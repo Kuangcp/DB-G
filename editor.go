@@ -5,7 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"db-k/highlight"
+	"db-g/highlight"
 )
 
 // appLastBuild reports how long the last editor rebuild (copy + tokenize +
