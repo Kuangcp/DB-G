@@ -75,7 +75,7 @@
 
 ## 交付物
 
-- 可运行窗口基准应用（HUD/toolbar/查找栏）：`main.go` + `editor.go` + `session`（`highlight/`、`metrics.go`、`findmatch.go`）。
+- 可运行窗口基准应用（HUD/toolbar/查找栏）：`main.go`、`editor.go`、`highlight/`、`metrics.go`、`findmatch.go`。
 - 可复现 headless 矩阵：`bench_test.go`（`TestSpikeMatrix`）。
 - 原始样本：`/tmp/opencode/matrix-{3000,12000,100000}-{FF,FV,VV}.csv`。
 - 复跑命令：`/home/zk/Code/go/bin/go1.27.1 test ./... -run TestSpikeMatrix -v -count=2`。
