@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"strings"
@@ -14,7 +14,7 @@ func TestEditorInjection(t *testing.T) {
 		{scopeFull, scopeViewport},     // FV
 		{scopeViewport, scopeViewport}, // VV
 	} {
-		a := newApp(text, sc)
+		a := newRoot(text, sc)
 		tt := ui.NewTester(rootView(a), 900, 640)
 		for range 3 {
 			tt.Frame()
@@ -35,7 +35,7 @@ func TestEditorInjection(t *testing.T) {
 }
 
 func TestEditorTypingKeepsColors(t *testing.T) {
-	a := newApp(buildSQL(200), strats{scopeViewport, scopeViewport})
+	a := newRoot(buildSQL(200), strats{scopeViewport, scopeViewport})
 	tt := ui.NewTester(rootView(a), 900, 640)
 	for range 2 {
 		tt.Frame()

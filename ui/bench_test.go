@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -46,7 +46,7 @@ func pct(acc []time.Duration, p float64) time.Duration {
 }
 
 func measureOne(size int, ck cfgKey) (injected int, keys, scrolls, frames []time.Duration) {
-	a := newApp(buildSQL(size), strats{tokenize: ck.tok, inject: ck.inject})
+	a := newRoot(buildSQL(size), strats{tokenize: ck.tok, inject: ck.inject})
 	tt := ui.NewTester(rootView(a), 900, 640)
 	for range 4 {
 		tt.Frame()
