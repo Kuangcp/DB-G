@@ -13,16 +13,23 @@ import (
 )
 
 type root struct {
-	ed         *editor
-	findQuery  string
-	findActive bool
-	sampler    *Sampler
-	con        *app.Console
-	win        *mygo.Window
+	ed            *editor
+	findQuery     string
+	findActive    bool
+	sampler       *Sampler
+	con           *app.Console
+	win           *mygo.Window
+	resultState   ui.ListState
+	resultsHeight float32
 }
 
 func newRoot(text string, s strats) *root {
-	return &root{ed: NewEditor(text, s), sampler: NewSampler(128), con: app.NewConsole()}
+	return &root{
+		ed:            NewEditor(text, s),
+		sampler:       NewSampler(128),
+		con:           app.NewConsole(),
+		resultsHeight: 260,
+	}
 }
 
 // NewRoot 创建交互窗口状态（初始 3k 行 SQL，SCOPE 环境变量选策略）。
@@ -106,34 +113,38 @@ func rootView(a *root) func(c *ui.Context) {
 				}
 			})
 
-			// editor + gutter
-			ui.Row(c).Fill().Children(func() {
-				ui.Box(c).Width(44).FillHeight().Draw(func(p *ui.Painter, r ui.Rect) {
-					ed.viewH = r.H
-					p.Clip(r, 0, func() {
-						top := r.Y - ed.scroll.Y
-						cur := ed.lines.At(ed.scroll.Y)
-						for i := cur; i < ed.lines.Count(); i++ {
-							y := top + ed.lines.Top(i)
-							if y > r.Y+r.H {
-								break
+			// 编辑器 / 结果 分屏
+			ui.SplitVertical(c, &a.resultsHeight, func() {
+				ui.Row(c).Fill().Children(func() {
+					ui.Box(c).Width(44).FillHeight().Draw(func(p *ui.Painter, r ui.Rect) {
+						ed.viewH = r.H
+						p.Clip(r, 0, func() {
+							top := r.Y - ed.scroll.Y
+							cur := ed.lines.At(ed.scroll.Y)
+							for i := cur; i < ed.lines.Count(); i++ {
+								y := top + ed.lines.Top(i)
+								if y > r.Y+r.H {
+									break
+								}
+								if i == cur {
+									p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: 16}, ui.RGBA(80, 100, 160, 0.25), 0)
+								}
+								p.Text(r.X+8, y, strconv.Itoa(i+1), 12, ui.RGB(130, 130, 130))
 							}
-							if i == cur {
-								p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: 16}, ui.RGBA(80, 100, 160, 0.25), 0)
-							}
-							p.Text(r.X+8, y, strconv.Itoa(i+1), 12, ui.RGB(130, 130, 130))
-						}
+						})
 					})
-				})
 
-				in := ui.TextAreaBuffer(c, ed.Buf).Label("编辑器").Fill().Font("monospace").
-					TrackLines(&ed.lines).TrackScroll(&ed.scroll)
-				if a.findActive && a.findQuery != "" {
-					in.TextRanges(FindAll(ed.Buf.String(), a.findQuery)...)
-				} else {
-					in.TextRanges(ed.allRanges...)
-				}
-			})
+					in := ui.TextAreaBuffer(c, ed.Buf).Label("编辑器").Fill().Font("monospace").
+						TrackLines(&ed.lines).TrackScroll(&ed.scroll)
+					if a.findActive && a.findQuery != "" {
+						in.TextRanges(FindAll(ed.Buf.String(), a.findQuery)...)
+					} else {
+						in.TextRanges(ed.allRanges...)
+					}
+				})
+			}, func() {
+				a.resultPane(c)
+			}).Grow(1)
 		})
 	}
 }
