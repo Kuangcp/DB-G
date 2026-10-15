@@ -47,7 +47,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 		switch {
 		case isActive:
 			dot.TextColor(c.Theme().Success)
-		case a.connErr != "" && a.connName == p.Name:
+		case a.connErr != "" && a.failedConnID == p.ID:
 			dot.TextColor(c.Theme().Danger)
 		default:
 			dot.TextColor(c.Theme().TextMuted)
@@ -64,13 +64,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 			expandLabel = "▾"
 		}
 		if ui.Button(c, expandLabel).Clicked() {
-			if a.treeExpand == nil {
-				a.treeExpand = map[string]bool{}
-			}
-			a.treeExpand[p.ID] = !a.treeExpand[p.ID]
-			if a.treeExpand[p.ID] {
-				a.expandConn(p)
-			}
+			a.toggleExpandConn(p)
 		}
 		ui.Spacer(c)
 		if ui.Button(c, "编辑").Clicked() {
@@ -180,10 +174,10 @@ func (a *root) browsePath() {
 
 func (a *root) connDot(c *ui.Context) {
 	switch {
-	case a.con.Session() != nil:
-		ui.Text(c, "●").TextColor(c.Theme().Success)
 	case a.connErr != "":
 		ui.Text(c, "●").TextColor(c.Theme().Danger)
+	case a.con.Session() != nil:
+		ui.Text(c, "●").TextColor(c.Theme().Success)
 	default:
 		ui.Text(c, "●").TextColor(c.Theme().TextMuted)
 	}

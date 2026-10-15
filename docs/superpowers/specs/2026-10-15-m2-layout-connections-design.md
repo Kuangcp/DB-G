@@ -78,7 +78,7 @@ func (s *ConnStore) SetActive(id string)
 
 ```go
 // engine/object.go
-const CapObjects Capabilities = 1 << 3   // 接在既有 4 个能力位之后
+const CapObjects Capabilities = 1 << 4   // 接在既有 4 个能力位之后
 
 type ObjectKind int   // ObjectTable | ObjectView | ObjectIndex
 

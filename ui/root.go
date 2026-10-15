@@ -27,6 +27,7 @@ type root struct {
 	connName       string
 	connErr        string
 	activeConnID   string
+	failedConnID   string
 	connFormOpen   bool
 	connFormID     string
 	connFormName   string

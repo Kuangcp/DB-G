@@ -62,6 +62,19 @@ func (a *root) expandConn(p app.ConnProfile) {
 	}
 }
 
+func (a *root) toggleExpandConn(p app.ConnProfile) {
+	if a.treeExpand == nil {
+		a.treeExpand = map[string]bool{}
+	}
+	a.treeExpand[p.ID] = !a.treeExpand[p.ID]
+	if a.treeExpand[p.ID] {
+		if a.treeErr != nil {
+			delete(a.treeErr, p.ID)
+		}
+		a.expandConn(p)
+	}
+}
+
 func (a *root) loadGroups(p app.ConnProfile) {
 	key := p.ID
 	if _, ok := a.treeData[key]; ok {

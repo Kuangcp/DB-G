@@ -374,3 +374,101 @@ func TestDuplicateNameConnsIsolated(t *testing.T) {
 		t.Fatal("must not overwrite A's cache while loading B")
 	}
 }
+
+func TestFailedOpenSetsTreeErrAndRemoveClears(t *testing.T) {
+	a := newSidebarRoot(t)
+	goodPath := seedConnFile(t)
+	badPath := filepath.Join(t.TempDir(), "willvanish.db")
+	if err := os.WriteFile(badPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.Add(app.ConnProfile{Name: "good", Kind: "sqlite", Path: goodPath}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.Add(app.ConnProfile{Name: "bad", Kind: "sqlite", Path: badPath}); err != nil {
+		t.Fatal(err)
+	}
+	good, bad := a.store.List()[0], a.store.List()[1]
+	if err := a.openConn(good); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(badPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.openConn(bad); err == nil {
+		t.Fatal("missing file must fail")
+	}
+	if a.connErr == "" || a.failedConnID != bad.ID {
+		t.Fatalf("connErr=%q failedConnID=%q", a.connErr, a.failedConnID)
+	}
+	if a.treeErr[bad.ID] == "" {
+		t.Fatal("openConn failure must write treeErr under the failed profile ID")
+	}
+	if a.con.Session() == nil || a.activeConnID != good.ID {
+		t.Fatal("failed open must keep previous session")
+	}
+	a.removeConn(bad.ID)
+	if a.connErr != "" || a.failedConnID != "" {
+		t.Fatalf("remove of failed profile must clear residue: connErr=%q failedConnID=%q", a.connErr, a.failedConnID)
+	}
+	if _, ok := a.store.Get(bad.ID); ok {
+		t.Fatal("bad profile must be removed")
+	}
+	if a.con.Session() == nil || a.activeConnID != good.ID {
+		t.Fatal("good session must survive removing bad profile")
+	}
+}
+
+func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
+	a := newSidebarRoot(t)
+	path := filepath.Join(t.TempDir(), "retry.db")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.Add(app.ConnProfile{Name: "retry", Kind: "sqlite", Path: path}); err != nil {
+		t.Fatal(err)
+	}
+	p := a.store.List()[0]
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	a.toggleExpandConn(p)
+	if !a.treeExpand[p.ID] {
+		t.Fatal("toggle must expand")
+	}
+	if a.treeErr[p.ID] == "" {
+		t.Fatal("failed expand must leave treeErr for the node")
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	s, err := engine.Open(engine.Profile{Kind: "sqlite", Name: "retry", DSN: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Open(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RunStatement(t.Context(), "CREATE TABLE recovered (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+	a.toggleExpandConn(p)
+	if a.treeExpand[p.ID] {
+		t.Fatal("second toggle must collapse")
+	}
+	a.toggleExpandConn(p)
+	if a.treeErr[p.ID] != "" {
+		t.Fatalf("re-expand must clear sticky treeErr, got %q", a.treeErr[p.ID])
+	}
+	if a.con.Session() == nil || a.activeConnID != p.ID {
+		t.Fatalf("retry must open: session=%v active=%q", a.con.Session(), a.activeConnID)
+	}
+	a.reloadTree()
+	a.loadGroups(p)
+	if got := a.treeData[p.ID][engine.ObjectTable]; len(got) != 1 || got[0].Name != "recovered" {
+		t.Fatalf("recovered objects: %+v err=%q", got, a.treeErr[p.ID])
+	}
+}
