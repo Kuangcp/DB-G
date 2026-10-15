@@ -62,7 +62,7 @@ func (s *session) Close() error {
 	return s.db.Close()
 }
 
-func (s *session) Caps() engine.Capabilities { return 0 }
+func (s *session) Caps() engine.Capabilities { return engine.CapObjects }
 
 func (s *session) Cancel() bool {
 	c := s.curCancel.Load()
@@ -186,4 +186,38 @@ func trimBytes(b []byte, max int) []byte {
 		max--
 	}
 	return b[:max]
+}
+
+func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	var t string
+	switch kind {
+	case engine.ObjectTable:
+		t = "table"
+	case engine.ObjectView:
+		t = "view"
+	case engine.ObjectIndex:
+		t = "index"
+	default:
+		return nil, fmt.Errorf("sqlite: unknown object kind %d", kind)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("sqlite: session not open")
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name`, t)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.DBObject
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, engine.DBObject{Kind: kind, Name: name})
+	}
+	return out, rows.Err()
 }

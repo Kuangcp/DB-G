@@ -44,3 +44,17 @@ func TestCapabilitiesHas(t *testing.T) {
 		t.Fatal("unset bit must report false")
 	}
 }
+
+func TestCapObjects(t *testing.T) {
+	var c Capabilities = CapObjects
+	if !c.Has(CapObjects) {
+		t.Fatal("CapObjects must be settable and readable")
+	}
+	if CapObjects == CapSQLCompletion || CapObjects == CapEditableResult ||
+		CapObjects == CapFetchMore || CapObjects == CapObjectDDL {
+		t.Fatal("CapObjects must not collide with existing bits")
+	}
+	if CapObjects != 1<<4 {
+		t.Fatalf("CapObjects = %d, want %d", CapObjects, 1<<4)
+	}
+}

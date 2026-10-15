@@ -188,3 +188,68 @@ func TestCellAndResultBudget(t *testing.T) {
 		t.Fatal("16MB budget must mark Truncated")
 	}
 }
+
+func TestObjects(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	lister, ok := s.(engine.ObjectLister)
+	if !ok {
+		t.Fatal("sqlite session must implement engine.ObjectLister")
+	}
+	if !s.Caps().Has(engine.CapObjects) {
+		t.Fatal("sqlite Caps must include CapObjects")
+	}
+	stmts := []string{
+		"CREATE TABLE a (id INTEGER)",
+		"CREATE TABLE b (id INTEGER)",
+		"CREATE VIEW v AS SELECT id FROM a",
+		"CREATE INDEX ia ON a (id)",
+		"CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT)",
+	}
+	for _, q := range stmts {
+		if _, err := s.RunStatement(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tables, err := lister.Objects(ctx, engine.ObjectTable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names := objectNames(tables); !equalStrings(names, []string{"a", "b", "seq"}) {
+		t.Fatalf("tables = %v, want [a b seq]（sqlite_sequence 已被过滤）", names)
+	}
+	views, err := lister.Objects(ctx, engine.ObjectView)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names := objectNames(views); !equalStrings(names, []string{"v"}) {
+		t.Fatalf("views = %v, want [v]", names)
+	}
+	indexes, err := lister.Objects(ctx, engine.ObjectIndex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if names := objectNames(indexes); !equalStrings(names, []string{"ia"}) {
+		t.Fatalf("indexes = %v, want [ia]", names)
+	}
+}
+
+func objectNames(objs []engine.DBObject) []string {
+	out := make([]string, len(objs))
+	for i, o := range objs {
+		out[i] = o.Name
+	}
+	return out
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

@@ -8,6 +8,7 @@ const (
 	CapFetchMore
 	CapObjectDDL
 	CapSQLCompletion
+	CapObjects
 )
 
 func (c Capabilities) Has(x Capabilities) bool { return c&x != 0 }
