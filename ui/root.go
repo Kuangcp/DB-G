@@ -21,8 +21,10 @@ type root struct {
 	win           *mygo.Window
 	resultState   ui.ListState
 	resultsHeight float32
-	dbName        string
-	openErr       string
+	sidebarWidth  float32
+	store         *app.ConnStore
+	connName      string
+	connErr       string
 }
 
 func newRoot(text string, s strats) *root {
@@ -31,12 +33,15 @@ func newRoot(text string, s strats) *root {
 		sampler:       NewSampler(128),
 		con:           app.NewConsole(),
 		resultsHeight: 260,
+		sidebarWidth:  280,
 	}
 }
 
-// NewRoot 创建交互窗口状态（初始 3k 行 SQL，SCOPE 环境变量选策略）。
+// NewRoot 创建交互窗口状态（初始 3k 行 SQL，SCOPE 环境变量选策略，加载用户连接库）。
 func NewRoot() *root {
-	return newRoot(buildSQL(3_000), stratsFromEnv())
+	r := newRoot(buildSQL(3_000), stratsFromEnv())
+	r.store = app.LoadStore(app.DefaultStorePath())
+	return r
 }
 
 func stratsFromEnv() strats {
@@ -73,101 +78,94 @@ func rootView(a *root) func(c *ui.Context) {
 			a.runSQL()
 		}
 
-		ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
-			// HUD
-			ui.Text(c, fmt.Sprintf(
-				"lines=%d injected=%d tokenize=%s inject=%s build(last)=%s",
-				ed.lineCount(), ed.Injected,
-				scopeName(ed.strat.tokenize), scopeName(ed.strat.inject),
-				fmtDur(appLastBuild),
-			)).FontSize(12)
-
-			// toolbar: sizes + strategies
-			ui.Row(c).Gap(6).Children(func() {
-				if ui.Button(c, "3k").Clicked() {
-					ed.Buf.Set(buildSQL(3_000))
-					ed.dirty = true
-				}
-				if ui.Button(c, "12k").Clicked() {
-					ed.Buf.Set(buildSQL(12_000))
-					ed.dirty = true
-				}
-				if ui.Button(c, "100k").Clicked() {
-					ed.Buf.Set(buildSQL(100_000))
-					ed.dirty = true
-				}
-				ui.Spacer(c)
-				if ui.Button(c, "FF").Clicked() {
-					ed.SetStrategy(strats{scopeFull, scopeFull})
-				}
-				if ui.Button(c, "FV").Clicked() {
-					ed.SetStrategy(strats{scopeFull, scopeViewport})
-				}
-				if ui.Button(c, "VV").Clicked() {
-					ed.SetStrategy(strats{scopeViewport, scopeViewport})
-				}
-			})
-
-			// toolbar: find
-			ui.Row(c).Gap(6).Children(func() {
-				ui.TextInput(c, &a.findQuery).Placeholder("find (overrides highlight when active)")
-				if ui.Button(c, "Find").Clicked() {
-					a.findActive = true
-				}
-				if ui.Button(c, "Clear").Clicked() {
-					a.findQuery, a.findActive = "", false
-				}
-			})
-
-			// 连接与执行
-			ui.Row(c).Gap(6).Children(func() {
-				if ui.Button(c, "打开…").Clicked() {
-					a.openDatabase()
-				}
-				if a.dbName != "" {
-					ui.Text(c, a.dbName).Bold()
-				}
-				if a.openErr != "" {
-					ui.Text(c, a.openErr).TextColor(c.Theme().Danger)
-				}
-				ui.Spacer(c)
-				if ui.Button(c, "执行").Disabled(a.con.Running() || a.con.Session() == nil).Clicked() {
-					a.runSQL()
-				}
-			})
-
-			// 编辑器 / 结果 分屏
-			ui.SplitVertical(c, &a.resultsHeight, func() {
-				ui.Row(c).Fill().Children(func() {
-					ui.Box(c).Width(44).FillHeight().Draw(func(p *ui.Painter, r ui.Rect) {
-						ed.viewH = r.H
-						p.Clip(r, 0, func() {
-							top := r.Y - ed.scroll.Y
-							cur := ed.lines.At(ed.scroll.Y)
-							for i := cur; i < ed.lines.Count(); i++ {
-								y := top + ed.lines.Top(i)
-								if y > r.Y+r.H {
-									break
-								}
-								if i == cur {
-									p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: 16}, ui.RGBA(80, 100, 160, 0.25), 0)
-								}
-								p.Text(r.X+8, y, strconv.Itoa(i+1), 12, ui.RGB(130, 130, 130))
-							}
-						})
-					})
-
-					in := ui.TextAreaBuffer(c, ed.Buf).Label("编辑器").Fill().Font("monospace").
-						TrackLines(&ed.lines).TrackScroll(&ed.scroll)
-					if a.findActive && a.findQuery != "" {
-						in.TextRanges(FindAll(ed.Buf.String(), a.findQuery)...)
-					} else {
-						in.TextRanges(ed.allRanges...)
+		ui.Split(c, &a.sidebarWidth, func() {
+			a.sidebar(c)
+		}, func() {
+			ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
+				// 顶栏：连接状态 + 执行
+				ui.Row(c).Gap(8).Children(func() {
+					a.connDot(c)
+					if a.connName != "" {
+						ui.Text(c, a.connName).Bold()
+					}
+					ui.Spacer(c)
+					if ui.Button(c, "执行").Disabled(a.con.Running() || a.con.Session() == nil).Clicked() {
+						a.runSQL()
 					}
 				})
-			}, func() {
-				a.resultPane(c)
-			}).Grow(1)
-		})
+
+				// 工具行：HUD + 尺寸 + 策略 + 查找
+				ui.Row(c).Gap(6).Children(func() {
+					ui.Text(c, fmt.Sprintf(
+						"lines=%d injected=%d tokenize=%s inject=%s build(last)=%s",
+						ed.lineCount(), ed.Injected,
+						scopeName(ed.strat.tokenize), scopeName(ed.strat.inject),
+						fmtDur(appLastBuild),
+					)).FontSize(12).SingleLine()
+					if ui.Button(c, "3k").Clicked() {
+						ed.Buf.Set(buildSQL(3_000))
+						ed.dirty = true
+					}
+					if ui.Button(c, "12k").Clicked() {
+						ed.Buf.Set(buildSQL(12_000))
+						ed.dirty = true
+					}
+					if ui.Button(c, "100k").Clicked() {
+						ed.Buf.Set(buildSQL(100_000))
+						ed.dirty = true
+					}
+					if ui.Button(c, "FF").Clicked() {
+						ed.SetStrategy(strats{scopeFull, scopeFull})
+					}
+					if ui.Button(c, "FV").Clicked() {
+						ed.SetStrategy(strats{scopeFull, scopeViewport})
+					}
+					if ui.Button(c, "VV").Clicked() {
+						ed.SetStrategy(strats{scopeViewport, scopeViewport})
+					}
+					ui.Spacer(c)
+					ui.TextInput(c, &a.findQuery).Placeholder("查找")
+					if ui.Button(c, "查找").Clicked() {
+						a.findActive = true
+					}
+					if ui.Button(c, "清除").Clicked() {
+						a.findQuery, a.findActive = "", false
+					}
+				})
+
+				// 编辑器 / 结果 分屏
+				ui.SplitVertical(c, &a.resultsHeight, func() {
+					ui.Row(c).Fill().Children(func() {
+						ui.Box(c).Width(44).FillHeight().Draw(func(p *ui.Painter, r ui.Rect) {
+							ed.viewH = r.H
+							p.Clip(r, 0, func() {
+								top := r.Y - ed.scroll.Y
+								cur := ed.lines.At(ed.scroll.Y)
+								for i := cur; i < ed.lines.Count(); i++ {
+									y := top + ed.lines.Top(i)
+									if y > r.Y+r.H {
+										break
+									}
+									if i == cur {
+										p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: 16}, ui.RGBA(80, 100, 160, 0.25), 0)
+									}
+									p.Text(r.X+8, y, strconv.Itoa(i+1), 12, ui.RGB(130, 130, 130))
+								}
+							})
+						})
+
+						in := ui.TextAreaBuffer(c, ed.Buf).Label("编辑器").Fill().Font("monospace").
+							TrackLines(&ed.lines).TrackScroll(&ed.scroll)
+						if a.findActive && a.findQuery != "" {
+							in.TextRanges(FindAll(ed.Buf.String(), a.findQuery)...)
+						} else {
+							in.TextRanges(ed.allRanges...)
+						}
+					})
+				}, func() {
+					a.resultPane(c)
+				}).Grow(1)
+			})
+		}).Fill()
 	}
 }

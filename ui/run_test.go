@@ -47,8 +47,8 @@ func TestOpenSQLiteErrors(t *testing.T) {
 	if err := a.openSQLite(filepath.Join(t.TempDir(), "missing.db")); err == nil {
 		t.Fatal("missing file must fail")
 	}
-	if a.openErr == "" {
-		t.Fatal("openErr must be set")
+	if a.connErr == "" {
+		t.Fatal("connErr must be set")
 	}
 }
 
@@ -58,8 +58,8 @@ func TestRunSQLiteEndToEnd(t *testing.T) {
 	if err := a.openSQLite(path); err != nil {
 		t.Fatal(err)
 	}
-	if a.dbName != "app.db" {
-		t.Fatalf("dbName = %q", a.dbName)
+	if a.connName != "app.db" {
+		t.Fatalf("connName = %q", a.connName)
 	}
 	a.ed.Buf.Set("SELECT id, name FROM users ORDER BY id")
 	tt := ui.NewTester(rootView(a), 1200, 800)
