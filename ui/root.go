@@ -21,6 +21,8 @@ type root struct {
 	win           *mygo.Window
 	resultState   ui.ListState
 	resultsHeight float32
+	dbName        string
+	openErr       string
 }
 
 func newRoot(text string, s strats) *root {
@@ -67,6 +69,10 @@ func rootView(a *root) func(c *ui.Context) {
 		ed := a.ed
 		ed.Update()
 
+		if c.Shortcut(ui.Ctrl, ui.KeyEnter) || c.Shortcut(0, ui.KeyF5) {
+			a.runSQL()
+		}
+
 		ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 			// HUD
 			ui.Text(c, fmt.Sprintf(
@@ -110,6 +116,23 @@ func rootView(a *root) func(c *ui.Context) {
 				}
 				if ui.Button(c, "Clear").Clicked() {
 					a.findQuery, a.findActive = "", false
+				}
+			})
+
+			// 连接与执行
+			ui.Row(c).Gap(6).Children(func() {
+				if ui.Button(c, "打开…").Clicked() {
+					a.openDatabase()
+				}
+				if a.dbName != "" {
+					ui.Text(c, a.dbName).Bold()
+				}
+				if a.openErr != "" {
+					ui.Text(c, a.openErr).TextColor(c.Theme().Danger)
+				}
+				ui.Spacer(c)
+				if ui.Button(c, "执行").Disabled(a.con.Running() || a.con.Session() == nil).Clicked() {
+					a.runSQL()
 				}
 			})
 
