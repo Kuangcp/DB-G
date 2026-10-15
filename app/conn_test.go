@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,8 +117,15 @@ func TestStoreCorruptFile(t *testing.T) {
 	if !strings.Contains(s.Warning(), "损坏") {
 		t.Fatalf("warning = %q", s.Warning())
 	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("corrupt file must be renamed away, stat = %v", err)
+	}
 	if _, err := os.Stat(path + ".bak"); err != nil {
 		t.Fatal("corrupt file must be kept as .bak")
+	}
+	s2 := LoadStore(path)
+	if s2.Warning() != "" {
+		t.Fatalf("reload warning = %q", s2.Warning())
 	}
 }
 
@@ -128,5 +136,37 @@ func TestStoreUpdateUnknownID(t *testing.T) {
 	}
 	if err := s.Remove("nope"); err == nil {
 		t.Fatal("remove unknown ID must fail")
+	}
+}
+
+func TestStoreSetActivePersists(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "connections.json")
+	s := LoadStore(path)
+	p := mustAdd(t, s, "one", filepath.Join(dir, "a.db"))
+	s.SetActive(p.ID)
+	if act, ok := s.Active(); !ok || act.ID != p.ID {
+		t.Fatalf("active: %+v %v", act, ok)
+	}
+	s2 := LoadStore(path)
+	if act, ok := s2.Active(); !ok || act.ID != p.ID {
+		t.Fatalf("reload active: %+v %v", act, ok)
+	}
+}
+
+func TestStoreSetActiveSaveFailureRollback(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "connections.json")
+	s := LoadStore(path)
+	p := mustAdd(t, s, "one", filepath.Join(dir, "a.db"))
+	if err := os.Mkdir(path+".tmp", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActive(p.ID)
+	if _, ok := s.Active(); ok {
+		t.Fatal("activeID must roll back after save failure")
+	}
+	if !strings.Contains(s.Warning(), "保存活动连接失败") {
+		t.Fatalf("warning = %q", s.Warning())
 	}
 }

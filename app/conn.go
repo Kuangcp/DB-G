@@ -37,7 +37,7 @@ func DefaultStorePath() string {
 	return filepath.Join(dir, "db-g", "connections.json")
 }
 
-// LoadStore 读取持久化文件；缺失为空表，损坏改名 .bak 后空表并记警告。
+// LoadStore 读取持久化文件；缺失为空表，损坏改名为 .bak 后空表并记警告（改名失败则警告仅记损坏）。
 func LoadStore(path string) *ConnStore {
 	s := &ConnStore{path: path}
 	data, err := os.ReadFile(path)
@@ -52,8 +52,11 @@ func LoadStore(path string) *ConnStore {
 		ActiveID string        `json:"activeID"`
 	}
 	if err := json.Unmarshal(data, &file); err != nil {
-		_ = os.WriteFile(path+".bak", data, 0o600)
-		s.warning = "连接配置损坏，已备份为 .bak"
+		if rerr := os.Rename(path, path+".bak"); rerr != nil {
+			s.warning = "连接配置损坏: " + rerr.Error()
+		} else {
+			s.warning = "连接配置损坏，已改名为 .bak"
+		}
 		return s
 	}
 	s.conns = file.Conns
@@ -61,7 +64,7 @@ func LoadStore(path string) *ConnStore {
 	return s
 }
 
-// Warning 返回加载期警告（损坏/读失败），空串表示正常。
+// Warning 返回最近记录的警告（加载损坏/读失败、活动连接保存失败），空串表示正常。
 func (s *ConnStore) Warning() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -210,10 +213,14 @@ func (s *ConnStore) Active() (ConnProfile, bool) {
 	return ConnProfile{}, false
 }
 
-// SetActive 设置活动连接；空串清空。
+// SetActive 设置活动连接；空串清空；落盘失败时回滚活动指针并记警告。
 func (s *ConnStore) SetActive(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	prev := s.activeID
 	s.activeID = id
-	_ = s.save()
+	if err := s.save(); err != nil {
+		s.activeID = prev
+		s.warning = "保存活动连接失败: " + err.Error()
+	}
 }
