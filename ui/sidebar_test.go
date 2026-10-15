@@ -267,3 +267,38 @@ func TestExpandInactiveAutoConnects(t *testing.T) {
 		t.Fatalf("expand of inactive conn must connect: session=%v name=%q", a.con.Session(), a.connName)
 	}
 }
+
+func TestObjectTreeAfterReloadNoPanic(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{Name: "lib", Kind: "sqlite", Path: seedConnFile(t)}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	stored := a.store.List()[0]
+	a.con.UseSession(treeFakeSession{err: errors.New("枚举失败")})
+	a.connName = stored.Name
+	a.reloadTree()
+	a.loadGroups(stored)
+	if got := a.treeErr[stored.ID]; got != "枚举失败" {
+		t.Fatalf("treeErr = %q", got)
+	}
+}
+
+func TestObjectTreeCrossConnBlocked(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{Name: "other", Kind: "sqlite", Path: seedConnFile(t)}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	stored := a.store.List()[0]
+	a.con.UseSession(treeFakeSession{objs: []engine.DBObject{{Kind: engine.ObjectTable, Name: "users"}}})
+	a.connName = "active-db"
+	a.reloadTree()
+	a.loadGroups(stored)
+	if got := a.treeErr[stored.ID]; got != "未连接" {
+		t.Fatalf("treeErr = %q", got)
+	}
+	if _, ok := a.treeData[stored.ID]; ok {
+		t.Fatal("must not cache another connection's objects")
+	}
+}

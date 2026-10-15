@@ -49,6 +49,13 @@ func (a *root) reloadTree() {
 	a.treeErr = nil
 }
 
+func (a *root) setTreeErr(key, msg string) {
+	if a.treeErr == nil {
+		a.treeErr = map[string]string{}
+	}
+	a.treeErr[key] = msg
+}
+
 func (a *root) expandConn(p app.ConnProfile) {
 	if a.con.Session() == nil || a.connName != p.Name {
 		_ = a.openConn(p)
@@ -61,17 +68,17 @@ func (a *root) loadGroups(p app.ConnProfile) {
 		return
 	}
 	sess := a.con.Session()
-	if sess == nil {
-		a.treeErr[key] = "未连接"
+	if sess == nil || a.connName != p.Name {
+		a.setTreeErr(key, "未连接")
 		return
 	}
 	if !sess.Caps().Has(engine.CapObjects) {
-		a.treeErr[key] = "该数据源不支持对象树"
+		a.setTreeErr(key, "该数据源不支持对象树")
 		return
 	}
 	lister, ok := sess.(engine.ObjectLister)
 	if !ok {
-		a.treeErr[key] = "该数据源不支持对象树"
+		a.setTreeErr(key, "该数据源不支持对象树")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -80,7 +87,7 @@ func (a *root) loadGroups(p app.ConnProfile) {
 	for _, g := range objectKinds {
 		objs, err := lister.Objects(ctx, g.kind)
 		if err != nil {
-			a.treeErr[key] = err.Error()
+			a.setTreeErr(key, err.Error())
 			return
 		}
 		data[g.kind] = objs
