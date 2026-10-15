@@ -23,6 +23,12 @@ var matrixCfg = []cfgKey{
 	{"VV", scopeViewport, scopeViewport},
 }
 
+var spikeP99Limit = map[int]time.Duration{
+	3_000:   8 * time.Millisecond,
+	12_000:  15 * time.Millisecond,
+	100_000: 50 * time.Millisecond,
+}
+
 func median(acc []time.Duration) time.Duration {
 	if len(acc) == 0 {
 		return 0
@@ -93,6 +99,14 @@ func TestSpikeMatrix(t *testing.T) {
 				median(keys), pct(keys, 0.9), pct(keys, 0.99),
 				median(scrolls), pct(scrolls, 0.9),
 				median(frames))
+
+			if ck.name == "VV" {
+				if limit, ok := spikeP99Limit[size]; ok {
+					if p := pct(keys, 0.99); p > limit {
+						t.Errorf("size=%d VV key p99 %v exceeds limit %v", size, p, limit)
+					}
+				}
+			}
 
 			f, err := os.Create(filepath.Join(dir, fmt.Sprintf("matrix-%d-%s.csv", size, ck.name)))
 			if err != nil {
