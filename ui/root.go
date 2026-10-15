@@ -13,18 +13,25 @@ import (
 )
 
 type root struct {
-	ed            *editor
-	findQuery     string
-	findActive    bool
-	sampler       *Sampler
-	con           *app.Console
-	win           *mygo.Window
-	resultState   ui.ListState
-	resultsHeight float32
-	sidebarWidth  float32
-	store         *app.ConnStore
-	connName      string
-	connErr       string
+	ed             *editor
+	findQuery      string
+	findActive     bool
+	sampler        *Sampler
+	con            *app.Console
+	win            *mygo.Window
+	resultState    ui.ListState
+	resultsHeight  float32
+	sidebarWidth   float32
+	store          *app.ConnStore
+	connName       string
+	connErr        string
+	connFormOpen   bool
+	connFormID     string
+	connFormName   string
+	connFormPath   string
+	connFormErr    string
+	connDeleteOpen bool
+	connDeleting   string
 }
 
 func newRoot(text string, s strats) *root {
@@ -87,6 +94,9 @@ func rootView(a *root) func(c *ui.Context) {
 					a.connDot(c)
 					if a.connName != "" {
 						ui.Text(c, a.connName).Bold()
+					}
+					if a.connErr != "" {
+						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
 					}
 					ui.Spacer(c)
 					if ui.Button(c, "执行").Disabled(a.con.Running() || a.con.Session() == nil).Clicked() {
