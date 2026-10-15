@@ -57,7 +57,7 @@ func (a *root) setTreeErr(key, msg string) {
 }
 
 func (a *root) expandConn(p app.ConnProfile) {
-	if a.con.Session() == nil || a.connName != p.Name {
+	if a.con.Session() == nil || a.activeConnID != p.ID {
 		_ = a.openConn(p)
 	}
 }
@@ -68,7 +68,7 @@ func (a *root) loadGroups(p app.ConnProfile) {
 		return
 	}
 	sess := a.con.Session()
-	if sess == nil || a.connName != p.Name {
+	if sess == nil || a.activeConnID != p.ID {
 		a.setTreeErr(key, "未连接")
 		return
 	}

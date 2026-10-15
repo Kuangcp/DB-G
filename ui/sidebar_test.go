@@ -212,6 +212,7 @@ func TestObjectTreeRendersLeaves(t *testing.T) {
 		{Kind: engine.ObjectTable, Name: "users"},
 	}})
 	a.connName = stored.Name
+	a.activeConnID = stored.ID
 	a.treeExpand[stored.ID] = true
 	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -233,6 +234,7 @@ func TestObjectTreeErrorLine(t *testing.T) {
 	stored := a.store.List()[0]
 	a.con.UseSession(treeFakeSession{err: errors.New("枚举失败")})
 	a.connName = stored.Name
+	a.activeConnID = stored.ID
 	a.treeExpand[stored.ID] = true
 	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -277,6 +279,7 @@ func TestObjectTreeAfterReloadNoPanic(t *testing.T) {
 	stored := a.store.List()[0]
 	a.con.UseSession(treeFakeSession{err: errors.New("枚举失败")})
 	a.connName = stored.Name
+	a.activeConnID = stored.ID
 	a.reloadTree()
 	a.loadGroups(stored)
 	if got := a.treeErr[stored.ID]; got != "枚举失败" {
@@ -300,5 +303,74 @@ func TestObjectTreeCrossConnBlocked(t *testing.T) {
 	}
 	if _, ok := a.treeData[stored.ID]; ok {
 		t.Fatal("must not cache another connection's objects")
+	}
+}
+
+func seedConnFileWithTable(t *testing.T, name, table string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	s, err := engine.Open(engine.Profile{Kind: "sqlite", Name: "seed", DSN: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Open(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RunStatement(t.Context(), "CREATE TABLE "+table+" (id INTEGER PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+	return path
+}
+
+func TestDuplicateNameConnsIsolated(t *testing.T) {
+	a := newSidebarRoot(t)
+	pathA := seedConnFileWithTable(t, "a.db", "alpha")
+	pathB := seedConnFileWithTable(t, "b.db", "beta")
+	if err := a.store.Add(app.ConnProfile{Name: "db", Kind: "sqlite", Path: pathA}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.Add(app.ConnProfile{Name: "db", Kind: "sqlite", Path: pathB}); err != nil {
+		t.Fatal(err)
+	}
+	pa, pb := a.store.List()[0], a.store.List()[1]
+	if pa.ID == pb.ID || pa.Name != pb.Name {
+		t.Fatalf("setup: %+v %+v", pa, pb)
+	}
+	if err := a.openConn(pa); err != nil {
+		t.Fatal(err)
+	}
+	a.reloadTree()
+	a.loadGroups(pa)
+	if objs := a.treeData[pa.ID][engine.ObjectTable]; len(objs) != 1 || objs[0].Name != "alpha" {
+		t.Fatalf("A cache: %+v", objs)
+	}
+	a.loadGroups(pb)
+	if got := a.treeErr[pb.ID]; got != "未连接" {
+		t.Fatalf("B must not reuse A's session, treeErr=%q", got)
+	}
+	if _, ok := a.treeData[pb.ID]; ok {
+		t.Fatal("must not cache A's objects under B's ID")
+	}
+	a.treeExpand[pb.ID] = true
+	a.expandConn(pb)
+	if a.con.Session() == nil || a.connName != "db" {
+		t.Fatalf("expand must connect B: session=%v name=%q", a.con.Session(), a.connName)
+	}
+	a.reloadTree()
+	a.loadGroups(pb)
+	if err := a.treeErr[pb.ID]; err != "" {
+		t.Fatalf("B load after reconnect: %q", err)
+	}
+	if objs := a.treeData[pb.ID][engine.ObjectTable]; len(objs) != 1 || objs[0].Name != "beta" {
+		t.Fatalf("B cache must be B's objects: %+v", objs)
+	}
+	if _, ok := a.treeData[pa.ID]; ok {
+		t.Fatal("must not overwrite A's cache while loading B")
 	}
 }

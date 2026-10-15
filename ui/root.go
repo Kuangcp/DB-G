@@ -26,6 +26,7 @@ type root struct {
 	store          *app.ConnStore
 	connName       string
 	connErr        string
+	activeConnID   string
 	connFormOpen   bool
 	connFormID     string
 	connFormName   string

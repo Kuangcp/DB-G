@@ -27,6 +27,7 @@ func (a *root) openConn(p app.ConnProfile) error {
 	}
 	a.con.SwapSession(sess)
 	a.connName = p.Name
+	a.activeConnID = p.ID
 	a.connErr = ""
 	if a.store != nil && p.ID != "" {
 		a.store.SetActive(p.ID)
@@ -38,10 +39,13 @@ func (a *root) removeConn(id string) {
 	if a.store == nil {
 		return
 	}
-	if act, ok := a.store.Active(); ok && act.ID == id {
+	if a.activeConnID == id {
 		a.con.SwapSession(nil)
 		a.connName = ""
-		a.store.SetActive("")
+		a.activeConnID = ""
+		if act, ok := a.store.Active(); ok && act.ID == id {
+			a.store.SetActive("")
+		}
 	}
 	_ = a.store.Remove(id)
 }
