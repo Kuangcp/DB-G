@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -180,5 +182,88 @@ func TestRemoveActiveConnClearsSession(t *testing.T) {
 	}
 	if _, ok := a.store.Get(stored.ID); ok {
 		t.Fatal("profile must be removed")
+	}
+}
+
+type treeFakeSession struct {
+	err  error
+	objs []engine.DBObject
+}
+
+func (f treeFakeSession) Open(context.Context) error { return nil }
+func (f treeFakeSession) Close() error               { return nil }
+func (f treeFakeSession) Cancel() bool               { return false }
+func (f treeFakeSession) Caps() engine.Capabilities  { return engine.CapObjects }
+func (f treeFakeSession) RunStatement(context.Context, string) (*engine.QueryResult, error) {
+	return &engine.QueryResult{}, nil
+}
+func (f treeFakeSession) Objects(context.Context, engine.ObjectKind) ([]engine.DBObject, error) {
+	return f.objs, f.err
+}
+
+func TestObjectTreeRendersLeaves(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{Name: "lib", Kind: "sqlite", Path: seedConnFile(t)}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	stored := a.store.List()[0]
+	a.con.UseSession(treeFakeSession{objs: []engine.DBObject{
+		{Kind: engine.ObjectTable, Name: "users"},
+	}})
+	a.connName = stored.Name
+	a.treeExpand[stored.ID] = true
+	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if !tt.HasText("users") {
+		t.Fatalf("leaf missing: %q", tt.Texts())
+	}
+	if !tt.HasText("表 (1)") {
+		t.Fatalf("group count missing: %q", tt.Texts())
+	}
+}
+
+func TestObjectTreeErrorLine(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{Name: "lib", Kind: "sqlite", Path: seedConnFile(t)}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	stored := a.store.List()[0]
+	a.con.UseSession(treeFakeSession{err: errors.New("枚举失败")})
+	a.connName = stored.Name
+	a.treeExpand[stored.ID] = true
+	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if !tt.HasText("枚举失败") {
+		t.Fatalf("error line missing: %q", tt.Texts())
+	}
+}
+
+func TestReloadTreeClearsCache(t *testing.T) {
+	a := newSidebarRoot(t)
+	a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{"x": {}}
+	a.treeErr = map[string]string{"x|table": "boom"}
+	a.reloadTree()
+	if a.treeData != nil || len(a.treeErr) != 0 {
+		t.Fatalf("reloadTree must clear cache: %v %v", a.treeData, a.treeErr)
+	}
+}
+
+func TestExpandInactiveAutoConnects(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{Name: "auto", Kind: "sqlite", Path: seedConnFile(t)}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	stored := a.store.List()[0]
+	a.treeExpand[stored.ID] = true
+	if a.con.Session() == nil {
+		a.expandConn(stored)
+	}
+	if a.con.Session() == nil || a.connName != "auto" {
+		t.Fatalf("expand of inactive conn must connect: session=%v name=%q", a.con.Session(), a.connName)
 	}
 }

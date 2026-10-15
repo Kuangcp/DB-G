@@ -59,6 +59,19 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 		if lbl.DoubleClicked() {
 			_ = a.openConn(p)
 		}
+		expandLabel := "▸"
+		if a.treeExpand[p.ID] {
+			expandLabel = "▾"
+		}
+		if ui.Button(c, expandLabel).Clicked() {
+			if a.treeExpand == nil {
+				a.treeExpand = map[string]bool{}
+			}
+			a.treeExpand[p.ID] = !a.treeExpand[p.ID]
+			if a.treeExpand[p.ID] {
+				a.expandConn(p)
+			}
+		}
 		ui.Spacer(c)
 		if ui.Button(c, "编辑").Clicked() {
 			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
@@ -67,6 +80,9 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 			a.connDeleting, a.connDeleteOpen = p.ID, true
 		}
 	})
+	if a.treeExpand[p.ID] {
+		a.objectGroups(c, p)
+	}
 }
 
 func (a *root) connModal(c *ui.Context) {
@@ -161,8 +177,6 @@ func (a *root) browsePath() {
 		win.Update(func() { a.connFormPath = paths[0] })
 	}()
 }
-
-func (a *root) reloadTree() {}
 
 func (a *root) connDot(c *ui.Context) {
 	switch {

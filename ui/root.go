@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/engine"
 )
 
 type root struct {
@@ -32,6 +33,11 @@ type root struct {
 	connFormErr    string
 	connDeleteOpen bool
 	connDeleting   string
+	treeExpand     map[string]bool
+	treeOpen       map[string]*bool
+	treeData       map[string]map[engine.ObjectKind][]engine.DBObject
+	treeErr        map[string]string
+	treeSelected   string
 }
 
 func newRoot(text string, s strats) *root {
@@ -41,6 +47,10 @@ func newRoot(text string, s strats) *root {
 		con:           app.NewConsole(),
 		resultsHeight: 260,
 		sidebarWidth:  280,
+		treeExpand:    map[string]bool{},
+		treeOpen:      map[string]*bool{},
+		treeData:      map[string]map[engine.ObjectKind][]engine.DBObject{},
+		treeErr:       map[string]string{},
 	}
 }
 
