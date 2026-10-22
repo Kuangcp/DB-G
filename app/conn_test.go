@@ -170,3 +170,40 @@ func TestStoreSetActiveSaveFailureRollback(t *testing.T) {
 		t.Fatalf("warning = %q", s.Warning())
 	}
 }
+
+func TestStoreValidateProfileByKind(t *testing.T) {
+	s := LoadStore(filepath.Join(t.TempDir(), "c.json"))
+	dir := t.TempDir()
+	if err := s.Add(ConnProfile{Name: "d", Kind: "sqlite", Path: dir}); err == nil {
+		t.Fatal("sqlite directory path must be rejected")
+	}
+	if err := s.Add(ConnProfile{Name: "m", Kind: "mysql"}); err == nil {
+		t.Fatal("mysql without host must be rejected")
+	}
+	if err := s.Add(ConnProfile{Name: "m", Kind: "mysql", Host: "h", Port: 0}); err == nil {
+		t.Fatal("mysql port 0 must be rejected")
+	}
+	if err := s.Add(ConnProfile{Name: "m", Kind: "mysql", Host: "h", Port: 70000}); err == nil {
+		t.Fatal("mysql port out of range must be rejected")
+	}
+	if err := s.Add(ConnProfile{Name: "pg", Kind: "postgres", Host: "h", Port: 5432}); err == nil {
+		t.Fatal("unknown kind must be rejected")
+	}
+	if err := s.Add(ConnProfile{Name: "m", Kind: "mysql", Host: "h", Port: 3306, User: "root", Password: "s", Database: "app"}); err != nil {
+		t.Fatalf("valid mysql profile: %v", err)
+	}
+	if len(s.List()) != 1 || s.List()[0].Host != "h" || s.List()[0].Port != 3306 || s.List()[0].Password != "s" {
+		t.Fatalf("round-trip: %+v", s.List())
+	}
+}
+
+func TestStoreLoadsLegacyJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.json")
+	if err := os.WriteFile(path, []byte(`{"conns":[{"id":"a","name":"x","kind":"sqlite","path":"/tmp/x.db"}],"activeID":""}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := LoadStore(path)
+	if len(s.List()) != 1 || s.List()[0].Name != "x" || s.List()[0].Host != "" || s.List()[0].Port != 0 {
+		t.Fatalf("legacy load: %+v", s.List())
+	}
+}

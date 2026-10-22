@@ -11,12 +11,17 @@ import (
 	"sync"
 )
 
-// ConnProfile 是一个持久化的数据源连接配置（M2 仅 sqlite 文件）。
+// ConnProfile 是一个持久化的数据源连接配置。
 type ConnProfile struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Kind string `json:"kind"`
-	Path string `json:"path"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Path     string `json:"path"`
+	Host     string `json:"host,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+	Database string `json:"database,omitempty"`
 }
 
 // ConnStore 管理连接列表与活动连接；变更同步原子落盘。
@@ -120,16 +125,36 @@ func genID() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-// Add 校验并新增连接；ID 为空时自动生成。
-func (s *ConnStore) Add(p ConnProfile) error {
+func validateProfile(p ConnProfile) error {
 	if p.Name == "" {
 		return errors.New("连接名称不能为空")
 	}
-	if p.Kind != "sqlite" {
-		return fmt.Errorf("M2 仅支持 sqlite，收到 %q", p.Kind)
+	switch p.Kind {
+	case "sqlite":
+		fi, err := os.Stat(p.Path)
+		if err != nil {
+			return fmt.Errorf("路径不可用: %w", err)
+		}
+		if fi.IsDir() {
+			return errors.New("路径不可用: 是目录而非数据库文件")
+		}
+	case "mysql":
+		if p.Host == "" {
+			return errors.New("主机不能为空")
+		}
+		if p.Port < 1 || p.Port > 65535 {
+			return errors.New("端口必须在 1–65535")
+		}
+	default:
+		return fmt.Errorf("不支持的数据源类型: %q", p.Kind)
 	}
-	if _, err := os.Stat(p.Path); err != nil {
-		return fmt.Errorf("路径不可用: %w", err)
+	return nil
+}
+
+// Add 校验并新增连接；ID 为空时自动生成。
+func (s *ConnStore) Add(p ConnProfile) error {
+	if err := validateProfile(p); err != nil {
+		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -155,14 +180,8 @@ func (s *ConnStore) Add(p ConnProfile) error {
 
 // Update 按 ID 更新连接（校验同 Add）。
 func (s *ConnStore) Update(p ConnProfile) error {
-	if p.Name == "" {
-		return errors.New("连接名称不能为空")
-	}
-	if p.Kind != "sqlite" {
-		return fmt.Errorf("M2 仅支持 sqlite，收到 %q", p.Kind)
-	}
-	if _, err := os.Stat(p.Path); err != nil {
-		return fmt.Errorf("路径不可用: %w", err)
+	if err := validateProfile(p); err != nil {
+		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

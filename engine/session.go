@@ -8,9 +8,14 @@ import (
 
 // Profile 描述一个数据源连接的静态配置。
 type Profile struct {
-	Kind string // "sqlite" | "mysql" | "postgres"
-	Name string // 展示名
-	DSN  string // sqlite：文件路径或 ":memory:"
+	Kind     string // "sqlite" | "mysql" | "postgres"
+	Name     string // 展示名
+	DSN      string // sqlite：文件路径或 ":memory:"
+	Host     string // mysql：主机
+	Port     int    // mysql：端口
+	User     string // mysql：用户
+	Password string // mysql：密码
+	Database string // mysql：数据库（可空）
 }
 
 // Session 是协议无关的数据源会话契约；实现由 driver 包提供。
