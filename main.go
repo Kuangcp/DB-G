@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo"
 	mygoUI "github.com/egoist/mygo/ui"
 
+	_ "db-g/driver/mysql"
 	_ "db-g/driver/sqlite"
 	"db-g/ui"
 )
