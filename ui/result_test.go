@@ -29,7 +29,7 @@ func TestResultPaneEmpty(t *testing.T) {
 	a := newTestRoot()
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
-	if !tt.HasText("Ctrl+Enter 执行 SQL") {
+	if !tt.HasText("请先连接数据源") {
 		t.Fatalf("empty hint missing: %q", tt.Texts())
 	}
 }

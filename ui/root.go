@@ -40,6 +40,9 @@ type root struct {
 	treeData       map[string]map[engine.ObjectKind][]engine.DBObject
 	treeErr        map[string]string
 	treeSelected   string
+	selStart       int
+	selEnd         int
+	execPending    bool
 }
 
 func newRoot(text string, s strats) *root {
@@ -94,7 +97,7 @@ func rootView(a *root) func(c *ui.Context) {
 		ed.Update()
 
 		if c.Shortcut(ui.Ctrl, ui.KeyEnter) || c.Shortcut(0, ui.KeyF5) {
-			a.runSQL()
+			a.execPending = true
 		}
 
 		ui.Split(c, &a.sidebarWidth, func() {
@@ -111,8 +114,8 @@ func rootView(a *root) func(c *ui.Context) {
 						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
 					}
 					ui.Spacer(c)
-					if ui.Button(c, "执行").Disabled(a.con.Running() || a.con.Session() == nil).Clicked() {
-						a.runSQL()
+					if ui.Button(c, "执行").Disabled(a.con.Running() || a.con.Session() == nil || a.selStart == a.selEnd).Clicked() {
+						a.execPending = true
 					}
 				})
 
@@ -182,6 +185,11 @@ func rootView(a *root) func(c *ui.Context) {
 							in.TextRanges(FindAll(ed.Buf.String(), a.findQuery)...)
 						} else {
 							in.TextRanges(ed.allRanges...)
+						}
+						a.selStart, a.selEnd = in.TextSelection()
+						if a.execPending {
+							a.execPending = false
+							a.runSQL()
 						}
 					})
 				}, func() {

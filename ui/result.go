@@ -35,7 +35,14 @@ func (a *root) resultPane(c *ui.Context) {
 			}
 			a.resultTable(c, r)
 		default:
-			ui.Text(c, "Ctrl+Enter 执行 SQL").TextColor(c.Theme().TextMuted)
+			switch {
+			case a.con.Session() == nil:
+				ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
+			case a.selStart == a.selEnd:
+				ui.Text(c, "请先选中要执行的 SQL").TextColor(c.Theme().TextMuted)
+			default:
+				ui.Text(c, "Ctrl+Enter 执行选中 SQL").TextColor(c.Theme().TextMuted)
+			}
 		}
 	})
 }

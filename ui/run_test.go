@@ -64,9 +64,8 @@ func TestRunSQLiteEndToEnd(t *testing.T) {
 	a.ed.Buf.Set("SELECT id, name FROM users ORDER BY id")
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
-	if err := tt.Click("执行"); err != nil {
-		t.Fatal(err)
-	}
+	a.selStart, a.selEnd = 0, len([]rune("SELECT id, name FROM users ORDER BY id"))
+	a.runSQL()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if a.con.Result() != nil || a.con.Err() != "" {
@@ -96,9 +95,8 @@ func TestRunErrorEndToEnd(t *testing.T) {
 	a.ed.Buf.Set("SELECT * FROM nope")
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
-	if err := tt.Click("执行"); err != nil {
-		t.Fatal(err)
-	}
+	a.selStart, a.selEnd = 0, len([]rune("SELECT * FROM nope"))
+	a.runSQL()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if a.con.Err() != "" {

@@ -128,9 +128,8 @@ func TestOpenConnAndRunEndToEnd(t *testing.T) {
 	a.ed.Buf.Set("SELECT name FROM users")
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if err := tt.Click("执行"); err != nil {
-		t.Fatal(err)
-	}
+	a.selStart, a.selEnd = 0, len([]rune("SELECT name FROM users"))
+	a.runSQL()
 	for range 200 {
 		if a.con.Result() != nil || a.con.Err() != "" {
 			break

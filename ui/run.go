@@ -61,5 +61,8 @@ func (a *root) removeConn(id string) {
 }
 
 func (a *root) runSQL() {
-	a.con.Run(a.ed.Buf.String())
+	if a.selStart == a.selEnd {
+		return
+	}
+	a.con.Run(a.ed.Buf.Slice(a.selStart, a.selEnd))
 }
