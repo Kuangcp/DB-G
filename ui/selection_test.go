@@ -72,6 +72,45 @@ func TestExecuteButtonDisabledWithoutSelection(t *testing.T) {
 	if a.con.Result() != nil {
 		t.Fatal("no result expected")
 	}
+
+	// Disabled elements are excluded from the focus order; walk Tab until
+	// focusing the editor auto-selects its text (button then legitimately
+	// enables) and assert 执行 never took focus along the way.
+	sawFocus := false
+	for range 32 {
+		if tt.Focused("执行") {
+			sawFocus = true
+			break
+		}
+		if a.selStart != a.selEnd {
+			break
+		}
+		tt.Key(0, ui.KeyTab)
+	}
+	if sawFocus {
+		t.Fatal("执行 must be disabled (unfocusable) without selection")
+	}
+	if a.selStart == a.selEnd {
+		t.Fatal("tab walk must reach the editor (auto selectAll)")
+	}
+
+	// Positive control: a real UI selection enables the button.
+	tt.Click("编辑器")
+	tt.Command("selectAll")
+	tt.Frame()
+	if a.selStart == a.selEnd {
+		t.Fatal("selectAll must produce a non-empty selection")
+	}
+	if err := tt.Click("执行"); err != nil {
+		t.Fatalf("enabled 执行 must be clickable: %v", err)
+	}
+	pollResult(t, a, tt)
+	if a.con.Err() != "" {
+		t.Fatalf("exec err: %s", a.con.Err())
+	}
+	if a.con.Result() == nil {
+		t.Fatal("enabled click must start a run")
+	}
 }
 
 func TestResultPaneHintByState(t *testing.T) {
