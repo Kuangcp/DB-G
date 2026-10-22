@@ -471,3 +471,72 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 		t.Fatalf("recovered objects: %+v err=%q", got, a.treeErr[p.ID])
 	}
 }
+
+func TestSidebarMySQLConnFlow(t *testing.T) {
+	a := newSidebarRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("新建连接"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("MySQL"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.connFormKind != "mysql" {
+		t.Fatalf("kind toggle: %q", a.connFormKind)
+	}
+	a.connFormName = "远程库"
+	a.connFormDB = "app"
+	a.connFormHost = "10.0.0.1"
+	a.connFormPort = "3306"
+	a.connFormUser = "root"
+	a.connFormPass = "secret"
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	if a.connFormOpen {
+		t.Fatalf("save must close modal: %s", a.connFormErr)
+	}
+	stored := a.store.List()
+	if len(stored) != 1 {
+		t.Fatalf("store: %+v", stored)
+	}
+	p := stored[0]
+	if p.Kind != "mysql" || p.Host != "10.0.0.1" || p.Port != 3306 || p.User != "root" || p.Password != "secret" || p.Database != "app" {
+		t.Fatalf("stored: %+v", p)
+	}
+	tt.Frame()
+	if err := tt.Click("编辑"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.connFormOpen || a.connFormKind != "mysql" || a.connFormHost != "10.0.0.1" || a.connFormPort != "3306" || a.connFormPass != "secret" {
+		t.Fatalf("edit refill: kind=%q host=%q port=%q pass=%q", a.connFormKind, a.connFormHost, a.connFormPort, a.connFormPass)
+	}
+}
+
+func TestOpenConnMySQLProfileFields(t *testing.T) {
+	var captured engine.Profile
+	engine.Register("mysql", func(p engine.Profile) (engine.Session, error) {
+		captured = p
+		return treeFakeSession{}, nil
+	})
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{
+		ID: "m1", Name: "远程", Kind: "mysql",
+		Host: "db.local", Port: 3307, User: "u", Password: "pw", Database: "app",
+	}
+	if err := a.openConn(p); err != nil {
+		t.Fatal(err)
+	}
+	if captured.Kind != "mysql" || captured.Name != "远程" || captured.Host != "db.local" || captured.Port != 3307 ||
+		captured.User != "u" || captured.Password != "pw" || captured.Database != "app" {
+		t.Fatalf("profile mapping: %+v", captured)
+	}
+	if a.con.Session() == nil || a.connName != "远程" {
+		t.Fatal("openConn must install session")
+	}
+}

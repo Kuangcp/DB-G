@@ -14,7 +14,10 @@ func (a *root) openSQLite(path string) error {
 }
 
 func (a *root) openConn(p app.ConnProfile) error {
-	sess, err := engine.Open(engine.Profile{Kind: p.Kind, Name: p.Name, DSN: p.Path})
+	sess, err := engine.Open(engine.Profile{
+		Kind: p.Kind, Name: p.Name, DSN: p.Path,
+		Host: p.Host, Port: p.Port, User: p.User, Password: p.Password, Database: p.Database,
+	})
 	if err != nil {
 		a.connErr = err.Error()
 		a.failedConnID = p.ID

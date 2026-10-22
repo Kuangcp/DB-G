@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strconv"
+
 	"github.com/egoist/mygo"
 
 	"github.com/egoist/mygo/ui"
@@ -13,6 +15,8 @@ func (a *root) sidebar(c *ui.Context) {
 		ui.Row(c).Gap(6).Children(func() {
 			if ui.Button(c, "新建连接").Clicked() {
 				a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
+				a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
+				a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
 			}
 			if ui.Button(c, "刷新").Clicked() {
 				a.reloadTree()
@@ -69,6 +73,12 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 		ui.Spacer(c)
 		if ui.Button(c, "编辑").Clicked() {
 			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
+			a.connFormKind = p.Kind
+			a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
+			a.connFormPort = ""
+			if p.Port > 0 {
+				a.connFormPort = strconv.Itoa(p.Port)
+			}
 		}
 		if ui.Button(c, "删除").Clicked() {
 			a.connDeleting, a.connDeleteOpen = p.ID, true
@@ -90,13 +100,31 @@ func (a *root) connModal(c *ui.Context) {
 			title = "编辑连接"
 		}
 		ui.Text(c, title).Bold()
-		ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
-		ui.Row(c).Gap(6).Children(func() {
-			ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Fill()
-			if ui.Button(c, "浏览…").Clicked() {
-				a.browsePath()
-			}
+		ui.RadioGroup(c, func() {
+			ui.Row(c).Gap(8).Children(func() {
+				ui.Radio(c, &a.connFormKind, "sqlite", "SQLite")
+				ui.Radio(c, &a.connFormKind, "mysql", "MySQL")
+			})
 		})
+		ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
+		if a.connFormKind == "mysql" {
+			ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）")
+			ui.Row(c).Gap(6).Children(func() {
+				ui.TextInput(c, &a.connFormHost).Placeholder("主机").Fill()
+				ui.TextInput(c, &a.connFormPort).Placeholder("端口")
+			})
+			ui.Row(c).Gap(6).Children(func() {
+				ui.TextInput(c, &a.connFormUser).Placeholder("用户").Fill()
+				ui.TextInput(c, &a.connFormPass).Placeholder("密码").Password()
+			})
+		} else {
+			ui.Row(c).Gap(6).Children(func() {
+				ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Fill()
+				if ui.Button(c, "浏览…").Clicked() {
+					a.browsePath()
+				}
+			})
+		}
 		if a.connFormErr != "" {
 			ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
 		}
@@ -138,7 +166,19 @@ func (a *root) saveConnForm() {
 		a.connFormErr = "连接库不可用"
 		return
 	}
-	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: "sqlite", Path: a.connFormPath}
+	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath}
+	if a.connFormKind == "mysql" {
+		port, err := strconv.Atoi(a.connFormPort)
+		if err != nil {
+			a.connFormErr = "端口必须是数字"
+			return
+		}
+		p.Host = a.connFormHost
+		p.Port = port
+		p.User = a.connFormUser
+		p.Password = a.connFormPass
+		p.Database = a.connFormDB
+	}
 	var err error
 	if a.connFormID == "" {
 		err = a.store.Add(p)

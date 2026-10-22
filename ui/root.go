@@ -33,6 +33,12 @@ type root struct {
 	connFormName   string
 	connFormPath   string
 	connFormErr    string
+	connFormKind   string
+	connFormHost   string
+	connFormPort   string
+	connFormUser   string
+	connFormPass   string
+	connFormDB     string
 	connDeleteOpen bool
 	connDeleting   string
 	treeExpand     map[string]bool
@@ -56,6 +62,7 @@ func newRoot(text string, s strats) *root {
 		treeOpen:      map[string]*bool{},
 		treeData:      map[string]map[engine.ObjectKind][]engine.DBObject{},
 		treeErr:       map[string]string{},
+		connFormKind:  "sqlite",
 	}
 }
 
