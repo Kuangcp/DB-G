@@ -17,13 +17,15 @@ type ConsoleManager struct {
 	store *ConnStore
 	sink  TextSink
 
-	mu         sync.Mutex
-	cache      map[string]string // consoleID → 最近正文
-	lastSaved  map[string]string // consoleID → 最近成功写盘的内容
-	dirty      map[string]bool   // consoleID → 有待写改动
-	saveTimers map[string]*time.Timer
-	caretDraft map[string][2]int // consoleID → 尚未落库的光标/选区（rune 偏移）
-	caretTimer map[string]*time.Timer
+	mu                sync.Mutex
+	activeWorkspaceID string            // 内存里的活动工作区（持久化副本在 store）
+	activeConsoleID   string            // 当前展示的控制台
+	cache             map[string]string // consoleID → 最近正文
+	lastSaved         map[string]string // consoleID → 最近成功写盘的内容
+	dirty             map[string]bool   // consoleID → 有待写改动
+	saveTimers        map[string]*time.Timer
+	caretDraft        map[string][2]int // consoleID → 尚未落库的光标/选区（rune 偏移）
+	caretTimer        map[string]*time.Timer
 }
 
 // NewConsoleManager 创建管理器；sink 的生产实现是 ConsoleFiles。
@@ -230,4 +232,354 @@ func (m *ConsoleManager) forget(id string) {
 	delete(m.lastSaved, id)
 	delete(m.dirty, id)
 	delete(m.caretDraft, id)
+}
+
+// ---------- 工作区与激活 ----------
+
+// Workspaces 返回全部工作区（按 SortOrder）。
+func (m *ConsoleManager) Workspaces() []WorkspaceRecord { return m.store.ListWorkspaces() }
+
+// ActiveWorkspace 返回当前工作区；内存指针无效时回落到第一个（不写盘）。
+func (m *ConsoleManager) ActiveWorkspace() (WorkspaceRecord, bool) {
+	ws, ok := m.resolveActiveWorkspace()
+	if !ok {
+		return WorkspaceRecord{}, false
+	}
+	return ws, true
+}
+
+func (m *ConsoleManager) resolveActiveWorkspace() (WorkspaceRecord, bool) {
+	list := m.store.ListWorkspaces()
+	if len(list) == 0 {
+		m.mu.Lock()
+		m.activeWorkspaceID = ""
+		m.mu.Unlock()
+		return WorkspaceRecord{}, false
+	}
+	m.mu.Lock()
+	id := m.activeWorkspaceID
+	m.mu.Unlock()
+	for _, ws := range list {
+		if ws.ID == id {
+			return ws, true
+		}
+	}
+	m.mu.Lock()
+	m.activeWorkspaceID = list[0].ID
+	m.mu.Unlock()
+	return list[0], true
+}
+
+// EnsureWorkspace 保证存在一个激活工作区：优先当前的，否则第一个，都没有就建「默认」。
+func (m *ConsoleManager) EnsureWorkspace() (WorkspaceRecord, error) {
+	if ws, ok := m.resolveActiveWorkspace(); ok {
+		return ws, nil
+	}
+	ws, err := m.store.CreateWorkspace("")
+	if err != nil {
+		return WorkspaceRecord{}, err
+	}
+	m.store.SetActiveWorkspace(ws.ID)
+	m.mu.Lock()
+	m.activeWorkspaceID = ws.ID
+	m.mu.Unlock()
+	return ws, nil
+}
+
+// CreateWorkspace 新建工作区并激活它（无成员，激活控制台清空）。
+func (m *ConsoleManager) CreateWorkspace(name string) (WorkspaceRecord, error) {
+	ws, err := m.store.CreateWorkspace(name)
+	if err != nil {
+		return WorkspaceRecord{}, err
+	}
+	m.store.SetActiveWorkspace(ws.ID)
+	m.mu.Lock()
+	m.activeWorkspaceID = ws.ID
+	m.activeConsoleID = ""
+	m.mu.Unlock()
+	return ws, nil
+}
+
+// SetActiveWorkspace 切换工作区，并按它的 LastActiveConsoleID（无效则最后成员）恢复激活控制台。
+func (m *ConsoleManager) SetActiveWorkspace(id string) (WorkspaceRecord, bool) {
+	ws, ok := m.store.GetWorkspace(id)
+	if !ok {
+		return WorkspaceRecord{}, false
+	}
+	m.flushActiveState()
+	m.store.SetActiveWorkspace(ws.ID)
+	m.mu.Lock()
+	m.activeWorkspaceID = ws.ID
+	m.activeConsoleID = ""
+	m.mu.Unlock()
+	m.restoreActiveIn(ws)
+	return ws, true
+}
+
+// RenameWorkspace 改名。
+func (m *ConsoleManager) RenameWorkspace(id, name string) error {
+	return m.store.RenameWorkspace(id, name)
+}
+
+// DeleteWorkspace 删除工作区；删的是当前工作区时切到下一个（无则进入无工作区态）。
+func (m *ConsoleManager) DeleteWorkspace(id string) error {
+	wasActive := false
+	if ws, ok := m.ActiveWorkspace(); ok && ws.ID == id {
+		wasActive = true
+	}
+	m.flushActiveState()
+	if err := m.store.DeleteWorkspace(id); err != nil {
+		return err
+	}
+	if !wasActive {
+		return nil
+	}
+	m.mu.Lock()
+	m.activeWorkspaceID = ""
+	m.activeConsoleID = ""
+	m.mu.Unlock()
+	if ws, ok := m.resolveActiveWorkspace(); ok {
+		m.store.SetActiveWorkspace(ws.ID)
+		m.restoreActiveIn(ws)
+	}
+	return nil
+}
+
+// ---------- 控制台集合与开关 ----------
+
+// ConsolesOf 返回某数据源的全部控制台（不看工作区成员关系）。
+func (m *ConsoleManager) ConsolesOf(connID string) []ConsoleRecord {
+	return m.store.ListConsoles(connID)
+}
+
+// Open 返回当前工作区的成员（按成员顺序），跳过指向已删除控制台的悬空 id。
+func (m *ConsoleManager) Open() []ConsoleRecord {
+	ws, ok := m.ActiveWorkspace()
+	if !ok {
+		return nil
+	}
+	out := make([]ConsoleRecord, 0, len(ws.Members))
+	for _, id := range ws.Members {
+		if rec, ok := m.store.GetConsole(id); ok {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
+// IsOpen 报告控制台是否在当前工作区。
+func (m *ConsoleManager) IsOpen(id string) bool {
+	ws, ok := m.ActiveWorkspace()
+	if !ok {
+		return false
+	}
+	for _, member := range ws.Members {
+		if member == id {
+			return true
+		}
+	}
+	return false
+}
+
+// Active 返回当前激活的控制台；指针无效或已不是当前工作区成员时清空。
+func (m *ConsoleManager) Active() (ConsoleRecord, bool) {
+	m.mu.Lock()
+	id := m.activeConsoleID
+	m.mu.Unlock()
+	if id == "" || !m.IsOpen(id) {
+		if id != "" {
+			m.mu.Lock()
+			if m.activeConsoleID == id {
+				m.activeConsoleID = ""
+			}
+			m.mu.Unlock()
+		}
+		return ConsoleRecord{}, false
+	}
+	rec, ok := m.store.GetConsole(id)
+	if !ok {
+		m.mu.Lock()
+		m.activeConsoleID = ""
+		m.mu.Unlock()
+		return ConsoleRecord{}, false
+	}
+	return rec, true
+}
+
+// Create 在数据源下新建控制台：建行 + 空文件 + 加入当前工作区 + 激活。
+func (m *ConsoleManager) Create(connID, name string) (ConsoleRecord, error) {
+	ws, err := m.EnsureWorkspace()
+	if err != nil {
+		return ConsoleRecord{}, err
+	}
+	rec, err := m.store.CreateConsole(connID, name)
+	if err != nil {
+		return ConsoleRecord{}, err
+	}
+	if err := m.sink.Write(rec.ID, ""); err != nil {
+		_ = m.store.DeleteConsole(rec.ID)
+		return ConsoleRecord{}, err
+	}
+	if err := m.store.AddWorkspaceMember(ws.ID, rec.ID); err != nil {
+		_ = m.sink.Delete(rec.ID)
+		_ = m.store.DeleteConsole(rec.ID)
+		return ConsoleRecord{}, err
+	}
+	m.activate(rec.ID)
+	return rec, nil
+}
+
+// OpenConsole 把控制台加入当前工作区（末尾）并激活；正文重新读盘。
+func (m *ConsoleManager) OpenConsole(id string) (ConsoleRecord, bool) {
+	rec, ok := m.store.GetConsole(id)
+	if !ok {
+		return ConsoleRecord{}, false
+	}
+	ws, err := m.EnsureWorkspace()
+	if err != nil {
+		return ConsoleRecord{}, false
+	}
+	if !m.IsOpen(id) {
+		if err := m.store.AddWorkspaceMember(ws.ID, id); err != nil {
+			return ConsoleRecord{}, false
+		}
+	}
+	m.forget(id) // 重新读盘
+	m.activate(id)
+	return rec, true
+}
+
+// CloseConsole 把控制台移出当前工作区（正文/元数据/结果保留）；关的是激活控制台时切换。
+func (m *ConsoleManager) CloseConsole(id string) error {
+	ws, ok := m.ActiveWorkspace()
+	if !ok {
+		return nil
+	}
+	if err := m.Flush(id); err != nil {
+		return err
+	}
+	m.flushCaret(id)
+	if err := m.store.RemoveWorkspaceMember(ws.ID, id); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	wasActive := m.activeConsoleID == id
+	m.mu.Unlock()
+	if wasActive {
+		m.mu.Lock()
+		m.activeConsoleID = ""
+		m.mu.Unlock()
+		if ws, ok := m.store.GetWorkspace(ws.ID); ok {
+			m.restoreActiveIn(ws)
+		}
+	}
+	return nil
+}
+
+// DeleteConsole 删除控制台：元数据 + .sql 文件 + 所有工作区成员。
+func (m *ConsoleManager) DeleteConsole(id string) error {
+	if _, ok := m.store.GetConsole(id); !ok {
+		return nil
+	}
+	_ = m.Flush(id)
+	m.forget(id)
+	wasActive := false
+	m.mu.Lock()
+	wasActive = m.activeConsoleID == id
+	m.mu.Unlock()
+	ws, hadWS := m.ActiveWorkspace()
+	if err := m.store.DeleteConsole(id); err != nil {
+		return err
+	}
+	_ = m.sink.Delete(id)
+	if wasActive {
+		m.mu.Lock()
+		m.activeConsoleID = ""
+		m.mu.Unlock()
+		if hadWS {
+			if ws, ok := m.store.GetWorkspace(ws.ID); ok {
+				m.restoreActiveIn(ws)
+			}
+		}
+	}
+	return nil
+}
+
+// Rename 重命名控制台（文件名不变）。
+func (m *ConsoleManager) Rename(id, name string) error { return m.store.RenameConsole(id, name) }
+
+// OnConnectionDeleted 清理被删连接的控制台：缓存/定时器 + 正文文件 + 激活态。
+// recs 必须是删除连接之前收集的控制台列表。
+func (m *ConsoleManager) OnConnectionDeleted(connID string, recs []ConsoleRecord) {
+	activeGone := false
+	m.mu.Lock()
+	active := m.activeConsoleID
+	for _, rec := range recs {
+		if rec.ID == active {
+			activeGone = true
+		}
+	}
+	m.mu.Unlock()
+	for _, rec := range recs {
+		m.forget(rec.ID)
+		_ = m.sink.Delete(rec.ID)
+	}
+	if activeGone {
+		m.mu.Lock()
+		m.activeConsoleID = ""
+		m.mu.Unlock()
+	}
+	if ws, ok := m.ActiveWorkspace(); ok {
+		if fresh, ok := m.store.GetWorkspace(ws.ID); ok {
+			m.mu.Lock()
+			empty := m.activeConsoleID == ""
+			m.mu.Unlock()
+			if empty {
+				m.restoreActiveIn(fresh)
+			}
+		}
+	}
+	_ = connID
+}
+
+// activate 设定激活控制台并记忆到工作区。
+func (m *ConsoleManager) activate(id string) {
+	m.mu.Lock()
+	m.activeConsoleID = id
+	m.mu.Unlock()
+	if ws, ok := m.ActiveWorkspace(); ok {
+		_ = m.store.SetWorkspaceLastActive(ws.ID, id)
+	}
+}
+
+// restoreActiveIn 按工作区的 LastActiveConsoleID（无效 → 最后成员）恢复激活；无成员则清空。
+func (m *ConsoleManager) restoreActiveIn(ws WorkspaceRecord) {
+	m.mu.Lock()
+	m.activeConsoleID = ""
+	m.mu.Unlock()
+	if len(ws.Members) == 0 {
+		return
+	}
+	pick := ""
+	if rec, ok := m.store.GetConsole(ws.LastActiveConsoleID); ok && m.IsOpen(rec.ID) {
+		pick = rec.ID
+	} else {
+		pick = ws.Members[len(ws.Members)-1]
+	}
+	if _, ok := m.store.GetConsole(pick); !ok {
+		return
+	}
+	m.activate(pick)
+}
+
+// flushActiveState 落盘当前激活控制台的正文与光标（切工作区/删工作区前）。
+func (m *ConsoleManager) flushActiveState() {
+	m.mu.Lock()
+	id := m.activeConsoleID
+	m.mu.Unlock()
+	if id == "" {
+		return
+	}
+	_ = m.Flush(id)
+	m.flushCaret(id)
 }

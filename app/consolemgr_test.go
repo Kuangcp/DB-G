@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -152,5 +153,184 @@ func TestTextUnknownConsole(t *testing.T) {
 	_, _, _, m := newMgr(t, newFakeSink())
 	if text, ok := m.Text("nope"); ok || text != "" {
 		t.Fatalf("unknown: %q %v", text, ok)
+	}
+}
+
+func TestCreateAddsMemberAndActivates(t *testing.T) {
+	sink := newFakeSink()
+	_, p, _, m := newMgr(t, sink)
+	rec, err := m.Create(p.ID, "第一条")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.IsOpen(rec.ID) {
+		t.Fatal("created console must be a member of the active workspace")
+	}
+	if got, ok := m.Active(); !ok || got.ID != rec.ID {
+		t.Fatalf("active: %+v %v", got, ok)
+	}
+	if !sink.Exists(rec.ID) {
+		t.Fatal("empty .sql file must be created")
+	}
+	ws, _ := m.ActiveWorkspace()
+	if ws.LastActiveConsoleID != rec.ID {
+		t.Fatalf("last active: %+v", ws)
+	}
+}
+
+func TestCloseKeepsFileAndSwitchesActive(t *testing.T) {
+	sink := newFakeSink()
+	_, p, _, m := newMgr(t, sink)
+	a, _ := m.Create(p.ID, "a")
+	b, _ := m.Create(p.ID, "b")
+	m.SetText(b.ID, "SELECT 2")
+	if err := m.CloseConsole(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if m.IsOpen(b.ID) {
+		t.Fatal("closed console must leave the workspace")
+	}
+	if !sink.Exists(b.ID) {
+		t.Fatal("closing must keep the .sql file")
+	}
+	if got, ok := m.Active(); !ok || got.ID != a.ID {
+		t.Fatalf("active after close: %+v %v", got, ok)
+	}
+	sink.files[b.ID] = "SELECT 99"
+	if _, ok := m.OpenConsole(b.ID); !ok {
+		t.Fatal("reopen must succeed")
+	}
+	if text, _ := m.Text(b.ID); text != "SELECT 99" {
+		t.Fatalf("reopen must re-read disk: %q", text)
+	}
+}
+
+func TestOpenConsoleAppendsMember(t *testing.T) {
+	_, p, _, m := newMgr(t, newFakeSink())
+	a, _ := m.Create(p.ID, "a")
+	b, err := m.Store().CreateConsole(p.ID, "b")
+	_ = err
+	_ = m.CloseConsole(a.ID)
+	if _, ok := m.OpenConsole(b.ID); !ok {
+		t.Fatal("open unknown-to-workspace console")
+	}
+	open := m.Open()
+	if len(open) != 1 || open[0].ID != b.ID {
+		t.Fatalf("open order: %+v", open)
+	}
+}
+
+func TestOpenSkipsDanglingMemberIDs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "connections.json")
+	raw := `{"consoles":[{"id":"c1","connectionID":"p1","name":"a"}],
+		"workspaces":[{"id":"w1","name":"默认","members":["c1","deadbeef"]}],
+		"activeWorkspaceID":"w1"}`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := NewConsoleManager(LoadStore(path), newFakeSink())
+	open := m.Open()
+	if len(open) != 1 || open[0].ID != "c1" {
+		t.Fatalf("dangling member must be skipped: %+v", open)
+	}
+}
+
+func TestDeleteWorkspaceKeepsConsolesReopenable(t *testing.T) {
+	sink := newFakeSink()
+	_, p, _, m := newMgr(t, sink)
+	rec, _ := m.Create(p.ID, "c")
+	ws, _ := m.ActiveWorkspace()
+	if err := m.DeleteWorkspace(ws.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.ActiveWorkspace(); ok {
+		t.Fatal("no workspace must remain")
+	}
+	if len(m.Open()) != 0 {
+		t.Fatal("open list must be empty without a workspace")
+	}
+	if !sink.Exists(rec.ID) {
+		t.Fatal("file must survive workspace deletion")
+	}
+	if _, ok := m.Active(); ok {
+		t.Fatal("no active console without a workspace")
+	}
+}
+
+func TestSetActiveWorkspaceRestoresLastActive(t *testing.T) {
+	_, p, _, m := newMgr(t, newFakeSink())
+	wsA, err := m.EnsureWorkspace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := m.Create(p.ID, "a")
+	wsB, err := m.CreateWorkspace("B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := m.Create(p.ID, "b")
+	if got, _ := m.Active(); got.ID != b.ID {
+		t.Fatalf("create must activate in the new workspace: %+v", got)
+	}
+	if _, ok := m.SetActiveWorkspace(wsA.ID); !ok {
+		t.Fatal("switch to A")
+	}
+	if got, _ := m.Active(); got.ID != a.ID {
+		t.Fatalf("restore A console: %+v", got)
+	}
+	if _, ok := m.SetActiveWorkspace(wsB.ID); !ok {
+		t.Fatal("switch to B")
+	}
+	if got, _ := m.Active(); got.ID != b.ID {
+		t.Fatalf("restore B console: %+v", got)
+	}
+}
+
+func TestEnsureWorkspaceCreatesDefaultOnce(t *testing.T) {
+	_, _, _, m := newMgr(t, newFakeSink())
+	ws1, err := m.EnsureWorkspace()
+	if err != nil || ws1.Name != "默认" {
+		t.Fatalf("ensure: %+v %v", ws1, err)
+	}
+	ws2, err := m.EnsureWorkspace()
+	if err != nil || ws2.ID != ws1.ID {
+		t.Fatalf("ensure must be idempotent: %+v %v", ws2, err)
+	}
+	if n := len(m.Workspaces()); n != 1 {
+		t.Fatalf("workspaces: %d", n)
+	}
+}
+
+func TestDeleteConsoleRemovesEverywhere(t *testing.T) {
+	sink := newFakeSink()
+	_, p, _, m := newMgr(t, sink)
+	rec, _ := m.Create(p.ID, "c")
+	m.SetText(rec.ID, "SELECT 1")
+	if err := m.DeleteConsole(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	if sink.Exists(rec.ID) {
+		t.Fatal(".sql must be deleted with the console")
+	}
+	if _, ok := m.Active(); ok {
+		t.Fatal("deleted active console must clear activation")
+	}
+	if len(m.Open()) != 0 {
+		t.Fatal("member must be removed")
+	}
+}
+
+func TestOnConnectionDeletedClearsActive(t *testing.T) {
+	sink := newFakeSink()
+	_, p, _, m := newMgr(t, sink)
+	rec, _ := m.Create(p.ID, "c")
+	recs := m.ConsolesOf(p.ID)
+	_ = m.Store().Remove(p.ID)
+	m.OnConnectionDeleted(p.ID, recs)
+	if _, ok := m.Active(); ok {
+		t.Fatal("active must clear")
+	}
+	if sink.Exists(rec.ID) {
+		t.Fatal("files of the deleted connection must be removed")
 	}
 }
