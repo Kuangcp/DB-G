@@ -8,7 +8,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
+	"time"
 )
 
 // ConnProfile 是一个持久化的数据源连接配置。
@@ -24,12 +27,33 @@ type ConnProfile struct {
 	Database string `json:"database,omitempty"`
 }
 
-// ConnStore 管理连接列表与活动连接；变更同步原子落盘。
+// ConsoleRecord 是一个命名控制台的元数据；正文存在它绑定的 .sql 文件里。
+type ConsoleRecord struct {
+	ID           string `json:"id"`
+	ConnectionID string `json:"connectionID"`
+	Name         string `json:"name"`
+	FilePath     string `json:"filePath"`
+	SortOrder    int    `json:"sortOrder"`
+	CreatedAt    int64  `json:"createdAt"`
+	UpdatedAt    int64  `json:"updatedAt"`
+	CaretStart   int    `json:"caretStart"`
+	CaretEnd     int    `json:"caretEnd"`
+}
+
+// storeFile 是 connections.json 的全部内容；LoadStore 与 save 共用，避免两处漂移。
+type storeFile struct {
+	Conns    []ConnProfile   `json:"conns"`
+	ActiveID string          `json:"activeID"`
+	Consoles []ConsoleRecord `json:"consoles"`
+}
+
+// ConnStore 管理连接列表、控制台元数据与活动连接；变更同步原子落盘。
 type ConnStore struct {
 	mu       sync.Mutex
 	path     string
 	conns    []ConnProfile
 	activeID string
+	consoles []ConsoleRecord
 	warning  string
 }
 
@@ -52,10 +76,7 @@ func LoadStore(path string) *ConnStore {
 		}
 		return s
 	}
-	var file struct {
-		Conns    []ConnProfile `json:"conns"`
-		ActiveID string        `json:"activeID"`
-	}
+	var file storeFile
 	if err := json.Unmarshal(data, &file); err != nil {
 		if rerr := os.Rename(path, path+".bak"); rerr != nil {
 			s.warning = "连接配置损坏: " + rerr.Error()
@@ -66,6 +87,7 @@ func LoadStore(path string) *ConnStore {
 	}
 	s.conns = file.Conns
 	s.activeID = file.ActiveID
+	s.consoles = file.Consoles
 	return s
 }
 
@@ -98,10 +120,11 @@ func (s *ConnStore) Get(id string) (ConnProfile, bool) {
 }
 
 func (s *ConnStore) save() error {
-	data, err := json.MarshalIndent(struct {
-		Conns    []ConnProfile `json:"conns"`
-		ActiveID string        `json:"activeID"`
-	}{s.conns, s.activeID}, "", "  ")
+	data, err := json.MarshalIndent(storeFile{
+		Conns:    s.conns,
+		ActiveID: s.activeID,
+		Consoles: s.consoles,
+	}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -242,4 +265,174 @@ func (s *ConnStore) SetActive(id string) {
 		s.activeID = prev
 		s.warning = "保存活动连接失败: " + err.Error()
 	}
+}
+
+// ConsolesDir 返回控制台正文文件目录（与配置文件同级，测试天然隔离）。
+func (s *ConnStore) ConsolesDir() string {
+	return filepath.Join(filepath.Dir(s.path), "consoles")
+}
+
+// ListConsoles 返回某数据源的全部控制台（副本），按 SortOrder、CreatedAt 升序。
+func (s *ConnStore) ListConsoles(connID string) []ConsoleRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listConsolesLocked(connID)
+}
+
+func (s *ConnStore) listConsolesLocked(connID string) []ConsoleRecord {
+	out := make([]ConsoleRecord, 0, len(s.consoles))
+	for _, c := range s.consoles {
+		if c.ConnectionID == connID {
+			out = append(out, c)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].SortOrder != out[j].SortOrder {
+			return out[i].SortOrder < out[j].SortOrder
+		}
+		return out[i].CreatedAt < out[j].CreatedAt
+	})
+	return out
+}
+
+// GetConsole 按 ID 查找控制台。
+func (s *ConnStore) GetConsole(id string) (ConsoleRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, c := range s.consoles {
+		if c.ID == id {
+			return c, true
+		}
+	}
+	return ConsoleRecord{}, false
+}
+
+// CreateConsole 在指定数据源下新建控制台元数据；空名称回退「控制台 N」。
+func (s *ConnStore) CreateConsole(connID, name string) (ConsoleRecord, error) {
+	name = strings.TrimSpace(name)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	found := false
+	for _, p := range s.conns {
+		if p.ID == connID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ConsoleRecord{}, fmt.Errorf("连接不存在: %s", connID)
+	}
+	if name == "" {
+		name = fmt.Sprintf("控制台 %d", len(s.listConsolesLocked(connID))+1)
+	}
+	id, err := genID()
+	if err != nil {
+		return ConsoleRecord{}, err
+	}
+	order := 0
+	for _, c := range s.consoles {
+		if c.ConnectionID == connID && c.SortOrder >= order {
+			order = c.SortOrder + 1
+		}
+	}
+	now := time.Now().UnixMilli()
+	rec := ConsoleRecord{
+		ID:           id,
+		ConnectionID: connID,
+		Name:         name,
+		FilePath:     filepath.Join(s.ConsolesDir(), id+".sql"),
+		SortOrder:    order,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	s.consoles = append(s.consoles, rec)
+	if err := s.save(); err != nil {
+		s.consoles = s.consoles[:len(s.consoles)-1]
+		return ConsoleRecord{}, err
+	}
+	return rec, nil
+}
+
+// RenameConsole 改名；空名称回退「控制台 N」之外的默认值（保留旧名）。
+func (s *ConnStore) RenameConsole(id, name string) error {
+	name = strings.TrimSpace(name)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.consoleIndexLocked(id)
+	if idx < 0 {
+		return fmt.Errorf("控制台不存在: %s", id)
+	}
+	if name == "" {
+		name = s.consoles[idx].Name
+	}
+	// 用更新闭包做单点写入，save 失败时回滚。
+	return s.mutateConsoleLocked(idx, func(c *ConsoleRecord) {
+		c.Name = name
+		c.UpdatedAt = time.Now().UnixMilli()
+	})
+}
+
+// DeleteConsole 删除控制台元数据行。
+func (s *ConnStore) DeleteConsole(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.consoleIndexLocked(id)
+	if idx < 0 {
+		return fmt.Errorf("控制台不存在: %s", id)
+	}
+	prev := s.consoles
+	s.consoles = append(append([]ConsoleRecord{}, s.consoles[:idx]...), s.consoles[idx+1:]...)
+	if err := s.save(); err != nil {
+		s.consoles = prev
+		return err
+	}
+	return nil
+}
+
+// SetConsoleCaret 记住光标/选区（rune 偏移）；落盘失败只记警告，不中断编辑。
+func (s *ConnStore) SetConsoleCaret(id string, start, end int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.consoleIndexLocked(id)
+	if idx < 0 {
+		return
+	}
+	if err := s.mutateConsoleLocked(idx, func(c *ConsoleRecord) {
+		c.CaretStart, c.CaretEnd = start, end
+	}); err != nil {
+		s.warning = "保存控制台光标失败: " + err.Error()
+	}
+}
+
+// TouchConsole 记录控制台最近落盘时刻。
+func (s *ConnStore) TouchConsole(id string, at int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.consoleIndexLocked(id)
+	if idx < 0 {
+		return
+	}
+	if err := s.mutateConsoleLocked(idx, func(c *ConsoleRecord) { c.UpdatedAt = at }); err != nil {
+		s.warning = "保存控制台失败: " + err.Error()
+	}
+}
+
+func (s *ConnStore) consoleIndexLocked(id string) int {
+	for i, c := range s.consoles {
+		if c.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// mutateConsoleLocked 就地修改第 idx 行并落盘，失败时恢复旧值。
+func (s *ConnStore) mutateConsoleLocked(idx int, fn func(*ConsoleRecord)) error {
+	old := s.consoles[idx]
+	fn(&s.consoles[idx])
+	if err := s.save(); err != nil {
+		s.consoles[idx] = old
+		return err
+	}
+	return nil
 }

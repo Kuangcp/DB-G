@@ -207,3 +207,74 @@ func TestStoreLoadsLegacyJSON(t *testing.T) {
 		t.Fatalf("legacy load: %+v", s.List())
 	}
 }
+
+func TestConsolesRoundTrip(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	rec, err := s.CreateConsole(p.ID, "  查询  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Name != "查询" || rec.ConnectionID != p.ID || rec.FilePath != filepath.Join(s.ConsolesDir(), rec.ID+".sql") {
+		t.Fatalf("bad record: %+v", rec)
+	}
+	again := LoadStore(s.path)
+	got, ok := again.GetConsole(rec.ID)
+	if !ok || got.Name != "查询" || got.SortOrder != rec.SortOrder {
+		t.Fatalf("round trip: %+v %v", got, ok)
+	}
+}
+
+func TestCreateConsoleDefaults(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	first, err := s.CreateConsole(p.ID, "")
+	if err != nil || first.Name != "控制台 1" {
+		t.Fatalf("first: %+v %v", first, err)
+	}
+	second, err := s.CreateConsole(p.ID, "  ")
+	if err != nil || second.Name != "控制台 2" || second.SortOrder != first.SortOrder+1 {
+		t.Fatalf("second: %+v %v", second, err)
+	}
+	if _, err := s.CreateConsole("nope", "x"); err == nil {
+		t.Fatal("unknown connection must fail")
+	}
+}
+
+func TestConsolesLegacyJSONWithoutField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "connections.json")
+	legacy := `{"conns":[{"id":"abc","name":"旧","kind":"sqlite","path":"/tmp/x.db"}],"activeID":"abc"}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := LoadStore(path)
+	if len(s.List()) != 1 || len(s.ListConsoles("abc")) != 0 {
+		t.Fatalf("legacy load: %+v", s.List())
+	}
+	if _, err := s.CreateConsole("abc", "新"); err != nil {
+		t.Fatal(err)
+	}
+	re := LoadStore(path)
+	if len(re.List()) != 1 || len(re.ListConsoles("abc")) != 1 {
+		t.Fatalf("legacy rewrite lost data: conns=%d consoles=%d", len(re.List()), len(re.ListConsoles("abc")))
+	}
+}
+
+func TestConsoleCaretAndDelete(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	rec, _ := s.CreateConsole(p.ID, "c")
+	s.SetConsoleCaret(rec.ID, 3, 7)
+	s.TouchConsole(rec.ID, 1234)
+	got, _ := LoadStore(s.path).GetConsole(rec.ID)
+	if got.CaretStart != 3 || got.CaretEnd != 7 || got.UpdatedAt != 1234 {
+		t.Fatalf("caret/updated: %+v", got)
+	}
+	if err := s.DeleteConsole(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := LoadStore(s.path).GetConsole(rec.ID); ok {
+		t.Fatal("console must be deleted")
+	}
+}
