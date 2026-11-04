@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"time"
 
@@ -67,5 +68,35 @@ func (a *root) runSQL() {
 	if a.selStart == a.selEnd {
 		return
 	}
-	a.con.Run(a.sess, a.ed.Buf.Slice(a.selStart, a.selEnd))
+	// 有激活控制台时：先落盘，并确保连着它的数据源；没有控制台时沿用临时缓冲执行（不落盘）。
+	if a.activeConsole != "" {
+		if err := a.flushActive(); err != nil {
+			return
+		}
+		if err := a.ensureConsoleConn(); err != nil {
+			a.consoleErr = err.Error()
+			return
+		}
+	}
+	a.currentRuntime().Run(a.sess, a.ed.Buf.Slice(a.selStart, a.selEnd))
+}
+
+// ensureConsoleConn 保证已连接的控制台正是执行目标；否则连上它的数据源。
+func (a *root) ensureConsoleConn() error {
+	m := a.consoleMgr()
+	if m == nil {
+		return errors.New("控制台不可用")
+	}
+	rec, ok := m.Active()
+	if !ok {
+		return errors.New("没有激活的控制台")
+	}
+	if a.sess != nil && a.sessConnID == rec.ConnectionID {
+		return nil
+	}
+	p, ok := a.store.Get(rec.ConnectionID)
+	if !ok {
+		return errors.New("控制台的数据源已删除")
+	}
+	return a.openConn(p)
 }

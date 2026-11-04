@@ -443,8 +443,8 @@ func (m *ConsoleManager) OpenConsole(id string) (ConsoleRecord, bool) {
 		if err := m.store.AddWorkspaceMember(ws.ID, id); err != nil {
 			return ConsoleRecord{}, false
 		}
+		m.forget(id) // 真正重开：正文以磁盘为准
 	}
-	m.forget(id) // 重新读盘
 	m.activate(id)
 	return rec, true
 }

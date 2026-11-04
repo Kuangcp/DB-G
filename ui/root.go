@@ -51,6 +51,23 @@ type root struct {
 	selStart       int
 	selEnd         int
 	execPending    bool
+
+	mgr             *app.ConsoleManager
+	consoles        map[string]*app.Console // consoleID → 运行态
+	activeConsole   string
+	pendingActivate string
+	pendingClose    string
+	pendingSwitchWS string
+	lastVer         map[string]uint64
+	lastCaret       [2]int
+	pendingSel      *[2]int
+	consoleErr      string
+	tabMenuAction   string // "close" / "rename" / "delete"
+	tabMenuTarget   string
+	modalKind       string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
+	modalTarget     string
+	modalText       string
+	modalErr        string
 }
 
 func newRoot(text string, s strats) *root {
@@ -65,6 +82,8 @@ func newRoot(text string, s strats) *root {
 		treeData:      map[string]map[engine.ObjectKind][]engine.DBObject{},
 		treeErr:       map[string]string{},
 		connFormKind:  "sqlite",
+		consoles:      map[string]*app.Console{},
+		lastVer:       map[string]uint64{},
 	}
 }
 
@@ -93,10 +112,106 @@ func (a *root) setSession(connID string, s engine.Session) {
 	a.sess, a.sessConnID = s, connID
 }
 
+// consoleMgr 懒初始化控制台管理器；没有连接库（无持久化）时返回 nil。
+func (a *root) consoleMgr() *app.ConsoleManager {
+	if a.mgr == nil && a.store != nil {
+		a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir()})
+	}
+	return a.mgr
+}
+
+// runtime 返回某控制台的执行运行态（懒创建，结果按控制台各自保留）。
+func (a *root) runtime(id string) *app.Console {
+	if c, ok := a.consoles[id]; ok {
+		return c
+	}
+	c := app.NewConsole()
+	if a.win != nil {
+		win := a.win
+		c.SetPublisher(func(f func()) { win.Update(f) })
+	}
+	a.consoles[id] = c
+	return c
+}
+
+// currentRuntime 返回结果区展示的运行态：有激活控制台用它的，否则用默认实例（空态/测试口）。
+func (a *root) currentRuntime() *app.Console {
+	if a.activeConsole == "" {
+		return a.con
+	}
+	return a.runtime(a.activeConsole)
+}
+
+// activateConsole 把编辑器切成该控制台的正文，并安排光标回位。
+func (a *root) activateConsole(id string) bool {
+	m := a.consoleMgr()
+	if m == nil {
+		return false
+	}
+	_ = a.flushActive()
+	rec, ok := m.OpenConsole(id)
+	if !ok {
+		return false
+	}
+	text, _ := m.Text(rec.ID)
+	a.ed.Buf.Set(text)
+	a.ed.dirty = true
+	a.ed.scroll = ui.ScrollState{}
+	start, end := m.Caret(rec.ID)
+	a.pendingSel = &[2]int{start, end}
+	a.activeConsole = rec.ID
+	a.lastVer[rec.ID] = a.ed.Buf.Version()
+	a.lastCaret = [2]int{start, end}
+	a.selStart, a.selEnd = start, end
+	a.runtime(rec.ID)
+	return true
+}
+
+// flushActive 落盘当前控制台的正文与光标（切标签/关闭/执行前/退出）。
+func (a *root) flushActive() error {
+	if a.activeConsole == "" {
+		return nil
+	}
+	m := a.consoleMgr()
+	if m == nil {
+		return nil
+	}
+	m.SetCaret(a.activeConsole, a.selStart, a.selEnd)
+	m.FlushCarets()
+	if err := m.Flush(a.activeConsole); err != nil {
+		a.consoleErr = err.Error()
+		return err
+	}
+	return nil
+}
+
+// syncActiveBuffer 把编辑器改动同步给管理器：只在文本版本变化时取 String()（O(n)），
+// 只在选区变化时记光标，保持逐帧成本为常数级。
+func (a *root) syncActiveBuffer() {
+	if a.activeConsole == "" {
+		return
+	}
+	m := a.consoleMgr()
+	if m == nil {
+		return
+	}
+	if ver := a.ed.Buf.Version(); ver != a.lastVer[a.activeConsole] {
+		a.lastVer[a.activeConsole] = ver
+		m.SetText(a.activeConsole, a.ed.Buf.String())
+	}
+	if cur := [2]int{a.selStart, a.selEnd}; cur != a.lastCaret {
+		a.lastCaret = cur
+		m.SetCaret(a.activeConsole, cur[0], cur[1])
+	}
+}
+
 // Attach 在窗口创建后接通主线程回投与原生窗口句柄。
 func (a *root) Attach(win *mygo.Window) {
 	a.win = win
 	a.con.SetPublisher(func(f func()) { win.Update(f) })
+	for _, c := range a.consoles {
+		c.SetPublisher(func(f func()) { win.Update(f) })
+	}
 }
 
 // View 是窗口内容入口。
@@ -111,11 +226,41 @@ func fmtDur(d time.Duration) string {
 func rootView(a *root) func(c *ui.Context) {
 	return func(c *ui.Context) {
 		ed := a.ed
+		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
+		a.syncActiveBuffer()
+		if a.pendingClose != "" {
+			id := a.pendingClose
+			a.pendingClose = ""
+			a.closeConsole(id)
+		}
+		if a.pendingSwitchWS != "" {
+			id := a.pendingSwitchWS
+			a.pendingSwitchWS = ""
+			if m := a.consoleMgr(); m != nil {
+				if _, ok := m.SetActiveWorkspace(id); ok {
+					if rec, ok := m.Active(); ok {
+						a.pendingActivate = rec.ID
+					} else {
+						a.clearEditorConsole()
+					}
+				}
+			}
+		}
+		if a.pendingActivate != "" {
+			id := a.pendingActivate
+			a.pendingActivate = ""
+			a.activateConsole(id)
+		}
 		ed.Update()
 
 		if c.Shortcut(ui.Ctrl, ui.KeyEnter) || c.Shortcut(0, ui.KeyF5) {
 			a.execPending = true
 		}
+		if c.Shortcut(ui.Ctrl, ui.KeyS) {
+			_ = a.flushActive()
+		}
+
+		a.tabModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
@@ -130,11 +275,19 @@ func rootView(a *root) func(c *ui.Context) {
 					if a.connErr != "" {
 						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
 					}
+					if a.consoleErr != "" {
+						if ui.Button(c, a.consoleErr).TextColor(c.Theme().Danger).SingleLine().Clicked() {
+							a.consoleErr = ""
+						}
+					}
 					ui.Spacer(c)
-					if ui.Button(c, "执行").Disabled(a.con.Running() || a.sess == nil || a.selStart == a.selEnd).Clicked() {
+					if ui.Button(c, "执行").Disabled(a.currentRuntime().Running() || a.sess == nil || a.selStart == a.selEnd).Clicked() {
 						a.execPending = true
 					}
 				})
+
+				// 标签条 + 工作区切换器
+				a.tabBar(c)
 
 				// 工具行：HUD + 尺寸 + 策略 + 查找
 				ui.Row(c).Gap(6).Children(func() {
@@ -198,6 +351,10 @@ func rootView(a *root) func(c *ui.Context) {
 
 						in := ui.TextAreaBuffer(c, ed.Buf).Label("编辑器").Fill().Font("monospace").
 							TrackLines(&ed.lines).TrackScroll(&ed.scroll)
+						if a.pendingSel != nil {
+							in.SetTextSelection(a.pendingSel[0], a.pendingSel[1])
+							a.pendingSel = nil
+						}
 						if a.findActive && a.findQuery != "" {
 							in.TextRanges(FindAll(ed.Buf.String(), a.findQuery)...)
 						} else {

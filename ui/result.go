@@ -13,19 +13,19 @@ import (
 func (a *root) resultPane(c *ui.Context) {
 	ui.Column(c).Fill().Gap(6).Children(func() {
 		switch {
-		case a.con.Running():
+		case a.currentRuntime().Running():
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Spinner(c)
 				ui.Text(c, "执行中…")
 				if ui.Button(c, "停止").Clicked() {
-					a.con.Cancel()
+					a.currentRuntime().Cancel()
 				}
 			})
-		case a.con.Err() != "":
+		case a.currentRuntime().Err() != "":
 			ui.Text(c, "执行失败").Bold()
-			ui.Text(c, a.con.Err()).TextColor(c.Theme().Danger).Font("monospace")
-		case a.con.Result() != nil:
-			r := a.con.Result()
+			ui.Text(c, a.currentRuntime().Err()).TextColor(c.Theme().Danger).Font("monospace")
+		case a.currentRuntime().Result() != nil:
+			r := a.currentRuntime().Result()
 			if !r.IsQuery {
 				ui.Textf(c, "OK — %d 行受影响", r.Affected)
 				return
