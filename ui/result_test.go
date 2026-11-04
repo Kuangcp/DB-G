@@ -82,8 +82,8 @@ func TestResultPaneErrorAndStop(t *testing.T) {
 	}
 
 	a.con.SetOutcome(nil, "")
-	a.con.UseSession(blockingFake{})
-	if !a.con.Run("SELECT 1") {
+	a.setSession("test", blockingFake{})
+	if !a.con.Run(a.sess, "SELECT 1") {
 		t.Fatal("run must start")
 	}
 	tt.Frame()

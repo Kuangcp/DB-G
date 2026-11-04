@@ -32,7 +32,7 @@ func (a *root) openConn(p app.ConnProfile) error {
 		a.setTreeErr(p.ID, a.connErr)
 		return err
 	}
-	a.con.SwapSession(sess)
+	a.setSession(p.ID, sess)
 	a.connName = p.Name
 	a.activeConnID = p.ID
 	a.failedConnID = ""
@@ -52,7 +52,7 @@ func (a *root) removeConn(id string) {
 		a.connErr = ""
 	}
 	if a.activeConnID == id {
-		a.con.SwapSession(nil)
+		a.setSession("", nil)
 		a.connName = ""
 		a.activeConnID = ""
 		a.connErr = ""
@@ -67,5 +67,5 @@ func (a *root) runSQL() {
 	if a.selStart == a.selEnd {
 		return
 	}
-	a.con.Run(a.ed.Buf.Slice(a.selStart, a.selEnd))
+	a.con.Run(a.sess, a.ed.Buf.Slice(a.selStart, a.selEnd))
 }

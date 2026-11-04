@@ -51,8 +51,7 @@ func waitFor(t *testing.T, d time.Duration, cond func() bool) {
 func TestRunCompletes(t *testing.T) {
 	f := &fakeSession{}
 	c := NewConsole()
-	c.UseSession(f)
-	if !c.Run("UPDATE t SET x=1") {
+	if !c.Run(f, "UPDATE t SET x=1") {
 		t.Fatal("Run must start")
 	}
 	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
@@ -69,23 +68,25 @@ func TestRunCompletes(t *testing.T) {
 	}
 }
 
-func TestRunGuards(t *testing.T) {
+func TestRunRequiresSession(t *testing.T) {
 	c := NewConsole()
-	if c.Run("SELECT 1") {
+	if c.Run(nil, "SELECT 1") {
 		t.Fatal("nil session must refuse")
 	}
+}
+
+func TestRunGuards(t *testing.T) {
 	f := &fakeSession{block: make(chan struct{})}
-	c = NewConsole()
-	c.UseSession(f)
-	if !c.Run("SELECT 1") {
+	c := NewConsole()
+	if !c.Run(f, "SELECT 1") {
 		t.Fatal("first run must start")
 	}
-	if c.Run("SELECT 2") {
+	if c.Run(f, "SELECT 2") {
 		t.Fatal("second run while running must refuse")
 	}
 	close(f.block)
 	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
-	if c.Run("") {
+	if c.Run(f, "") {
 		t.Fatal("empty query must refuse")
 	}
 }
@@ -93,8 +94,7 @@ func TestRunGuards(t *testing.T) {
 func TestCancelStopsRun(t *testing.T) {
 	f := &fakeSession{block: make(chan struct{})}
 	c := NewConsole()
-	c.UseSession(f)
-	if !c.Run("SELECT slow") {
+	if !c.Run(f, "SELECT slow") {
 		t.Fatal("run must start")
 	}
 	c.Cancel()
@@ -104,27 +104,26 @@ func TestCancelStopsRun(t *testing.T) {
 	}
 }
 
-func TestSwapSessionDropsInflight(t *testing.T) {
-	old := &fakeSession{block: make(chan struct{})}
+func TestCancelLeavesNoStaleResult(t *testing.T) {
+	f := &fakeSession{block: make(chan struct{})}
 	c := NewConsole()
-	c.UseSession(old)
-	if !c.Run("SELECT 1") {
-		t.Fatal("run must start")
+	if !c.Run(f, "SELECT 1") {
+		t.Fatal("first run")
 	}
-	next := &fakeSession{}
-	c.SwapSession(next)
-	if c.Running() {
-		t.Fatal("swap must clear running")
+	if c.Run(f, "SELECT 2") {
+		t.Fatal("a running console must reject a second run")
 	}
-	if c.Session() != engine.Session(next) {
-		t.Fatal("session must be swapped")
+	c.Cancel()
+	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
+	if c.Result() != nil || c.Err() == "" {
+		t.Fatalf("cancel must surface an error and no result: %+v %q", c.Result(), c.Err())
 	}
-	if c.Result() != nil || c.Err() != "" {
-		t.Fatalf("outcome must be cleared: %v %q", c.Result(), c.Err())
+	f2 := &fakeSession{}
+	if !c.Run(f2, "SELECT 3") {
+		t.Fatal("must be runnable again after cancel")
 	}
-	close(old.block)
-	time.Sleep(20 * time.Millisecond)
-	if c.Running() || c.Result() != nil {
-		t.Fatal("stale completion must be dropped by generation")
+	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
+	if c.Err() != "" {
+		t.Fatalf("err after rerun: %q", c.Err())
 	}
 }

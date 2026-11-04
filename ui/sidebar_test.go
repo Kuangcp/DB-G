@@ -116,7 +116,7 @@ func TestOpenConnAndRunEndToEnd(t *testing.T) {
 	if err := a.openConn(stored); err != nil {
 		t.Fatal(err)
 	}
-	if a.con.Session() == nil {
+	if a.sess == nil {
 		t.Fatal("openConn must install a session")
 	}
 	if a.connName != "本地库" || a.connErr != "" {
@@ -160,7 +160,7 @@ func TestOpenConnFailureKeepsState(t *testing.T) {
 	if a.connErr == "" {
 		t.Fatal("connErr must be set")
 	}
-	if a.con.Session() == nil || a.connName != "good" {
+	if a.sess == nil || a.connName != "good" {
 		t.Fatal("failed open must keep previous session")
 	}
 }
@@ -176,8 +176,8 @@ func TestRemoveActiveConnClearsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.removeConn(stored.ID)
-	if a.con.Session() != nil || a.connName != "" {
-		t.Fatalf("session=%v connName=%q", a.con.Session(), a.connName)
+	if a.sess != nil || a.connName != "" {
+		t.Fatalf("session=%v connName=%q", a.sess, a.connName)
 	}
 	if _, ok := a.store.Get(stored.ID); ok {
 		t.Fatal("profile must be removed")
@@ -207,7 +207,7 @@ func TestObjectTreeRendersLeaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.con.UseSession(treeFakeSession{objs: []engine.DBObject{
+	a.setSession(stored.ID, treeFakeSession{objs: []engine.DBObject{
 		{Kind: engine.ObjectTable, Name: "users"},
 	}})
 	a.connName = stored.Name
@@ -231,7 +231,7 @@ func TestObjectTreeErrorLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.con.UseSession(treeFakeSession{err: errors.New("枚举失败")})
+	a.setSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
 	a.connName = stored.Name
 	a.activeConnID = stored.ID
 	a.treeExpand[stored.ID] = true
@@ -261,11 +261,11 @@ func TestExpandInactiveAutoConnects(t *testing.T) {
 	}
 	stored := a.store.List()[0]
 	a.treeExpand[stored.ID] = true
-	if a.con.Session() == nil {
+	if a.sess == nil {
 		a.expandConn(stored)
 	}
-	if a.con.Session() == nil || a.connName != "auto" {
-		t.Fatalf("expand of inactive conn must connect: session=%v name=%q", a.con.Session(), a.connName)
+	if a.sess == nil || a.connName != "auto" {
+		t.Fatalf("expand of inactive conn must connect: session=%v name=%q", a.sess, a.connName)
 	}
 }
 
@@ -276,7 +276,7 @@ func TestObjectTreeAfterReloadNoPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.con.UseSession(treeFakeSession{err: errors.New("枚举失败")})
+	a.setSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
 	a.connName = stored.Name
 	a.activeConnID = stored.ID
 	a.reloadTree()
@@ -293,7 +293,7 @@ func TestObjectTreeCrossConnBlocked(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.con.UseSession(treeFakeSession{objs: []engine.DBObject{{Kind: engine.ObjectTable, Name: "users"}}})
+	a.setSession("", treeFakeSession{objs: []engine.DBObject{{Kind: engine.ObjectTable, Name: "users"}}})
 	a.connName = "active-db"
 	a.reloadTree()
 	a.loadGroups(stored)
@@ -358,8 +358,8 @@ func TestDuplicateNameConnsIsolated(t *testing.T) {
 	}
 	a.treeExpand[pb.ID] = true
 	a.expandConn(pb)
-	if a.con.Session() == nil || a.connName != "db" {
-		t.Fatalf("expand must connect B: session=%v name=%q", a.con.Session(), a.connName)
+	if a.sess == nil || a.connName != "db" {
+		t.Fatalf("expand must connect B: session=%v name=%q", a.sess, a.connName)
 	}
 	a.reloadTree()
 	a.loadGroups(pb)
@@ -403,7 +403,7 @@ func TestFailedOpenSetsTreeErrAndRemoveClears(t *testing.T) {
 	if a.treeErr[bad.ID] == "" {
 		t.Fatal("openConn failure must write treeErr under the failed profile ID")
 	}
-	if a.con.Session() == nil || a.activeConnID != good.ID {
+	if a.sess == nil || a.activeConnID != good.ID {
 		t.Fatal("failed open must keep previous session")
 	}
 	a.removeConn(bad.ID)
@@ -413,7 +413,7 @@ func TestFailedOpenSetsTreeErrAndRemoveClears(t *testing.T) {
 	if _, ok := a.store.Get(bad.ID); ok {
 		t.Fatal("bad profile must be removed")
 	}
-	if a.con.Session() == nil || a.activeConnID != good.ID {
+	if a.sess == nil || a.activeConnID != good.ID {
 		t.Fatal("good session must survive removing bad profile")
 	}
 }
@@ -462,8 +462,8 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 	if a.treeErr[p.ID] != "" {
 		t.Fatalf("re-expand must clear sticky treeErr, got %q", a.treeErr[p.ID])
 	}
-	if a.con.Session() == nil || a.activeConnID != p.ID {
-		t.Fatalf("retry must open: session=%v active=%q", a.con.Session(), a.activeConnID)
+	if a.sess == nil || a.activeConnID != p.ID {
+		t.Fatalf("retry must open: session=%v active=%q", a.sess, a.activeConnID)
 	}
 	a.reloadTree()
 	a.loadGroups(p)
@@ -536,7 +536,7 @@ func TestOpenConnMySQLProfileFields(t *testing.T) {
 		captured.User != "u" || captured.Password != "pw" || captured.Database != "app" {
 		t.Fatalf("profile mapping: %+v", captured)
 	}
-	if a.con.Session() == nil || a.connName != "远程" {
+	if a.sess == nil || a.connName != "远程" {
 		t.Fatal("openConn must install session")
 	}
 }

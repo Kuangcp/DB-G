@@ -45,7 +45,7 @@ func (a *root) sidebar(c *ui.Context) {
 
 func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 	act, _ := a.store.Active()
-	isActive := act.ID == p.ID && a.con.Session() != nil
+	isActive := act.ID == p.ID && a.sess != nil
 	ui.Row(c).Gap(6).Children(func() {
 		dot := ui.Text(c, "●")
 		switch {
@@ -216,7 +216,7 @@ func (a *root) connDot(c *ui.Context) {
 	switch {
 	case a.connErr != "":
 		ui.Text(c, "●").TextColor(c.Theme().Danger)
-	case a.con.Session() != nil:
+	case a.sess != nil:
 		ui.Text(c, "●").TextColor(c.Theme().Success)
 	default:
 		ui.Text(c, "●").TextColor(c.Theme().TextMuted)

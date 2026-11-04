@@ -19,6 +19,8 @@ type root struct {
 	findActive     bool
 	sampler        *Sampler
 	con            *app.Console
+	sess           engine.Session
+	sessConnID     string
 	win            *mygo.Window
 	resultState    ui.ListState
 	resultsHeight  float32
@@ -83,6 +85,14 @@ func stratsFromEnv() strats {
 	return strats{scopeViewport, scopeViewport}
 }
 
+// setSession 安装唯一的活动会话，并关闭被替换掉的旧会话（连接归属由 sessConnID 记录）。
+func (a *root) setSession(connID string, s engine.Session) {
+	if a.sess != nil && a.sess != s {
+		_ = a.sess.Close()
+	}
+	a.sess, a.sessConnID = s, connID
+}
+
 // Attach 在窗口创建后接通主线程回投与原生窗口句柄。
 func (a *root) Attach(win *mygo.Window) {
 	a.win = win
@@ -121,7 +131,7 @@ func rootView(a *root) func(c *ui.Context) {
 						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
 					}
 					ui.Spacer(c)
-					if ui.Button(c, "执行").Disabled(a.con.Running() || a.con.Session() == nil || a.selStart == a.selEnd).Clicked() {
+					if ui.Button(c, "执行").Disabled(a.con.Running() || a.sess == nil || a.selStart == a.selEnd).Clicked() {
 						a.execPending = true
 					}
 				})

@@ -14,7 +14,6 @@ const queryTimeout = 30 * time.Second
 type Console struct {
 	mu      sync.Mutex
 	publish func(func())
-	sess    engine.Session
 	gen     uint64
 	running bool
 	result  *engine.QueryResult
@@ -30,37 +29,6 @@ func (c *Console) SetPublisher(f func(func())) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.publish = f
-}
-
-func (c *Console) UseSession(s engine.Session) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.sess = s
-}
-
-// SwapSession 取消在途执行、丢弃其结果并替换会话，同时关闭旧会话。
-func (c *Console) SwapSession(s engine.Session) {
-	c.mu.Lock()
-	old := c.sess
-	if c.cancel != nil {
-		c.cancel()
-		c.cancel = nil
-	}
-	c.gen++
-	c.sess = s
-	c.running, c.result, c.err = false, nil, ""
-	pub := c.publish
-	c.mu.Unlock()
-	if old != nil {
-		_ = old.Close()
-	}
-	pub(func() {})
-}
-
-func (c *Console) Session() engine.Session {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.sess
 }
 
 func (c *Console) Running() bool {
@@ -88,10 +56,10 @@ func (c *Console) SetOutcome(res *engine.QueryResult, errMsg string) {
 	c.running, c.result, c.err = false, res, errMsg
 }
 
-// Run 在后台协程执行 query；无会话、已在执行或空串时返回 false。
-func (c *Console) Run(query string) bool {
+// Run 在后台协程用 sess 执行 query；无会话、已在执行或空串时返回 false。
+func (c *Console) Run(sess engine.Session, query string) bool {
 	c.mu.Lock()
-	if c.sess == nil || c.running || query == "" {
+	if sess == nil || c.running || query == "" {
 		c.mu.Unlock()
 		return false
 	}
@@ -100,7 +68,6 @@ func (c *Console) Run(query string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
 	c.cancel = cancel
 	c.running, c.result, c.err = true, nil, ""
-	sess := c.sess
 	c.mu.Unlock()
 
 	go func() {

@@ -36,7 +36,7 @@ func (a *root) resultPane(c *ui.Context) {
 			a.resultTable(c, r)
 		default:
 			switch {
-			case a.con.Session() == nil:
+			case a.sess == nil:
 				ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
 			case a.selStart == a.selEnd:
 				ui.Text(c, "请先选中要执行的 SQL").TextColor(c.Theme().TextMuted)
