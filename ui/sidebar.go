@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/egoist/mygo"
@@ -85,8 +86,61 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 		}
 	})
 	if a.treeExpand[p.ID] {
+		a.consoleSection(c, p)
 		a.objectGroups(c, p)
 	}
+}
+
+// consoleSection 列出该数据源的全部控制台（打开与否两种状态）并提供新建入口。
+func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
+	m := a.consoleMgr()
+	if m == nil {
+		return
+	}
+	ui.Text(c, "控制台").FontSize(12).TextColor(c.Theme().TextMuted)
+	for _, rec := range m.ConsolesOf(p.ID) {
+		a.consoleRow(c, rec, m.IsOpen(rec.ID))
+	}
+	if ui.Button(c, "＋ 新建控制台").Clicked() {
+		rec, err := m.Create(p.ID, "")
+		if err != nil {
+			a.consoleErr = "新建控制台失败: " + err.Error()
+			return
+		}
+		a.pendingActivate = rec.ID
+	}
+}
+
+// consoleRow 渲染一个控制台：已打开加粗，点击打开或激活，右键关闭/重命名/删除。
+func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
+	ui.Row(c).Gap(4).Children(func() {
+		dot := ui.Text(c, "●")
+		if isOpen {
+			dot.TextColor(c.Theme().Success)
+		} else {
+			dot.TextColor(c.Theme().TextMuted)
+		}
+		btn := ui.Button(c, rec.Name)
+		if isOpen {
+			btn.Bold()
+		} else {
+			btn.TextColor(c.Theme().TextMuted)
+		}
+		if btn.Clicked() {
+			a.pendingActivate = rec.ID
+		}
+		btn.ContextMenu(func(menu *ui.Menu) {
+			if menu.Item("关闭").Disabled(!isOpen).Chosen() {
+				a.pendingClose = rec.ID
+			}
+			if menu.Item("重命名…").Chosen() {
+				a.openModal("rename", rec.ID, rec.Name)
+			}
+			if menu.Item("删除…").Chosen() {
+				a.openModal("delete", rec.ID, rec.Name)
+			}
+		})
+	})
 }
 
 func (a *root) connModal(c *ui.Context) {
@@ -149,6 +203,12 @@ func (a *root) deleteModal(c *ui.Context) {
 	ui.Modal(c, &a.connDeleteOpen, func() {
 		ui.Text(c, "删除连接「"+name+"」？").Bold()
 		ui.Text(c, "仅移除配置，不删除数据库文件").TextColor(c.Theme().TextMuted)
+		if m := a.consoleMgr(); m != nil {
+			if n := len(m.ConsolesOf(a.connDeleting)); n > 0 {
+				ui.Text(c, fmt.Sprintf("将同时删除该数据源的 %d 个控制台及其 .sql 文件", n)).
+					TextColor(c.Theme().Danger)
+			}
+		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, "取消").Clicked() {
 				a.connDeleteOpen = false

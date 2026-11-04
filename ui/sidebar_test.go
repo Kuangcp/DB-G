@@ -540,3 +540,80 @@ func TestOpenConnMySQLProfileFields(t *testing.T) {
 		t.Fatal("openConn must install session")
 	}
 }
+
+func TestSidebarConsolesListOpenState(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	if _, err := m.Create(prof.ID, "开着的"); err != nil {
+		t.Fatal(err)
+	}
+	closed, _ := m.Create(prof.ID, "关掉的")
+	_ = m.CloseConsole(closed.ID)
+	a.treeExpand[prof.ID] = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if !tt.HasText("开着的") || !tt.HasText("关掉的") {
+		t.Fatalf("consoles missing: %q", tt.Texts())
+	}
+}
+
+func TestSidebarReopenClosedConsole(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	rec, _ := m.Create(prof.ID, "草稿")
+	m.SetText(rec.ID, "SELECT 5")
+	_ = m.Flush(rec.ID)
+	_ = m.CloseConsole(rec.ID)
+	a.treeExpand[prof.ID] = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("草稿"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !m.IsOpen(rec.ID) {
+		t.Fatal("clicking a closed console must reopen it")
+	}
+	if got := a.ed.Buf.String(); got != "SELECT 5" {
+		t.Fatalf("buffer after reopen: %q", got)
+	}
+}
+
+func TestSidebarCreateConsoleWithoutConnection(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if a.sess != nil {
+		t.Fatal("precondition: not connected")
+	}
+	a.treeExpand[prof.ID] = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("＋ 新建控制台"); err != nil {
+		t.Fatal("must be clickable without a connection:", err)
+	}
+	if len(a.consoleMgr().ConsolesOf(prof.ID)) != 1 {
+		t.Fatal("console must be created without connecting")
+	}
+}
+
+func TestRemoveConnDeletesConsoleFiles(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	rec, _ := a.consoleMgr().Create(prof.ID, "c")
+	files := app.ConsoleFiles{Dir: a.store.ConsolesDir()}
+	if err := files.Write(rec.ID, "SELECT 1"); err != nil {
+		t.Fatal(err)
+	}
+	a.removeConn(prof.ID)
+	if files.Exists(rec.ID) {
+		t.Fatal(".sql must be removed with the connection")
+	}
+	if len(a.consoleMgr().Open()) != 0 {
+		t.Fatal("tabs must be gone")
+	}
+	if a.activeConsole != "" {
+		t.Fatalf("active console must clear: %q", a.activeConsole)
+	}
+}

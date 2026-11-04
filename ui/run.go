@@ -48,6 +48,10 @@ func (a *root) removeConn(id string) {
 	if a.store == nil {
 		return
 	}
+	var recs []app.ConsoleRecord
+	if m := a.consoleMgr(); m != nil {
+		recs = m.ConsolesOf(id)
+	}
 	if a.failedConnID == id {
 		a.failedConnID = ""
 		a.connErr = ""
@@ -62,6 +66,16 @@ func (a *root) removeConn(id string) {
 		}
 	}
 	_ = a.store.Remove(id)
+	if m := a.consoleMgr(); m != nil {
+		m.OnConnectionDeleted(id, recs)
+		for _, rec := range recs {
+			delete(a.consoles, rec.ID)
+			delete(a.lastVer, rec.ID)
+			if a.activeConsole == rec.ID {
+				a.clearEditorConsole()
+			}
+		}
+	}
 }
 
 func (a *root) runSQL() {
