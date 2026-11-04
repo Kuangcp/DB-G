@@ -25,4 +25,5 @@ func main() {
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}
+	r.FlushAll()
 }

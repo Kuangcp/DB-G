@@ -87,11 +87,40 @@ func newRoot(text string, s strats) *root {
 	}
 }
 
-// NewRoot 创建交互窗口状态（初始 3k 行 SQL，SCOPE 环境变量选策略，加载用户连接库）。
+// NewRoot 创建交互窗口状态（SCOPE 环境变量选编辑策略，加载用户连接库并恢复上次的控制台）。
 func NewRoot() *root {
-	r := newRoot(buildSQL(3_000), stratsFromEnv())
-	r.store = app.LoadStore(app.DefaultStorePath())
+	return newRootWithStore(app.DefaultStorePath(), stratsFromEnv())
+}
+
+// newRootWithStore 用指定连接库路径建根状态，并恢复上次激活的工作区、控制台、正文与光标。
+func newRootWithStore(storePath string, s strats) *root {
+	r := newRoot("", s)
+	r.store = app.LoadStore(storePath)
+	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
+	r.restoreSession()
 	return r
+}
+
+// restoreSession 恢复上次激活的控制台；没有可恢复的则不写盘、进空态。
+func (a *root) restoreSession() bool {
+	m := a.consoleMgr()
+	if m == nil {
+		return false
+	}
+	rec, ok := m.Active()
+	if !ok {
+		return false
+	}
+	return a.activateConsole(rec.ID)
+}
+
+// FlushAll 退出前落盘全部控制台正文与光标。
+func (a *root) FlushAll() {
+	_ = a.flushActive()
+	if m := a.consoleMgr(); m != nil {
+		m.FlushCarets()
+		m.FlushAll()
+	}
 }
 
 func stratsFromEnv() strats {

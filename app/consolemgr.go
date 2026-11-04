@@ -386,6 +386,15 @@ func (m *ConsoleManager) Active() (ConsoleRecord, bool) {
 	m.mu.Lock()
 	id := m.activeConsoleID
 	m.mu.Unlock()
+	if id == "" {
+		// 冷启动：按激活工作区的 LastActiveConsoleID（无效 → 最后成员）惰性恢复。
+		if ws, ok := m.ActiveWorkspace(); ok && len(ws.Members) > 0 {
+			m.restoreActiveIn(ws)
+			m.mu.Lock()
+			id = m.activeConsoleID
+			m.mu.Unlock()
+		}
+	}
 	if id == "" || !m.IsOpen(id) {
 		if id != "" {
 			m.mu.Lock()

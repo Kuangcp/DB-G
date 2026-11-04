@@ -12,6 +12,11 @@
       （JSON 持久化/新建/编辑/删除/状态点）；SQLite 对象树（懒加载）
 - [x] 选区执行：仅执行编辑器选中的 SQL，无选区时禁用（禁止跑整个控制台）
 - [x] M4（部分）：MySQL 连接 + 执行 + 对象树（information_schema；PostgreSQL 未做）
+- [x] 控制台 + 工作区：一个数据源多个命名控制台，每个绑定
+      `~/.config/db-g/consoles/<id>.sql`；标签条/工作区切换、防抖自动落盘、
+      Ctrl+S 立即保存、重启恢复工作区与控制台正文/光标。**关闭标签（×）只是移出当前
+      工作区，文件保留**；右键「删除…」才删元数据与 .sql。侧栏每个数据源下列出它的
+      全部控制台，可重新打开。
 - [ ] M3：多语句控制台 + 执行历史
 - [ ] M5：结果排序/筛选/分页/导出
 - [ ] M6：结果编辑（事务写回）
@@ -20,8 +25,10 @@
 ## 构建与测试
 
 ```bash
-export GO=/home/zk/Code/go/bin/go1.27.1
-$GO run .            # 交互窗口
-$GO test ./...       # 全量（含 spike 与结果网格基准，数分钟）
-$GO tool mygo vet .  # UI 生命周期检查
+export GO=/home/zk/Code/go/bin/go1.27.3
+CGO_ENABLED=0 $GO run .     # 交互窗口（本机 cgo 链接有 .sframe 环境问题，统一关掉 cgo）
+CGO_ENABLED=0 $GO test ./... # 全量（含 spike 与结果网格基准，数分钟）
+$GO tool mygo vet .         # UI 生命周期检查
 ```
+
+编辑器工具行的 3k/12k/100k 演示按钮会写入当前激活控制台并自动落盘（spike 回归用）。
