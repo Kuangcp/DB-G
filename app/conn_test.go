@@ -278,3 +278,107 @@ func TestConsoleCaretAndDelete(t *testing.T) {
 		t.Fatal("console must be deleted")
 	}
 }
+
+func TestWorkspaceCRUDRoundTrip(t *testing.T) {
+	s := tempStore(t)
+	ws, err := s.CreateWorkspace("")
+	if err != nil || ws.Name != "默认" || !ws.AutoNamed {
+		t.Fatalf("default ws: %+v %v", ws, err)
+	}
+	named, err := s.CreateWorkspace("分析")
+	if err != nil || named.AutoNamed || named.SortOrder != ws.SortOrder+1 {
+		t.Fatalf("named ws: %+v %v", named, err)
+	}
+	if err := s.RenameWorkspace(ws.ID, "日常"); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveWorkspace(named.ID)
+	again := LoadStore(s.path)
+	if got, _ := again.GetWorkspace(ws.ID); got.Name != "日常" {
+		t.Fatalf("rename lost: %+v", got)
+	}
+	if again.ActiveWorkspaceID() != named.ID {
+		t.Fatalf("active ws: %q", again.ActiveWorkspaceID())
+	}
+	if err := s.DeleteWorkspace(named.ID); err != nil {
+		t.Fatal(err)
+	}
+	if LoadStore(s.path).ActiveWorkspaceID() != "" {
+		t.Fatal("deleting active workspace must clear pointer")
+	}
+}
+
+func TestWorkspaceMembersAndLastActive(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	ws, _ := s.CreateWorkspace("默认")
+	a, _ := s.CreateConsole(p.ID, "a")
+	b, _ := s.CreateConsole(p.ID, "b")
+	if err := s.AddWorkspaceMember(ws.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddWorkspaceMember(ws.ID, a.ID); err != nil {
+		t.Fatal("add must be idempotent:", err)
+	}
+	_ = s.AddWorkspaceMember(ws.ID, b.ID)
+	if err := s.SetWorkspaceLastActive(ws.ID, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := LoadStore(s.path).GetWorkspace(ws.ID)
+	if len(got.Members) != 2 || got.Members[0] != a.ID || got.LastActiveConsoleID != b.ID {
+		t.Fatalf("members: %+v", got)
+	}
+	_ = s.RemoveWorkspaceMember(ws.ID, a.ID)
+	got, _ = LoadStore(s.path).GetWorkspace(ws.ID)
+	if len(got.Members) != 1 || got.Members[0] != b.ID {
+		t.Fatalf("remove: %+v", got.Members)
+	}
+}
+
+func TestDeleteConsoleStripsMembership(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	ws, _ := s.CreateWorkspace("默认")
+	rec, _ := s.CreateConsole(p.ID, "c")
+	_ = s.AddWorkspaceMember(ws.ID, rec.ID)
+	_ = s.SetWorkspaceLastActive(ws.ID, rec.ID)
+	if err := s.DeleteConsole(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := LoadStore(s.path).GetWorkspace(ws.ID)
+	if len(got.Members) != 0 || got.LastActiveConsoleID != "" {
+		t.Fatalf("membership not stripped: %+v", got)
+	}
+}
+
+func TestDeleteWorkspaceKeepsConsoles(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	ws, _ := s.CreateWorkspace("默认")
+	rec, _ := s.CreateConsole(p.ID, "c")
+	_ = s.AddWorkspaceMember(ws.ID, rec.ID)
+	if err := s.DeleteWorkspace(ws.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := LoadStore(s.path).GetConsole(rec.ID); !ok {
+		t.Fatal("deleting a workspace must keep consoles")
+	}
+}
+
+func TestRemoveConnCascadesConsoles(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	ws, _ := s.CreateWorkspace("默认")
+	rec, _ := s.CreateConsole(p.ID, "c")
+	_ = s.AddWorkspaceMember(ws.ID, rec.ID)
+	if err := s.Remove(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(s.ListConsoles(p.ID)) != 0 {
+		t.Fatal("consoles must be removed with the connection")
+	}
+	got, _ := LoadStore(s.path).GetWorkspace(ws.ID)
+	if len(got.Members) != 0 {
+		t.Fatalf("members must be stripped: %+v", got.Members)
+	}
+}
