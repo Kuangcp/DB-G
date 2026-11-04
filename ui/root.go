@@ -189,6 +189,8 @@ func (a *root) activateConsole(id string) bool {
 	start, end := m.Caret(rec.ID)
 	a.pendingSel = &[2]int{start, end}
 	a.activeConsole = rec.ID
+	// 活动控制台的正文惰性取自编辑器：逐帧只比较版本号，落盘时才拷贝。
+	m.SetTextSource(rec.ID, func() string { return a.ed.Buf.String() })
 	a.lastVer[rec.ID] = a.ed.Buf.Version()
 	a.lastCaret = [2]int{start, end}
 	a.selStart, a.selEnd = start, end
@@ -226,7 +228,7 @@ func (a *root) syncActiveBuffer() {
 	}
 	if ver := a.ed.Buf.Version(); ver != a.lastVer[a.activeConsole] {
 		a.lastVer[a.activeConsole] = ver
-		m.SetText(a.activeConsole, a.ed.Buf.String())
+		m.TouchVersion(a.activeConsole, ver)
 	}
 	if cur := [2]int{a.selStart, a.selEnd}; cur != a.lastCaret {
 		a.lastCaret = cur

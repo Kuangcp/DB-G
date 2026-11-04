@@ -617,3 +617,69 @@ func TestRemoveConnDeletesConsoleFiles(t *testing.T) {
 		t.Fatalf("active console must clear: %q", a.activeConsole)
 	}
 }
+
+func TestSidebarRenameConsoleFlow(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	rec, _ := m.Create(prof.ID, "旧名")
+	a.treeExpand[prof.ID] = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.RightClick("旧名"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("重命名…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("重命名控制台") {
+		t.Fatalf("rename modal missing: %q", tt.Texts())
+	}
+	a.modalText = "新名"
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got, _ := a.store.GetConsole(rec.ID); got.Name != "新名" {
+		t.Fatalf("renamed: %+v", got)
+	}
+	if !tt.HasText("新名") || tt.HasText("旧名") {
+		t.Fatalf("sidebar/tab not refreshed: %q", tt.Texts())
+	}
+}
+
+func TestSidebarDeleteConsoleFlow(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	rec, _ := m.Create(prof.ID, "要删的")
+	files := app.ConsoleFiles{Dir: a.store.ConsolesDir()}
+	if err := files.Write(rec.ID, "SELECT 1"); err != nil {
+		t.Fatal(err)
+	}
+	a.treeExpand[prof.ID] = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.RightClick("要删的"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("删除…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if _, ok := a.store.GetConsole(rec.ID); ok {
+		t.Fatal("console must be deleted")
+	}
+	if files.Exists(rec.ID) {
+		t.Fatal(".sql must be deleted")
+	}
+	if a.activeConsole != "" {
+		t.Fatalf("active must clear: %q", a.activeConsole)
+	}
+}

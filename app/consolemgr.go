@@ -26,6 +26,8 @@ type ConsoleManager struct {
 	saveTimers        map[string]*time.Timer
 	caretDraft        map[string][2]int // consoleID → 尚未落库的光标/选区（rune 偏移）
 	caretTimer        map[string]*time.Timer
+	src               map[string]func() string // consoleID → 惰性正文来源（活动控制台）
+	ver               map[string]uint64        // consoleID → 已见过的正文版本
 }
 
 // NewConsoleManager 创建管理器；sink 的生产实现是 ConsoleFiles。
@@ -41,23 +43,30 @@ func NewConsoleManager(store *ConnStore, sink TextSink) *ConsoleManager {
 		saveTimers: map[string]*time.Timer{},
 		caretDraft: map[string][2]int{},
 		caretTimer: map[string]*time.Timer{},
+		src:        map[string]func() string{},
+		ver:        map[string]uint64{},
 	}
 }
 
 // Store 暴露底层存储（工作区/控制台元数据的其余操作）。
 func (m *ConsoleManager) Store() *ConnStore { return m.store }
 
-// Text 返回控制台正文；首次访问读盘（文件缺失 = 空串），未知 id 返回 false。
+// Text 返回控制台正文；活动控制台有惰性来源时取当前编辑器内容，
+// 否则首次访问读盘（文件缺失 = 空串），未知 id 返回 false。
 func (m *ConsoleManager) Text(id string) (string, bool) {
 	if _, ok := m.store.GetConsole(id); !ok {
 		return "", false
 	}
 	m.mu.Lock()
-	if text, ok := m.cache[id]; ok {
-		m.mu.Unlock()
+	src := m.src[id]
+	text, ok := m.cache[id]
+	m.mu.Unlock()
+	if src != nil {
+		return src(), true
+	}
+	if ok {
 		return text, true
 	}
-	m.mu.Unlock()
 
 	text, err := m.sink.Read(id)
 	if err != nil {
@@ -102,6 +111,35 @@ func (m *ConsoleManager) SetText(id, text string) {
 	m.mu.Unlock()
 }
 
+// SetTextSource 注册活动控制台的惰性正文来源：逐帧只比较版本号（常数级），
+// 真正取文本（O(n) 拷贝）只在落盘时发生。
+func (m *ConsoleManager) SetTextSource(id string, src func() string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if src == nil {
+		delete(m.src, id)
+		return
+	}
+	m.src[id] = src
+}
+
+// TouchVersion 报告编辑器正文版本变化：只置脏并重置防抖，不拷贝正文。
+func (m *ConsoleManager) TouchVersion(id string, ver uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.src[id] == nil {
+		return
+	}
+	if m.ver[id] == ver {
+		return
+	}
+	m.ver[id] = ver
+	m.dirty[id] = true
+	m.stopSaveTimerLocked(id)
+	delay := m.SaveDelay
+	m.saveTimers[id] = time.AfterFunc(delay, func() { _ = m.Flush(id) })
+}
+
 // Dirty 报告是否有未写盘的改动。
 func (m *ConsoleManager) Dirty(id string) bool {
 	m.mu.Lock()
@@ -116,8 +154,22 @@ func (m *ConsoleManager) Flush(id string) error {
 		m.mu.Unlock()
 		return nil
 	}
-	text := m.cache[id]
+	src, text := m.src[id], m.cache[id]
 	m.stopSaveTimerLocked(id)
+	m.mu.Unlock()
+
+	if src != nil {
+		text = src()
+	}
+
+	m.mu.Lock()
+	saved, known := m.lastSaved[id]
+	if known && saved == text {
+		// 内容与上次落盘一致（例如撤销回原文）：不必重写。
+		delete(m.dirty, id)
+		m.mu.Unlock()
+		return nil
+	}
 	m.mu.Unlock()
 
 	if err := m.sink.Write(id, text); err != nil {
@@ -126,7 +178,7 @@ func (m *ConsoleManager) Flush(id string) error {
 
 	m.mu.Lock()
 	m.lastSaved[id] = text
-	if m.cache[id] == text {
+	if src != nil || m.cache[id] == text {
 		delete(m.dirty, id)
 	}
 	m.mu.Unlock()
@@ -232,6 +284,8 @@ func (m *ConsoleManager) forget(id string) {
 	delete(m.lastSaved, id)
 	delete(m.dirty, id)
 	delete(m.caretDraft, id)
+	delete(m.src, id)
+	delete(m.ver, id)
 }
 
 // ---------- 工作区与激活 ----------
@@ -288,6 +342,7 @@ func (m *ConsoleManager) EnsureWorkspace() (WorkspaceRecord, error) {
 
 // CreateWorkspace 新建工作区并激活它（无成员，激活控制台清空）。
 func (m *ConsoleManager) CreateWorkspace(name string) (WorkspaceRecord, error) {
+	m.flushActiveState() // 切走前把当前控制台的正文/光标落盘
 	ws, err := m.store.CreateWorkspace(name)
 	if err != nil {
 		return WorkspaceRecord{}, err

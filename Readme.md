@@ -27,7 +27,7 @@
 ```bash
 export GO=/home/zk/Code/go/bin/go1.27.3
 CGO_ENABLED=0 $GO run .     # 交互窗口（本机 cgo 链接有 .sframe 环境问题，统一关掉 cgo）
-CGO_ENABLED=0 $GO test ./... # 全量（含 spike 与结果网格基准，数分钟）
+CGO_ENABLED=0 $GO test -p 1 ./... # 全量（含 spike 与结果网格基准，数分钟；-p 1 避免并行包争 CPU 导致基准超限）
 $GO tool mygo vet .         # UI 生命周期检查
 ```
 

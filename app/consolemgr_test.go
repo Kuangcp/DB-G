@@ -334,3 +334,63 @@ func TestOnConnectionDeletedClearsActive(t *testing.T) {
 		t.Fatal("files of the deleted connection must be removed")
 	}
 }
+
+func TestCreateWorkspaceFlushesActiveConsole(t *testing.T) {
+	sink := newFakeSink()
+	_, p, _, m := newMgr(t, sink)
+	rec, _ := m.Create(p.ID, "a")
+	m.SetText(rec.ID, "SELECT 9")
+	if _, err := m.CreateWorkspace("B"); err != nil {
+		t.Fatal(err)
+	}
+	if got := sink.text(rec.ID); got != "SELECT 9" {
+		t.Fatalf("switching workspace must flush the active console: %q", got)
+	}
+}
+
+func TestLazyTextSourceFlush(t *testing.T) {
+	sink := newFakeSink()
+	_, _, rec, m := newMgr(t, sink)
+	text := "SELECT 1"
+	m.SetTextSource(rec.ID, func() string { return text })
+	m.TouchVersion(rec.ID, 2)
+	if !m.Dirty(rec.ID) {
+		t.Fatal("version bump must mark dirty")
+	}
+	text = "SELECT 2"
+	if err := m.Flush(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := sink.text(rec.ID); got != "SELECT 2" {
+		t.Fatalf("flush must read the source lazily: %q", got)
+	}
+	if m.Dirty(rec.ID) {
+		t.Fatal("flush must clear dirty")
+	}
+	writes := sink.writes
+	m.TouchVersion(rec.ID, 2) // 同一版本：不置脏、不重写
+	_ = m.Flush(rec.ID)
+	if sink.writes != writes {
+		t.Fatalf("unchanged version must not rewrite: writes=%d", sink.writes)
+	}
+}
+
+func TestLazySourceSkipsIdenticalContent(t *testing.T) {
+	sink := newFakeSink()
+	_, _, rec, m := newMgr(t, sink)
+	text := "SELECT 1"
+	m.SetTextSource(rec.ID, func() string { return text })
+	m.TouchVersion(rec.ID, 2)
+	if err := m.Flush(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	// 版本变了但内容没变（例如撤销回原文）：不应再写一次盘。
+	m.TouchVersion(rec.ID, 3)
+	writes := sink.writes
+	if err := m.Flush(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	if sink.writes != writes {
+		t.Fatal("identical content must not be rewritten")
+	}
+}
