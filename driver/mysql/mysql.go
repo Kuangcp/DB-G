@@ -78,7 +78,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult
 }
 
 func (s *session) Cancel() bool {
@@ -369,4 +369,32 @@ func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name st
 		}
 	}
 	return "", fmt.Errorf("未找到 %s 的 DDL", name)
+}
+
+// txWrap 把 database/sql 事务包成 engine.Tx。
+type txWrap struct{ tx *sql.Tx }
+
+func (t *txWrap) Exec(ctx context.Context, query string, args ...any) (int64, error) {
+	res, err := t.tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+func (t *txWrap) Commit() error   { return t.tx.Commit() }
+func (t *txWrap) Rollback() error { return t.tx.Rollback() }
+
+// Begin 开一个显式事务（写操作提交用）。
+func (s *session) Begin(ctx context.Context) (engine.Tx, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("mysql: session not open")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &txWrap{tx: tx}, nil
 }
