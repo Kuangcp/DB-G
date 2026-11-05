@@ -62,3 +62,17 @@ func (s *Sampler) Sorted() []time.Duration {
 func (s *Sampler) Median() time.Duration { return percentile(s.Sorted(), 0.5) }
 func (s *Sampler) P90() time.Duration    { return percentile(s.Sorted(), 0.9) }
 func (s *Sampler) P99() time.Duration    { return percentile(s.Sorted(), 0.99) }
+
+// median returns the median of unsorted samples (测试与基准用）。
+func median(v []time.Duration) time.Duration {
+	s := append([]time.Duration(nil), v...)
+	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
+	return percentile(s, 0.5)
+}
+
+// pct returns percentile p of unsorted samples.
+func pct(v []time.Duration, p float64) time.Duration {
+	s := append([]time.Duration(nil), v...)
+	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
+	return percentile(s, p)
+}

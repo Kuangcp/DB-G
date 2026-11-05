@@ -32,7 +32,7 @@ func TestSwitchingTabsSwapsEditorContent(t *testing.T) {
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	tt.Frame()
-	if got := a.ed.Buf.String(); got != "SELECT 'A'" {
+	if got := a.activeText(); got != "SELECT 'A'" {
 		t.Fatalf("first frame body: %q", got)
 	}
 	// 用户点 B 标签
@@ -41,7 +41,7 @@ func TestSwitchingTabsSwapsEditorContent(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Frame()
-	if got := a.ed.Buf.String(); got != "SELECT 'B'" {
+	if got := a.activeText(); got != "SELECT 'B'" {
 		t.Fatalf("editor must show B after clicking its tab, got %q", got)
 	}
 	// 再点回 A
@@ -50,7 +50,7 @@ func TestSwitchingTabsSwapsEditorContent(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Frame()
-	if got := a.ed.Buf.String(); got != "SELECT 'A'" {
+	if got := a.activeText(); got != "SELECT 'A'" {
 		t.Fatalf("editor must show A after clicking back, got %q", got)
 	}
 }
@@ -77,7 +77,7 @@ func TestCloseActiveSwitchesEditorContent(t *testing.T) {
 	if a.activeConsole != A.ID {
 		t.Fatalf("closing B must activate A, active=%q", a.activeConsole)
 	}
-	if got := a.ed.Buf.String(); got != "SELECT 'A'" {
+	if got := a.activeText(); got != "SELECT 'A'" {
 		t.Fatalf("editor must show A after closing B, got %q", got)
 	}
 	if !tt.HasText("甲") || tt.HasText("乙") {
@@ -103,14 +103,14 @@ func TestSwitchPreservesUnsavedEdits(t *testing.T) {
 	tt.Frame()
 
 	// 在 A 里改一行尚未到防抖时间，就切到 B
-	a.ed.Buf.Set("SELECT 'A edited'")
+	a.setActiveText("SELECT 'A edited'")
 	tt.Frame()
 	if err := tt.Click("乙"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	tt.Frame()
-	if got := a.ed.Buf.String(); got != "SELECT 'B'" {
+	if got := a.activeText(); got != "SELECT 'B'" {
 		t.Fatalf("editor must show B, got %q", got)
 	}
 	if err := tt.Click("甲"); err != nil {
@@ -118,7 +118,7 @@ func TestSwitchPreservesUnsavedEdits(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Frame()
-	if got := a.ed.Buf.String(); got != "SELECT 'A edited'" {
+	if got := a.activeText(); got != "SELECT 'A edited'" {
 		t.Fatalf("unsaved A edit must survive the switch, got %q", got)
 	}
 	// B 的内容没被 A 覆盖

@@ -9,15 +9,12 @@ import (
 
 // settingsView 是独立设置窗口的内容：开发用的编辑器性能面板（HUD/预设/高亮策略）。
 func (a *root) settingsView(c *ui.Context) {
-	ed := a.ed
 	disabled := a.activeConsole == ""
 	ui.Column(c).Fill().Padding(12).Gap(8).Children(func() {
 		ui.Text(c, "编辑器性能（开发用）").Bold()
 		ui.Text(c, fmt.Sprintf(
-			"lines=%d injected=%d tokenize=%s inject=%s build(last)=%s",
-			ed.lineCount(), ed.Injected,
-			scopeName(ed.strat.tokenize), scopeName(ed.strat.inject),
-			fmtDur(appLastBuild),
+			"行数=%d 字节=%d 版本=%d",
+			a.code.LineCount(), a.code.ByteLen(), a.code.Version(),
 		)).FontSize(12).SingleLine()
 		ui.Row(c).Gap(6).Children(func() {
 			if ui.Button(c, "刷新").Clicked() {
@@ -35,22 +32,6 @@ func (a *root) settingsView(c *ui.Context) {
 			}
 		})
 
-		ui.Text(c, "高亮策略").FontSize(12).TextColor(c.Theme().TextMuted)
-		ui.Row(c).Gap(6).Children(func() {
-			if ui.Button(c, "FF").Clicked() {
-				ed.SetStrategy(strats{scopeFull, scopeFull})
-				a.updateSettingsWindow()
-			}
-			if ui.Button(c, "FV").Clicked() {
-				ed.SetStrategy(strats{scopeFull, scopeViewport})
-				a.updateSettingsWindow()
-			}
-			if ui.Button(c, "VV").Clicked() {
-				ed.SetStrategy(strats{scopeViewport, scopeViewport})
-				a.updateSettingsWindow()
-			}
-		})
-
 		if disabled {
 			ui.Text(c, "没有激活的控制台：预设不可用").FontSize(12).TextColor(c.Theme().TextMuted)
 		}
@@ -65,8 +46,7 @@ func (a *root) applyEditorPreset(n int) {
 	if a.activeConsole == "" {
 		return
 	}
-	a.ed.Buf.Set(buildSQL(n))
-	a.ed.dirty = true
+	a.setActiveText(buildSQL(n))
 	a.syncActiveBuffer()
 	_ = a.flushActive()
 	a.updateSettingsWindow()

@@ -22,7 +22,7 @@ func (blockingFake) RunStatement(ctx context.Context, _ string) (*engine.QueryRe
 }
 
 func newTestRoot() *root {
-	return newRoot("", strats{scopeViewport, scopeViewport})
+	return newRoot("")
 }
 
 func TestResultPaneEmpty(t *testing.T) {

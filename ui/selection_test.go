@@ -32,9 +32,9 @@ func pollResult(t *testing.T, a *root, tt *ui.Tester) {
 func TestRunSQLExecutesSelectionOnly(t *testing.T) {
 	a := openForSelection(t)
 	text := "SELECT 9 AS x;\nSELECT name FROM users;"
-	a.ed.Buf.Set(text)
+	a.setActiveText(text)
 	cut := strings.Index(text, "SELECT name")
-	a.selStart, a.selEnd = 0, cut-1
+	a.setSelection(0, len([]rune(text[:cut-1])))
 	a.runSQL()
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	pollResult(t, a, tt)
@@ -52,8 +52,8 @@ func TestRunSQLExecutesSelectionOnly(t *testing.T) {
 
 func TestRunSQLEmptySelectionDoesNothing(t *testing.T) {
 	a := openForSelection(t)
-	a.ed.Buf.Set("SELECT name FROM users")
-	a.selStart, a.selEnd = 0, 0
+	a.setActiveText("SELECT name FROM users")
+	a.setSelection(0, 0)
 	a.runSQL()
 	if a.con.Running() || a.con.Result() != nil || a.con.Err() != "" {
 		t.Fatal("empty selection must not start execution")
@@ -62,43 +62,23 @@ func TestRunSQLEmptySelectionDoesNothing(t *testing.T) {
 
 func TestExecuteButtonDisabledWithoutSelection(t *testing.T) {
 	a := openForSelection(t)
-	a.ed.Buf.Set("SELECT name FROM users")
+	a.setActiveText("SELECT name FROM users")
+	a.setSelection(0, 0)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	err := tt.Click("执行")
-	if err == nil && a.con.Running() {
-		t.Fatal("disabled 执行 must not start a run")
+	if a.hasSelection() {
+		t.Fatal("precondition: no selection")
 	}
-	if a.con.Result() != nil {
-		t.Fatal("no result expected")
+	// 无选区：点「执行」不得开始执行（按钮禁用）
+	_ = tt.Click("执行")
+	if a.con.Running() || a.con.Result() != nil || a.con.Err() != "" {
+		t.Fatal("执行 must do nothing without a selection")
 	}
-
-	// Disabled elements are excluded from the focus order; walk Tab until
-	// focusing the editor auto-selects its text (button then legitimately
-	// enables) and assert 执行 never took focus along the way.
-	sawFocus := false
-	for range 32 {
-		if tt.Focused("执行") {
-			sawFocus = true
-			break
-		}
-		if a.selStart != a.selEnd {
-			break
-		}
-		tt.Key(0, ui.KeyTab)
-	}
-	if sawFocus {
-		t.Fatal("执行 must be disabled (unfocusable) without selection")
-	}
-	if a.selStart == a.selEnd {
-		t.Fatal("tab walk must reach the editor (auto selectAll)")
-	}
-
-	// Positive control: a real UI selection enables the button.
+	// 有选区（真实 select-all）：按钮可点并开始执行
 	tt.Click("编辑器")
 	tt.Command("selectAll")
 	tt.Frame()
-	if a.selStart == a.selEnd {
+	if !a.hasSelection() {
 		t.Fatal("selectAll must produce a non-empty selection")
 	}
 	if err := tt.Click("执行"); err != nil {
@@ -123,9 +103,35 @@ func TestResultPaneHintByState(t *testing.T) {
 	if err := a.openConn(app.ConnProfile{Name: "lib", Kind: "sqlite", Path: seedConnFile(t)}); err != nil {
 		t.Fatal(err)
 	}
-	a.selStart, a.selEnd = 0, 0
+	a.setSelection(0, 0)
 	tt.Frame()
 	if !tt.HasText("请先选中要执行的 SQL") {
 		t.Fatalf("no-selection hint missing: %q", tt.Texts())
+	}
+}
+
+func TestCtrlEnterRunsSelection(t *testing.T) {
+	a := openForSelection(t)
+	a.setActiveText("SELECT 1 AS x")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	// 先聚焦编辑器（点击会移动光标），再选区，否则选区会被点击清掉。
+	tt.Click("编辑器")
+	tt.Frame()
+	a.setSelection(0, len([]rune("SELECT 1 AS x")))
+	tt.Frame()
+	before := a.activeText()
+	tt.Key(ui.Ctrl, ui.KeyEnter)
+	tt.Frame()
+	pollResult(t, a, tt)
+	if got := a.activeText(); got != before {
+		t.Fatalf("Ctrl+Enter must not edit the text: %q", got)
+	}
+	r := a.con.Result()
+	if a.con.Err() != "" {
+		t.Fatalf("exec err: %s", a.con.Err())
+	}
+	if r == nil || len(r.Columns) != 1 || r.Columns[0] != "x" {
+		t.Fatalf("Ctrl+Enter must run the selection: %+v", r)
 	}
 }

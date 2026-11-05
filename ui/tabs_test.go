@@ -11,7 +11,7 @@ import (
 
 func newConsoleRoot(t *testing.T) *root {
 	t.Helper()
-	a := newRoot("", strats{scopeViewport, scopeViewport})
+	a := newRoot("")
 	a.store = app.LoadStore(filepath.Join(t.TempDir(), "connections.json"))
 	a.consoles, a.lastVer = map[string]*app.Console{}, map[string]uint64{}
 	return a
@@ -64,29 +64,29 @@ func TestTabClickSwitchesBufferAndCaret(t *testing.T) {
 	if !a.activateConsole(first.ID) {
 		t.Fatal("activate A")
 	}
-	if got := a.ed.Buf.String(); got != "SELECT 1" {
+	if got := a.activeText(); got != "SELECT 1" {
 		t.Fatalf("buffer: %q", got)
 	}
 	if !a.activateConsole(second.ID) {
 		t.Fatal("activate B")
 	}
-	if got := a.ed.Buf.String(); got != "SELECT 2" {
+	if got := a.activeText(); got != "SELECT 2" {
 		t.Fatalf("buffer: %q", got)
 	}
-	if a.pendingSel == nil || *a.pendingSel != [2]int{3, 3} {
-		t.Fatalf("pending selection: %+v", a.pendingSel)
+	if s, e := a.code.CaretRunes(); s != 3 || e != 3 {
+		t.Fatalf("caret of B: %d,%d", s, e)
 	}
 	// 失焦后再激活 A：A 的光标也应从元数据恢复（0/0）
 	if !a.activateConsole(first.ID) {
 		t.Fatal("reactivate A")
 	}
-	if a.pendingSel == nil || *a.pendingSel != [2]int{0, 0} {
-		t.Fatalf("caret of A: %+v", a.pendingSel)
+	if s, e := a.code.CaretRunes(); s != 0 || e != 0 {
+		t.Fatalf("caret of A: %d,%d", s, e)
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if a.pendingSel != nil {
-		t.Fatal("pending selection must be consumed by the frame")
+	if s, e := a.code.CaretRunes(); s != 0 || e != 0 {
+		t.Fatalf("frames must not move the caret: %d,%d", s, e)
 	}
 }
 
@@ -130,13 +130,10 @@ func TestCaretClampedAfterExternalShorten(t *testing.T) {
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if a.pendingSel != nil {
-		t.Fatal("pending selection must be applied")
-	}
 	tt.Frame()
 	limit := len([]rune("SELECT 1"))
-	if a.selStart > limit || a.selEnd > limit {
-		t.Fatalf("caret not clamped: %d %d", a.selStart, a.selEnd)
+	if s, e := a.code.CaretRunes(); s > limit || e > limit {
+		t.Fatalf("caret not clamped: %d %d", s, e)
 	}
 }
 
@@ -192,7 +189,7 @@ func TestWorkspaceCreateAndSwitch(t *testing.T) {
 	if a.activeConsole != recA.ID {
 		t.Fatalf("switching back must restore A: %q", a.activeConsole)
 	}
-	if got := a.ed.Buf.String(); got != "" {
+	if got := a.activeText(); got != "" {
 		t.Fatalf("A body: %q", got)
 	}
 }
@@ -221,5 +218,41 @@ func TestWorkspaceDeleteKeepsConsoles(t *testing.T) {
 	}
 	if recs := m.ConsolesOf(prof.ID); len(recs) != 1 {
 		t.Fatalf("console must survive: %+v", recs)
+	}
+}
+
+func TestSwitchKeepsCaretWithWideRunes(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	A, _ := m.Create(prof.ID, "甲")
+	m.SetText(A.ID, "SELECT '你好😀'")
+	_ = m.Flush(A.ID)
+	B, _ := m.Create(prof.ID, "乙")
+	m.SetText(B.ID, "SELECT 'B'")
+	_ = m.Flush(B.ID)
+	if !a.activateConsole(A.ID) {
+		t.Fatal("activate A")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Frame()
+	a.setSelection(9, 9)
+	tt.Frame()
+	if err := tt.Click("乙"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if err := tt.Click("甲"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if got := a.activeText(); got != "SELECT '你好😀'" {
+		t.Fatalf("body: %q", got)
+	}
+	if s, e := a.code.CaretRunes(); s != 9 || e != 9 {
+		t.Fatalf("caret must come back at the same rune: %d,%d", s, e)
 	}
 }

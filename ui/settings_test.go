@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/egoist/mygo"
@@ -14,7 +13,7 @@ func TestSettingsViewShowsPerformanceControls(t *testing.T) {
 	a := newConsoleRoot(t)
 	tt := ui.NewTester(a.settingsView, 560, 340)
 	tt.Frame()
-	for _, want := range []string{"编辑器性能", "lines=", "3k", "12k", "100k", "FF", "FV", "VV", "刷新"} {
+	for _, want := range []string{"编辑器性能", "行数=", "3k", "12k", "100k", "刷新"} {
 		if !tt.HasText(want) {
 			t.Fatalf("settings view missing %q: %q", want, tt.Texts())
 		}
@@ -54,7 +53,7 @@ func TestSettingsPresetWritesActiveConsole(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := buildSQL(3_000)
-	if got := a.ed.Buf.String(); got != want {
+	if got := a.activeText(); got != want {
 		t.Fatalf("preset must fill the editor: got %d runes, want %d", len([]rune(got)), len([]rune(want)))
 	}
 	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir()}.Read(rec.ID)
@@ -68,11 +67,11 @@ func TestSettingsPresetWritesActiveConsole(t *testing.T) {
 
 func TestSettingsPresetNeedsActiveConsole(t *testing.T) {
 	a := newConsoleRoot(t)
-	before := a.ed.Buf.String()
+	before := a.activeText()
 	tt := ui.NewTester(a.settingsView, 560, 340)
 	tt.Frame()
 	_ = tt.Click("12k")
-	if got := a.ed.Buf.String(); got != before {
+	if got := a.activeText(); got != before {
 		t.Fatalf("preset must do nothing without an active console: %d runes", len([]rune(got)))
 	}
 }
@@ -125,24 +124,5 @@ func TestSettingsButtonOpensSingletonWindow(t *testing.T) {
 	tt.Frame()
 	if len(created) != 2 {
 		t.Fatalf("closed window must be recreated: %d", len(created))
-	}
-}
-
-func TestStrategyButtonsSwitchEditorStrategy(t *testing.T) {
-	a := newConsoleRoot(t)
-	tt := ui.NewTester(a.settingsView, 560, 340)
-	tt.Frame()
-	if err := tt.Click("FF"); err != nil {
-		t.Fatal(err)
-	}
-	if a.ed.strat.tokenize != scopeFull || a.ed.strat.inject != scopeFull {
-		t.Fatalf("strategy not applied: %+v", a.ed.strat)
-	}
-	tt.Frame()
-	if !tt.HasText("tokenize=full") || !tt.HasText("inject=full") {
-		t.Fatalf("HUD must reflect the new strategy: %q", tt.Texts())
-	}
-	if !strings.Contains(strings.Join(tt.Texts(), " "), "lines=") {
-		t.Fatalf("HUD missing: %q", tt.Texts())
 	}
 }

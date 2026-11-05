@@ -71,6 +71,7 @@ func (a *root) removeConn(id string) {
 		for _, rec := range recs {
 			delete(a.consoles, rec.ID)
 			delete(a.lastVer, rec.ID)
+			a.code.Drop(rec.ID)
 			if a.activeConsole == rec.ID {
 				a.clearEditorConsole()
 			}
@@ -79,7 +80,8 @@ func (a *root) removeConn(id string) {
 }
 
 func (a *root) runSQL() {
-	if a.selStart == a.selEnd {
+	text, ok := a.code.SelectedText()
+	if !ok {
 		return
 	}
 	// 有激活控制台时：先落盘，并确保连着它的数据源；没有控制台时沿用临时缓冲执行（不落盘）。
@@ -92,7 +94,7 @@ func (a *root) runSQL() {
 			return
 		}
 	}
-	a.currentRuntime().Run(a.sess, a.ed.Buf.Slice(a.selStart, a.selEnd))
+	a.currentRuntime().Run(a.sess, text)
 }
 
 // ensureConsoleConn 保证已连接的控制台正是执行目标；否则连上它的数据源。

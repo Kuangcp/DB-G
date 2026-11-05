@@ -33,7 +33,7 @@ func TestResultGridFrameBudget(t *testing.T) {
 		r.Rows[i] = row
 	}
 
-	a := newRoot("", strats{scopeViewport, scopeViewport})
+	a := newRoot("")
 	a.con.SetOutcome(r, "")
 	tt := ui.NewTester(rootView(a), 1600, 900)
 	for range 5 {

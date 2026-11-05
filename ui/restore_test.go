@@ -32,15 +32,15 @@ func TestRestoreWorkspaceAndConsole(t *testing.T) {
 	}
 	m.FlushCarets()
 
-	a := newRootWithStore(storePath, strats{scopeViewport, scopeViewport})
+	a := newRootWithStore(storePath)
 	if a.activeConsole != rec.ID {
 		t.Fatalf("active console: %q", a.activeConsole)
 	}
-	if got := a.ed.Buf.String(); got != "SELECT 100" {
+	if got := a.activeText(); got != "SELECT 100" {
 		t.Fatalf("restored text: %q", got)
 	}
-	if a.pendingSel == nil || a.pendingSel[0] != 7 || a.pendingSel[1] != 7 {
-		t.Fatalf("restored caret: %+v", a.pendingSel)
+	if cs, ce := a.code.CaretRunes(); cs != 7 || ce != 7 {
+		t.Fatalf("restored caret: %d,%d", cs, ce)
 	}
 	if _, ok := a.store.GetConsole(rec.ID); !ok {
 		t.Fatal("console metadata must exist")
@@ -54,15 +54,15 @@ func TestRestoreFallsBackOnInvalidIDs(t *testing.T) {
 	if err := os.WriteFile(storePath, []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	a := newRootWithStore(storePath, strats{scopeViewport, scopeViewport})
+	a := newRootWithStore(storePath)
 	if ws, ok := a.consoleMgr().ActiveWorkspace(); !ok || ws.ID != "w1" {
 		t.Fatalf("fallback workspace: %+v %v", ws, ok)
 	}
 	if _, ok := a.consoleMgr().Active(); ok {
 		t.Fatal("no console must be active")
 	}
-	if a.ed.Buf.String() != "" {
-		t.Fatalf("empty buffer expected: %q", a.ed.Buf.String())
+	if a.activeText() != "" {
+		t.Fatalf("empty buffer expected: %q", a.activeText())
 	}
 	if a.activeConsole != "" {
 		t.Fatalf("active console must be empty: %q", a.activeConsole)
@@ -72,7 +72,7 @@ func TestRestoreFallsBackOnInvalidIDs(t *testing.T) {
 func TestEmptyStoreDoesNotWriteOnStartup(t *testing.T) {
 	dir := t.TempDir()
 	storePath := filepath.Join(dir, "connections.json")
-	a := newRootWithStore(storePath, strats{scopeViewport, scopeViewport})
+	a := newRootWithStore(storePath)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if _, err := os.Stat(storePath); !errors.Is(err, os.ErrNotExist) {
@@ -93,7 +93,7 @@ func TestFlushAllWritesDirtyConsoles(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.ed.Buf.Set("SELECT 77")
+	a.setActiveText("SELECT 77")
 	a.syncActiveBuffer()
 	a.FlushAll()
 	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir()}.Read(rec.ID)

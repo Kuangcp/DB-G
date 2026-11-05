@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -14,10 +13,7 @@ import (
 )
 
 type root struct {
-	ed             *editor
-	findQuery      string
-	findActive     bool
-	sampler        *Sampler
+	code           *codeEditor
 	con            *app.Console
 	sess           engine.Session
 	sessConnID     string
@@ -48,8 +44,6 @@ type root struct {
 	treeData       map[string]map[engine.ObjectKind][]engine.DBObject
 	treeErr        map[string]string
 	treeSelected   string
-	selStart       int
-	selEnd         int
 	execPending    bool
 
 	mgr               *app.ConsoleManager
@@ -60,7 +54,6 @@ type root struct {
 	pendingSwitchWS   string
 	lastVer           map[string]uint64
 	lastCaret         [2]int
-	pendingSel        *[2]int
 	consoleErr        string
 	widthsFor         *engine.QueryResult
 	widths            []float32
@@ -75,10 +68,9 @@ type root struct {
 	modalErr          string
 }
 
-func newRoot(text string, s strats) *root {
-	return &root{
-		ed:            NewEditor(text, s),
-		sampler:       NewSampler(128),
+func newRoot(text string) *root {
+	a := &root{
+		code:          newCodeEditor("在左侧数据源下新建或打开控制台"),
 		con:           app.NewConsole(),
 		resultsHeight: 260,
 		sidebarWidth:  280,
@@ -90,16 +82,18 @@ func newRoot(text string, s strats) *root {
 		consoles:      map[string]*app.Console{},
 		lastVer:       map[string]uint64{},
 	}
+	a.code.SetActive("", text)
+	return a
 }
 
-// NewRoot 创建交互窗口状态（SCOPE 环境变量选编辑策略，加载用户连接库并恢复上次的控制台）。
+// NewRoot 创建交互窗口状态（加载用户连接库并恢复上次的控制台）。
 func NewRoot() *root {
-	return newRootWithStore(app.DefaultStorePath(), stratsFromEnv())
+	return newRootWithStore(app.DefaultStorePath())
 }
 
 // newRootWithStore 用指定连接库路径建根状态，并恢复上次激活的工作区、控制台、正文与光标。
-func newRootWithStore(storePath string, s strats) *root {
-	r := newRoot("", s)
+func newRootWithStore(storePath string) *root {
+	r := newRoot("")
 	r.store = app.LoadStore(storePath)
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
 	r.restoreSession()
@@ -198,20 +192,33 @@ func (a *root) activateConsole(id string) bool {
 	// 目标控制台：同样以磁盘为准（它上次离开时已落盘）。
 	m.DetachTextSource(rec.ID)
 	text, _ := m.Text(rec.ID)
-	a.ed.Buf.Set(text)
-	a.ed.dirty = true
-	a.ed.scroll = ui.ScrollState{}
+	a.code.SetActive(rec.ID, text)
 	start, end := m.Caret(rec.ID)
-	a.pendingSel = &[2]int{start, end}
+	a.code.SetSelection(start, end)
 	a.activeConsole = rec.ID
 	// 活动控制台的正文惰性取自编辑器：逐帧只比较版本号，落盘时才拷贝。
-	m.SetTextSource(rec.ID, func() string { return a.ed.Buf.String() })
-	a.lastVer[rec.ID] = a.ed.Buf.Version()
+	m.SetTextSource(rec.ID, func() string { return a.code.Text() })
+	a.lastVer[rec.ID] = a.code.Version()
 	a.lastCaret = [2]int{start, end}
-	a.selStart, a.selEnd = start, end
+	a.code.state.ScrollTo(a.code.state.CursorPos().Line)
 	a.runtime(rec.ID)
 	return true
 }
+
+// hasSelection 报告当前是否有选区（「仅执行选中」的开关）。
+func (a *root) hasSelection() bool {
+	_, _, has := a.code.Selection()
+	return has
+}
+
+// setActiveText 整体替换当前正文（测试与设置窗口预设用）。
+func (a *root) setActiveText(text string) { a.code.SetText(text) }
+
+// activeText 返回当前正文。
+func (a *root) activeText() string { return a.code.Text() }
+
+// setSelection 用 rune 偏移设置选区（测试用；编辑器内部是字节）。
+func (a *root) setSelection(startRune, endRune int) { a.code.SetSelection(startRune, endRune) }
 
 // flushActive 落盘当前控制台的正文与光标（切标签/关闭/执行前/退出）。
 func (a *root) flushActive() error {
@@ -222,7 +229,8 @@ func (a *root) flushActive() error {
 	if m == nil {
 		return nil
 	}
-	m.SetCaret(a.activeConsole, a.selStart, a.selEnd)
+	s, e := a.code.CaretRunes()
+	m.SetCaret(a.activeConsole, s, e)
 	m.FlushCarets()
 	if err := m.Flush(a.activeConsole); err != nil {
 		a.consoleErr = err.Error()
@@ -241,13 +249,13 @@ func (a *root) syncActiveBuffer() {
 	if m == nil {
 		return
 	}
-	if ver := a.ed.Buf.Version(); ver != a.lastVer[a.activeConsole] {
+	if ver := a.code.Version(); ver != a.lastVer[a.activeConsole] {
 		a.lastVer[a.activeConsole] = ver
 		m.TouchVersion(a.activeConsole, ver)
 	}
-	if cur := [2]int{a.selStart, a.selEnd}; cur != a.lastCaret {
-		a.lastCaret = cur
-		m.SetCaret(a.activeConsole, cur[0], cur[1])
+	if s, e := a.code.CaretRunes(); [2]int{s, e} != a.lastCaret {
+		a.lastCaret = [2]int{s, e}
+		m.SetCaret(a.activeConsole, s, e)
 	}
 }
 
@@ -271,7 +279,6 @@ func fmtDur(d time.Duration) string {
 
 func rootView(a *root) func(c *ui.Context) {
 	return func(c *ui.Context) {
-		ed := a.ed
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
 		a.maybeOpenSettings()
 		a.syncActiveBuffer()
@@ -298,8 +305,6 @@ func rootView(a *root) func(c *ui.Context) {
 			a.pendingActivate = ""
 			a.activateConsole(id)
 		}
-		ed.Update()
-
 		if c.Shortcut(ui.Ctrl, ui.KeyEnter) || c.Shortcut(0, ui.KeyF5) {
 			a.execPending = true
 		}
@@ -331,7 +336,7 @@ func rootView(a *root) func(c *ui.Context) {
 					if ui.Button(c, "设置").Clicked() {
 						a.requestSettings()
 					}
-					if ui.Button(c, "执行").Disabled(a.currentRuntime().Running() || a.sess == nil || a.selStart == a.selEnd).Clicked() {
+					if ui.Button(c, "执行").Disabled(a.currentRuntime().Running() || a.sess == nil || !a.hasSelection()).Clicked() {
 						a.execPending = true
 					}
 				})
@@ -339,56 +344,22 @@ func rootView(a *root) func(c *ui.Context) {
 				// 标签条 + 工作区切换器
 				a.tabBar(c)
 
-				// 工具行：查找（性能 HUD/预设/策略在独立设置窗口里）
+				// 工具行：查找（编辑器自带查找栏；性能预设/信息在独立设置窗口里）
 				ui.Row(c).Gap(6).Children(func() {
 					ui.Spacer(c)
-					ui.TextInput(c, &a.findQuery).Placeholder("查找")
 					if ui.Button(c, "查找").Clicked() {
-						a.findActive = true
+						a.code.Find()
 					}
-					if ui.Button(c, "清除").Clicked() {
-						a.findQuery, a.findActive = "", false
-					}
+					ui.Text(c, "Ctrl+F / Ctrl+Space").FontSize(12).TextColor(c.Theme().TextMuted)
 				})
 
 				// 编辑器 / 结果 分屏
 				ui.SplitVertical(c, &a.resultsHeight, func() {
-					ui.Row(c).Fill().Children(func() {
-						ui.Box(c).Width(44).FillHeight().Draw(func(p *ui.Painter, r ui.Rect) {
-							ed.viewH = r.H
-							p.Clip(r, 0, func() {
-								top := r.Y - ed.scroll.Y
-								cur := ed.lines.At(ed.scroll.Y)
-								for i := cur; i < ed.lines.Count(); i++ {
-									y := top + ed.lines.Top(i)
-									if y > r.Y+r.H {
-										break
-									}
-									if i == cur {
-										p.Fill(ui.Rect{X: r.X, Y: y, W: r.W, H: 16}, ui.RGBA(80, 100, 160, 0.25), 0)
-									}
-									p.Text(r.X+8, y, strconv.Itoa(i+1), 12, ui.RGB(130, 130, 130))
-								}
-							})
-						})
-
-						in := ui.TextAreaBuffer(c, ed.Buf).Label("编辑器").Fill().Font("monospace").
-							TrackLines(&ed.lines).TrackScroll(&ed.scroll)
-						if a.pendingSel != nil {
-							in.SetTextSelection(a.pendingSel[0], a.pendingSel[1])
-							a.pendingSel = nil
-						}
-						if a.findActive && a.findQuery != "" {
-							in.TextRanges(FindAll(ed.Buf.String(), a.findQuery)...)
-						} else {
-							in.TextRanges(ed.allRanges...)
-						}
-						a.selStart, a.selEnd = in.TextSelection()
-						if a.execPending {
-							a.execPending = false
-							a.runSQL()
-						}
-					})
+					a.code.View(c).Label("编辑器")
+					if a.execPending {
+						a.execPending = false
+						a.runSQL()
+					}
 				}, func() {
 					a.resultPane(c)
 				}).Grow(1)

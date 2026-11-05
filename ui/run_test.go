@@ -61,10 +61,10 @@ func TestRunSQLiteEndToEnd(t *testing.T) {
 	if a.connName != "app.db" {
 		t.Fatalf("connName = %q", a.connName)
 	}
-	a.ed.Buf.Set("SELECT id, name FROM users ORDER BY id")
+	a.setActiveText("SELECT id, name FROM users ORDER BY id")
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
-	a.selStart, a.selEnd = 0, len([]rune("SELECT id, name FROM users ORDER BY id"))
+	a.setSelection(0, len([]rune("SELECT id, name FROM users ORDER BY id")))
 	a.runSQL()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -92,10 +92,10 @@ func TestRunErrorEndToEnd(t *testing.T) {
 	if err := a.openSQLite(path); err != nil {
 		t.Fatal(err)
 	}
-	a.ed.Buf.Set("SELECT * FROM nope")
+	a.setActiveText("SELECT * FROM nope")
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
-	a.selStart, a.selEnd = 0, len([]rune("SELECT * FROM nope"))
+	a.setSelection(0, len([]rune("SELECT * FROM nope")))
 	a.runSQL()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {

@@ -125,10 +125,10 @@ func TestOpenConnAndRunEndToEnd(t *testing.T) {
 	if act, ok := a.store.Active(); !ok || act.ID != stored.ID {
 		t.Fatalf("active: %+v %v", act, ok)
 	}
-	a.ed.Buf.Set("SELECT name FROM users")
+	a.setActiveText("SELECT name FROM users")
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	a.selStart, a.selEnd = 0, len([]rune("SELECT name FROM users"))
+	a.setSelection(0, len([]rune("SELECT name FROM users")))
 	a.runSQL()
 	for range 200 {
 		if a.con.Result() != nil || a.con.Err() != "" {
@@ -576,7 +576,7 @@ func TestSidebarReopenClosedConsole(t *testing.T) {
 	if !m.IsOpen(rec.ID) {
 		t.Fatal("clicking a closed console must reopen it")
 	}
-	if got := a.ed.Buf.String(); got != "SELECT 5" {
+	if got := a.activeText(); got != "SELECT 5" {
 		t.Fatalf("buffer after reopen: %q", got)
 	}
 }

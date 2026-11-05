@@ -38,7 +38,7 @@ func (a *root) resultPane(c *ui.Context) {
 			switch {
 			case a.sess == nil:
 				ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
-			case a.selStart == a.selEnd:
+			case !a.hasSelection():
 				ui.Text(c, "请先选中要执行的 SQL").TextColor(c.Theme().TextMuted)
 			default:
 				ui.Text(c, "Ctrl+Enter 执行选中 SQL").TextColor(c.Theme().TextMuted)
