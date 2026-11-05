@@ -1,5 +1,9 @@
 # mygo SQL 编辑器可行性基准 — 结果报告
 
+> **历史文档（部分已退役）**：下面「自制编辑器 + FF/FV/VV 策略」的矩阵数据来自 db-g 早期自写的
+> tokenizer（`highlight/` + `ui/TextAreaBuffer`，已随 A1 删除）。当前编辑器是 mygo `ui/editor`，
+> 现行基准见文末「A1：ui/editor 基准」一节。保留旧数据仅为记录当时的取舍依据。
+
 日期：2026-10-13
 分支：`main` @ `db-k`（`/home/zk/Code/go/db-k`）
 结论：**B — 需视口（viewport）策略才可行（正结果）**
@@ -89,3 +93,53 @@
 # 交互窗口（需本机 GTK+OpenGL；SCOPE=FF|FV|VV，默认 VV）
 /home/zk/Code/go/bin/go1.27.1 run .
 ```
+---
+
+# A1：ui/editor 基准（现行）
+
+日期：2026-11-05
+动机：主编辑器从自制实现迁移到 mygo `ui/editor`（见 `docs/superpowers/specs/2026-11-05-editor-completions-design.md` 阶段 A1）。
+旧的 FF/FV/VV 策略与 `highlight/` 包已删除，本机跑旧基准确认已退役。
+
+## 环境
+
+| 项 | 值 |
+|---|---|
+| OS | Linux x86_64（同机，Manjaro） |
+| CPU | Intel Core i5-10400F @ 2.90GHz（12 逻辑核） |
+| Go | go1.27.3 linux/amd64 |
+| mygo | 本地 `github.com/egoist/mygo` HEAD（`ui/editor`） |
+| 测量方式 | `ui.Tester` headless（CPU raster，无窗口），`ui/perf_test.go` |
+
+复现：`CGO_ENABLED=0 go test ./ui -run 'TestEditor.*Perf' -v -count=1`
+
+## 数字（20 帧/场景，p50 / p99）
+
+| 场景 | 3k 行 | 12k 行 | 100k 行（11 MB） |
+|---|---|---|---|
+| 键入一个字符 | 5.0 / 5.4 ms | 5.0 / 5.7 ms | 5.0 / 5.3 ms |
+| 滚动一屏 | 0.05 / 0.32 ms | 0.04 / 0.23 ms | 0.05 / 0.38 ms |
+| 打开首帧 | 0.81 / — ms | 0.81 / — ms | **99.8 ms**（见下） |
+| 补全弹层开着键入（2000 候选） | 5.4 / 7.8 ms | 6.0 / 7.7 ms | 5.6 / 9.0 ms |
+| 预热后空帧 | 0.81 / 1.08 ms | 0.82 / 0.84 ms | 0.83 / 0.90 ms |
+
+**100k 行的一次性开盘成本**：连续 3 帧约 228–255 ms（`no-folding`/`no-active-line`/`no-indent-guides`/
+`no-auto-close` 只能减少 10–25%，说明是库首次为 11 MB 建行索引/高亮状态），随后稳态 0.86 ms/帧。
+决策（用户拍板）：**接受**这笔一次性成本；真实控制台的正文通常几十~几千行（首帧 <1 ms），
+100k 只出现在设置窗口的演示预设里。
+
+## 基准限值（`ui/perf_test.go`）
+
+| 项 | 限值 |
+|---|---|
+| 键入 p99（所有规模） | 12 ms |
+| 滚动 p99（所有规模） | 2 ms |
+| 首帧（3k/12k） | 5 ms |
+| 首帧（100k，一次性） | 300 ms |
+| 补全弹层开着键入 p99 | 14 ms（100k 为 15 ms） |
+| 预热后空帧 p99（所有规模） | 2 ms |
+
+## 与旧基线的对比
+
+旧自制编辑器 100k 行单键中值 31.4 ms（VV 策略），换 `ui/editor` 后 100k 键入 p99 ≈ 5.3 ms，
+且不再需要按文档规模切换高亮策略（`SCOPE` 环境变量已删除）。

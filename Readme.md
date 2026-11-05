@@ -5,7 +5,8 @@
 
 ## 功能清单
 
-- [x] 长文本编辑器：虚拟化渲染 + 增量 SQL 高亮 + 查找（性能基准见 docs/spike-results.md）
+- [x] 编辑器：mygo `ui/editor`（SQL 高亮、行号、查找替换 Ctrl+F、折叠、多光标、撤销；
+      百万行级视口布局，性能基准见 docs/spike-results.md 的 A1 一节）
 - [x] M1：打开 SQLite 文件、异步执行 SQL（Ctrl+Enter）、虚拟化结果表格
       （行号/截断徽章/错误横幅/停止取消/500 行与 1MB/16MB 预算）
 - [x] M2：主页面布局对齐 db-k 骨架（侧栏/顶栏/单行工具栏）；连接管理
@@ -27,9 +28,10 @@
 ```bash
 export GO=/home/zk/Code/go/bin/go1.27.3
 CGO_ENABLED=0 $GO run .     # 交互窗口（本机 cgo 链接有 .sframe 环境问题，统一关掉 cgo）
-CGO_ENABLED=0 $GO test -p 1 ./... # 全量（含 spike 与结果网格基准，数分钟；-p 1 避免并行包争 CPU 导致基准超限）
+CGO_ENABLED=0 $GO test -p 1 ./... # 全量（含编辑器与结果网格基准；-p 1 避免并行包争 CPU 导致基准超限）
+CGO_ENABLED=0 $GO test ./ui -run 'TestEditor.*Perf' -v   # 只跑编辑器性能基准
 $GO tool mygo vet .         # UI 生命周期检查
 ```
 
-顶栏「设置」打开独立设置窗口（单例）：编辑器性能 HUD、3k/12k/100k 演示预设
-（写入当前激活控制台并立即落盘）、FF/FV/VV 高亮策略都在那里（spike 回归用）。
+顶栏「设置」打开独立设置窗口（单例）：编辑器信息（行数/字节/版本）与 3k/12k/100k
+演示预设（写入当前激活控制台并立即落盘，性能自测用）。
