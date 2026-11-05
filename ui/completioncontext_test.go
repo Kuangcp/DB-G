@@ -12,11 +12,11 @@ func TestDotIdent(t *testing.T) {
 		{"select * from users.", 20, "users", true},
 		{"select users.", 13, "users", true},
 		{"SELECT a.", 9, "a", true},
-		{"select 1.", 9, "", false},      // 数字不是标识符
-		{"select 'abc.", 12, "", false},  // 单引号字符串里
+		{"select 1.", 9, "", false},       // 数字不是标识符
+		{"select 'abc.", 12, "", false},   // 单引号字符串里
 		{"select 1 -- x.", 14, "", false}, // 行注释里
-		{"a.b.", 4, "b", true},           // 最后一个点号前是 b
-		{"users.", 0, "", false},         // 光标在行首
+		{"a.b.", 4, "b", true},            // 最后一个点号前是 b
+		{"users.", 0, "", false},          // 光标在行首
 		{"", 0, "", false},
 	}
 	for _, c := range cases {

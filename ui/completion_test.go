@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"context"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"db-g/engine"
 )
 
 // completionLabels 取某连接的候选标签（completionItems 对未知连接也返回词表）。
@@ -171,5 +174,61 @@ func TestCompletionUnknownTableAfterDotKeepsKeywords(t *testing.T) {
 	}
 	if !tt.HasText("select") && !tt.HasText("SELECT") {
 		t.Fatalf("keywords must remain for unknown relations: %q", tt.Texts())
+	}
+}
+
+type noColumnsSession struct {
+	// 只声明 CapObjects：旧驱动/第三方实现的形态。
+}
+
+func (s noColumnsSession) Open(context.Context) error { return nil }
+func (s noColumnsSession) Close() error               { return nil }
+func (s noColumnsSession) Cancel() bool               { return false }
+func (s noColumnsSession) Caps() engine.Capabilities  { return engine.CapObjects }
+func (s noColumnsSession) RunStatement(context.Context, string) (*engine.QueryResult, error) {
+	return &engine.QueryResult{}, nil
+}
+func (s noColumnsSession) Objects(context.Context, engine.ObjectKind) ([]engine.DBObject, error) {
+	return []engine.DBObject{{Name: "t"}}, nil
+}
+
+func TestEnsureColumnsDegradesWithoutCapability(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.setSession("c1", noColumnsSession{})
+	a.ensureColumns("c1", "t") // 不得 panic，也不得写缓存
+	if _, ok := a.catalog.getColumns("c1", "t"); ok {
+		t.Fatal("session without CapColumns must not produce column items")
+	}
+	if found := a.completionItems("c1"); len(found) == 0 {
+		t.Fatal("keywords must remain available")
+	}
+}
+
+func TestShowCompletionsAtCursorLoadsColumnsAfterCatalog(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.sess.RunStatement(t.Context(), `CREATE TABLE a3_u (zz_two TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	a.catalog.invalidate(prof.ID)
+	rec, _ := a.consoleMgr().Create(prof.ID, "列补全")
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	// 模拟真实路径：编辑器有焦点时，目录加载完成的重弹会顺手把列取上。
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Click("编辑器")
+	tt.Frame()
+	a.ensureCatalog(prof.ID)
+	a.setActiveText("select * from a3_u.")
+	n := len([]rune("select * from a3_u."))
+	a.code.SetSelection(n, n)
+	a.showCompletionsAtCursor()
+	if _, ok := a.catalog.getColumns(prof.ID, "a3_u"); !ok {
+		t.Fatal("dot context must trigger a column load")
 	}
 }

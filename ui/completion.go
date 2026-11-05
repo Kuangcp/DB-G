@@ -177,11 +177,15 @@ func (a *root) showCompletionsAtCursor() {
 		return
 	}
 	connID := a.activeConsoleConnID()
-	if ident, ok := dotIdent(a.code.Text(), a.code.state.Cursor()); ok {
+	if ident, ok := dotIdent(a.code.Text(), a.code.state.Cursor()); ok && a.catalog.hasRelation(connID, ident) {
 		if items, hit := a.catalog.getColumns(connID, ident); hit {
 			a.code.state.ShowCompletions(-1, items)
 			return
 		}
+		// 目录刚加载完、光标正在点号上下文：顺手把列也取上，别等下一次按键。
+		a.ensureColumns(connID, ident)
+		a.code.state.ShowCompletions(-1, sqlWordItems())
+		return
 	}
 	if items, ok := a.catalog.get(connID); ok {
 		a.code.state.ShowCompletions(-1, items)
