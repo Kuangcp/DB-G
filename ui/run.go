@@ -172,8 +172,19 @@ func (a *root) startStmt(i int) {
 // stmtDone 返回第 i 条语句的完成回调：记日志，并在成功时推进下一条。
 func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) {
 	logDone := a.execDoneLogger(a.stmtRuns[i].runtimeID)
+	// 在主线程捕获历史所需字段（回调在后台协程）。
+	stmt := a.stmtRuns[i].stmt
+	sql := a.code.Text()[stmt.Start:stmt.End]
+	connID, connName := a.sessConnID, a.connName
 	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
 		logDone(res, errMsg, dur)
+		if a.history != nil {
+			e := app.HistoryEntry{ConnID: connID, ConnName: connName, SQL: sql, DurMS: dur.Milliseconds(), OK: errMsg == "", Err: errMsg}
+			if res != nil {
+				e.Rows = len(res.Rows)
+			}
+			_ = a.history.Add(e)
+		}
 		rec := func() { a.recordFetchState(a.stmtRuns[i].runtimeID, res) }
 		if a.win != nil {
 			win := a.win

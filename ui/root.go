@@ -65,6 +65,8 @@ type root struct {
 	filterOpen          bool
 	filterCol           int
 	filterText          string
+	history             *app.History
+	historyOpen         bool
 	exportConfirm       bool
 	exportFormat        string
 	exportStatus        string
@@ -119,6 +121,7 @@ func NewRoot() *root {
 func newRootWithStore(storePath string) *root {
 	r := newRoot("")
 	r.store = app.LoadStore(storePath)
+	r.history = app.OpenHistory(app.DefaultHistoryPath())
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
 	r.restoreSession()
 	ws, _ := r.mgr.ActiveWorkspace()
@@ -421,6 +424,7 @@ func (a *root) view(c *ui.Context) {
 		a.cellViewer(c)
 		a.filterModal(c)
 		a.exportConfirmModal(c)
+		a.historyPanel(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
@@ -441,6 +445,9 @@ func (a *root) view(c *ui.Context) {
 						}
 					}
 					ui.Spacer(c)
+					if ui.Button(c, "历史").Clicked() {
+						a.historyOpen = true
+					}
 					if ui.Button(c, "设置").Clicked() {
 						a.requestSettings()
 					}
