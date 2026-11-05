@@ -176,3 +176,16 @@ func TestCatalogInvalidateDropsColumns(t *testing.T) {
 		t.Fatal("invalidate must drop columns too")
 	}
 }
+
+func TestBuildColumnItemsColumnsFirst(t *testing.T) {
+	items := buildColumnItems([]engine.Column{{Name: "zz_col", Type: "TEXT"}, {Name: "id", Type: "INTEGER"}})
+	if len(items) < 3 {
+		t.Fatalf("items: %d", len(items))
+	}
+	if items[0].Label != "id" || items[1].Label != "zz_col" {
+		t.Fatalf("columns must come first, sorted: %+v %+v", items[0], items[1])
+	}
+	if items[0].Kind != myeditor.CompletionField || items[0].Detail != "INTEGER" {
+		t.Fatalf("column item: %+v", items[0])
+	}
+}

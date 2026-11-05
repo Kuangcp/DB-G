@@ -18,6 +18,16 @@ const completionTimeout = 5 * time.Second
 // 否则先给词表并触发一次后台加载。
 func (a *root) onCompletion(r myeditor.CompletionRequest) {
 	connID := a.activeConsoleConnID()
+	// 点号上下文：`表名.` 之后只补该表的列（+ 关键字）。
+	if ident, ok := dotIdent(a.code.Text(), r.Offset); ok && a.catalog.hasRelation(connID, ident) {
+		if items, hit := a.catalog.getColumns(connID, ident); hit {
+			a.code.state.ShowCompletions(r.Offset-len(r.Prefix), items)
+			return
+		}
+		a.code.state.ShowCompletions(r.Offset-len(r.Prefix), sqlWordItems())
+		a.ensureColumns(connID, ident)
+		return
+	}
 	if items, ok := a.catalog.get(connID); ok {
 		a.code.state.ShowCompletions(r.Offset-len(r.Prefix), items)
 		return
@@ -76,6 +86,47 @@ func (a *root) ensureCatalog(connID string) {
 	go load()
 }
 
+// ensureColumns 在主线程调用：没有新鲜列缓存时发起一次加载（同 ensureCatalog 的线程语义）。
+func (a *root) ensureColumns(connID, table string) {
+	if connID == "" || table == "" || !a.catalog.beginColumns(connID, table) {
+		return
+	}
+	sess := a.sess
+	if sess == nil || a.sessConnID != connID || !sess.Caps().Has(engine.CapColumns) {
+		a.catalog.failColumns(connID, table)
+		return
+	}
+	load := func() {
+		cols, err := columnsOf(sess, table)
+		if err != nil {
+			a.catalog.failColumns(connID, table)
+			return
+		}
+		a.catalog.finishColumns(connID, table, cols)
+		if a.win != nil {
+			win := a.win
+			win.Update(a.showCompletionsAtCursor)
+		}
+	}
+	if a.win == nil {
+		load()
+		a.showCompletionsAtCursor()
+		return
+	}
+	go load()
+}
+
+// columnsOf 用会话列出某表的列（纯函数，可被后台协程安全调用）。
+func columnsOf(sess engine.Session, table string) ([]engine.Column, error) {
+	lister, ok := sess.(engine.ColumnLister)
+	if !ok || !sess.Caps().Has(engine.CapColumns) {
+		return nil, nil // 能力不足：降级为只有关键字/表
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
+	defer cancel()
+	return lister.Columns(ctx, table)
+}
+
 // objectsOf 用会话枚举表与视图（纯函数，可被后台协程安全调用）。
 func objectsOf(sess engine.Session) (tables, views []string, err error) {
 	lister, ok := sess.(engine.ObjectLister)
@@ -115,17 +166,28 @@ func (a *root) loadCatalog(connID string) (tables, views []string, err error) {
 	return objectsOf(a.sess)
 }
 
-// retriggerCompletions 在目录就绪后把候选补上。
+// retriggerCompletions 在目录/列就绪后把候选补上。
+func (a *root) retriggerCompletions() { a.showCompletionsAtCursor() }
+
+// showCompletionsAtCursor 重算当前上下文（点号列 / 目录 / 词表）并刷新弹层。
 // 不能用 Run(ShowCompletions)：编辑器在同一词起点已有弹层时会短路成「本地重过滤」，
-// 不会再问一次 onCompletion（目录就永远补不进去）。ShowCompletions(-1, …) 让编辑器
-// 用自己的词起点与当前前缀刷新列表。
-func (a *root) retriggerCompletions() {
+// 不会再问一次 onCompletion（目录就永远补不进去）。
+func (a *root) showCompletionsAtCursor() {
 	if a.win == nil && !a.code.state.Focused() {
 		return
 	}
-	if items, ok := a.catalog.get(a.activeConsoleConnID()); ok {
-		a.code.state.ShowCompletions(-1, items)
+	connID := a.activeConsoleConnID()
+	if ident, ok := dotIdent(a.code.Text(), a.code.state.Cursor()); ok {
+		if items, hit := a.catalog.getColumns(connID, ident); hit {
+			a.code.state.ShowCompletions(-1, items)
+			return
+		}
 	}
+	if items, ok := a.catalog.get(connID); ok {
+		a.code.state.ShowCompletions(-1, items)
+		return
+	}
+	a.code.state.ShowCompletions(-1, sqlWordItems())
 }
 
 // refreshCompletions 失效当前连接的缓存并重新加载（设置窗口按钮）。

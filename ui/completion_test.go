@@ -113,3 +113,63 @@ func TestOpenConnInvalidatesCatalog(t *testing.T) {
 		t.Fatal("openConn must invalidate the connection's catalog")
 	}
 }
+
+func typeText(tt *ui.Tester, s string) {
+	for _, ch := range s {
+		tt.TypeKey(0, 0, string(ch))
+	}
+}
+
+func TestCompletionColumnsAfterDot(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.sess.RunStatement(t.Context(), `CREATE TABLE a3_t (id INTEGER PRIMARY KEY, zz_col TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	a.catalog.invalidate(prof.ID)
+	rec, err := a.consoleMgr().Create(prof.ID, "列补全")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Click("编辑器")
+	tt.Frame()
+	typeText(tt, "select * from a3_t.")
+	for range 6 {
+		tt.Frame()
+	}
+	if !tt.HasText("zz_col") {
+		t.Fatalf("column completion missing: %q", tt.Texts())
+	}
+}
+
+func TestCompletionUnknownTableAfterDotKeepsKeywords(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	a.catalog.invalidate(prof.ID)
+	rec, _ := a.consoleMgr().Create(prof.ID, "列补全")
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Click("编辑器")
+	tt.Frame()
+	typeText(tt, "select * from nosuch.")
+	for range 6 {
+		tt.Frame()
+	}
+	if !tt.HasText("select") && !tt.HasText("SELECT") {
+		t.Fatalf("keywords must remain for unknown relations: %q", tt.Texts())
+	}
+}

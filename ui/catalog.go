@@ -175,11 +175,11 @@ func (c *catalogCache) failColumns(connID, table string) {
 	delete(c.colsInflight, connID+"\x00"+table)
 }
 
-// buildColumnItems 组装「词表 + 该表的列」；列去重排序，Detail 给类型。
+// buildColumnItems 组装「该表的列 + 词表」：列在前，因为点号后用户要的是列，
+// 而编辑器弹层只渲染前若干行（词表几百条会把列挤到看不见的地方）。
 func buildColumnItems(cols []engine.Column) []myeditor.Completion {
 	words := sqlWordItems()
 	out := make([]myeditor.Completion, 0, len(words)+len(cols))
-	out = append(out, words...)
 	sorted := slices.Clone(cols)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
 	seen := map[string]bool{}
@@ -194,7 +194,7 @@ func buildColumnItems(cols []engine.Column) []myeditor.Completion {
 		}
 		out = append(out, myeditor.Completion{Label: col.Name, Detail: detail, Kind: myeditor.CompletionField})
 	}
-	return out
+	return append(out, words...)
 }
 
 // buildCatalogItems 组装候选：词表在前，表（表）与视图（视图）在后；各段去重排序。
