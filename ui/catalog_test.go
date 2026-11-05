@@ -3,6 +3,10 @@ package ui
 import (
 	"testing"
 	"time"
+
+	myeditor "github.com/egoist/mygo/ui/editor"
+
+	"db-g/engine"
 )
 
 func TestCatalogCacheHitAndTTL(t *testing.T) {
@@ -101,5 +105,74 @@ func TestBuildCatalogItemsKeepsWordsFirst(t *testing.T) {
 	items[0].Label = "MUTATED"
 	if sqlWordItems()[0].Label == "MUTATED" {
 		t.Fatal("catalog items must not alias the shared word list")
+	}
+}
+
+func TestCatalogHasRelationAndColumns(t *testing.T) {
+	c := newCatalogCache()
+	clock := time.Unix(2000, 0)
+	c.now = func() time.Time { return clock }
+	c.begin("conn")
+	c.finish("conn", []string{"users"}, []string{"v_users"})
+	if !c.hasRelation("conn", "users") || !c.hasRelation("conn", "v_users") {
+		t.Fatal("tables and views must be relations")
+	}
+	if c.hasRelation("conn", "nope") || c.hasRelation("other", "users") {
+		t.Fatal("unknown relation or connection must miss")
+	}
+	if !c.hasRelation("conn", "USERS") {
+		t.Fatal("relation lookup must ignore case, as SQL identifiers do")
+	}
+	if !c.beginColumns("conn", "users") {
+		t.Fatal("first column load must start")
+	}
+	if c.beginColumns("conn", "users") {
+		t.Fatal("column load must dedupe")
+	}
+	c.finishColumns("conn", "users", []engine.Column{
+		{Name: "id", Type: "INTEGER", PrimaryKey: true},
+		{Name: "name", Type: "TEXT", Nullable: true},
+	})
+	items, ok := c.getColumns("conn", "users")
+	if !ok {
+		t.Fatal("columns must be cached")
+	}
+	var id, name bool
+	for _, it := range items {
+		if it.Label == "id" && it.Detail == "INTEGER" && it.Kind == myeditor.CompletionField {
+			id = true
+		}
+		if it.Label == "name" {
+			name = true
+		}
+	}
+	if !id || !name {
+		t.Fatalf("items: %+v", items)
+	}
+	clock = clock.Add(6 * time.Minute)
+	if _, ok := c.getColumns("conn", "users"); ok {
+		t.Fatal("expired columns must miss")
+	}
+}
+
+func TestCatalogColumnFailureAllowsRetry(t *testing.T) {
+	c := newCatalogCache()
+	c.beginColumns("c", "t")
+	c.failColumns("c", "t")
+	if _, ok := c.getColumns("c", "t"); ok {
+		t.Fatal("failure must not be cached")
+	}
+	if !c.beginColumns("c", "t") {
+		t.Fatal("failure must allow retry")
+	}
+}
+
+func TestCatalogInvalidateDropsColumns(t *testing.T) {
+	c := newCatalogCache()
+	c.beginColumns("c", "t")
+	c.finishColumns("c", "t", []engine.Column{{Name: "x"}})
+	c.invalidate("c")
+	if _, ok := c.getColumns("c", "t"); ok {
+		t.Fatal("invalidate must drop columns too")
 	}
 }
