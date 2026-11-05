@@ -160,6 +160,7 @@ func (a *root) startStmt(i int) {
 	a.activeStmt = i
 	stmt := a.stmtRuns[i].stmt
 	sql := a.code.Text()[stmt.Start:stmt.End]
+	a.lastExecSQL = sql
 	rt := a.runtimeFor(a.stmtRuns[i].runtimeID)
 	rt.SetOnDone(a.stmtDone(i))
 	if !rt.Run(a.sess, sql) {

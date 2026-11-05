@@ -216,3 +216,45 @@ func TestResultPaneRendersTextBytes(t *testing.T) {
 		t.Fatalf("byte summary must not show for text: %q", tt.Texts())
 	}
 }
+
+func TestResultCopyRowInsertViaMenu(t *testing.T) {
+	a := openForSelection(t)
+	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice')"); err != nil {
+		t.Fatal(err)
+	}
+	a.setActiveText("SELECT id, name FROM users ORDER BY id")
+	a.setSelection(0, len([]rune("SELECT id, name FROM users ORDER BY id")))
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	a.runSQL()
+	pollResult(t, a, tt)
+	tt.Frame()
+	if err := tt.RightClick("alice"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("复制本行 → INSERT"); err != nil {
+		t.Fatal(err)
+	}
+	got := tt.Clipboard()
+	if !strings.HasPrefix(got, `INSERT INTO "users" (`) || !strings.Contains(got, "'alice'") {
+		t.Fatalf("clipboard: %q", got)
+	}
+}
+
+func TestResultCellViewerShowsFullValue(t *testing.T) {
+	a := newTestRoot()
+	long := strings.Repeat("长", 40)
+	a.con.SetOutcome(resultWith([]string{"note"}, []any{long}), "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if err := tt.RightClick(long); err != nil {
+		t.Fatalf("right click failed: %v", err)
+	}
+	if err := tt.ChooseMenuItem("查看完整内容"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText(long) {
+		t.Fatalf("viewer must show the full value: %q", tt.Texts())
+	}
+}

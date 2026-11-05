@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
@@ -10,7 +11,33 @@ import (
 	"db-g/engine"
 )
 
+// cursorDataCol 把 Cells.Cursor（列 ID）换成结果里的数据列下标；行号列或未知列返回 -1。
+func (a *root) cursorDataCol(r *engine.QueryResult) int {
+	id := a.resultState.Cells.Cursor
+	if id == "" || id == "#" || r == nil {
+		return -1
+	}
+	for i, name := range r.Columns {
+		if name == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// copyCurrentCell 复制当前选中单元格（Ctrl+C 与「复制」按钮共用）。
+func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
+	col := a.cursorDataCol(r)
+	if r == nil || a.resultRow < 0 || a.resultRow >= len(r.Rows) || col < 0 || col >= len(r.Columns) {
+		return
+	}
+	c.WriteClipboard(cellString(r.Rows[a.resultRow][col]))
+}
+
 func (a *root) resultPane(c *ui.Context) {
+	if c.Shortcut(ui.Ctrl, ui.KeyC) && !a.code.state.Focused() {
+		a.copyCurrentCell(c, a.currentRuntime().Result())
+	}
 	ui.Column(c).Fill().Gap(6).Children(func() {
 		if len(a.stmtRuns) > 1 {
 			a.stmtTabs(c)
@@ -87,6 +114,78 @@ func (a *root) stmtTabs(c *ui.Context) {
 	})
 }
 
+// dataCols 返回结果数据列的下标（0..n-1）。
+func dataCols(r *engine.QueryResult) []int {
+	out := make([]int, len(r.Columns))
+	for i := range out {
+		out[i] = i
+	}
+	return out
+}
+
+// rowTable 返回「复制本行 → INSERT」用的表名：从最近执行语句里取唯一的关系名。
+func (a *root) rowTable() (string, bool) {
+	rels := relationsIn(a.lastExecSQL)
+	seen := map[string]string{}
+	for _, r := range rels {
+		if r.Table != "" {
+			seen[strings.ToLower(r.Table)] = r.Table
+		}
+	}
+	if len(seen) != 1 {
+		return "", false
+	}
+	for _, name := range seen {
+		return name, true
+	}
+	return "", false
+}
+
+// connKind 返回当前连接的种类（决定引用符），无连接按 sqlite。
+func (a *root) connKind() string {
+	if a.sessConnID != "" {
+		if p, ok := a.store.Get(a.sessConnID); ok && p.Kind != "" {
+			return p.Kind
+		}
+	}
+	return "sqlite"
+}
+
+// openCellViewer 打开单元格完整内容弹窗（JSON 美化）。
+func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
+	if r == nil || row < 0 || row >= len(r.Rows) || col < 0 || col >= len(r.Columns) {
+		return
+	}
+	text, isJSON := formatCellValue(r.Rows[row][col])
+	a.cellViewTitle = r.Columns[col]
+	if isJSON {
+		a.cellViewTitle += "（JSON）"
+	}
+	a.cellViewText = text
+	a.cellViewOpen = true
+}
+
+// cellViewer 渲染长文本查看弹窗。
+func (a *root) cellViewer(c *ui.Context) {
+	if !a.cellViewOpen {
+		return
+	}
+	ui.Modal(c, &a.cellViewOpen, func() {
+		ui.Text(c, a.cellViewTitle).Bold()
+		ui.ScrollBoth(c).Height(320).Children(func() {
+			ui.Text(c, a.cellViewText).Font("monospace").FontSize(12)
+		})
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "复制").Clicked() {
+				c.WriteClipboard(a.cellViewText)
+			}
+			if ui.PrimaryButton(c, "关闭").Clicked() {
+				a.cellViewOpen = false
+			}
+		})
+	})
+}
+
 func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	widths := a.columnWidths(r)
 	cols := make([]ui.TableColumn, 0, len(r.Columns)+1)
@@ -100,13 +199,52 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			MaxWidth: maxColumnWidth,
 		})
 	}
-	ui.Table(c, &a.resultState, cols, len(r.Rows), func(row, col int) {
+	// 顶部操作条：复制当前单元格/行、查看完整内容。
+	ui.Row(c).Gap(6).Children(func() {
+		if ui.Button(c, "复制").Clicked() {
+			a.copyCurrentCell(c, r)
+		}
+		if ui.Button(c, "查看").Clicked() {
+			a.openCellViewer(r, a.resultRow, a.cursorDataCol(r))
+		}
+		ui.Text(c, "右键单元格：复制行 / 生成 INSERT / 查看完整内容").FontSize(12).TextColor(c.Theme().TextMuted)
+	})
+
+	a.resultState.CellSelect = true
+	a.resultState.Selected = &a.resultRow
+	a.resultState.CellMenu = func(m *ui.Menu, row, col int) {
+		a.resultRow = row
+		dataCol := col - 1 // 第 0 列是行号
+		if dataCol >= 0 && dataCol < len(r.Columns) {
+			if m.Item("复制单元格").Chosen() {
+				c.WriteClipboard(cellString(r.Rows[row][dataCol]))
+			}
+		}
+		if m.Item("复制本行").Chosen() {
+			c.WriteClipboard(rowsTSV(r, []int{row}, dataCols(r), false))
+		}
+		if it := m.Item("复制本行 → INSERT"); it.Chosen() {
+			if table, ok := a.rowTable(); ok {
+				c.WriteClipboard(insertSQL(a.connKind(), table, r.Columns, r.Rows[row]))
+			}
+		} else if table, ok := a.rowTable(); !ok {
+			_ = table
+		}
+		if dataCol >= 0 && m.Item("查看完整内容").Chosen() {
+			a.openCellViewer(r, row, dataCol)
+		}
+	}
+
+	tbl := ui.Table(c, &a.resultState, cols, len(r.Rows), func(row, col int) {
 		if col == 0 {
 			ui.Text(c, strconv.Itoa(row+1)).TextColor(c.Theme().TextMuted)
 			return
 		}
 		ui.Text(c, cellText(r.Rows[row][col-1])).SingleLine()
 	}).Grow(1)
+	if tbl.Submitted() {
+		a.openCellViewer(r, a.resultRow, a.cursorDataCol(r))
+	}
 }
 
 func cellText(v any) string {

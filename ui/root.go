@@ -58,6 +58,11 @@ type root struct {
 	lastCaret           [2]int
 	stmtRuns            []stmtRun // 本次执行的语句（多语句时结果区按它分 Tab）
 	activeStmt          int
+	lastExecSQL         string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
+	resultRow           int
+	cellViewOpen        bool
+	cellViewTitle       string
+	cellViewText        string
 	consoleErr          string
 	widthsFor           *engine.QueryResult
 	widths              []float32
@@ -389,6 +394,7 @@ func (a *root) view(c *ui.Context) {
 		}
 
 		a.tabModal(c)
+		a.cellViewer(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
