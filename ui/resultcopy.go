@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
+	"db-g/app"
 	"db-g/engine"
 )
 
@@ -84,64 +84,7 @@ func rowsTSV(r *engine.QueryResult, rowIdx, colsIdx []int, header bool) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// quoteIdentFor 按数据源方言引用标识符。
-func quoteIdentFor(kind, s string) string {
-	if kind == "mysql" {
-		return "`" + strings.ReplaceAll(s, "`", "``") + "`"
-	}
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
-}
-
-// quoteValue 把值渲染成 SQL 字面量（复制 INSERT 用，宁可不复制也不拼坏）。
-func quoteValue(v any) string {
-	switch t := v.(type) {
-	case nil:
-		return "NULL"
-	case string:
-		return "'" + strings.ReplaceAll(t, "'", "''") + "'"
-	case []byte:
-		if isTextBytes(t) {
-			return quoteValue(string(t))
-		}
-		return "NULL" // 二进制不生成 INSERT
-	case bool:
-		if t {
-			return "1"
-		}
-		return "0"
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprint(t)
-	case float32, float64:
-		return strconv.FormatFloat(toFloat(t), 'g', -1, 64)
-	case time.Time:
-		return quoteValue(t.Format(time.RFC3339Nano))
-	default:
-		return quoteValue(fmt.Sprint(t))
-	}
-}
-
-func toFloat(v any) float64 {
-	switch t := v.(type) {
-	case float32:
-		return float64(t)
-	case float64:
-		return t
-	}
-	return 0
-}
-
-// insertSQL 生成「复制本行 → INSERT」语句。
+// insertSQL 生成「复制本行 → INSERT」语句（与导出共用同一套转义）。
 func insertSQL(kind, table string, cols []string, row []any) string {
-	quoted := make([]string, len(cols))
-	values := make([]string, len(cols))
-	for i, c := range cols {
-		quoted[i] = quoteIdentFor(kind, c)
-		if i < len(row) {
-			values[i] = quoteValue(row[i])
-		} else {
-			values[i] = "NULL"
-		}
-	}
-	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);",
-		quoteIdentFor(kind, table), strings.Join(quoted, ", "), strings.Join(values, ", "))
+	return app.InsertStatement(kind, table, cols, row)
 }

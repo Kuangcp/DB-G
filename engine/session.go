@@ -41,6 +41,12 @@ type ColumnLister interface {
 	Columns(ctx context.Context, table string) ([]Column, error)
 }
 
+// RowStreamer 是可选能力接口：把查询结果逐行流式交给调用方（全量导出用）。
+// onColumns 在开始前给出列名；onRow 每行调用一次，返回错误即中止。
+type RowStreamer interface {
+	Stream(ctx context.Context, query string, onColumns func([]string) error, onRow func([]any) error) error
+}
+
 // Factory 创建未打开的会话。
 type Factory func(p Profile) (Session, error)
 

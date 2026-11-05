@@ -1,11 +1,17 @@
 package ui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/egoist/mygo"
+
+	"db-g/app"
 
 	"github.com/egoist/mygo/ui"
 
@@ -222,6 +228,30 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		}
 		if ui.Button(c, "取更多").Disabled(!a.canFetchMore()).Clicked() {
 			a.fetchMore()
+		}
+		ui.MenuButton(c, "导出…", func(m *ui.Menu) {
+			if m.Item("当前结果 CSV").Chosen() {
+				a.pickExport("csv", false)
+			}
+			if m.Item("当前结果 JSON").Chosen() {
+				a.pickExport("json", false)
+			}
+			if m.Item("当前结果 SQL INSERT").Chosen() {
+				a.pickExport("insert", false)
+			}
+			full := a.canStream()
+			if it := m.Item("全量 CSV（流式，重新执行查询）"); it.Disabled(!full).Chosen() {
+				a.confirmFullExport("csv")
+			}
+			if it := m.Item("全量 JSON（流式，重新执行查询）"); it.Disabled(!full).Chosen() {
+				a.confirmFullExport("json")
+			}
+		})
+		if a.exportStatus != "" {
+			ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+			if ui.Button(c, "×").Clicked() {
+				a.exportStatus = ""
+			}
 		}
 		if n := len(a.resView.filters); n > 0 {
 			ui.Text(c, fmt.Sprintf("筛选 %d 列", n)).FontSize(12).TextColor(c.Theme().TextMuted)
@@ -497,4 +527,107 @@ func (a *root) recordFetchState(runtimeID string, res *engine.QueryResult) {
 	}
 	a.fetchStates[runtimeID] = fetchState{loaded: len(res.Rows), more: res.Truncated}
 	a.resView.key = ""
+}
+
+// canStream 报告能否全量流式导出（驱动实现 RowStreamer 且有可重放的 SQL）。
+func (a *root) canStream() bool {
+	if a.sess == nil || strings.TrimSpace(a.lastExecSQL) == "" {
+		return false
+	}
+	_, ok := a.sess.(engine.RowStreamer)
+	return ok
+}
+
+// confirmFullExport 打开「会重新执行查询」的确认弹窗。
+func (a *root) confirmFullExport(format string) {
+	a.exportFormat = format
+	a.exportConfirm = true
+}
+
+// exportConfirmModal 渲染全量导出确认。
+func (a *root) exportConfirmModal(c *ui.Context) {
+	if !a.exportConfirm {
+		return
+	}
+	ui.Modal(c, &a.exportConfirm, func() {
+		ui.Text(c, "全量导出（"+a.exportFormat+"）").Bold()
+		ui.Text(c, "会重新执行当前语句读取全部结果，数据可能与屏幕上略有差异。").TextColor(c.Theme().TextMuted)
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "取消").Clicked() {
+				a.exportConfirm = false
+			}
+			if ui.PrimaryButton(c, "选择文件…").Clicked() {
+				format := a.exportFormat
+				a.exportConfirm = false
+				a.pickExport(format, true)
+			}
+		})
+	})
+}
+
+// pickExport 弹保存对话框（goroutine），选定后后台导出。
+func (a *root) pickExport(format string, full bool) {
+	win := a.win
+	if win == nil {
+		return
+	}
+	go func() {
+		ext := "." + format
+		if format == "insert" {
+			ext = ".sql"
+		}
+		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
+			Parent:      win,
+			Title:       "导出结果",
+			DefaultPath: "result" + ext,
+		})
+		if err != nil || path == "" {
+			return
+		}
+		win.Update(func() {
+			a.exportStatus = "导出中…"
+		})
+		n, err := a.exportTo(path, format, full)
+		win.Update(func() {
+			if err != nil {
+				a.exportStatus = "导出失败: " + err.Error()
+				app.LogError("export", "failed", "path", path, "format", format, "err", err.Error())
+				return
+			}
+			a.exportStatus = fmt.Sprintf("已导出 %d 行 → %s", n, path)
+			app.LogInfo("export", "done", "path", path, "format", format, "rows", n, "full", full)
+		})
+	}()
+}
+
+// exportTo 同步导出（对话框之外的实现；测试直接调用）。
+func (a *root) exportTo(path, format string, full bool) (int, error) {
+	kind := a.connKind()
+	table := ""
+	if _, ok := fetchMoreSQL(a.lastExecSQL, 0, 1); ok {
+		if t, ok := a.rowTable(); ok {
+			table = t
+		}
+	}
+	if format == "insert" && table == "" {
+		return 0, errors.New("无法确定表名（多表查询），不能导出 INSERT")
+	}
+	if full {
+		streamer, ok := a.sess.(engine.RowStreamer)
+		if !ok {
+			return 0, errors.New("当前数据源不支持流式导出")
+		}
+		sql := a.lastExecSQL
+		stream := func(onCols func([]string) error, onRow func([]any) error) error {
+			return streamer.Stream(context.Background(), sql, onCols, onRow)
+		}
+		return app.ExportStream(path, format, kind, table, stream)
+	}
+	r := a.currentRuntime().Result()
+	if r == nil || !r.IsQuery {
+		return 0, errors.New("没有可导出的查询结果")
+	}
+	rows := make([][]any, len(r.Rows))
+	copy(rows, r.Rows)
+	return app.ExportRows(path, format, kind, table, r.Columns, rows)
 }

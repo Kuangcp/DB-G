@@ -65,6 +65,9 @@ type root struct {
 	filterOpen          bool
 	filterCol           int
 	filterText          string
+	exportConfirm       bool
+	exportFormat        string
+	exportStatus        string
 	cellViewOpen        bool
 	cellViewTitle       string
 	cellViewText        string
@@ -417,6 +420,7 @@ func (a *root) view(c *ui.Context) {
 		a.tabModal(c)
 		a.cellViewer(c)
 		a.filterModal(c)
+		a.exportConfirmModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)

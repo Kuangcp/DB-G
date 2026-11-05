@@ -278,3 +278,46 @@ func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, e
 	}
 	return out, nil
 }
+
+// Stream 逐行流式读结果（全量导出用）：不设行数上限，也不裁单元格，内存只留当前行。
+func (s *session) Stream(ctx context.Context, query string, onColumns func([]string) error, onRow func([]any) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return errors.New("mysql: session not open")
+	}
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	if onColumns != nil {
+		if err := onColumns(cols); err != nil {
+			return err
+		}
+	}
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	for rows.Next() {
+		if err := rows.Scan(ptrs...); err != nil {
+			return err
+		}
+		for i, v := range vals {
+			switch t := v.(type) {
+			case []byte:
+				vals[i] = append([]byte(nil), t...)
+			}
+		}
+		if err := onRow(vals); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -301,5 +302,44 @@ func TestColumnsUnknownTable(t *testing.T) {
 	}
 	if len(cols) != 0 {
 		t.Fatalf("cols: %+v", cols)
+	}
+}
+
+func TestStreamRows(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	if _, err := s.RunStatement(ctx, `CREATE TABLE t (id INTEGER, name TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RunStatement(ctx, `INSERT INTO t (id, name) VALUES (1,'a'),(2,'b'),(3,'c')`); err != nil {
+		t.Fatal(err)
+	}
+	streamer, ok := s.(engine.RowStreamer)
+	if !ok {
+		t.Fatal("sqlite must stream rows")
+	}
+	var cols []string
+	var rows [][]any
+	err := streamer.Stream(ctx, "SELECT id, name FROM t ORDER BY id",
+		func(c []string) error { cols = c; return nil },
+		func(row []any) error {
+			cp := append([]any(nil), row...)
+			rows = append(rows, cp)
+			return nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cols) != 2 || cols[1] != "name" {
+		t.Fatalf("cols: %v", cols)
+	}
+	if len(rows) != 3 || rows[2][1] != "c" {
+		t.Fatalf("rows: %v", rows)
+	}
+	// 回调报错要中止并返回该错误
+	sentinel := errors.New("stop")
+	err = streamer.Stream(ctx, "SELECT id FROM t", nil, func([]any) error { return sentinel })
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("callback error must propagate: %v", err)
 	}
 }

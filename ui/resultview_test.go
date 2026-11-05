@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,5 +129,49 @@ func TestDisplayToResultAfterSort(t *testing.T) {
 	}
 	if a.displayToResult(r, 0) != 1 || a.displayToResult(r, 2) != 0 {
 		t.Fatalf("display→result mapping: %d %d", a.displayToResult(r, 0), a.displayToResult(r, 2))
+	}
+}
+
+func TestExportCurrentAndFull(t *testing.T) {
+	a := openForSelection(t)
+	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice'),('bob')"); err != nil {
+		t.Fatal(err)
+	}
+	a.setActiveText("SELECT id, name FROM users ORDER BY id")
+	a.setSelection(0, len([]rune("SELECT id, name FROM users ORDER BY id")))
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.runSQL()
+	pollResult(t, a, tt)
+	tt.Frame()
+
+	dir := t.TempDir()
+	csvPath := dir + "/out.csv"
+	n, err := a.exportTo(csvPath, "csv", false)
+	if err != nil || n != 2 {
+		t.Fatalf("current export: n=%d err=%v", n, err)
+	}
+	data, _ := os.ReadFile(csvPath)
+	if !strings.Contains(string(data), "id,name") || !strings.Contains(string(data), "alice") {
+		t.Fatalf("csv: %q", data)
+	}
+
+	insPath := dir + "/out.sql"
+	if _, err := a.exportTo(insPath, "insert", false); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(insPath)
+	if !strings.Contains(string(data), `INSERT INTO "users"`) {
+		t.Fatalf("insert: %q", data)
+	}
+
+	jsonPath := dir + "/out.json"
+	n, err = a.exportTo(jsonPath, "json", true) // 全量流式
+	if err != nil || n != 2 {
+		t.Fatalf("full export: n=%d err=%v", n, err)
+	}
+	data, _ = os.ReadFile(jsonPath)
+	if !strings.Contains(string(data), `"name":"bob"`) {
+		t.Fatalf("json: %q", data)
 	}
 }
