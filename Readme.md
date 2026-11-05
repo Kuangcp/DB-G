@@ -12,7 +12,9 @@
 - [x] M2：主页面布局对齐 db-k 骨架（侧栏/顶栏/单行工具栏）；连接管理
       （JSON 持久化/新建/编辑/删除/状态点）；SQLite 对象树（懒加载）
 - [x] 选区执行：仅执行编辑器选中的 SQL，无选区时禁用（禁止跑整个控制台）
-- [x] M4（部分）：MySQL 连接 + 执行 + 对象树（information_schema；PostgreSQL 未做）
+- [x] 数据源：SQLite / MySQL / **PostgreSQL**（pgx）/ **ClickHouse**（只读优先）
+      —— 连接、执行、对象树、列目录（含主键）、补全、导出；PostgreSQL 支持写操作，
+      ClickHouse 只读；多 schema 切换与 PG 的 DDL 查看待做（见 P3 记录）
 - [x] 控制台 + 工作区：一个数据源多个命名控制台，每个绑定
       `~/.config/db-g/consoles/<id>.sql`；标签条/工作区切换、防抖自动落盘、
       Ctrl+S 立即保存、重启恢复工作区与控制台正文/光标。**关闭标签（×）只是移出当前
