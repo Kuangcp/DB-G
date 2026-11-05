@@ -156,17 +156,10 @@ func stmtScopeAt(text string, offset int) string {
 	if bestOpen >= 0 {
 		return strings.TrimSpace(text[bestOpen+1 : bestClose])
 	}
-	// 外层作用域：把不含光标的括号块内容抹成空格，但保留括号本身（派生表解析仍能认出）。
-	if len(blanks) == 0 {
-		return strings.TrimSpace(text[start:end])
-	}
-	buf := []byte(text[start:end])
-	for _, sp := range blanks {
-		for k := sp.open + 1 - start; k < sp.close-start; k++ {
-			buf[k] = ' '
-		}
-	}
-	return strings.TrimSpace(string(buf))
+	// 外层作用域：返回整条语句，由 relationsIn 按括号深度只取本层关系
+	// （子查询里的 FROM 在更深的括号里，因此不会泄漏到外层；CTE 定义仍可见）。
+	_ = blanks
+	return strings.TrimSpace(text[start:end])
 }
 
 // statementBounds 返回光标所在语句的 [start,end)（跳过字符串/注释，深度 0 的 ; 切分）。
@@ -273,10 +266,22 @@ func relationsInDepth(scope string, inherited map[string][]relationRef, depth in
 		}
 		add2(&out, seen, table, alias)
 	}
+	nest := 0
 	for ; i < len(toks); i++ {
 		tok := toks[i]
-		if tok.kind != 'i' {
+		if tok.kind == 'p' {
+			switch tok.text {
+			case "(":
+				nest++
+			case ")":
+				if nest > 0 {
+					nest--
+				}
+			}
 			continue
+		}
+		if nest != 0 {
+			continue // 子查询内部不参与本层作用域
 		}
 		switch strings.ToUpper(tok.text) {
 		case "FROM":

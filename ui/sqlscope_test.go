@@ -12,8 +12,9 @@ func TestStmtScopeAt(t *testing.T) {
 		t.Fatalf("inner scope: %q", inner)
 	}
 	outer := stmtScopeAt(text, strings.Index(text, "select id"))
-	if strings.Contains(outer, "select x") {
-		t.Fatalf("outer scope must stop at the parenthesis: %q", outer)
+	// 外层作用域是整条语句（CTE 定义要可见），但 relationsIn 只取本层关系：
+	if got := relationsOf(outer); strings.Join(got, ",") != "b" {
+		t.Fatalf("outer scope relations must exclude the subquery: %v (scope=%q)", got, outer)
 	}
 	if got := stmtScopeAt("select 1; select 2", strings.Index("select 1; select 2", "select 2")); got != "select 2" {
 		t.Fatalf("statement split: %q", got)

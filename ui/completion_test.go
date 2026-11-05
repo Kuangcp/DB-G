@@ -2,10 +2,12 @@ package ui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
+	"db-g/app"
 	"db-g/engine"
 )
 
@@ -230,5 +232,123 @@ func TestShowCompletionsAtCursorLoadsColumnsAfterCatalog(t *testing.T) {
 	a.showCompletionsAtCursor()
 	if _, ok := a.catalog.getColumns(prof.ID, "a3_u"); !ok {
 		t.Fatal("dot context must trigger a column load")
+	}
+}
+
+func setupA4(t *testing.T) (*root, app.ConnProfile) {
+	t.Helper()
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE med_school (id INTEGER PRIMARY KEY, name TEXT, zz_col TEXT)`,
+		`CREATE TABLE b (id INTEGER PRIMARY KEY, bcol TEXT)`,
+		`CREATE TABLE inner_t (zz_inner TEXT)`,
+	} {
+		if _, err := a.sess.RunStatement(t.Context(), q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.catalog.invalidate(prof.ID)
+	rec, err := a.consoleMgr().Create(prof.ID, "语句列")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	return a, prof
+}
+
+func hasText(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// menuAt 把 sql（用 | 标光标）写进编辑器，光标放到标记处，敲 typed 触发补全，返回菜单文本。
+func menuAt(t *testing.T, a *root, sql string, typed string) []string {
+	t.Helper()
+	marker := strings.Index(sql, "|")
+	if marker < 0 {
+		t.Fatal("missing marker")
+	}
+	text := strings.Replace(sql, "|", "", 1)
+	a.setActiveText(text)
+	caret := len([]rune(text[:marker]))
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Click("编辑器")
+	tt.Frame()
+	a.code.SetSelection(caret, caret)
+	if typed != "" {
+		tt.TypeKey(0, 0, typed)
+	}
+	for range 8 {
+		tt.Frame()
+	}
+	return tt.Texts()
+}
+
+func TestStatementColumnsInSelectList(t *testing.T) {
+	a, _ := setupA4(t)
+	if texts := menuAt(t, a, "select id, na| from med_school;", "m"); !hasText(texts, "name") {
+		t.Fatalf("select-list column missing: %v", texts)
+	}
+}
+
+func TestStatementColumnsInGroupAndOrderBy(t *testing.T) {
+	a, _ := setupA4(t)
+	if texts := menuAt(t, a, "select id from med_school group by na|", "m"); !hasText(texts, "name") {
+		t.Fatalf("group by column missing: %v", texts)
+	}
+	if texts := menuAt(t, a, "select id from med_school order by zz|", "_"); !hasText(texts, "zz_col") {
+		t.Fatalf("order by column missing: %v", texts)
+	}
+}
+
+func TestStatementColumnsJoinMultipleTables(t *testing.T) {
+	a, _ := setupA4(t)
+	if texts := menuAt(t, a, "select * from med_school m join b on m.id = b.id where bc|", "o"); !hasText(texts, "bcol") {
+		t.Fatalf("join column from b missing: %v", texts)
+	}
+	if texts := menuAt(t, a, "select * from med_school m join b on m.id = b.id where na|", "m"); !hasText(texts, "name") {
+		t.Fatalf("join column from med_school missing: %v", texts)
+	}
+}
+
+func TestStatementColumnsCTE(t *testing.T) {
+	a, _ := setupA4(t)
+	if texts := menuAt(t, a, "with x as (select * from med_school) select na| from x", "m"); !hasText(texts, "name") {
+		t.Fatalf("cte column missing: %v", texts)
+	}
+}
+
+func TestStatementColumnsSubqueryScope(t *testing.T) {
+	a, _ := setupA4(t)
+	if texts := menuAt(t, a, "select * from med_school where id in (select zz| from inner_t)", "_"); !hasText(texts, "zz_inner") {
+		t.Fatalf("inner scope column missing: %v", texts)
+	}
+	if texts := menuAt(t, a, "select * from med_school where id in (select zz_inner from inner_t) and na|", "m"); !hasText(texts, "name") {
+		t.Fatalf("outer scope column missing: %v", texts)
+	}
+}
+
+func TestNoTableNoColumns(t *testing.T) {
+	a, _ := setupA4(t)
+	if texts := menuAt(t, a, "select na|", "m"); hasText(texts, "name") || hasText(texts, "zz_col") {
+		t.Fatalf("no table mentioned → no columns: %v", texts)
+	}
+}
+
+func TestAliasDotColumns(t *testing.T) {
+	a, _ := setupA4(t)
+	if texts := menuAt(t, a, "select m.na| from med_school m", "m"); !hasText(texts, "name") {
+		t.Fatalf("alias dot column missing: %v", texts)
 	}
 }

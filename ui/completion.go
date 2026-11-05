@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	myeditor "github.com/egoist/mygo/ui/editor"
@@ -14,26 +15,10 @@ import (
 // completionTimeout 限住一次目录枚举，避免慢库拖住补全。
 const completionTimeout = 5 * time.Second
 
-// onCompletion 是编辑器的补全回调：缓存命中就直接给候选（含表/视图），
-// 否则先给词表并触发一次后台加载。
+// onCompletion 是编辑器的补全回调：按光标上下文给候选（点号列 / 语句表列 / 目录 / 词表）。
 func (a *root) onCompletion(r myeditor.CompletionRequest) {
-	connID := a.activeConsoleConnID()
-	// 点号上下文：`表名.` 之后只补该表的列（+ 关键字）。
-	if ident, ok := dotIdent(a.code.Text(), r.Offset); ok && a.catalog.hasRelation(connID, ident) {
-		if items, hit := a.catalog.getColumns(connID, ident); hit {
-			a.code.state.ShowCompletions(r.Offset-len(r.Prefix), items)
-			return
-		}
-		a.code.state.ShowCompletions(r.Offset-len(r.Prefix), sqlWordItems())
-		a.ensureColumns(connID, ident)
-		return
-	}
-	if items, ok := a.catalog.get(connID); ok {
-		a.code.state.ShowCompletions(r.Offset-len(r.Prefix), items)
-		return
-	}
-	a.code.state.ShowCompletions(r.Offset-len(r.Prefix), sqlWordItems())
-	a.ensureCatalog(connID)
+	items := a.completionItemsAt(r.Offset)
+	a.code.state.ShowCompletions(r.Offset-len(r.Prefix), items)
 }
 
 // activeConsoleConnID 返回当前控制台的数据源 id（无控制台为空）。
@@ -80,7 +65,7 @@ func (a *root) ensureCatalog(connID string) {
 	}
 	if a.win == nil {
 		load()
-		a.retriggerCompletions()
+		a.requestRetrigger()
 		return
 	}
 	go load()
@@ -110,7 +95,7 @@ func (a *root) ensureColumns(connID, table string) {
 	}
 	if a.win == nil {
 		load()
-		a.showCompletionsAtCursor()
+		a.requestRetrigger()
 		return
 	}
 	go load()
@@ -166,8 +151,124 @@ func (a *root) loadCatalog(connID string) (tables, views []string, err error) {
 	return objectsOf(a.sess)
 }
 
+// completionItemsAt 计算光标 offset 处的候选，并顺手发起缺失的加载。
+//
+// 优先级：点号列（表名/别名） → 语句里引用的表的列 → 目录（表/视图+词） → 词表。
+// 加载在 headless 下是同步的，所以最多重算 3 轮（目录 → 列 → 完整），
+// 真机上第二轮通常仍是部分结果，等后台加载完成由 retrigger 再补。
+func (a *root) completionItemsAt(offset int) []myeditor.Completion {
+	if a.computingCompletion {
+		return sqlWordItems()
+	}
+	a.computingCompletion = true
+	defer func() { a.computingCompletion = false }()
+
+	var items []myeditor.Completion
+	for pass := 0; pass < 3; pass++ {
+		var more bool
+		items, more = a.computeCompletion(offset)
+		if !more {
+			break
+		}
+	}
+	a.computingCompletion = false
+	// 计算期间完成的同步加载（headless）在这里补一次重弹，拿到完整候选。
+	if a.retriggerPending {
+		a.retriggerPending = false
+		a.showCompletionsAtCursor()
+	}
+	return items
+}
+
+// requestRetrigger 在加载完成后请求重弹；若正在计算候选则作业推迟到计算结束。
+func (a *root) requestRetrigger() {
+	if a.computingCompletion {
+		a.retriggerPending = true
+		return
+	}
+	a.showCompletionsAtCursor()
+}
+
+// computeCompletion 是一轮候选计算；more 为 true 表示本次发起了加载、值得再算一轮。
+func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more bool) {
+	text := a.code.Text()
+	connID := a.activeConsoleConnID()
+	rels := relationsIn(stmtScopeAt(text, offset))
+	aliases := aliasMap(rels)
+
+	// 1) 点号上下文：`表名.` / `别名.`
+	if ident, ok := dotIdent(text, offset); ok {
+		table := ident
+		if t, isAlias := aliases[ident]; isAlias {
+			table = t
+		}
+		if table != "" && a.catalog.hasRelation(connID, table) {
+			if cols, hit := a.catalog.getColumns(connID, table); hit {
+				return cols, false
+			}
+			a.ensureColumns(connID, table)
+			return sqlWordItems(), true
+		}
+		if !a.catalogLoaded(connID) {
+			a.ensureCatalog(connID)
+			return sqlWordItems(), true
+		}
+	}
+
+	// 2) 语句里引用的表：补它们的列（多表 JOIN 时全部）。
+	if tables := a.knownRelations(connID, rels); len(tables) > 0 {
+		cols, all := a.catalog.getColumnsMany(connID, tables)
+		if !all {
+			missing := false
+			for i, t := range tables {
+				if cols[i] == nil {
+					missing = true
+					a.ensureColumns(connID, t)
+				}
+			}
+			cols, _ = a.catalog.getColumnsMany(connID, tables)
+			return buildStatementItems(tables, cols), missing
+		}
+		return buildStatementItems(tables, cols), false
+	}
+
+	// 3) 目录（表/视图 + 词）或纯词表；语句里有表名但目录还没加载时先加载目录。
+	if items, ok := a.catalog.get(connID); ok {
+		return items, false
+	}
+	a.ensureCatalog(connID)
+	return sqlWordItems(), true // 目录加载后重算一轮（headless 同步，真机等回调）
+}
+
+// catalogLoaded 报告该连接的表/视图目录是否已有新鲜缓存。
+func (a *root) catalogLoaded(connID string) bool {
+	_, ok := a.catalog.get(connID)
+	return ok
+}
+
+// knownRelations 过滤出目录里认识的关系（大小写不敏感），去重保序，最多 8 张。
+func (a *root) knownRelations(connID string, rels []relationRef) []string {
+	out := make([]string, 0, len(rels))
+	seen := map[string]bool{}
+	for _, r := range rels {
+		if r.Table == "" {
+			continue
+		}
+		key := strings.ToLower(r.Table)
+		if seen[key] || !a.catalog.hasRelation(connID, r.Table) {
+			continue
+		}
+		seen[key] = true
+		out = append(out, r.Table)
+		if len(out) == 8 {
+			break
+		}
+	}
+	return out
+}
+
 // retriggerCompletions 在目录/列就绪后把候选补上。
-func (a *root) retriggerCompletions() { a.showCompletionsAtCursor() }
+func (a *root) retriggerCompletions() { a.requestRetrigger() }
 
 // showCompletionsAtCursor 重算当前上下文（点号列 / 目录 / 词表）并刷新弹层。
 // 不能用 Run(ShowCompletions)：编辑器在同一词起点已有弹层时会短路成「本地重过滤」，
@@ -176,22 +277,7 @@ func (a *root) showCompletionsAtCursor() {
 	if a.win == nil && !a.code.state.Focused() {
 		return
 	}
-	connID := a.activeConsoleConnID()
-	if ident, ok := dotIdent(a.code.Text(), a.code.state.Cursor()); ok && a.catalog.hasRelation(connID, ident) {
-		if items, hit := a.catalog.getColumns(connID, ident); hit {
-			a.code.state.ShowCompletions(-1, items)
-			return
-		}
-		// 目录刚加载完、光标正在点号上下文：顺手把列也取上，别等下一次按键。
-		a.ensureColumns(connID, ident)
-		a.code.state.ShowCompletions(-1, sqlWordItems())
-		return
-	}
-	if items, ok := a.catalog.get(connID); ok {
-		a.code.state.ShowCompletions(-1, items)
-		return
-	}
-	a.code.state.ShowCompletions(-1, sqlWordItems())
+	a.code.state.ShowCompletions(-1, a.completionItemsAt(a.code.state.Cursor()))
 }
 
 // refreshCompletions 失效当前连接的缓存并重新加载（设置窗口按钮）。

@@ -42,27 +42,29 @@ type root struct {
 	treeSelected   string
 	execPending    bool
 
-	mgr               *app.ConsoleManager
-	catalog           *catalogCache
-	consoles          map[string]*app.Console // consoleID → 运行态
-	activeConsole     string
-	pendingActivate   string
-	pendingClose      string
-	pendingSwitchWS   string
-	lastVer           map[string]uint64
-	lastCaret         [2]int
-	consoleErr        string
-	widthsFor         *engine.QueryResult
-	widths            []float32
-	settingsRequested bool
-	settingsWin       settingsWin
-	openSettingsWin   func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
-	tabMenuAction     string                               // "close" / "rename" / "delete"
-	tabMenuTarget     string
-	modalKind         string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
-	modalTarget       string
-	modalText         string
-	modalErr          string
+	mgr                 *app.ConsoleManager
+	catalog             *catalogCache
+	consoles            map[string]*app.Console // consoleID → 运行态
+	activeConsole       string
+	pendingActivate     string
+	pendingClose        string
+	pendingSwitchWS     string
+	lastVer             map[string]uint64
+	lastCaret           [2]int
+	consoleErr          string
+	widthsFor           *engine.QueryResult
+	widths              []float32
+	computingCompletion bool
+	retriggerPending    bool
+	settingsRequested   bool
+	settingsWin         settingsWin
+	openSettingsWin     func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
+	tabMenuAction       string                               // "close" / "rename" / "delete"
+	tabMenuTarget       string
+	modalKind           string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
+	modalTarget         string
+	modalText           string
+	modalErr            string
 }
 
 func newRoot(text string) *root {
