@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -187,5 +188,54 @@ func TestBuildColumnItemsColumnsFirst(t *testing.T) {
 	}
 	if items[0].Kind != myeditor.CompletionField || items[0].Detail != "INTEGER" {
 		t.Fatalf("column item: %+v", items[0])
+	}
+}
+
+func TestBuildStatementItemsMultiTable(t *testing.T) {
+	items := buildStatementItems([]string{"a", "b"}, [][]engine.Column{
+		{{Name: "id", Type: "INTEGER"}, {Name: "name", Type: "TEXT"}},
+		{{Name: "id", Type: "INTEGER"}, {Name: "bcol", Type: "TEXT"}},
+	})
+	var name, bcol, ids []string
+	for _, it := range items {
+		switch it.Label {
+		case "name":
+			name = append(name, it.Detail)
+		case "bcol":
+			bcol = append(bcol, it.Detail)
+		case "id":
+			ids = append(ids, it.Detail)
+		}
+	}
+	if len(name) != 1 || !strings.Contains(name[0], "a") {
+		t.Fatalf("name detail: %v", name)
+	}
+	if len(bcol) != 1 || !strings.Contains(bcol[0], "b") {
+		t.Fatalf("bcol detail: %v", bcol)
+	}
+	if len(ids) != 2 {
+		t.Fatalf("same column in two tables must show both: %v", ids)
+	}
+	if items[0].Kind != myeditor.CompletionField {
+		t.Fatalf("columns must come first: %+v", items[0])
+	}
+}
+
+func TestBuildStatementItemsSingleTableDetail(t *testing.T) {
+	items := buildStatementItems([]string{"a"}, [][]engine.Column{{{Name: "name", Type: "TEXT"}}})
+	if items[0].Label != "name" || items[0].Detail != "TEXT" {
+		t.Fatalf("single table detail must be the type: %+v", items[0])
+	}
+}
+
+func TestGetColumnsMany(t *testing.T) {
+	c := newCatalogCache()
+	c.finishColumns("c", "a", []engine.Column{{Name: "x"}})
+	cols, ok := c.getColumnsMany("c", []string{"a"})
+	if !ok || len(cols) != 1 || cols[0][0].Name != "x" {
+		t.Fatalf("cols=%v ok=%v", cols, ok)
+	}
+	if _, ok := c.getColumnsMany("c", []string{"a", "b"}); ok {
+		t.Fatal("missing table must report not-all-hit")
 	}
 }

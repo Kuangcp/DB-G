@@ -23,9 +23,10 @@ type catalogEntry struct {
 	loadedAt time.Time
 }
 
-// columnEntry 是一个表的列候选与加载时间。
+// columnEntry 是一个表的列候选（组装好的 + 原始列）与加载时间。
 type columnEntry struct {
 	items    []myeditor.Completion
+	cols     []engine.Column
 	loadedAt time.Time
 }
 
@@ -165,7 +166,7 @@ func (c *catalogCache) finishColumns(connID, table string, cols []engine.Column)
 	if c.cols[connID] == nil {
 		c.cols[connID] = map[string]columnEntry{}
 	}
-	c.cols[connID][table] = columnEntry{items: items, loadedAt: c.now()}
+	c.cols[connID][table] = columnEntry{items: items, cols: slices.Clone(cols), loadedAt: c.now()}
 }
 
 // failColumns 结束一次失败的列加载：不写缓存，下次可重试。
@@ -216,5 +217,60 @@ func buildCatalogItems(tables, views []string) []myeditor.Completion {
 	}
 	add(tables, "表", myeditor.CompletionModule)
 	add(views, "视图", myeditor.CompletionType)
+	return out
+}
+
+// getColumnsMany 返回各表的原始列（顺序与 tables 一致）与「是否全部命中」。
+// 未命中的表对应 nil；调用方据此决定先展示部分列还是等加载。
+func (c *catalogCache) getColumnsMany(connID string, tables []string) ([][]engine.Column, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([][]engine.Column, len(tables))
+	all := true
+	for i, t := range tables {
+		e, ok := c.cols[connID][t]
+		if !ok || c.now().Sub(e.loadedAt) >= c.ttl {
+			all = false
+			continue
+		}
+		out[i] = e.cols
+	}
+	return out, all
+}
+
+// buildStatementItems 组装「多表列 + 词表」：按 rels 顺序出列（多表时 Detail 为
+// "表 · 类型"，单表时为类型），按 (label, detail) 去重，最后接词表。
+// cols[i] 为 nil 表示该表列尚未加载（跳过）。
+func buildStatementItems(rels []string, cols [][]engine.Column) []myeditor.Completion {
+	multi := len(rels) > 1
+	seen := map[string]bool{}
+	words := sqlWordItems()
+	out := make([]myeditor.Completion, 0, len(words)+len(rels)*8)
+	add := func(label, detail string, kind myeditor.CompletionKind) {
+		key := label + "\x00" + detail
+		if label == "" || seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, myeditor.Completion{Label: label, Detail: detail, Kind: kind})
+	}
+	for i, rel := range rels {
+		if i >= len(cols) || cols[i] == nil {
+			continue
+		}
+		sorted := slices.Clone(cols[i])
+		sort.SliceStable(sorted, func(a, b int) bool { return sorted[a].Name < sorted[b].Name })
+		for _, col := range sorted {
+			detail := col.Type
+			if detail == "" {
+				detail = "列"
+			}
+			if multi {
+				detail = rel + " · " + detail
+			}
+			add(col.Name, detail, myeditor.CompletionField)
+		}
+	}
+	out = append(out, words...)
 	return out
 }
