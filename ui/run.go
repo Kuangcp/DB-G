@@ -34,6 +34,9 @@ func (a *root) openConn(p app.ConnProfile) error {
 		return err
 	}
 	a.setSession(p.ID, sess)
+	if a.catalog != nil {
+		a.catalog.invalidate(p.ID) // 重连后目录可能变了
+	}
 	a.connName = p.Name
 	a.activeConnID = p.ID
 	a.failedConnID = ""
@@ -51,6 +54,9 @@ func (a *root) removeConn(id string) {
 	var recs []app.ConsoleRecord
 	if m := a.consoleMgr(); m != nil {
 		recs = m.ConsolesOf(id)
+	}
+	if a.catalog != nil {
+		a.catalog.invalidate(id)
 	}
 	if a.failedConnID == id {
 		a.failedConnID = ""

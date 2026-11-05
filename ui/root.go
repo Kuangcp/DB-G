@@ -43,6 +43,7 @@ type root struct {
 	execPending    bool
 
 	mgr               *app.ConsoleManager
+	catalog           *catalogCache
 	consoles          map[string]*app.Console // consoleID → 运行态
 	activeConsole     string
 	pendingActivate   string
@@ -79,6 +80,8 @@ func newRoot(text string) *root {
 		lastVer:       map[string]uint64{},
 	}
 	a.code.SetActive("", text)
+	a.catalog = newCatalogCache()
+	a.code.state.OnCompletion = a.onCompletion
 	return a
 }
 

@@ -32,6 +32,13 @@ func (a *root) settingsView(c *ui.Context) {
 			}
 		})
 
+		ui.Text(c, "补全").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Row(c).Gap(6).Children(func() {
+			if ui.Button(c, "刷新补全缓存").Clicked() {
+				a.refreshCompletions()
+			}
+		})
+
 		if disabled {
 			ui.Text(c, "没有激活的控制台：预设不可用").FontSize(12).TextColor(c.Theme().TextMuted)
 		}

@@ -126,3 +126,12 @@ func TestSettingsButtonOpensSingletonWindow(t *testing.T) {
 		t.Fatalf("closed window must be recreated: %d", len(created))
 	}
 }
+
+func TestSettingsHasRefreshCompletionsButton(t *testing.T) {
+	a := newConsoleRoot(t)
+	tt := ui.NewTester(a.settingsView, 560, 400)
+	tt.Frame()
+	if !tt.HasText("刷新补全缓存") {
+		t.Fatalf("refresh completions button missing: %q", tt.Texts())
+	}
+}
