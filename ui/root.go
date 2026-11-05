@@ -52,22 +52,25 @@ type root struct {
 	selEnd         int
 	execPending    bool
 
-	mgr             *app.ConsoleManager
-	consoles        map[string]*app.Console // consoleID → 运行态
-	activeConsole   string
-	pendingActivate string
-	pendingClose    string
-	pendingSwitchWS string
-	lastVer         map[string]uint64
-	lastCaret       [2]int
-	pendingSel      *[2]int
-	consoleErr      string
-	tabMenuAction   string // "close" / "rename" / "delete"
-	tabMenuTarget   string
-	modalKind       string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
-	modalTarget     string
-	modalText       string
-	modalErr        string
+	mgr               *app.ConsoleManager
+	consoles          map[string]*app.Console // consoleID → 运行态
+	activeConsole     string
+	pendingActivate   string
+	pendingClose      string
+	pendingSwitchWS   string
+	lastVer           map[string]uint64
+	lastCaret         [2]int
+	pendingSel        *[2]int
+	consoleErr        string
+	settingsRequested bool
+	settingsWin       settingsWin
+	openSettingsWin   func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
+	tabMenuAction     string                               // "close" / "rename" / "delete"
+	tabMenuTarget     string
+	modalKind         string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
+	modalTarget       string
+	modalText         string
+	modalErr          string
 }
 
 func newRoot(text string, s strats) *root {
@@ -268,6 +271,7 @@ func rootView(a *root) func(c *ui.Context) {
 	return func(c *ui.Context) {
 		ed := a.ed
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
+		a.maybeOpenSettings()
 		a.syncActiveBuffer()
 		if a.pendingClose != "" {
 			id := a.pendingClose
@@ -322,6 +326,9 @@ func rootView(a *root) func(c *ui.Context) {
 						}
 					}
 					ui.Spacer(c)
+					if ui.Button(c, "设置").Clicked() {
+						a.requestSettings()
+					}
 					if ui.Button(c, "执行").Disabled(a.currentRuntime().Running() || a.sess == nil || a.selStart == a.selEnd).Clicked() {
 						a.execPending = true
 					}
@@ -330,35 +337,8 @@ func rootView(a *root) func(c *ui.Context) {
 				// 标签条 + 工作区切换器
 				a.tabBar(c)
 
-				// 工具行：HUD + 尺寸 + 策略 + 查找
+				// 工具行：查找（性能 HUD/预设/策略在独立设置窗口里）
 				ui.Row(c).Gap(6).Children(func() {
-					ui.Text(c, fmt.Sprintf(
-						"lines=%d injected=%d tokenize=%s inject=%s build(last)=%s",
-						ed.lineCount(), ed.Injected,
-						scopeName(ed.strat.tokenize), scopeName(ed.strat.inject),
-						fmtDur(appLastBuild),
-					)).FontSize(12).SingleLine()
-					if ui.Button(c, "3k").Clicked() {
-						ed.Buf.Set(buildSQL(3_000))
-						ed.dirty = true
-					}
-					if ui.Button(c, "12k").Clicked() {
-						ed.Buf.Set(buildSQL(12_000))
-						ed.dirty = true
-					}
-					if ui.Button(c, "100k").Clicked() {
-						ed.Buf.Set(buildSQL(100_000))
-						ed.dirty = true
-					}
-					if ui.Button(c, "FF").Clicked() {
-						ed.SetStrategy(strats{scopeFull, scopeFull})
-					}
-					if ui.Button(c, "FV").Clicked() {
-						ed.SetStrategy(strats{scopeFull, scopeViewport})
-					}
-					if ui.Button(c, "VV").Clicked() {
-						ed.SetStrategy(strats{scopeViewport, scopeViewport})
-					}
 					ui.Spacer(c)
 					ui.TextInput(c, &a.findQuery).Placeholder("查找")
 					if ui.Button(c, "查找").Clicked() {
