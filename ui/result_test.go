@@ -100,7 +100,22 @@ func TestCellTextAndCutRunes(t *testing.T) {
 		t.Fatalf("nil → %q", got)
 	}
 	if got := cellText([]byte{1, 2, 3}); got != "[3 bytes]" {
-		t.Fatalf("[]byte → %q", got)
+		t.Fatalf("binary []byte → %q", got)
+	}
+	// MySQL 的 TEXT/VARCHAR 以 []byte 返回：必须渲染真实文本，而不是字节数摘要。
+	if got := cellText([]byte("hello 世界")); got != "hello 世界" {
+		t.Fatalf("text []byte → %q", got)
+	}
+	if got := cellText([]byte("a\x00b")); got != "[3 bytes]" {
+		t.Fatalf("NUL bytes must stay binary → %q", got)
+	}
+	if got := cellText([]byte{0xff, 0xfe}); got != "[2 bytes]" {
+		t.Fatalf("invalid UTF-8 must stay binary → %q", got)
+	}
+	longBytes := []byte(strings.Repeat("好", 600))
+	cut := cellText(longBytes)
+	if !strings.HasSuffix(cut, "…") || len([]rune(cut)) != 513 {
+		t.Fatalf("long text []byte must be cut like string, runes=%d", len([]rune(cut)))
 	}
 	if got := cellText(int64(42)); got != "42" {
 		t.Fatalf("int64 → %q", got)

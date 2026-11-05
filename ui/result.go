@@ -67,12 +67,37 @@ func cellText(v any) string {
 	case nil:
 		return "NULL"
 	case []byte:
+		// []byte 既可能是 MySQL 的 TEXT/VARCHAR（应渲染文本），也可能是真正的二进制
+		// （BLOB）。合法 UTF-8 且无 NUL 时按文本渲染，否则给字节数摘要。
+		if isTextBytes(t) {
+			return cutRunes(string(t), 512)
+		}
 		return fmt.Sprintf("[%d bytes]", len(t))
 	case string:
 		return cutRunes(t, 512)
 	default:
 		return fmt.Sprint(t)
 	}
+}
+
+// isTextBytes 判断字节串是否可以当文本显示：合法 UTF-8，且不含 NUL 等控制字符
+// （制表/换行除外，它们由表格单行渲染处理）。
+func isTextBytes(b []byte) bool {
+	if len(b) == 0 {
+		return true
+	}
+	if !utf8.Valid(b) {
+		return false
+	}
+	for _, r := range string(b) {
+		if r == 0 {
+			return false
+		}
+		if r < 0x20 && r != '\t' && r != '\n' && r != '\r' {
+			return false
+		}
+	}
+	return true
 }
 
 func cutRunes(s string, n int) string {
