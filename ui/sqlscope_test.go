@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStmtScopeAt(t *testing.T) {
@@ -91,5 +92,22 @@ func TestAliasMap(t *testing.T) {
 	}
 	if _, ok := m["d"]; ok {
 		t.Fatal("derived table alias must not resolve to a column scope")
+	}
+}
+
+func TestStmtScopeAtIsBounded(t *testing.T) {
+	// 大文件下补全不能全文扫描：100k 行（11MB）也要在毫秒级完成。
+	text := buildSQL(100_000)
+	start := time.Now()
+	scope := stmtScopeAt(text, len(text)/2)
+	d := time.Since(start)
+	if scope == "" {
+		t.Fatal("empty scope")
+	}
+	if d > 2*time.Millisecond {
+		t.Fatalf("stmtScopeAt on %d bytes took %v (must stay bounded)", len(text), d)
+	}
+	if got := relationsOf(scope); len(got) == 0 {
+		t.Fatalf("relations lost in the windowed scan: %q", scope)
 	}
 }

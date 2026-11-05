@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"unicode/utf8"
 )
 
 // relationRef 是语句里出现的一张表；Alias 非空表示 FROM/JOIN 给了别名。
@@ -94,6 +95,11 @@ func skipQuoted(s string, i int, quote byte) int {
 	return len(s)
 }
 
+// sqlScopeWindow 是作用域扫描的窗口半宽：补全在每次按键都会跑，不能全文扫描
+// （11 MB 的 100k 行控制台全文扫一次约 8 ms）。超过窗口的单条语句会退化为
+// 「只看窗口内的片段」，属于可接受的上限。
+const sqlScopeWindow = 64 << 10
+
 // stmtScopeAt 返回光标所在的作用域文本：最内层包住光标的括号块（子查询），
 // 没有括号时是光标所在的整条语句（按 ; 切，跳过字符串/注释）。offset 为字节偏移。
 func stmtScopeAt(text string, offset int) string {
@@ -103,6 +109,27 @@ func stmtScopeAt(text string, offset int) string {
 	if offset > len(text) {
 		offset = len(text)
 	}
+	// 只取光标附近的一段：先按字节窗口，再对齐到 UTF-8 边界。
+	if lo, hi := offset-sqlScopeWindow, offset+sqlScopeWindow; lo > 0 || hi < len(text) {
+		if lo < 0 {
+			lo = 0
+		}
+		if hi > len(text) {
+			hi = len(text)
+		}
+		for lo > 0 && !utf8.RuneStart(text[lo]) {
+			lo--
+		}
+		for hi < len(text) && !utf8.RuneStart(text[hi]) {
+			hi++
+		}
+		return scopeInSegment(text[lo:hi], offset-lo)
+	}
+	return scopeInSegment(text, offset)
+}
+
+// scopeInSegment 在给定片段内做语句/括号作用域分析（offset 相对片段起点）。
+func scopeInSegment(text string, offset int) string {
 	start, end := statementBounds(text, offset)
 	// 在语句内找最内层括号；同时记下不含光标的括号块（稍后抹掉，防止内层 FROM 泄漏到外层作用域）
 	type span struct{ open, close int }
