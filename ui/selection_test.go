@@ -50,17 +50,18 @@ func TestRunSQLExecutesSelectionOnly(t *testing.T) {
 	}
 }
 
-func TestRunSQLEmptySelectionDoesNothing(t *testing.T) {
+func TestRunSQLWithoutSelectionRunsCurrentStatement(t *testing.T) {
+	// roadmap P1：无选区 → 执行光标所在语句（不再禁止）。
 	a := openForSelection(t)
-	a.setActiveText("SELECT name FROM users")
-	a.setSelection(0, 0)
+	a.setActiveText("SELECT name FROM users; SELECT 2")
+	a.setSelection(0, 0) // 光标在第一条语句里
 	a.runSQL()
-	if a.con.Running() || a.con.Result() != nil || a.con.Err() != "" {
-		t.Fatal("empty selection must not start execution")
+	if !a.con.Running() && a.con.Result() == nil && a.con.Err() == "" {
+		t.Fatal("cursor statement must run without a selection")
 	}
 }
 
-func TestExecuteButtonDisabledWithoutSelection(t *testing.T) {
+func TestExecuteButtonRunsCurrentStatementWithoutSelection(t *testing.T) {
 	a := openForSelection(t)
 	a.setActiveText("SELECT name FROM users")
 	a.setSelection(0, 0)
@@ -69,27 +70,15 @@ func TestExecuteButtonDisabledWithoutSelection(t *testing.T) {
 	if a.hasSelection() {
 		t.Fatal("precondition: no selection")
 	}
-	// 无选区：点「执行」不得开始执行（按钮禁用）
-	_ = tt.Click("执行")
-	if a.con.Running() || a.con.Result() != nil || a.con.Err() != "" {
-		t.Fatal("执行 must do nothing without a selection")
-	}
-	// 有选区（真实 select-all）：按钮可点并开始执行
-	tt.Click("编辑器")
-	tt.Command("selectAll")
-	tt.Frame()
-	if !a.hasSelection() {
-		t.Fatal("selectAll must produce a non-empty selection")
-	}
 	if err := tt.Click("执行"); err != nil {
-		t.Fatalf("enabled 执行 must be clickable: %v", err)
+		t.Fatalf("执行 must be clickable without a selection (P1): %v", err)
 	}
 	pollResult(t, a, tt)
 	if a.con.Err() != "" {
 		t.Fatalf("exec err: %s", a.con.Err())
 	}
 	if a.con.Result() == nil {
-		t.Fatal("enabled click must start a run")
+		t.Fatal("click must run the statement at the cursor")
 	}
 }
 
@@ -105,7 +94,7 @@ func TestResultPaneHintByState(t *testing.T) {
 	}
 	a.setSelection(0, 0)
 	tt.Frame()
-	if !tt.HasText("请先选中要执行的 SQL") {
+	if !tt.HasText("Ctrl+Enter 执行光标所在语句（选中则只跑选区）") {
 		t.Fatalf("no-selection hint missing: %q", tt.Texts())
 	}
 }

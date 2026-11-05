@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	myeditor "github.com/egoist/mygo/ui/editor"
 
 	"db-g/app"
 	"db-g/engine"
@@ -55,6 +56,8 @@ type root struct {
 	pendingSwitchWS     string
 	lastVer             map[string]uint64
 	lastCaret           [2]int
+	stmtRuns            []stmtRun // 本次执行的语句（多语句时结果区按它分 Tab）
+	activeStmt          int
 	consoleErr          string
 	widthsFor           *engine.QueryResult
 	widths              []float32
@@ -178,12 +181,52 @@ func (a *root) runtime(id string) *app.Console {
 	return c
 }
 
-// currentRuntime 返回结果区展示的运行态：有激活控制台用它的，否则用默认实例（空态/测试口）。
-func (a *root) currentRuntime() *app.Console {
-	if a.activeConsole == "" {
+// runtimeFor 返回某个运行态 id 的实例；空 id 用默认实例（scratch 执行/测试口）。
+func (a *root) runtimeFor(id string) *app.Console {
+	if id == "" {
 		return a.con
 	}
-	return a.runtime(a.activeConsole)
+	return a.runtime(id)
+}
+
+// currentRuntime 返回结果区展示的运行态：多语句时是当前语句，否则是当前控制台。
+func (a *root) currentRuntime() *app.Console {
+	if len(a.stmtRuns) > 0 && a.activeStmt < len(a.stmtRuns) {
+		return a.runtimeFor(a.stmtRuns[a.activeStmt].runtimeID)
+	}
+	return a.runtimeFor(a.activeConsole)
+}
+
+// refreshStmtBackgrounds 按语句范围与状态刷新编辑器的行底色（当前/成功/失败）。
+func (a *root) refreshStmtBackgrounds() {
+	st := a.code.state
+	if len(a.stmtRuns) == 0 || st.Buffer == nil {
+		st.LineBackgrounds = nil
+		return
+	}
+	buf := st.Buffer
+	out := make([]myeditor.LineBackground, 0, len(a.stmtRuns))
+	for i, run := range a.stmtRuns {
+		if !run.started {
+			continue
+		}
+		first := buf.Pos(run.stmt.Start).Line
+		last := buf.Pos(max(run.stmt.End-1, run.stmt.Start)).Line
+		rt := a.runtimeFor(run.runtimeID)
+		var col ui.Color
+		switch {
+		case rt.Running():
+			col = ui.RGBA(80, 100, 160, 0.20)
+		case rt.Err() != "":
+			col = ui.RGBA(200, 60, 60, 0.18)
+		case i == a.activeStmt:
+			col = ui.RGBA(80, 160, 110, 0.16)
+		default:
+			col = ui.RGBA(80, 160, 110, 0.07)
+		}
+		out = append(out, myeditor.LineBackground{First: first, Last: last, Color: col})
+	}
+	st.LineBackgrounds = out
 }
 
 // activateConsole 把编辑器切成该控制台的正文，并安排光标回位。
@@ -207,6 +250,7 @@ func (a *root) activateConsole(id string) bool {
 	}
 	// 目标控制台：同样以磁盘为准（它上次离开时已落盘）。
 	m.DetachTextSource(rec.ID)
+	a.stmtRuns, a.activeStmt = nil, 0
 	text, _ := m.Text(rec.ID)
 	a.code.SetActive(rec.ID, text)
 	start, end := m.Caret(rec.ID)
@@ -269,6 +313,7 @@ func (a *root) syncActiveBuffer() {
 	if ver := a.code.Version(); ver != a.lastVer[a.activeConsole] {
 		a.lastVer[a.activeConsole] = ver
 		m.TouchVersion(a.activeConsole, ver)
+		a.refreshStmtBackgrounds()
 	}
 	if s, e := a.code.CaretRunes(); [2]int{s, e} != a.lastCaret {
 		a.lastCaret = [2]int{s, e}
@@ -367,7 +412,7 @@ func (a *root) view(c *ui.Context) {
 					if ui.Button(c, "设置").Clicked() {
 						a.requestSettings()
 					}
-					if ui.Button(c, "执行").Disabled(a.currentRuntime().Running() || a.sess == nil || !a.hasSelection()).Clicked() {
+					if ui.Button(c, "执行").Disabled(a.currentRuntime().Running() || a.sess == nil).Clicked() {
 						a.execPending = true
 					}
 				})

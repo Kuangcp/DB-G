@@ -12,6 +12,9 @@ import (
 
 func (a *root) resultPane(c *ui.Context) {
 	ui.Column(c).Fill().Gap(6).Children(func() {
+		if len(a.stmtRuns) > 1 {
+			a.stmtTabs(c)
+		}
 		switch {
 		case a.currentRuntime().Running():
 			ui.Row(c).Gap(8).Children(func() {
@@ -38,8 +41,8 @@ func (a *root) resultPane(c *ui.Context) {
 			switch {
 			case a.sess == nil:
 				ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
-			case !a.hasSelection():
-				ui.Text(c, "请先选中要执行的 SQL").TextColor(c.Theme().TextMuted)
+			case true:
+				ui.Text(c, "Ctrl+Enter 执行光标所在语句（选中则只跑选区）").TextColor(c.Theme().TextMuted)
 			default:
 				ui.Text(c, "Ctrl+Enter 执行选中 SQL").TextColor(c.Theme().TextMuted)
 			}
@@ -55,6 +58,34 @@ const (
 	charWidth      = 8   // 一个半角字符的估算宽度（DIP）
 	cellPad        = 24  // 单元格左右内边距
 )
+
+// stmtTabs 是多语句执行的结果 Tab（语句 N · 状态）；点击切换展示。
+func (a *root) stmtTabs(c *ui.Context) {
+	ui.Row(c).Gap(6).Children(func() {
+		for i, run := range a.stmtRuns {
+			rt := a.runtimeFor(run.runtimeID)
+			label := fmt.Sprintf("语句 %d", i+1)
+			switch {
+			case !run.started:
+				label += " · 未执行"
+			case rt.Running():
+				label += " · 执行中"
+			case rt.Err() != "":
+				label += " · 失败"
+			default:
+				label += " · 成功"
+			}
+			btn := ui.Button(c, label)
+			if i == a.activeStmt {
+				btn.Bold()
+			}
+			if btn.Clicked() {
+				a.activeStmt = i
+				a.refreshStmtBackgrounds()
+			}
+		}
+	})
+}
 
 func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	widths := a.columnWidths(r)

@@ -20,6 +20,7 @@ type Console struct {
 	err     string
 	cancel  context.CancelFunc
 	onDone  func(res *engine.QueryResult, errMsg string, dur time.Duration)
+	dur     time.Duration
 }
 
 func NewConsole() *Console {
@@ -49,6 +50,13 @@ func (c *Console) Result() *engine.QueryResult {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.result
+}
+
+// Dur 返回最近一次执行的耗时。
+func (c *Console) Dur() time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.dur
 }
 
 func (c *Console) Err() string {
@@ -86,6 +94,7 @@ func (c *Console) Run(sess engine.Session, query string) bool {
 		var done func(*engine.QueryResult, string, time.Duration)
 		c.mu.Lock()
 		if gen == c.gen {
+			c.dur = dur
 			c.running, c.cancel = false, nil
 			if err != nil {
 				c.result, c.err = nil, err.Error()

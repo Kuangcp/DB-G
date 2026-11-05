@@ -3,7 +3,9 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"db-g/app"
@@ -88,9 +90,17 @@ func (a *root) removeConn(id string) {
 	}
 }
 
+// stmtRun 是一次执行里的一条语句：范围、运行时 id、是否已开始。
+type stmtRun struct {
+	stmt      app.SQLStatement
+	runtimeID string
+	started   bool
+}
+
 func (a *root) runSQL() {
-	text, ok := a.code.SelectedText()
-	if !ok {
+	text := a.code.Text()
+	ranges := a.execRanges(text)
+	if len(ranges) == 0 {
 		return
 	}
 	// 有激活控制台时：先落盘，并确保连着它的数据源；没有控制台时沿用临时缓冲执行（不落盘）。
@@ -104,7 +114,79 @@ func (a *root) runSQL() {
 			return
 		}
 	}
-	a.currentRuntime().Run(a.sess, text)
+	a.resetStmtRuns(ranges)
+	a.startStmt(0)
+}
+
+// execRanges 算出本次要执行的语句：有选区 → 选区切分（偏移加上选区起点）；
+// 否则 → 光标所在单条语句。
+func (a *root) execRanges(text string) []app.SQLStatement {
+	if sel, ok := a.code.SelectedText(); ok && strings.TrimSpace(sel) != "" {
+		selStart, _, _ := a.code.Selection()
+		out := make([]app.SQLStatement, 0, 4)
+		for _, st := range app.SplitStatements(sel) {
+			out = append(out, app.SQLStatement{Start: st.Start + selStart, End: st.End + selStart})
+		}
+		return out
+	}
+	if st, ok := app.StatementAt(text, a.code.state.Cursor()); ok {
+		return []app.SQLStatement{st}
+	}
+	return nil
+}
+
+// resetStmtRuns 为本次执行准备运行时：单条语句沿用当前控制台的运行态（兼容既有行为），
+// 多条语句各建一个（id = consoleID#i）。
+func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
+	a.stmtRuns = nil
+	a.activeStmt = 0
+	multi := len(ranges) > 1
+	for i, st := range ranges {
+		id := a.activeConsole
+		if multi {
+			id = fmt.Sprintf("%s#%d", a.activeConsole, i)
+		}
+		a.stmtRuns = append(a.stmtRuns, stmtRun{stmt: st, runtimeID: id})
+	}
+	a.refreshStmtBackgrounds()
+}
+
+// startStmt 执行第 i 条语句；完成回调里顺序推进下一条（失败即停）。
+func (a *root) startStmt(i int) {
+	if i < 0 || i >= len(a.stmtRuns) {
+		return
+	}
+	a.stmtRuns[i].started = true
+	a.activeStmt = i
+	stmt := a.stmtRuns[i].stmt
+	sql := a.code.Text()[stmt.Start:stmt.End]
+	rt := a.runtimeFor(a.stmtRuns[i].runtimeID)
+	rt.SetOnDone(a.stmtDone(i))
+	if !rt.Run(a.sess, sql) {
+		app.LogWarn("exec", "statement not started", "index", i)
+	}
+	a.refreshStmtBackgrounds()
+}
+
+// stmtDone 返回第 i 条语句的完成回调：记日志，并在成功时推进下一条。
+func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) {
+	logDone := a.execDoneLogger(a.stmtRuns[i].runtimeID)
+	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
+		logDone(res, errMsg, dur)
+		ok := errMsg == ""
+		advance := func() {
+			a.refreshStmtBackgrounds()
+			if ok {
+				a.startStmt(i + 1)
+			}
+		}
+		if a.win != nil {
+			win := a.win
+			win.Update(advance)
+			return
+		}
+		advance()
+	}
 }
 
 // ensureConsoleConn 保证已连接的控制台正是执行目标；否则连上它的数据源。
