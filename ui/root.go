@@ -149,7 +149,8 @@ func (a *root) consoleMgr() *app.ConsoleManager {
 // execDoneLogger 返回一次执行结束的日志回调（连接名在执行时读取，避免陈旧）。
 func (a *root) execDoneLogger(consoleID string) func(*engine.QueryResult, string, time.Duration) {
 	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
-		kv := []any{"console", consoleID, "conn", a.connName, "dur_ms", dur.Milliseconds()}
+		// 只带 consoleID：连接名在 exec/start（UI 线程）里已记过，这里不跨线程读 root 字段。
+		kv := []any{"console", consoleID, "dur_ms", dur.Milliseconds()}
 		if errMsg != "" {
 			app.LogError("exec", "failed", append(kv, "err", errMsg)...)
 			return
