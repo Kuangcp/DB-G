@@ -174,3 +174,25 @@ func (f *fakeTx) Exec(ctx context.Context, query string, args ...any) (int64, er
 	}
 	return 1, nil
 }
+
+func TestBuildOpsPostgresPlaceholders(t *testing.T) {
+	plan, err := BuildEditPlan("postgres", "users", []string{"id", "name", "score"}, editTestCols)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := [][]any{{int64(1), "a", 1.0}}
+	e := NewEditSet()
+	e.SetCell(0, 1, "b")
+	ops, err := e.BuildOps(plan, rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `UPDATE "users" SET "name" = $1 WHERE "id" = $2`
+	if ops[0].SQL != want {
+		t.Fatalf("sql: %q", ops[0].SQL)
+	}
+	preview, _ := e.Preview(plan, rows)
+	if preview[0] != `UPDATE "users" SET "name" = 'b' WHERE "id" = 1` {
+		t.Fatalf("preview: %q", preview[0])
+	}
+}

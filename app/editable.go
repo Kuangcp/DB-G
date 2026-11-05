@@ -181,11 +181,11 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 		return keys[i].Col < keys[j].Col
 	})
 	for _, k := range keys {
-		set := QuoteIdent(plan.Kind, plan.Columns[k.Col]) + " = ?"
-		where, whereArgs, err := pkWhere(plan, rows[k.Row])
+		where, whereArgs, err := pkWhere(plan, rows[k.Row], 2)
 		if err != nil {
 			return nil, err
 		}
+		set := QuoteIdent(plan.Kind, plan.Columns[k.Col]) + " = " + Placeholder(plan.Kind, 1)
 		args := []any{e.Cells[k]}
 		args = append(args, whereArgs...)
 		ops = append(ops, Op{
@@ -212,7 +212,7 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 		args := make([]any, len(cols))
 		for j, c := range cols {
 			names[j] = QuoteIdent(plan.Kind, plan.Columns[c])
-			marks[j] = "?"
+			marks[j] = Placeholder(plan.Kind, j+1)
 			args[j] = ins[c]
 		}
 		ops = append(ops, Op{
@@ -231,7 +231,7 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 	}
 	sort.Ints(delRows)
 	for _, r := range delRows {
-		where, args, err := pkWhere(plan, rows[r])
+		where, args, err := pkWhere(plan, rows[r], 1)
 		if err != nil {
 			return nil, err
 		}
@@ -271,15 +271,15 @@ func ApplyOps(ctx context.Context, tx TxLike, ops []Op) error {
 	return nil
 }
 
-// pkWhere 生成「全部主键」的 WHERE 子句与参数。
-func pkWhere(plan *EditPlan, row []any) (string, []any, error) {
+// pkWhere 生成「全部主键」的 WHERE 子句与参数；start 是占位符起始序号（PostgreSQL 用）。
+func pkWhere(plan *EditPlan, row []any, start int) (string, []any, error) {
 	if len(plan.PKIdx) == 0 {
 		return "", nil, ErrNoPrimaryKey
 	}
 	parts := make([]string, len(plan.PKIdx))
 	args := make([]any, len(plan.PKIdx))
 	for i, idx := range plan.PKIdx {
-		parts[i] = QuoteIdent(plan.Kind, plan.PKNames[i]) + " = ?"
+		parts[i] = QuoteIdent(plan.Kind, plan.PKNames[i]) + " = " + Placeholder(plan.Kind, start+i)
 		args[i] = cellValue(row, idx)
 	}
 	return strings.Join(parts, " AND "), args, nil
@@ -315,14 +315,27 @@ func textOf(v any) (string, bool) {
 	return "", false
 }
 
-// renderOp 把 ? 依次替换成内联字面量（预览用）。
+// renderOp 把占位符（? 或 $n）依次替换成内联字面量（预览用）。
 func renderOp(op Op) string {
 	s := op.SQL
-	for _, arg := range op.Args {
-		lit := QuoteValue(arg)
-		if i := strings.IndexByte(s, '?'); i >= 0 {
-			s = s[:i] + lit + s[i+1:]
+	if strings.Contains(s, "$1") {
+		for i, arg := range op.Args {
+			s = strings.Replace(s, fmt.Sprintf("$%d", i+1), QuoteValue(arg), 1)
+		}
+	} else {
+		for _, arg := range op.Args {
+			if j := strings.IndexByte(s, '?'); j >= 0 {
+				s = s[:j] + QuoteValue(arg) + s[j+1:]
+			}
 		}
 	}
 	return strings.TrimSuffix(s, ";")
+}
+
+// Placeholder 返回第 n 个参数占位符（从 1 计数）：PostgreSQL 用 $n，其余用 ?。
+func Placeholder(kind string, n int) string {
+	if kind == "postgres" {
+		return fmt.Sprintf("$%d", n)
+	}
+	return "?"
 }
