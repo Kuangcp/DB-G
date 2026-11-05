@@ -253,3 +253,53 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func TestColumns(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	if _, err := s.RunStatement(ctx, `CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, score REAL)`); err != nil {
+		t.Fatal(err)
+	}
+	lister, ok := s.(engine.ColumnLister)
+	if !ok || !s.Caps().Has(engine.CapColumns) {
+		t.Fatal("sqlite must list columns")
+	}
+	cols, err := lister.Columns(ctx, "users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cols) != 3 {
+		t.Fatalf("cols: %+v", cols)
+	}
+	if cols[0].Name != "id" || !cols[0].PrimaryKey || cols[0].Type == "" {
+		t.Fatalf("pk column: %+v", cols[0])
+	}
+	if cols[1].Name != "name" || cols[1].Nullable {
+		t.Fatalf("not-null column: %+v", cols[1])
+	}
+}
+
+func TestColumnsQuotesIdentifier(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	if _, err := s.RunStatement(ctx, `CREATE TABLE "weird""name" (c TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	cols, err := s.(engine.ColumnLister).Columns(ctx, `weird"name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cols) != 1 || cols[0].Name != "c" {
+		t.Fatalf("cols: %+v", cols)
+	}
+}
+
+func TestColumnsUnknownTable(t *testing.T) {
+	cols, err := newMemSession(t).(engine.ColumnLister).Columns(context.Background(), "nope")
+	if err != nil {
+		t.Fatal("unknown table must not error:", err)
+	}
+	if len(cols) != 0 {
+		t.Fatalf("cols: %+v", cols)
+	}
+}

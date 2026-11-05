@@ -62,7 +62,7 @@ func (s *session) Close() error {
 	return s.db.Close()
 }
 
-func (s *session) Caps() engine.Capabilities { return engine.CapObjects }
+func (s *session) Caps() engine.Capabilities { return engine.CapObjects | engine.CapColumns }
 
 func (s *session) Cancel() bool {
 	c := s.curCancel.Load()
@@ -220,4 +220,42 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 		out = append(out, engine.DBObject{Kind: kind, Name: name})
 	}
 	return out, rows.Err()
+}
+
+// quoteIdent 把 SQL 标识符包成双引号并转义内部双引号（PRAGMA 不吃占位符）。
+func quoteIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// Columns 列出一个表的列（PRAGMA table_info）；表不存在时返回空列表。
+func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("sqlite: session not open")
+	}
+	rows, err := s.db.QueryContext(ctx, "PRAGMA table_info("+quoteIdent(table)+")")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.Column
+	for rows.Next() {
+		var (
+			cid     int
+			name    string
+			typ     string
+			notNull int
+			dflt    sql.NullString
+			pk      int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			return nil, err
+		}
+		out = append(out, engine.Column{Name: name, Type: typ, Nullable: notNull == 0, PrimaryKey: pk > 0})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

@@ -120,3 +120,14 @@ func TestMySQLIntegration(t *testing.T) {
 func newTestConfig() *mysql.Config {
 	return mysql.NewConfig()
 }
+
+func TestColumnsRequiresOpenSession(t *testing.T) {
+	s, err := openSession(engine.Profile{Kind: "mysql", Host: "h", Port: 3306, User: "u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 未 Open（或未选库）都必须报错，而不是返回空列表假装成功。
+	if _, err := s.(engine.ColumnLister).Columns(context.Background(), "users"); err == nil {
+		t.Fatal("listing columns without an open session must fail")
+	}
+}

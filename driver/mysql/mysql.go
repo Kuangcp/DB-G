@@ -77,7 +77,7 @@ func (s *session) Close() error {
 	return s.db.Close()
 }
 
-func (s *session) Caps() engine.Capabilities { return engine.CapObjects }
+func (s *session) Caps() engine.Capabilities { return engine.CapObjects | engine.CapColumns }
 
 func (s *session) Cancel() bool {
 	c := s.curCancel.Load()
@@ -237,4 +237,42 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 		out = append(out, engine.DBObject{Kind: kind, Name: name})
 	}
 	return out, rows.Err()
+}
+
+// Columns 列出一个表的列（information_schema）。
+func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("mysql: session not open")
+	}
+	if s.cfg.DBName == "" {
+		return nil, errors.New("mysql: 未选择数据库")
+	}
+	const q = `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`
+	rows, err := s.db.QueryContext(ctx, q, s.cfg.DBName, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.Column
+	for rows.Next() {
+		var (
+			name, typ, nullable, key string
+		)
+		if err := rows.Scan(&name, &typ, &nullable, &key); err != nil {
+			return nil, err
+		}
+		out = append(out, engine.Column{
+			Name:       name,
+			Type:       typ,
+			Nullable:   nullable == "YES",
+			PrimaryKey: key == "PRI",
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

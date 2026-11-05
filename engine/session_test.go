@@ -58,3 +58,15 @@ func TestCapObjects(t *testing.T) {
 		t.Fatalf("CapObjects = %d, want %d", CapObjects, 1<<4)
 	}
 }
+
+func TestCapColumns(t *testing.T) {
+	var c Capabilities = CapColumns
+	if !c.Has(CapColumns) {
+		t.Fatal("CapColumns must be settable and readable")
+	}
+	for _, other := range []Capabilities{CapEditableResult, CapFetchMore, CapObjectDDL, CapSQLCompletion, CapObjects} {
+		if CapColumns == other {
+			t.Fatal("CapColumns must not collide with existing bits")
+		}
+	}
+}

@@ -9,6 +9,7 @@ const (
 	CapObjectDDL
 	CapSQLCompletion
 	CapObjects
+	CapColumns
 )
 
 func (c Capabilities) Has(x Capabilities) bool { return c&x != 0 }

@@ -27,6 +27,20 @@ type Session interface {
 	Caps() Capabilities
 }
 
+// Column 是一个表的列元数据（列目录用）。
+type Column struct {
+	Name       string
+	Type       string
+	Nullable   bool
+	PrimaryKey bool
+}
+
+// ColumnLister 是可选能力接口：按表名列出一个表的列。
+// UI 经类型断言与 CapColumns 能力位判定后使用；Session 接口本身不要求实现它。
+type ColumnLister interface {
+	Columns(ctx context.Context, table string) ([]Column, error)
+}
+
 // Factory 创建未打开的会话。
 type Factory func(p Profile) (Session, error)
 
