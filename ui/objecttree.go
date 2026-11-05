@@ -135,11 +135,110 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
 			open := a.groupOpenPtr(p.ID+"|"+kindKey(g.kind), false)
 			ui.TreeItem(c, label, open, func() {
 				for _, o := range objs {
-					if ui.TreeItem(c, o.Name, nil, nil).Selected(a.treeSelected == p.ID+"|"+o.Name).Clicked() {
-						a.treeSelected = p.ID + "|" + o.Name
+					obj := o
+					leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == p.ID+"|"+obj.Name)
+					if leaf.Clicked() {
+						a.treeSelected = p.ID + "|" + obj.Name
 					}
+					if leaf.DoubleClicked() {
+						a.previewObject(p, obj)
+					}
+					leaf.ContextMenu(func(m *ui.Menu) {
+						if m.Item("预览数据").Chosen() {
+							a.previewObject(p, obj)
+						}
+						if m.Item("查看 DDL").Chosen() {
+							a.showDDL(p, obj)
+						}
+						if m.Item("插入名称").Chosen() {
+							a.code.Insert(obj.Name)
+						}
+					})
 				}
 			})
 		}
+	})
+}
+
+// previewObject 在新控制台里预览对象数据（SELECT * … LIMIT 200）并立即执行。
+func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
+	m := a.consoleMgr()
+	if m == nil {
+		return
+	}
+	if a.sessConnID != p.ID {
+		if err := a.openConn(p); err != nil {
+			a.consoleErr = err.Error()
+			return
+		}
+	}
+	rec, err := m.Create(p.ID, "预览 "+o.Name)
+	if err != nil {
+		a.consoleErr = "新建预览控制台失败: " + err.Error()
+		return
+	}
+	a.pendingActivate = rec.ID
+	a.pendingText = "SELECT * FROM " + app.QuoteIdent(p.Kind, o.Name) + " LIMIT 200"
+	a.pendingExec = true
+}
+
+// showDDL 取对象的 DDL 并弹窗（headless 同步，有窗口时后台 + Update）。
+func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
+	if a.sessConnID != p.ID {
+		if err := a.openConn(p); err != nil {
+			a.consoleErr = err.Error()
+			return
+		}
+	}
+	load := func() {
+		lister, ok := a.sess.(engine.ObjectDDLer)
+		if !ok || !a.sess.Caps().Has(engine.CapObjectDDL) {
+			a.ddlTitle, a.ddlText, a.ddlOpen = o.Name, "该数据源不支持查看 DDL", true
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		ddl, err := lister.ObjectDDL(ctx, o.Kind, o.Name)
+		apply := func() {
+			a.ddlTitle, a.ddlOpen = o.Name, true
+			if err != nil {
+				a.ddlText = "读取 DDL 失败: " + err.Error()
+				app.LogWarn("ddl", "load failed", "object", o.Name, "err", err.Error())
+				return
+			}
+			a.ddlText = ddl
+		}
+		if a.win != nil {
+			win := a.win
+			win.Update(apply)
+			return
+		}
+		apply()
+	}
+	if a.win == nil {
+		load()
+		return
+	}
+	go load()
+}
+
+// ddlPanel 渲染 DDL 弹窗。
+func (a *root) ddlPanel(c *ui.Context) {
+	if !a.ddlOpen {
+		return
+	}
+	ui.Modal(c, &a.ddlOpen, func() {
+		ui.Text(c, "DDL："+a.ddlTitle).Bold().SingleLine()
+		ui.ScrollBoth(c).Height(360).Children(func() {
+			ui.Text(c, a.ddlText).Font("monospace").FontSize(12)
+		})
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "复制").Clicked() {
+				c.WriteClipboard(a.ddlText)
+			}
+			if ui.PrimaryButton(c, "关闭").Clicked() {
+				a.ddlOpen = false
+			}
+		})
 	})
 }

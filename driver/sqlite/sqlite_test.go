@@ -343,3 +343,29 @@ func TestStreamRows(t *testing.T) {
 		t.Fatalf("callback error must propagate: %v", err)
 	}
 }
+
+func TestObjectDDL(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	if _, err := s.RunStatement(ctx, `CREATE TABLE ddl_t (id INTEGER PRIMARY KEY, name TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RunStatement(ctx, `CREATE VIEW ddl_v AS SELECT id FROM ddl_t`); err != nil {
+		t.Fatal(err)
+	}
+	lister, ok := s.(engine.ObjectDDLer)
+	if !ok || !s.Caps().Has(engine.CapObjectDDL) {
+		t.Fatal("sqlite must provide DDL")
+	}
+	ddl, err := lister.ObjectDDL(ctx, engine.ObjectTable, "ddl_t")
+	if err != nil || !strings.HasPrefix(strings.ToUpper(ddl), "CREATE TABLE") {
+		t.Fatalf("table ddl: %q err=%v", ddl, err)
+	}
+	ddl, err = lister.ObjectDDL(ctx, engine.ObjectView, "ddl_v")
+	if err != nil || !strings.Contains(strings.ToUpper(ddl), "CREATE VIEW") {
+		t.Fatalf("view ddl: %q err=%v", ddl, err)
+	}
+	if _, err := lister.ObjectDDL(ctx, engine.ObjectTable, "nope"); err == nil {
+		t.Fatal("missing object must error")
+	}
+}

@@ -41,6 +41,11 @@ type ColumnLister interface {
 	Columns(ctx context.Context, table string) ([]Column, error)
 }
 
+// ObjectDDLer 是可选能力接口：返回对象的 DDL（建表/建视图语句）。
+type ObjectDDLer interface {
+	ObjectDDL(ctx context.Context, kind ObjectKind, name string) (string, error)
+}
+
 // RowStreamer 是可选能力接口：把查询结果逐行流式交给调用方（全量导出用）。
 // onColumns 在开始前给出列名；onRow 每行调用一次，返回错误即中止。
 type RowStreamer interface {

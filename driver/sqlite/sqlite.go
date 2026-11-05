@@ -63,7 +63,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL
 }
 
 func (s *session) Cancel() bool {
@@ -303,4 +303,36 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 		}
 	}
 	return rows.Err()
+}
+
+// ObjectDDL 返回表/视图/索引的建对象语句（sqlite_master.sql）。
+func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", errors.New("sqlite: session not open")
+	}
+	var t string
+	switch kind {
+	case engine.ObjectTable:
+		t = "table"
+	case engine.ObjectView:
+		t = "view"
+	case engine.ObjectIndex:
+		t = "index"
+	default:
+		return "", fmt.Errorf("sqlite: unknown object kind %d", kind)
+	}
+	var ddl sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = ? AND name = ?`, t, name).Scan(&ddl)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("未找到 %s 的 DDL", name)
+		}
+		return "", err
+	}
+	if !ddl.Valid || ddl.String == "" {
+		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+	}
+	return ddl.String, nil
 }

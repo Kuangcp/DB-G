@@ -66,6 +66,11 @@ type root struct {
 	filterCol           int
 	filterText          string
 	history             *app.History
+	pendingText         string // 激活控制台后要写入的正文（对象预览用）
+	pendingExec         bool   // 写入正文后是否立即执行
+	ddlOpen             bool
+	ddlTitle            string
+	ddlText             string
 	historyOpen         bool
 	exportConfirm       bool
 	exportFormat        string
@@ -413,6 +418,16 @@ func (a *root) view(c *ui.Context) {
 			a.pendingActivate = ""
 			a.activateConsole(id)
 		}
+		if a.pendingText != "" {
+			text := a.pendingText
+			a.pendingText = ""
+			a.setActiveText(text)
+			a.setSelection(0, 0)
+		}
+		if a.pendingExec {
+			a.pendingExec = false
+			a.execPending = true
+		}
 		if c.Shortcut(ui.Ctrl, ui.KeyEnter) || c.Shortcut(0, ui.KeyF5) {
 			a.execPending = true
 		}
@@ -425,6 +440,7 @@ func (a *root) view(c *ui.Context) {
 		a.filterModal(c)
 		a.exportConfirmModal(c)
 		a.historyPanel(c)
+		a.ddlPanel(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)

@@ -78,7 +78,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL
 }
 
 func (s *session) Cancel() bool {
@@ -320,4 +320,53 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 		}
 	}
 	return rows.Err()
+}
+
+// ObjectDDL 返回表/视图的建对象语句（SHOW CREATE）；索引不支持。
+func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", errors.New("mysql: session not open")
+	}
+	quoted := "`" + strings.ReplaceAll(name, "`", "``") + "`"
+	var q string
+	switch kind {
+	case engine.ObjectTable:
+		q = "SHOW CREATE TABLE " + quoted
+	case engine.ObjectView:
+		q = "SHOW CREATE VIEW " + quoted
+	default:
+		return "", errors.New("mysql: 该对象不支持查看 DDL")
+	}
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return "", err
+	}
+	if !rows.Next() {
+		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+	}
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if err := rows.Scan(ptrs...); err != nil {
+		return "", err
+	}
+	// SHOW CREATE 的最后一列是 DDL 文本。
+	for i := len(vals) - 1; i >= 0; i-- {
+		switch t := vals[i].(type) {
+		case string:
+			return t, nil
+		case []byte:
+			return string(t), nil
+		}
+	}
+	return "", fmt.Errorf("未找到 %s 的 DDL", name)
 }
