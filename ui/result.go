@@ -4,12 +4,22 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 
 	"db-g/engine"
 )
+
+// displayToResult 把显示顺序的行号换成结果行下标（排序/筛选后两者不同）。
+func (a *root) displayToResult(r *engine.QueryResult, displayRow int) int {
+	rows := a.resView.apply(r)
+	if displayRow < 0 || displayRow >= len(rows) {
+		return -1
+	}
+	return rows[displayRow]
+}
 
 // cursorDataCol 把 Cells.Cursor（列 ID）换成结果里的数据列下标；行号列或未知列返回 -1。
 func (a *root) cursorDataCol(r *engine.QueryResult) int {
@@ -28,10 +38,11 @@ func (a *root) cursorDataCol(r *engine.QueryResult) int {
 // copyCurrentCell 复制当前选中单元格（Ctrl+C 与「复制」按钮共用）。
 func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
 	col := a.cursorDataCol(r)
-	if r == nil || a.resultRow < 0 || a.resultRow >= len(r.Rows) || col < 0 || col >= len(r.Columns) {
+	row := a.displayToResult(r, a.resultRow)
+	if r == nil || row < 0 || col < 0 || col >= len(r.Columns) {
 		return
 	}
-	c.WriteClipboard(cellString(r.Rows[a.resultRow][col]))
+	c.WriteClipboard(cellString(r.Rows[row][col]))
 }
 
 func (a *root) resultPane(c *ui.Context) {
@@ -199,21 +210,55 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			MaxWidth: maxColumnWidth,
 		})
 	}
-	// 顶部操作条：复制当前单元格/行、查看完整内容。
+	displayRows := a.resView.apply(r)
+
+	// 顶部操作条：复制/查看/取更多/筛选状态。
 	ui.Row(c).Gap(6).Children(func() {
 		if ui.Button(c, "复制").Clicked() {
 			a.copyCurrentCell(c, r)
 		}
 		if ui.Button(c, "查看").Clicked() {
-			a.openCellViewer(r, a.resultRow, a.cursorDataCol(r))
+			a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
 		}
-		ui.Text(c, "右键单元格：复制行 / 生成 INSERT / 查看完整内容").FontSize(12).TextColor(c.Theme().TextMuted)
+		if ui.Button(c, "取更多").Disabled(!a.canFetchMore()).Clicked() {
+			a.fetchMore()
+		}
+		if n := len(a.resView.filters); n > 0 {
+			ui.Text(c, fmt.Sprintf("筛选 %d 列", n)).FontSize(12).TextColor(c.Theme().TextMuted)
+		}
+		ui.Text(c, "右键表头排序/筛选；右键单元格复制").FontSize(12).TextColor(c.Theme().TextMuted)
 	})
+
+	a.resultState.HeaderMenu = func(m *ui.Menu, col int) {
+		if col <= 0 {
+			return
+		}
+		idx := col - 1
+		if m.Item("升序").Chosen() {
+			a.resView.sortBy(r, idx, false)
+		}
+		if m.Item("降序").Chosen() {
+			a.resView.sortBy(r, idx, true)
+		}
+		if m.Item("清除排序").Chosen() {
+			a.resView.sortBy(r, -1, false)
+		}
+		if m.Item("筛选…").Chosen() {
+			a.filterOpen, a.filterCol, a.filterText = true, idx, a.resView.filters[idx]
+		}
+		if _, has := a.resView.filters[idx]; has {
+			if m.Item("清除本列筛选").Chosen() {
+				a.resView.clearFilter(idx)
+			}
+		}
+	}
 
 	a.resultState.CellSelect = true
 	a.resultState.Selected = &a.resultRow
 	a.resultState.CellMenu = func(m *ui.Menu, row, col int) {
+		// resultRow 与 Table 一致，存「显示顺序」；取数据时再映射到结果行。
 		a.resultRow = row
+		row = a.displayToResult(r, row)
 		dataCol := col - 1 // 第 0 列是行号
 		if dataCol >= 0 && dataCol < len(r.Columns) {
 			if m.Item("复制单元格").Chosen() {
@@ -236,14 +281,21 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	}
 
 	tbl := ui.Table(c, &a.resultState, cols, len(r.Rows), func(row, col int) {
-		if col == 0 {
-			ui.Text(c, strconv.Itoa(row+1)).TextColor(c.Theme().TextMuted)
+		if row < 0 || row >= len(displayRows) {
 			return
 		}
-		ui.Text(c, cellText(r.Rows[row][col-1])).SingleLine()
+		ri := displayRows[row]
+		if col == 0 {
+			ui.Text(c, strconv.Itoa(ri+1)).TextColor(c.Theme().TextMuted)
+			return
+		}
+		if col-1 >= len(r.Rows[ri]) {
+			return
+		}
+		ui.Text(c, cellText(r.Rows[ri][col-1])).SingleLine()
 	}).Grow(1)
 	if tbl.Submitted() {
-		a.openCellViewer(r, a.resultRow, a.cursorDataCol(r))
+		a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
 	}
 }
 
@@ -356,4 +408,93 @@ func runeWidth(r rune) int {
 		return 2
 	}
 	return 1
+}
+
+// canFetchMore 报告当前结果能否「取更多」：单条查询、驱动支持、还有更多行。
+func (a *root) canFetchMore() bool {
+	rt := a.currentRuntime()
+	r := rt.Result()
+	if r == nil || !r.IsQuery || rt.Running() || a.sess == nil || !a.sess.Caps().Has(engine.CapFetchMore) {
+		return false
+	}
+	if _, ok := fetchMoreSQL(a.lastExecSQL, 0, 1); !ok {
+		return false
+	}
+	st, ok := a.fetchStates[a.currentRuntimeID()]
+	return ok && st.more
+}
+
+// fetchMore 用派生表分页把后续行追加到当前结果（不重跑原 SQL 的第一页）。
+func (a *root) fetchMore() {
+	if !a.canFetchMore() {
+		return
+	}
+	id := a.currentRuntimeID()
+	st := a.fetchStates[id]
+	sql, ok := fetchMoreSQL(a.lastExecSQL, st.loaded, 500)
+	if !ok {
+		a.consoleErr = "取更多失败：当前语句不支持分页"
+		return
+	}
+	base := a.currentRuntime()
+	more := a.runtimeFor(id + "#more")
+	more.SetOnDone(func(res *engine.QueryResult, errMsg string, dur time.Duration) {
+		apply := func() {
+			if errMsg != "" {
+				a.consoleErr = "取更多失败: " + errMsg
+				return
+			}
+			if res == nil || base.Result() == nil {
+				return
+			}
+			r := base.Result()
+			r.Rows = append(r.Rows, res.Rows...)
+			r.Truncated = res.Truncated
+			a.fetchStates[id] = fetchState{loaded: len(r.Rows), more: res.Truncated && res.IsQuery}
+			a.resView.key = ""
+		}
+		if a.win != nil {
+			win := a.win
+			win.Update(apply)
+			return
+		}
+		apply()
+	})
+	if !more.Run(a.sess, sql) {
+		a.consoleErr = "取更多失败：无法启动"
+	}
+}
+
+// filterModal 渲染每列筛选输入。
+func (a *root) filterModal(c *ui.Context) {
+	if !a.filterOpen {
+		return
+	}
+	ui.Modal(c, &a.filterOpen, func() {
+		title := "筛选"
+		if r := a.currentRuntime().Result(); r != nil && a.filterCol >= 0 && a.filterCol < len(r.Columns) {
+			title = "筛选：" + r.Columns[a.filterCol]
+		}
+		ui.Text(c, title).Bold()
+		ui.TextInput(c, &a.filterText).Placeholder("包含…（留空清除）").AutoFocus()
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "取消").Clicked() {
+				a.filterOpen = false
+			}
+			if ui.PrimaryButton(c, "应用").Clicked() {
+				a.resView.setFilter(a.filterCol, a.filterText)
+				a.filterOpen = false
+			}
+		})
+	})
+}
+
+// recordFetchState 在语句执行成功后记录分页状态。
+func (a *root) recordFetchState(runtimeID string, res *engine.QueryResult) {
+	if res == nil || !res.IsQuery {
+		delete(a.fetchStates, runtimeID)
+		return
+	}
+	a.fetchStates[runtimeID] = fetchState{loaded: len(res.Rows), more: res.Truncated}
+	a.resView.key = ""
 }

@@ -59,7 +59,12 @@ type root struct {
 	stmtRuns            []stmtRun // 本次执行的语句（多语句时结果区按它分 Tab）
 	activeStmt          int
 	lastExecSQL         string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
+	resView             *resultView
+	fetchStates         map[string]fetchState // runtimeID → 分页状态
 	resultRow           int
+	filterOpen          bool
+	filterCol           int
+	filterText          string
 	cellViewOpen        bool
 	cellViewTitle       string
 	cellViewText        string
@@ -94,6 +99,8 @@ func newRoot(text string) *root {
 		lastVer:       map[string]uint64{},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
+	a.resView = newResultView()
+	a.fetchStates = map[string]fetchState{}
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
@@ -186,12 +193,26 @@ func (a *root) runtime(id string) *app.Console {
 	return c
 }
 
+// fetchState 是一个结果的分页状态：已加载行数、是否还有更多。
+type fetchState struct {
+	loaded int
+	more   bool
+}
+
 // runtimeFor 返回某个运行态 id 的实例；空 id 用默认实例（scratch 执行/测试口）。
 func (a *root) runtimeFor(id string) *app.Console {
 	if id == "" {
 		return a.con
 	}
 	return a.runtime(id)
+}
+
+// currentRuntimeID 返回当前结果对应的运行态 id（多语句时为 consoleID#i）。
+func (a *root) currentRuntimeID() string {
+	if len(a.stmtRuns) > 0 && a.activeStmt < len(a.stmtRuns) {
+		return a.stmtRuns[a.activeStmt].runtimeID
+	}
+	return a.activeConsole
 }
 
 // currentRuntime 返回结果区展示的运行态：多语句时是当前语句，否则是当前控制台。
@@ -395,6 +416,7 @@ func (a *root) view(c *ui.Context) {
 
 		a.tabModal(c)
 		a.cellViewer(c)
+		a.filterModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)

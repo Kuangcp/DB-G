@@ -174,6 +174,13 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 	logDone := a.execDoneLogger(a.stmtRuns[i].runtimeID)
 	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
 		logDone(res, errMsg, dur)
+		rec := func() { a.recordFetchState(a.stmtRuns[i].runtimeID, res) }
+		if a.win != nil {
+			win := a.win
+			win.Update(rec)
+		} else {
+			rec()
+		}
 		ok := errMsg == ""
 		advance := func() {
 			a.refreshStmtBackgrounds()

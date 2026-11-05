@@ -62,7 +62,9 @@ func (s *session) Close() error {
 	return s.db.Close()
 }
 
-func (s *session) Caps() engine.Capabilities { return engine.CapObjects | engine.CapColumns }
+func (s *session) Caps() engine.Capabilities {
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore
+}
 
 func (s *session) Cancel() bool {
 	c := s.curCancel.Load()
