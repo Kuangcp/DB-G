@@ -85,6 +85,9 @@ func (l *Logger) SetLevel(level LogLevel) {
 	l.level = level
 }
 
+// Dir 返回日志目录。
+func (l *Logger) Dir() string { return l.dir }
+
 // Path 返回当前日志文件路径（可能随时间轮转变化）。
 func (l *Logger) Path() string {
 	l.mu.Lock()
@@ -211,6 +214,17 @@ func CloseLogs() {
 	if l != nil {
 		_ = l.Close()
 	}
+}
+
+// LogDir 返回当前生效的日志目录：已初始化时用实际目录，否则用默认目录。
+func LogDir() string {
+	defaultMu.RLock()
+	l := defaultLogger
+	defaultMu.RUnlock()
+	if l != nil {
+		return l.Dir()
+	}
+	return DefaultLogDir()
 }
 
 func logAt(level LogLevel, tag, msg string, kv ...any) {

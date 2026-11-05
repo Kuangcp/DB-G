@@ -135,3 +135,16 @@ func TestSettingsHasRefreshCompletionsButton(t *testing.T) {
 		t.Fatalf("refresh completions button missing: %q", tt.Texts())
 	}
 }
+
+func TestSettingsShowsLogPath(t *testing.T) {
+	a := newConsoleRoot(t)
+	dir := initTestLogs(t)
+	tt := ui.NewTester(a.settingsView, 560, 520)
+	tt.Frame()
+	if !tt.HasText("日志") || !tt.HasText(dir) {
+		t.Fatalf("settings must show the log dir %q: %q", dir, tt.Texts())
+	}
+	if !tt.HasText("打开日志目录") {
+		t.Fatalf("open-log button missing: %q", tt.Texts())
+	}
+}

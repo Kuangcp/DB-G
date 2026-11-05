@@ -5,6 +5,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"db-g/app"
 )
 
 // settingsView 是独立设置窗口的内容：开发用的编辑器性能面板（HUD/预设/高亮策略）。
@@ -36,6 +38,14 @@ func (a *root) settingsView(c *ui.Context) {
 		ui.Row(c).Gap(6).Children(func() {
 			if ui.Button(c, "刷新补全缓存").Clicked() {
 				a.refreshCompletions()
+			}
+		})
+
+		ui.Text(c, "日志").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Row(c).Gap(6).Children(func() {
+			ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)
+			if ui.Button(c, "打开日志目录").Clicked() {
+				mygo.Shell.ShowItemInFolder(app.LogDir())
 			}
 		})
 
