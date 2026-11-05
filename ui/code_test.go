@@ -127,3 +127,28 @@ func TestCodeEditorKeepsUndoAcrossConsoleSwitch(t *testing.T) {
 		t.Fatalf("undo after switch: %q", got)
 	}
 }
+
+func TestFormatActiveFormatsDocument(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.setActiveText("select a,b from t where x=1")
+	a.setSelection(0, 0)
+	a.formatActive()
+	want := "SELECT a,b\nFROM t\nWHERE x=1"
+	if got := a.activeText(); got != want {
+		t.Fatalf("format:\n%q\nwant\n%q", got, want)
+	}
+	if !a.code.state.Buffer.CanUndo() {
+		t.Fatal("formatting must be undoable")
+	}
+}
+
+func TestFormatActiveFormatsSelectionOnly(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.setActiveText("-- keep me as is\nselect 1")
+	start := len([]rune("-- keep me as is\n"))
+	a.setSelection(start, start+len([]rune("select 1")))
+	a.formatActive()
+	if got := a.activeText(); got != "-- keep me as is\nSELECT 1" {
+		t.Fatalf("selection format: %q", got)
+	}
+}

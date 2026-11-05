@@ -111,6 +111,12 @@ func (c *codeEditor) SelectedText() (string, bool) {
 	return c.state.SelectedText(), true
 }
 
+// Replace 用 text 替换字节范围 [start,end)（进入撤销栈）。
+func (c *codeEditor) Replace(start, end int, text string) {
+	c.state.Select(start, end)
+	c.state.Insert(text)
+}
+
 // Insert 在光标处输入文本。
 func (c *codeEditor) Insert(text string) { c.state.Insert(text) }
 

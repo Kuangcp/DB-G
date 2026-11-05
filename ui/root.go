@@ -302,6 +302,27 @@ func (a *root) activateConsole(id string) bool {
 	return true
 }
 
+// formatActive 格式化选区（无选区时整篇）；看不懂就保持原样。
+func (a *root) formatActive() {
+	text := a.code.Text()
+	start, end := 0, len(text)
+	if s, e, has := a.code.Selection(); has {
+		start, end = s, e
+	}
+	if start >= end {
+		return
+	}
+	segment := text[start:end]
+	formatted, err := app.FormatSQL(segment)
+	if err != nil || formatted == segment || formatted == "" {
+		return
+	}
+	if a.activeConsole != "" {
+		a.syncActiveBuffer()
+	}
+	a.code.Replace(start, end, formatted)
+}
+
 // hasSelection 报告当前是否有选区（「仅执行选中」的开关）。
 func (a *root) hasSelection() bool {
 	_, _, has := a.code.Selection()
@@ -480,6 +501,9 @@ func (a *root) view(c *ui.Context) {
 					ui.Spacer(c)
 					if ui.Button(c, "查找").Clicked() {
 						a.code.Find()
+					}
+					if ui.Button(c, "格式化").Clicked() {
+						a.formatActive()
 					}
 					ui.Text(c, "Ctrl+F / Ctrl+Space").FontSize(12).TextColor(c.Theme().TextMuted)
 				})
