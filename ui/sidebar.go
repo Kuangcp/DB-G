@@ -158,10 +158,12 @@ func (a *root) connModal(c *ui.Context) {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Radio(c, &a.connFormKind, "sqlite", "SQLite")
 				ui.Radio(c, &a.connFormKind, "mysql", "MySQL")
+				ui.Radio(c, &a.connFormKind, "postgres", "PostgreSQL")
+				ui.Radio(c, &a.connFormKind, "clickhouse", "ClickHouse")
 			})
 		})
 		ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
-		if a.connFormKind == "mysql" {
+		if a.connFormKind != "sqlite" {
 			ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）")
 			ui.Row(c).Gap(6).Children(func() {
 				ui.TextInput(c, &a.connFormHost).Placeholder("主机").Fill()
@@ -227,8 +229,12 @@ func (a *root) saveConnForm() {
 		return
 	}
 	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath}
-	if a.connFormKind == "mysql" {
-		port, err := strconv.Atoi(a.connFormPort)
+	if a.connFormKind != "sqlite" {
+		portText := a.connFormPort
+		if portText == "" {
+			portText = strconv.Itoa(defaultPort(a.connFormKind))
+		}
+		port, err := strconv.Atoi(portText)
 		if err != nil {
 			a.connFormErr = "端口必须是数字"
 			return
@@ -281,4 +287,17 @@ func (a *root) connDot(c *ui.Context) {
 	default:
 		ui.Text(c, "●").TextColor(c.Theme().TextMuted)
 	}
+}
+
+// defaultPort 返回各数据源的默认端口。
+func defaultPort(kind string) int {
+	switch kind {
+	case "mysql":
+		return 3306
+	case "postgres":
+		return 5432
+	case "clickhouse":
+		return 9000
+	}
+	return 0
 }

@@ -205,7 +205,7 @@ func validateProfile(p ConnProfile) error {
 		if fi.IsDir() {
 			return errors.New("路径不可用: 是目录而非数据库文件")
 		}
-	case "mysql":
+	case "mysql", "postgres", "clickhouse":
 		if p.Host == "" {
 			return errors.New("主机不能为空")
 		}

@@ -186,14 +186,18 @@ func TestStoreValidateProfileByKind(t *testing.T) {
 	if err := s.Add(ConnProfile{Name: "m", Kind: "mysql", Host: "h", Port: 70000}); err == nil {
 		t.Fatal("mysql port out of range must be rejected")
 	}
-	if err := s.Add(ConnProfile{Name: "pg", Kind: "postgres", Host: "h", Port: 5432}); err == nil {
+	if err := s.Add(ConnProfile{Name: "x", Kind: "oracle", Host: "h", Port: 1521}); err == nil {
 		t.Fatal("unknown kind must be rejected")
+	}
+	if err := s.Add(ConnProfile{Name: "pg", Kind: "postgres", Host: "h", Port: 5432}); err != nil {
+		t.Fatalf("valid postgres profile: %v", err)
 	}
 	if err := s.Add(ConnProfile{Name: "m", Kind: "mysql", Host: "h", Port: 3306, User: "root", Password: "s", Database: "app"}); err != nil {
 		t.Fatalf("valid mysql profile: %v", err)
 	}
-	if len(s.List()) != 1 || s.List()[0].Host != "h" || s.List()[0].Port != 3306 || s.List()[0].Password != "s" {
-		t.Fatalf("round-trip: %+v", s.List())
+	list := s.List()
+	if len(list) != 2 || list[1].Kind != "mysql" || list[1].Port != 3306 || list[1].Password != "s" {
+		t.Fatalf("round-trip: %+v", list)
 	}
 }
 
@@ -380,5 +384,21 @@ func TestRemoveConnCascadesConsoles(t *testing.T) {
 	got, _ := LoadStore(s.path).GetWorkspace(ws.ID)
 	if len(got.Members) != 0 {
 		t.Fatalf("members must be stripped: %+v", got.Members)
+	}
+}
+
+func TestValidateProfilePostgresAndClickHouse(t *testing.T) {
+	s := tempStore(t)
+	if err := s.Add(ConnProfile{Name: "pg", Kind: "postgres", Host: "h", Port: 5432, User: "u", Database: "d"}); err != nil {
+		t.Fatalf("valid postgres profile: %v", err)
+	}
+	if err := s.Add(ConnProfile{Name: "ck", Kind: "clickhouse", Host: "h", Port: 9000, User: "u", Database: "d"}); err != nil {
+		t.Fatalf("valid clickhouse profile: %v", err)
+	}
+	if err := s.Add(ConnProfile{Name: "bad", Kind: "postgres", Port: 5432}); err == nil {
+		t.Fatal("postgres without host must be rejected")
+	}
+	if err := s.Add(ConnProfile{Name: "bad2", Kind: "clickhouse", Host: "h", Port: 0}); err == nil {
+		t.Fatal("clickhouse without port must be rejected")
 	}
 }
