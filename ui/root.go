@@ -1,10 +1,6 @@
 package ui
 
 import (
-	"fmt"
-	"os"
-	"time"
-
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
@@ -120,16 +116,6 @@ func (a *root) FlushAll() {
 		m.FlushCarets()
 		m.FlushAll()
 	}
-}
-
-func stratsFromEnv() strats {
-	switch os.Getenv("SCOPE") {
-	case "FF":
-		return strats{scopeFull, scopeFull}
-	case "FV":
-		return strats{scopeFull, scopeViewport}
-	}
-	return strats{scopeViewport, scopeViewport}
 }
 
 // setSession 安装唯一的活动会话，并关闭被替换掉的旧会话（连接归属由 sessConnID 记录）。
@@ -271,10 +257,6 @@ func (a *root) Attach(win *mygo.Window) {
 // View 是窗口内容入口。
 func (a *root) View(c *ui.Context) {
 	rootView(a)(c)
-}
-
-func fmtDur(d time.Duration) string {
-	return fmt.Sprintf("%.2fms", float64(d)/float64(time.Millisecond))
 }
 
 func rootView(a *root) func(c *ui.Context) {
