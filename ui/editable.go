@@ -1,0 +1,378 @@
+package ui
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/egoist/mygo/ui"
+
+	"db-g/app"
+	"db-g/engine"
+)
+
+// editStateKey 标识「当前结果」的可编辑状态；结果变了就重算。
+func (a *root) editStateKey(r *engine.QueryResult) string {
+	if r == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s|%p|%d", a.currentRuntimeID(), r, len(r.Rows))
+}
+
+// ensureEditState 在结果变化时重算可编辑计划（只读原因也一并算出）。
+func (a *root) ensureEditState(r *engine.QueryResult) {
+	key := a.editStateKey(r)
+	if key == a.editKey {
+		return
+	}
+	a.editKey = key
+	if a.editSets == nil {
+		a.editSets = map[string]*app.EditSet{}
+	}
+	a.editPlan = nil
+	a.readonlyReason = ""
+	if r == nil || !r.IsQuery {
+		return
+	}
+	id := a.currentRuntimeID()
+	if a.editSets[id] == nil {
+		a.editSets[id] = app.NewEditSet()
+	}
+	if a.sess == nil || !a.sess.Caps().Has(engine.CapEditableResult) {
+		a.readonlyReason = "当前数据源不支持写操作"
+		return
+	}
+	if _, ok := a.sess.(engine.Transactional); !ok {
+		a.readonlyReason = "当前数据源不支持事务"
+		return
+	}
+	rels := relationsIn(stmtScopeAt(a.lastExecSQL, 0))
+	seen := map[string]string{}
+	for _, rel := range rels {
+		if rel.Table != "" {
+			seen[strings.ToLower(rel.Table)] = rel.Table
+		}
+	}
+	if len(seen) != 1 {
+		a.readonlyReason = "只有单表查询可编辑（JOIN/子查询结果只读）"
+		return
+	}
+	var table string
+	for _, name := range seen {
+		table = name
+	}
+	connID := a.activeConsoleConnID()
+	cols, all := a.catalog.getColumnsMany(connID, []string{table})
+	if !all {
+		a.ensureColumns(connID, table)
+		// headless（无窗口）下加载是同步的，这里再读一次即可立刻判定。
+		cols, all = a.catalog.getColumnsMany(connID, []string{table})
+		if !all {
+			a.readonlyReason = "正在加载列信息，稍后再试"
+			a.editKey = "" // 列加载完成后重算
+			return
+		}
+	}
+	infos := make([]app.ColumnInfo, 0, len(cols[0]))
+	for _, c := range cols[0] {
+		infos = append(infos, app.ColumnInfo{Name: c.Name, Type: c.Type, PrimaryKey: c.PrimaryKey})
+	}
+	plan, err := app.BuildEditPlan(a.connKind(), table, r.Columns, infos)
+	if err != nil {
+		a.readonlyReason = err.Error()
+		return
+	}
+	a.editPlan = plan
+}
+
+// editSet 返回当前结果的本地改动集。
+func (a *root) editSet() *app.EditSet {
+	id := a.currentRuntimeID()
+	if a.editSets == nil {
+		a.editSets = map[string]*app.EditSet{}
+	}
+	if a.editSets[id] == nil {
+		a.editSets[id] = app.NewEditSet()
+	}
+	return a.editSets[id]
+}
+
+// rowsForPlan 返回当前结果的数据行（编辑用的行下标是结果行下标）。
+func (a *root) rowsForPlan() [][]any {
+	if r := a.currentRuntime().Result(); r != nil {
+		return r.Rows
+	}
+	return nil
+}
+
+// setCellEdit 暂存一格改动（结果行下标 + 结果列下标）。
+func (a *root) setCellEdit(row, col int, v any) {
+	if a.editPlan == nil || row < 0 || col < 0 || col >= len(a.editPlan.Columns) || !a.editPlan.Editable[col] {
+		return
+	}
+	a.editSet().SetCell(row, col, v)
+}
+
+// clearRowEdit 还原一行（取消删除标记或丢弃该行改格）。
+func (a *root) clearRowEdit(row int) {
+	es := a.editSet()
+	es.RestoreRow(row)
+	for k := range es.Cells {
+		if k.Row == row {
+			delete(es.Cells, k)
+		}
+	}
+}
+
+// addInsertRow 追加一行待新增。
+func (a *root) addInsertRow() int {
+	return a.editSet().AddInsert()
+}
+
+// deleteRow 标记删除某结果行。
+func (a *root) deleteRow(row int) {
+	if a.editPlan == nil || row < 0 || row >= len(a.rowsForPlan()) {
+		return
+	}
+	a.editSet().MarkDeleted(row)
+}
+
+// previewEdits 生成提交预览（只读 SQL 列表）。
+func (a *root) previewEdits() ([]string, error) {
+	if a.editPlan == nil {
+		return nil, errors.New(a.readonlyReason)
+	}
+	es := a.editSet()
+	if es.Count() == 0 {
+		return nil, errors.New("没有待提交的改动")
+	}
+	return es.Preview(a.editPlan, a.rowsForPlan())
+}
+
+// applyEditsSync 在事务里执行全部改动（测试与提交共用；调用方保证不在 UI 线程做长活）。
+func (a *root) applyEditsSync() error {
+	plan := a.editPlan
+	if plan == nil {
+		return errors.New(a.readonlyReason)
+	}
+	es := a.editSet()
+	ops, err := es.BuildOps(plan, a.rowsForPlan())
+	if err != nil {
+		return err
+	}
+	if len(ops) == 0 {
+		return errors.New("没有实际改动（值与原来相同或行已被删除）")
+	}
+	txer, ok := a.sess.(engine.Transactional)
+	if !ok {
+		return errors.New("当前数据源不支持事务")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tx, err := txer.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if err := app.ApplyOps(ctx, tx, ops); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	es.Clear()
+	app.LogInfo("write", "committed", "table", plan.Table, "ops", len(ops))
+	return nil
+}
+
+// commitEdits 打开预览确认弹窗。
+func (a *root) commitEdits() {
+	lines, err := a.previewEdits()
+	if err != nil {
+		a.consoleErr = err.Error()
+		return
+	}
+	a.previewLines = lines
+	a.previewOpen = true
+}
+
+// applyConfirmedEdits 在确认后执行（有窗口时后台 + Update）。
+func (a *root) applyConfirmedEdits() {
+	a.previewOpen = false
+	if a.editPlan == nil || a.editSet().Count() == 0 {
+		return
+	}
+	a.editBusy = true
+	done := func(err error) {
+		a.editBusy = false
+		if err != nil {
+			a.consoleErr = "提交失败（已回滚）：" + err.Error()
+			app.LogWarn("write", "commit failed", "err", err.Error())
+			return
+		}
+		a.consoleErr = "提交成功"
+		a.editKey = ""
+		a.refreshResult()
+	}
+	if a.win == nil {
+		done(a.applyEditsSync())
+		return
+	}
+	go func() {
+		err := a.applyEditsSync()
+		win := a.win
+		win.Update(func() { done(err) })
+	}()
+}
+
+// refreshResult 重跑最近一次语句（刷新结果，保持排序/筛选与分页状态）。
+func (a *root) refreshResult() {
+	sql := a.lastExecSQL
+	if sql == "" || a.sess == nil {
+		return
+	}
+	id := a.currentRuntimeID()
+	rt := a.runtimeFor(id)
+	rt.SetOnDone(func(res *engine.QueryResult, errMsg string, dur time.Duration) {
+		apply := func() {
+			a.recordFetchState(id, res)
+			a.editKey = ""
+			a.refreshStmtBackgrounds()
+		}
+		if a.win != nil {
+			win := a.win
+			win.Update(apply)
+			return
+		}
+		apply()
+	})
+	rt.Run(a.sess, sql)
+}
+
+// editCellModal 渲染单元格编辑弹窗。
+func (a *root) editCellModal(c *ui.Context) {
+	if !a.editCellOpen {
+		return
+	}
+	ui.Modal(c, &a.editCellOpen, func() {
+		ui.Text(c, fmt.Sprintf("编辑 %s · 第 %d 行", a.editPlan.Columns[a.editCellCol], a.editCellRow+1)).Bold()
+		ui.TextInput(c, &a.editCellText).AutoFocus()
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "取消").Clicked() {
+				a.editCellOpen = false
+			}
+			if ui.Button(c, "设为 NULL").Clicked() {
+				a.setCellEdit(a.editCellRow, a.editCellCol, nil)
+				a.editCellOpen = false
+			}
+			if ui.PrimaryButton(c, "保存").Clicked() {
+				a.setCellEdit(a.editCellRow, a.editCellCol, parseEditValue(a.editCellText))
+				a.editCellOpen = false
+			}
+		})
+	})
+}
+
+// previewModal 渲染提交预览。
+func (a *root) previewModal(c *ui.Context) {
+	if !a.previewOpen {
+		return
+	}
+	ui.Modal(c, &a.previewOpen, func() {
+		ui.Text(c, fmt.Sprintf("提交 %d 条改动（单事务，影响行数不符会整体回滚）", len(a.previewLines))).Bold()
+		ui.ScrollBoth(c).Height(320).Children(func() {
+			ui.Text(c, strings.Join(a.previewLines, "\n")).Font("monospace").FontSize(12)
+		})
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "取消").Clicked() {
+				a.previewOpen = false
+			}
+			if ui.PrimaryButton(c, "确认提交").Clicked() {
+				a.applyConfirmedEdits()
+			}
+		})
+	})
+}
+
+// parseEditValue 把输入的文本变成值：能解析成数字就数字，否则字符串；"NULL" 视为 NULL。
+func parseEditValue(s string) any {
+	if s == "NULL" {
+		return nil
+	}
+	if n, err := parseInt(s); err == nil {
+		return n
+	}
+	if f, err := parseFloat(s); err == nil {
+		return f
+	}
+	return s
+}
+
+func parseInt(s string) (int64, error) {
+	var n int64
+	_, err := fmt.Sscan(s, &n)
+	return n, err
+}
+
+func parseFloat(s string) (float64, error) {
+	var f float64
+	_, err := fmt.Sscan(s, &f)
+	return f, err
+}
+
+// editToolbar 渲染写操作按钮；只读时禁用并显示原因。
+func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
+	es := a.editSet()
+	n := es.Count()
+	editable := a.editPlan != nil
+	if editable && ui.Button(c, "编辑格").Clicked() {
+		a.beginEditCurrent(r)
+	}
+	if editable && ui.Button(c, "增行").Clicked() {
+		a.addInsertRow()
+	}
+	if editable && ui.Button(c, "删行").Disabled(n == 0 && len(a.rowsForPlan()) == 0).Clicked() {
+		row := a.displayToResult(r, a.resultRow)
+		a.deleteRow(row)
+	}
+	if editable && ui.Button(c, "撤销改动").Disabled(n == 0).Clicked() {
+		a.editSet().Clear()
+		a.editKey = ""
+	}
+	if editable {
+		label := "提交"
+		if n > 0 {
+			label = fmt.Sprintf("提交 (%d)", n)
+		}
+		if ui.PrimaryButton(c, label).Disabled(n == 0 || a.editBusy).Clicked() {
+			a.commitEdits()
+		}
+	} else if a.readonlyReason != "" {
+		ui.Text(c, "只读："+a.readonlyReason).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+	}
+}
+
+// beginEditCurrent 打开「编辑格」弹窗（当前选中单元格）。
+func (a *root) beginEditCurrent(r *engine.QueryResult) {
+	col := a.cursorDataCol(r)
+	row := a.displayToResult(r, a.resultRow)
+	if a.editPlan == nil || row < 0 || col < 0 {
+		return
+	}
+	if !a.editPlan.Editable[col] {
+		a.consoleErr = "主键列不可编辑"
+		return
+	}
+	a.editCellRow, a.editCellCol = row, col
+	a.editCellText = cellString(cellValueOf(r, row, col))
+	a.editCellOpen = true
+}
+
+func cellValueOf(r *engine.QueryResult, row, col int) any {
+	if r == nil || row < 0 || row >= len(r.Rows) || col < 0 || col >= len(r.Rows[row]) {
+		return nil
+	}
+	return r.Rows[row][col]
+}

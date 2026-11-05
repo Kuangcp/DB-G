@@ -68,6 +68,17 @@ type root struct {
 	history             *app.History
 	pendingText         string // 激活控制台后要写入的正文（对象预览用）
 	pendingExec         bool   // 写入正文后是否立即执行
+	editKey             string
+	editPlan            *app.EditPlan
+	editSets            map[string]*app.EditSet
+	readonlyReason      string
+	editBusy            bool
+	editCellOpen        bool
+	editCellRow         int
+	editCellCol         int
+	editCellText        string
+	previewOpen         bool
+	previewLines        []string
 	ddlOpen             bool
 	ddlTitle            string
 	ddlText             string
@@ -462,6 +473,8 @@ func (a *root) view(c *ui.Context) {
 		a.exportConfirmModal(c)
 		a.historyPanel(c)
 		a.ddlPanel(c)
+		a.editCellModal(c)
+		a.previewModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)

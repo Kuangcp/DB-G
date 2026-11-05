@@ -216,7 +216,11 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			MaxWidth: maxColumnWidth,
 		})
 	}
+	a.ensureEditState(r)
 	displayRows := a.resView.apply(r)
+	editSet := a.editSet()
+	insertRows := len(editSet.Inserts)
+	totalRows := len(displayRows) + insertRows
 
 	// 顶部操作条：复制/查看/取更多/筛选状态。
 	ui.Row(c).Gap(6).Children(func() {
@@ -229,6 +233,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if ui.Button(c, "取更多").Disabled(!a.canFetchMore()).Clicked() {
 			a.fetchMore()
 		}
+		a.editToolbar(c, r)
 		ui.MenuButton(c, "导出…", func(m *ui.Menu) {
 			if m.Item("当前结果 CSV").Chosen() {
 				a.pickExport("csv", false)
@@ -308,21 +313,75 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if dataCol >= 0 && m.Item("查看完整内容").Chosen() {
 			a.openCellViewer(r, row, dataCol)
 		}
+		if a.editPlan != nil && dataCol >= 0 {
+			if it := m.Item("编辑单元格…"); it.Disabled(!a.editPlan.Editable[dataCol]).Chosen() {
+				a.editCellRow, a.editCellCol = row, dataCol
+				a.editCellText = cellString(cellValueOf(r, row, dataCol))
+				a.editCellOpen = true
+			}
+			if a.editPlan.Editable[dataCol] && m.Item("设为 NULL").Chosen() {
+				a.setCellEdit(row, dataCol, nil)
+			}
+			if _, has := a.editSet().Cells[app.CellKey{Row: row, Col: dataCol}]; has {
+				if m.Item("还原本格").Chosen() {
+					a.editSet().ClearCell(row, dataCol)
+				}
+			}
+		}
+		if a.editPlan != nil {
+			if a.editSet().Deletes[row] {
+				if m.Item("还原本行").Chosen() {
+					a.clearRowEdit(row)
+				}
+			} else if m.Item("删除本行").Chosen() {
+				a.deleteRow(row)
+			}
+		}
 	}
 
-	tbl := ui.Table(c, &a.resultState, cols, len(r.Rows), func(row, col int) {
-		if row < 0 || row >= len(displayRows) {
+	tbl := ui.Table(c, &a.resultState, cols, totalRows, func(row, col int) {
+		if row < 0 {
+			return
+		}
+		// 新增行渲染在数据行之后。
+		if row >= len(displayRows) {
+			insIdx := row - len(displayRows)
+			if insIdx >= len(editSet.Inserts) {
+				return
+			}
+			if col == 0 {
+				ui.Text(c, "+").TextColor(c.Theme().Success)
+				return
+			}
+			v, ok := editSet.Inserts[insIdx][col-1]
+			if !ok {
+				ui.Text(c, "").SingleLine()
+				return
+			}
+			ui.Text(c, cellText(v)).SingleLine().TextColor(c.Theme().Success)
 			return
 		}
 		ri := displayRows[row]
 		if col == 0 {
-			ui.Text(c, strconv.Itoa(ri+1)).TextColor(c.Theme().TextMuted)
+			label := strconv.Itoa(ri + 1)
+			if editSet.Deletes[ri] {
+				ui.Text(c, "−"+label).TextColor(c.Theme().Danger)
+				return
+			}
+			ui.Text(c, label).TextColor(c.Theme().TextMuted)
 			return
 		}
 		if col-1 >= len(r.Rows[ri]) {
 			return
 		}
-		ui.Text(c, cellText(r.Rows[ri][col-1])).SingleLine()
+		txt := ui.Text(c, cellText(r.Rows[ri][col-1])).SingleLine()
+		if editSet.Deletes[ri] {
+			txt.TextColor(c.Theme().TextMuted)
+			return
+		}
+		if _, dirty := editSet.Cells[app.CellKey{Row: ri, Col: col - 1}]; dirty {
+			txt.TextColor(c.Theme().Accent).Bold()
+		}
 	}).Grow(1)
 	if tbl.Submitted() {
 		a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))

@@ -29,7 +29,8 @@ func (a *root) activeConsoleConnID() string {
 			return rec.ConnectionID
 		}
 	}
-	return ""
+	// 没有控制台（临时缓冲执行）时退回到当前会话的连接，补全/写操作仍可用。
+	return a.sessConnID
 }
 
 // completionItems 返回某连接的候选：缓存命中用组装好的，否则只有词表。
@@ -43,7 +44,7 @@ func (a *root) completionItems(connID string) []myeditor.Completion {
 // ensureCatalog 在主线程调用：没有新鲜缓存时发起一次加载。
 // 有窗口时后台取数、完成后回投重弹；headless（测试）同步执行便于断言。
 func (a *root) ensureCatalog(connID string) {
-	if connID == "" || !a.catalog.begin(connID) {
+	if !a.catalog.begin(connID) {
 		return
 	}
 	// 在主线程捕获会话，后台协程只用捕获到的接口值（不读 a.sess，避免数据竞争）。
@@ -77,7 +78,7 @@ func (a *root) ensureCatalog(connID string) {
 
 // ensureColumns 在主线程调用：没有新鲜列缓存时发起一次加载（同 ensureCatalog 的线程语义）。
 func (a *root) ensureColumns(connID, table string) {
-	if connID == "" || table == "" || !a.catalog.beginColumns(connID, table) {
+	if table == "" || !a.catalog.beginColumns(connID, table) {
 		return
 	}
 	sess := a.sess
