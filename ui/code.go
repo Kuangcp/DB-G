@@ -32,11 +32,13 @@ func newCodeEditor(placeholder string) *codeEditor {
 // SetActive 把编辑器切到该控制台的正文（同一控制台复用它的 Buffer）。
 func (c *codeEditor) SetActive(consoleID, text string) {
 	buf, ok := c.buffers[consoleID]
-	if !ok {
+	switch {
+	case !ok:
 		buf = myeditor.NewBuffer(text)
 		buf.SetLanguage(myeditor.LanguageNamed("SQL"))
 		c.buffers[consoleID] = buf
-	} else {
+	case buf.String() != text:
+		// 只有正文真的不同（外部改动/首次载入）才 Reset；否则保留撤销历史。
 		buf.Reset(text)
 	}
 	c.state.Buffer = buf

@@ -256,3 +256,25 @@ func TestSwitchKeepsCaretWithWideRunes(t *testing.T) {
 		t.Fatalf("caret must come back at the same rune: %d,%d", s, e)
 	}
 }
+
+func TestCtrlSSavesActiveConsole(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	rec, _ := m.Create(prof.ID, "保存")
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Click("编辑器")
+	tt.Frame()
+	a.setActiveText("SELECT 'saved'")
+	tt.Frame() // 帧首同步正文版本
+	tt.Key(ui.Ctrl, ui.KeyS)
+	tt.Frame()
+	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir()}.Read(rec.ID)
+	if err != nil || text != "SELECT 'saved'" {
+		t.Fatalf("Ctrl+S must flush the console: %q %v", text, err)
+	}
+}

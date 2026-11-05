@@ -108,3 +108,22 @@ func TestCtrlEnterIsTakenFromTheEditor(t *testing.T) {
 		t.Fatal("plain Enter must still insert a newline")
 	}
 }
+
+func TestCodeEditorKeepsUndoAcrossConsoleSwitch(t *testing.T) {
+	c := newTestCode()
+	c.SetActive("a", "SELECT 1")
+	c.Insert("x")
+	edited := c.Text()
+	if !c.state.Buffer.CanUndo() {
+		t.Fatal("typing must create an undo step")
+	}
+	c.SetActive("b", "SELECT 2")
+	c.SetActive("a", edited) // 切回来时正文与 Buffer 一致：不得清空撤销历史
+	if !c.state.Buffer.CanUndo() {
+		t.Fatal("undo history must survive switching between consoles")
+	}
+	c.state.Buffer.Undo()
+	if got := c.Text(); got != "SELECT 1" {
+		t.Fatalf("undo after switch: %q", got)
+	}
+}
