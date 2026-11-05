@@ -9,6 +9,7 @@ import (
 
 	myeditor "github.com/egoist/mygo/ui/editor"
 
+	"db-g/app"
 	"db-g/engine"
 )
 
@@ -52,12 +53,15 @@ func (a *root) ensureCatalog(connID string) {
 		return
 	}
 	load := func() {
+		start := time.Now()
 		tables, views, err := objectsOf(sess)
 		if err != nil {
 			a.catalog.fail(connID)
+			app.LogWarn("catalog", "tables load failed", "conn", connID, "err", err.Error())
 			return
 		}
 		a.catalog.finish(connID, tables, views)
+		app.LogInfo("catalog", "tables loaded", "conn", connID, "tables", len(tables), "views", len(views), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
 			win.Update(a.retriggerCompletions)
@@ -82,12 +86,15 @@ func (a *root) ensureColumns(connID, table string) {
 		return
 	}
 	load := func() {
+		start := time.Now()
 		cols, err := columnsOf(sess, table)
 		if err != nil {
 			a.catalog.failColumns(connID, table)
+			app.LogWarn("catalog", "columns load failed", "conn", connID, "table", table, "err", err.Error())
 			return
 		}
 		a.catalog.finishColumns(connID, table, cols)
+		app.LogInfo("catalog", "columns loaded", "conn", connID, "table", table, "cols", len(cols), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
 			win.Update(a.showCompletionsAtCursor)

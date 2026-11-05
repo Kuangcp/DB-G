@@ -15,6 +15,7 @@ func (a *root) openSQLite(path string) error {
 }
 
 func (a *root) openConn(p app.ConnProfile) error {
+	app.LogInfo("conn", "open", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path))
 	sess, err := engine.Open(engine.Profile{
 		Kind: p.Kind, Name: p.Name, DSN: p.Path,
 		Host: p.Host, Port: p.Port, User: p.User, Password: p.Password, Database: p.Database,
@@ -23,6 +24,7 @@ func (a *root) openConn(p app.ConnProfile) error {
 		a.connErr = err.Error()
 		a.failedConnID = p.ID
 		a.setTreeErr(p.ID, a.connErr)
+		app.LogError("conn", "open failed", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path), "err", err.Error())
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -51,6 +53,7 @@ func (a *root) removeConn(id string) {
 	if a.store == nil {
 		return
 	}
+	app.LogInfo("conn", "remove", "id", id)
 	var recs []app.ConsoleRecord
 	if m := a.consoleMgr(); m != nil {
 		recs = m.ConsolesOf(id)
@@ -91,6 +94,7 @@ func (a *root) runSQL() {
 		return
 	}
 	// 有激活控制台时：先落盘，并确保连着它的数据源；没有控制台时沿用临时缓冲执行（不落盘）。
+	app.LogInfo("exec", "start", "conn", a.connName, "console", a.activeConsole, "sql", text)
 	if a.activeConsole != "" {
 		if err := a.flushActive(); err != nil {
 			return

@@ -19,10 +19,18 @@ type Console struct {
 	result  *engine.QueryResult
 	err     string
 	cancel  context.CancelFunc
+	onDone  func(res *engine.QueryResult, errMsg string, dur time.Duration)
 }
 
 func NewConsole() *Console {
 	return &Console{publish: func(func()) {}}
+}
+
+// SetOnDone 注册「一次执行结束」的回调（异步，主线程之外调用；用于日志/诊断）。
+func (c *Console) SetOnDone(f func(res *engine.QueryResult, errMsg string, dur time.Duration)) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onDone = f
 }
 
 func (c *Console) SetPublisher(f func(func())) {
@@ -70,9 +78,12 @@ func (c *Console) Run(sess engine.Session, query string) bool {
 	c.running, c.result, c.err = true, nil, ""
 	c.mu.Unlock()
 
+	start := time.Now()
 	go func() {
 		res, err := sess.RunStatement(ctx, query)
 		cancel()
+		dur := time.Since(start)
+		var done func(*engine.QueryResult, string, time.Duration)
 		c.mu.Lock()
 		if gen == c.gen {
 			c.running, c.cancel = false, nil
@@ -81,10 +92,14 @@ func (c *Console) Run(sess engine.Session, query string) bool {
 			} else {
 				c.result, c.err = res, ""
 			}
+			done = c.onDone
 		}
 		pubFn := c.publish
 		c.mu.Unlock()
 		pubFn(func() {})
+		if done != nil {
+			done(c.Result(), c.Err(), dur)
+		}
 	}()
 	return true
 }

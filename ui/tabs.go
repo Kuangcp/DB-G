@@ -97,8 +97,10 @@ func (a *root) createConsole() {
 	rec, err := m.Create(a.sessConnID, "")
 	if err != nil {
 		a.consoleErr = "新建控制台失败: " + err.Error()
+		app.LogWarn("console", "create failed", "err", err.Error())
 		return
 	}
+	app.LogInfo("console", "create", "id", rec.ID, "name", rec.Name)
 	a.pendingActivate = rec.ID
 }
 
@@ -111,8 +113,10 @@ func (a *root) closeConsole(id string) {
 	wasActive := a.activeConsole == id
 	if err := m.CloseConsole(id); err != nil {
 		a.consoleErr = "关闭控制台失败: " + err.Error()
+		app.LogWarn("console", "close failed", "id", id, "err", err.Error())
 		return
 	}
+	app.LogInfo("console", "close", "id", id)
 	if wasActive {
 		a.afterActiveRemoved()
 	}
@@ -193,6 +197,7 @@ func (a *root) tabModal(c *ui.Context) {
 					a.modalErr = "重命名失败: " + err.Error()
 					return
 				}
+				app.LogInfo("console", "rename", "id", a.modalTarget, "name", a.modalText)
 				a.modalKind = ""
 			})
 		case "delete":
@@ -202,8 +207,10 @@ func (a *root) tabModal(c *ui.Context) {
 				wasActive := a.activeConsole == a.modalTarget
 				if err := m.DeleteConsole(a.modalTarget); err != nil {
 					a.modalErr = "删除失败: " + err.Error()
+					app.LogWarn("console", "delete failed", "id", a.modalTarget, "err", err.Error())
 					return
 				}
+				app.LogInfo("console", "delete", "id", a.modalTarget)
 				delete(a.consoles, a.modalTarget)
 				delete(a.lastVer, a.modalTarget)
 				a.code.Drop(a.modalTarget)

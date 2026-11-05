@@ -60,11 +60,12 @@ func DefaultLogDir() string {
 // NewLogger 在 dir 下打开（或创建）当天的日志文件。
 func NewLogger(dir string) (*Logger, error) {
 	l := &Logger{
-		dir:        dir,
-		now:        time.Now,
-		level:      LevelInfo,
-		maxSize:    defaultMaxLogSize,
-		alsoStderr: true,
+		dir:     dir,
+		now:     time.Now,
+		level:   LevelInfo,
+		maxSize: defaultMaxLogSize,
+		// stderr 同步便于 go run 排查；测试里用 DBG_LOG_STDERR=0 关掉噪音。
+		alsoStderr: os.Getenv("DBG_LOG_STDERR") != "0",
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err

@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"fmt"
+	"runtime/debug"
+	"time"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
@@ -81,6 +85,7 @@ func newRoot(text string) *root {
 		consoles:      map[string]*app.Console{},
 		lastVer:       map[string]uint64{},
 	}
+	a.con.SetOnDone(a.execDoneLogger(""))
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
@@ -98,6 +103,8 @@ func newRootWithStore(storePath string) *root {
 	r.store = app.LoadStore(storePath)
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
 	r.restoreSession()
+	ws, _ := r.mgr.ActiveWorkspace()
+	app.LogInfo("startup", "session restored", "consoles", len(r.mgr.Open()), "workspace", ws.Name, "conn_warning", r.store.Warning())
 	return r
 }
 
@@ -139,12 +146,29 @@ func (a *root) consoleMgr() *app.ConsoleManager {
 	return a.mgr
 }
 
+// execDoneLogger 返回一次执行结束的日志回调（连接名在执行时读取，避免陈旧）。
+func (a *root) execDoneLogger(consoleID string) func(*engine.QueryResult, string, time.Duration) {
+	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
+		kv := []any{"console", consoleID, "conn", a.connName, "dur_ms", dur.Milliseconds()}
+		if errMsg != "" {
+			app.LogError("exec", "failed", append(kv, "err", errMsg)...)
+			return
+		}
+		rows, affected, truncated := 0, int64(0), false
+		if res != nil {
+			rows, affected, truncated = len(res.Rows), res.Affected, res.Truncated
+		}
+		app.LogInfo("exec", "done", append(kv, "rows", rows, "affected", affected, "truncated", truncated)...)
+	}
+}
+
 // runtime 返回某控制台的执行运行态（懒创建，结果按控制台各自保留）。
 func (a *root) runtime(id string) *app.Console {
 	if c, ok := a.consoles[id]; ok {
 		return c
 	}
 	c := app.NewConsole()
+	c.SetOnDone(a.execDoneLogger(id))
 	if a.win != nil {
 		win := a.win
 		c.SetPublisher(func(f func()) { win.Update(f) })
@@ -225,6 +249,7 @@ func (a *root) flushActive() error {
 	m.FlushCarets()
 	if err := m.Flush(a.activeConsole); err != nil {
 		a.consoleErr = err.Error()
+		app.LogWarn("console", "flush failed", "console", a.activeConsole, "err", err.Error())
 		return err
 	}
 	return nil
@@ -264,8 +289,26 @@ func (a *root) View(c *ui.Context) {
 	rootView(a)(c)
 }
 
+// guardView 包住一帧的构建：panic 时记堆栈并在顶栏显示错误，尽量让应用继续跑。
+func (a *root) guardView(fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			app.LogError("panic", "view build", "err", fmt.Sprint(r), "stack", string(debug.Stack()))
+			a.consoleErr = "内部错误：" + fmt.Sprint(r)
+		}
+	}()
+	fn()
+}
+
 func rootView(a *root) func(c *ui.Context) {
 	return func(c *ui.Context) {
+		a.guardView(func() { a.view(c) })
+	}
+}
+
+// view 是一帧的真正构建（由 guardView 包裹）。
+func (a *root) view(c *ui.Context) {
+	{
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
 		a.maybeOpenSettings()
 		a.syncActiveBuffer()
