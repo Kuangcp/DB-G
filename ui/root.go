@@ -177,11 +177,21 @@ func (a *root) activateConsole(id string) bool {
 	if m == nil {
 		return false
 	}
-	_ = a.flushActive()
+	if id == a.activeConsole {
+		return true
+	}
+	prev := a.activeConsole
+	if err := a.flushActive(); err != nil {
+		return false // 落盘失败不切换，避免丢编辑
+	}
+	// 旧控制台：flush 之后磁盘是权威，丢掉它的编辑器来源与内存正文。
+	m.DetachTextSource(prev)
 	rec, ok := m.OpenConsole(id)
 	if !ok {
 		return false
 	}
+	// 目标控制台：同样以磁盘为准（它上次离开时已落盘）。
+	m.DetachTextSource(rec.ID)
 	text, _ := m.Text(rec.ID)
 	a.ed.Buf.Set(text)
 	a.ed.dirty = true

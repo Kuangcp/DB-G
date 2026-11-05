@@ -394,3 +394,48 @@ func TestLazySourceSkipsIdenticalContent(t *testing.T) {
 		t.Fatal("identical content must not be rewritten")
 	}
 }
+
+func TestTextIgnoresLiveSource(t *testing.T) {
+	sink := newFakeSink()
+	_, _, rec, m := newMgr(t, sink)
+	sink.files[rec.ID] = "on disk"
+	live := "in editor"
+	m.SetTextSource(rec.ID, func() string { return live })
+	if got, _ := m.Text(rec.ID); got != "on disk" {
+		t.Fatalf("Text must read stored body, not the live editor source: %q", got)
+	}
+	m.SetText(rec.ID, "explicit")
+	if got, _ := m.Text(rec.ID); got != "explicit" {
+		t.Fatalf("explicit buffer must win: %q", got)
+	}
+}
+
+func TestDetachTextSourceFallsBackToDisk(t *testing.T) {
+	sink := newFakeSink()
+	_, _, rec, m := newMgr(t, sink)
+	sink.files[rec.ID] = "typed"
+	m.SetTextSource(rec.ID, func() string { return "live" })
+	m.DetachTextSource(rec.ID)
+	if got, _ := m.Text(rec.ID); got != "typed" {
+		t.Fatalf("detached console must re-read disk: %q", got)
+	}
+	m.TouchVersion(rec.ID, 1) // 没有来源时不应置脏
+	if m.Dirty(rec.ID) {
+		t.Fatal("version bumps without a source must not mark dirty")
+	}
+}
+
+func TestFlushStillUsesLiveSource(t *testing.T) {
+	sink := newFakeSink()
+	_, _, rec, m := newMgr(t, sink)
+	live := "v1"
+	m.SetTextSource(rec.ID, func() string { return live })
+	m.TouchVersion(rec.ID, 1)
+	live = "v2"
+	if err := m.Flush(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := sink.text(rec.ID); got != "v2" {
+		t.Fatalf("flush must write the live editor body: %q", got)
+	}
+}

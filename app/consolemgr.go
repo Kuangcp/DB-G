@@ -51,19 +51,16 @@ func NewConsoleManager(store *ConnStore, sink TextSink) *ConsoleManager {
 // Store 暴露底层存储（工作区/控制台元数据的其余操作）。
 func (m *ConsoleManager) Store() *ConnStore { return m.store }
 
-// Text 返回控制台正文；活动控制台有惰性来源时取当前编辑器内容，
-// 否则首次访问读盘（文件缺失 = 空串），未知 id 返回 false。
+// Text 返回控制台已保存的正文（内存缓冲优先，其次磁盘；文件缺失 = 空串）。
+// 它绝不读活动控制台的惰性编辑器来源：编辑器内容只在 Flush 时可见，
+// 否则「切到别的控制台」会读到当前编辑器文本而不是目标控制台自己的正文。
 func (m *ConsoleManager) Text(id string) (string, bool) {
 	if _, ok := m.store.GetConsole(id); !ok {
 		return "", false
 	}
 	m.mu.Lock()
-	src := m.src[id]
 	text, ok := m.cache[id]
 	m.mu.Unlock()
-	if src != nil {
-		return src(), true
-	}
 	if ok {
 		return text, true
 	}
@@ -121,6 +118,20 @@ func (m *ConsoleManager) SetTextSource(id string, src func() string) {
 		return
 	}
 	m.src[id] = src
+}
+
+// DetachTextSource 解除某控制台的编辑器来源并丢弃其内存正文/版本：
+// 之后 Text 重新读盘。切换控制台时对「旧控制台」和「目标控制台」各调一次，
+// 保证两边都以磁盘（刚由 Flush 写下的内容）为准。
+func (m *ConsoleManager) DetachTextSource(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.src, id)
+	delete(m.ver, id)
+	if !m.dirty[id] {
+		// 已落盘：下次 Text 重新读盘（磁盘权威）；仍有未落盘改动时保留缓存，避免丢内容。
+		delete(m.cache, id)
+	}
 }
 
 // TouchVersion 报告编辑器正文版本变化：只置脏并重置防抖，不拷贝正文。
