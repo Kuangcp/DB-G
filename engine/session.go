@@ -41,6 +41,18 @@ type ColumnLister interface {
 	Columns(ctx context.Context, table string) ([]Column, error)
 }
 
+// Tx 是一次显式事务：Exec 返回影响行数，Commit/Rollback 结束事务。
+type Tx interface {
+	Exec(ctx context.Context, query string, args ...any) (int64, error)
+	Commit() error
+	Rollback() error
+}
+
+// Transactional 是可选能力接口：会话能否开显式事务（写操作提交用）。
+type Transactional interface {
+	Begin(ctx context.Context) (Tx, error)
+}
+
 // ObjectDDLer 是可选能力接口：返回对象的 DDL（建表/建视图语句）。
 type ObjectDDLer interface {
 	ObjectDDL(ctx context.Context, kind ObjectKind, name string) (string, error)

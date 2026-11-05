@@ -131,3 +131,17 @@ func TestColumnsRequiresOpenSession(t *testing.T) {
 		t.Fatal("listing columns without an open session must fail")
 	}
 }
+
+func TestBeginRequiresOpenSession(t *testing.T) {
+	s, err := openSession(engine.Profile{Kind: "mysql", Host: "h", Port: 3306, User: "u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, ok := s.(engine.Transactional)
+	if !ok || !s.Caps().Has(engine.CapEditableResult) {
+		t.Fatal("mysql must declare editable results")
+	}
+	if _, err := tr.Begin(context.Background()); err == nil {
+		t.Fatal("Begin without an open session must fail")
+	}
+}

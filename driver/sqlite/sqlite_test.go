@@ -369,3 +369,53 @@ func TestObjectDDL(t *testing.T) {
 		t.Fatal("missing object must error")
 	}
 }
+
+func TestTransactionalCommitAndRollback(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	if _, err := s.RunStatement(ctx, `CREATE TABLE tx_t (id INTEGER PRIMARY KEY, name TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	tr, ok := s.(engine.Transactional)
+	if !ok || !s.Caps().Has(engine.CapEditableResult) {
+		t.Fatal("sqlite must support transactions")
+	}
+	// 提交可见
+	tx, err := tr.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := tx.Exec(ctx, `INSERT INTO tx_t (id, name) VALUES (?, ?)`, 1, "a")
+	if err != nil || n != 1 {
+		t.Fatalf("exec: n=%d err=%v", n, err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.RunStatement(ctx, `SELECT count(*) FROM tx_t`); err != nil || r.Rows[0][0] != int64(1) {
+		t.Fatalf("committed row missing: %+v", r)
+	}
+	// 回滚不可见
+	tx, err = tr.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO tx_t (id, name) VALUES (?, ?)`, 2, "b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.RunStatement(ctx, `SELECT count(*) FROM tx_t`); err != nil || r.Rows[0][0] != int64(1) {
+		t.Fatalf("rolled back row visible: %+v", r)
+	}
+	// 影响行数要如实返回
+	tx, err = tr.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if n, err := tx.Exec(ctx, `UPDATE tx_t SET name = ? WHERE id = ?`, "z", 999); err != nil || n != 0 {
+		t.Fatalf("no-match update: n=%d err=%v", n, err)
+	}
+}
