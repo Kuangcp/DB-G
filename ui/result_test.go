@@ -129,3 +129,90 @@ func TestCellTextAndCutRunes(t *testing.T) {
 		t.Fatalf("cutRunes runes = %d, suffix ok=%v", len([]rune(got)), strings.HasSuffix(got, "…"))
 	}
 }
+
+func TestDisplayWidthCountsWideRunes(t *testing.T) {
+	cases := map[string]int{
+		"":           0,
+		"abc":        3,
+		"中文":         4,
+		"a中b":        4,
+		"2026-11-04": 10,
+		"ＡＢ":         4, // 全角
+	}
+	for in, want := range cases {
+		if got := displayWidth(in); got != want {
+			t.Fatalf("displayWidth(%q) = %d, want %d", in, got, want)
+		}
+	}
+}
+
+func resultWith(cols []string, rows ...[]any) *engine.QueryResult {
+	return &engine.QueryResult{IsQuery: true, Columns: cols, Rows: rows}
+}
+
+func TestResultWidthsFollowValues(t *testing.T) {
+	r := resultWith([]string{"id", "name", "memo"},
+		[]any{int64(1), "短", strings.Repeat("长", 200)},
+		[]any{int64(2), "一个比较长的名字", ""},
+	)
+	w := resultWidths(r)
+	if len(w) != 3 {
+		t.Fatalf("widths len = %d", len(w))
+	}
+	if w[0] != minColumnWidth {
+		t.Fatalf("id column must fall back to the minimum: %v", w[0])
+	}
+	if w[1] <= minColumnWidth || w[1] >= maxColumnWidth {
+		t.Fatalf("name column must fit its widest value: %v", w[1])
+	}
+	if w[2] != maxColumnWidth {
+		t.Fatalf("memo column must be capped at the maximum: %v", w[2])
+	}
+	if w[1] >= w[2] {
+		t.Fatalf("wide value must be wider than a short one: %v vs %v", w[1], w[2])
+	}
+}
+
+func TestResultWidthsCountHeader(t *testing.T) {
+	r := resultWith([]string{"一个很长的列标题名字"}, []any{"1"})
+	w := resultWidths(r)
+	if w[0] <= minColumnWidth {
+		t.Fatalf("header must widen the column: %v", w[0])
+	}
+}
+
+func TestResultWidthsSeeRenderedTextNotByteCounts(t *testing.T) {
+	// MySQL 的 TEXT 以 []byte 返回：宽度必须按渲染后的字符算，不是 "[N bytes]"。
+	r := resultWith([]string{"t"}, []any{[]byte("abcdef")}, []any{[]byte("x")})
+	w := resultWidths(r)
+	if want := float32(6*charWidth + cellPad); w[0] < want || w[0] > want+1 {
+		t.Fatalf("text []byte width = %v, want ~%v", w[0], want)
+	}
+}
+
+func TestResultWidthsCachedPerResult(t *testing.T) {
+	a := newTestRoot()
+	r := resultWith([]string{"c"}, []any{"v"})
+	first := a.columnWidths(r)
+	second := a.columnWidths(r)
+	if &first[0] != &second[0] {
+		t.Fatal("widths must be cached for the same result")
+	}
+	other := resultWith([]string{"c"}, []any{"a much longer value here"})
+	if w := a.columnWidths(other); w[0] <= first[0] {
+		t.Fatalf("new result must be measured again: %v vs %v", w[0], first[0])
+	}
+}
+
+func TestResultPaneRendersTextBytes(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(resultWith([]string{"v"}, []any{[]byte("真实文本")}), "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if !tt.HasText("真实文本") {
+		t.Fatalf("text cell missing: %q", tt.Texts())
+	}
+	if tt.HasText("bytes]") {
+		t.Fatalf("byte summary must not show for text: %q", tt.Texts())
+	}
+}

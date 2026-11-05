@@ -62,6 +62,8 @@ type root struct {
 	lastCaret         [2]int
 	pendingSel        *[2]int
 	consoleErr        string
+	widthsFor         *engine.QueryResult
+	widths            []float32
 	settingsRequested bool
 	settingsWin       settingsWin
 	openSettingsWin   func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
