@@ -117,6 +117,24 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 判断口诀：**删掉实体要不要一起消失、要不要按它查询？** 要 → `connections.json` 的结构化字段；
 不要 → 独立文件或内存。加字段只要 JSON 可序列化即可（无迁移框架，旧文件缺字段按零值处理）。
 
+## 快捷键（★ 必读）
+
+**一个动作表管全部键位**，不要再往各处散写 `c.Shortcut(...)`：
+
+- `ui/keymap.go`：`keyActions`（动作、默认键位、作用域、编辑器命令）+ `"Ctrl+Enter"` 这类
+  字符串的解析/格式化。加动作 = 在表里加一行（`ID` 是持久化键名，别随便改）。
+- 作用域决定"什么时候才注册"：`scopeAlways`（编辑器聚焦也生效）、`scopeEditor`、
+  `scopeNoEditor`（结果区）。**必须先判作用域再调 `c.Shortcut`** ——
+  `c.Shortcut` 一旦返回 true 就把键消费掉，判断放在后面等于让别的控件收不到键
+  （历史 bug：结果区的 Ctrl+C 吃掉了编辑器的复制）。
+- 编辑区的动作复用 mygo 的 `editor.Command`（`DuplicateLinesDown` / `DeleteLine` …），
+  由 `applyEditorBindings()` 灌进 `State.Bindings`；做不了的动作交给窗口，绑成
+  `NoCommand` 让编辑器别吞键。`scopeNoEditor` 的动作不碰编辑器绑定。
+- 改键：`setChords/resetChords` 会**存盘 + 重建编辑器绑定**；同作用域撞键时自动把
+  原来的动作解绑（`breakConflicts`）。设置窗口「快捷键」一节点「录制」后按新组合即可。
+- 持久化：`<config>/db-g/keymap.json`，只存与默认值不同的动作（`app/keymap.go`）。
+  测试要改键就把 `a.keymapPath` 指到 `t.TempDir()`，**不要写用户的真实配置**。
+
 ## UI 约定（★ 必读）
 
 参照 mygo 的 `docs/ui/*.md`（`/home/zk/Code/go/mygo/docs/ui/`），本项目的固定做法：

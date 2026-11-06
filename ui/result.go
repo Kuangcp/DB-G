@@ -52,9 +52,6 @@ func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
 }
 
 func (a *root) resultPane(c *ui.Context) {
-	if c.Shortcut(ui.Ctrl, ui.KeyC) && !a.code.state.Focused() {
-		a.copyCurrentCell(c, a.currentRuntime().Result())
-	}
 	ui.Column(c).Fill().Gap(6).Children(func() {
 		if len(a.stmtRuns) > 1 {
 			a.stmtTabs(c)

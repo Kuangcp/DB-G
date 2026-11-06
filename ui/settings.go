@@ -12,51 +12,56 @@ import (
 // settingsView 是独立设置窗口的内容：开发用的编辑器性能面板（HUD/预设/高亮策略）。
 func (a *root) settingsView(c *ui.Context) {
 	disabled := a.activeConsole == ""
-	ui.Column(c).Fill().Padding(12).Gap(8).Children(func() {
-		ui.Text(c, "编辑器性能（开发用）").Bold()
-		ui.Text(c, fmt.Sprintf(
-			"行数=%d 字节=%d 版本=%d",
-			a.code.LineCount(), a.code.ByteLen(), a.code.Version(),
-		)).FontSize(12).SingleLine()
-		ui.Row(c).Gap(6).Children(func() {
-			if ui.Button(c, "刷新").Clicked() {
-				a.updateSettingsWindow()
-			}
-		})
-
-		ui.Text(c, "预设（写入当前激活控制台并立即保存）").FontSize(12).TextColor(c.Theme().TextMuted)
-		ui.Row(c).Gap(6).Children(func() {
-			for _, n := range []int{3_000, 12_000, 100_000} {
-				label := fmt.Sprintf("%dk", n/1_000)
-				if ui.Button(c, label).Disabled(disabled).Clicked() {
-					a.applyEditorPreset(n)
+	// 内容比窗口高（快捷键一节就不短），整块可滚。
+	ui.Scroll(c).Fill().Children(func() {
+		ui.Column(c).FillWidth().Padding(12).Gap(8).Children(func() {
+			ui.Text(c, "编辑器性能（开发用）").Bold()
+			ui.Text(c, fmt.Sprintf(
+				"行数=%d 字节=%d 版本=%d",
+				a.code.LineCount(), a.code.ByteLen(), a.code.Version(),
+			)).FontSize(12).SingleLine()
+			ui.Row(c).Gap(6).Children(func() {
+				if ui.Button(c, "刷新").Clicked() {
+					a.updateSettingsWindow()
 				}
+			})
+
+			ui.Text(c, "预设（写入当前激活控制台并立即保存）").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Row(c).Gap(6).Children(func() {
+				for _, n := range []int{3_000, 12_000, 100_000} {
+					label := fmt.Sprintf("%dk", n/1_000)
+					if ui.Button(c, label).Disabled(disabled).Clicked() {
+						a.applyEditorPreset(n)
+					}
+				}
+			})
+
+			ui.Text(c, "补全").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Row(c).Gap(6).Children(func() {
+				if ui.Button(c, "刷新补全缓存").Clicked() {
+					a.refreshCompletions()
+				}
+			})
+
+			a.keymapSection(c)
+
+			a.profilesSection(c)
+
+			ui.Text(c, "日志").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Row(c).Gap(6).Children(func() {
+				ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)
+				if ui.Button(c, "打开日志目录").Clicked() {
+					mygo.Shell.ShowItemInFolder(app.LogDir())
+				}
+			})
+
+			if disabled {
+				ui.Text(c, "没有激活的控制台：预设不可用").FontSize(12).TextColor(c.Theme().TextMuted)
+			}
+			if a.consoleErr != "" {
+				ui.Text(c, a.consoleErr).TextColor(c.Theme().Danger).FontSize(12)
 			}
 		})
-
-		ui.Text(c, "补全").FontSize(12).TextColor(c.Theme().TextMuted)
-		ui.Row(c).Gap(6).Children(func() {
-			if ui.Button(c, "刷新补全缓存").Clicked() {
-				a.refreshCompletions()
-			}
-		})
-
-		a.profilesSection(c)
-
-		ui.Text(c, "日志").FontSize(12).TextColor(c.Theme().TextMuted)
-		ui.Row(c).Gap(6).Children(func() {
-			ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)
-			if ui.Button(c, "打开日志目录").Clicked() {
-				mygo.Shell.ShowItemInFolder(app.LogDir())
-			}
-		})
-
-		if disabled {
-			ui.Text(c, "没有激活的控制台：预设不可用").FontSize(12).TextColor(c.Theme().TextMuted)
-		}
-		if a.consoleErr != "" {
-			ui.Text(c, a.consoleErr).TextColor(c.Theme().Danger).FontSize(12)
-		}
 	})
 }
 
@@ -101,8 +106,8 @@ func (a *root) openSettings() {
 	}
 	a.settingsWin = open(mygo.WindowOptions{
 		Title:   "设置 — db-g",
-		Width:   560,
-		Height:  340,
+		Width:   620,
+		Height:  560,
 		Content: ui.View(a.settingsView),
 	})
 }

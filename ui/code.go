@@ -19,7 +19,8 @@ type codeEditor struct {
 func newCodeEditor(placeholder string) *codeEditor {
 	return &codeEditor{
 		state: &myeditor.State{
-			// Ctrl+Enter 交给窗口做「执行选中」：NoCommand 让编辑器不消费它。
+			// 兜底：Ctrl+Enter 属于窗口的「执行」，编辑器别拿它换行。
+			// root.applyEditorBindings 会用 keymap 里的绑定整份替换掉它。
 			Bindings: []myeditor.Binding{
 				{Mods: ui.Ctrl, Key: ui.KeyEnter, Command: myeditor.NoCommand},
 			},

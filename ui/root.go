@@ -34,8 +34,12 @@ type root struct {
 	connFormPass   string
 	connFormDB     string
 	connFormParams string
-	connProto      int    // ClickHouse 协议：0 native / 1 http / 2 https
-	connTestMsg    string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	connProto      int                // ClickHouse 协议：0 native / 1 http / 2 https
+	chords         map[string][]chord // 动作 → 键位（见 keymap.go）
+	keymapPath     string             // keymap.json 的位置（空 = 不读盘，测试用）
+	captureAction  string             // 设置窗口正在录制键位的动作
+	keymapWarn     string             // 键位文件读写问题的提示
+	connTestMsg    string             // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
 	connTestErr    bool
 	connTestBusy   bool
 	connDeleteOpen bool
@@ -122,6 +126,7 @@ func newRoot(text string) *root {
 		treeSchemas:   map[string][]string{},
 		treeErr:       map[string]string{},
 		connFormKind:  "sqlite",
+		chords:        defaultChords(),
 		sessions:      map[string]engine.Session{},
 		sessionUse:    map[string]uint64{},
 		sessionErr:    map[string]string{},
@@ -134,6 +139,7 @@ func newRoot(text string) *root {
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
+	a.applyEditorBindings()
 	return a
 }
 
@@ -145,6 +151,9 @@ func NewRoot() *root {
 // newRootWithStore 用指定连接库路径建根状态，并恢复上次激活的工作区、控制台、正文与光标。
 func newRootWithStore(storePath string) *root {
 	r := newRoot("")
+	r.keymapPath = app.DefaultKeymapPath()
+	r.keymapWarn = r.loadKeymap()
+	r.applyEditorBindings()
 	r.store = app.LoadStore(storePath)
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
@@ -461,12 +470,7 @@ func (a *root) view(c *ui.Context) {
 			a.pendingExec = false
 			a.execPending = true
 		}
-		if c.Shortcut(ui.Ctrl, ui.KeyEnter) || c.Shortcut(0, ui.KeyF5) {
-			a.execPending = true
-		}
-		if c.Shortcut(ui.Ctrl, ui.KeyS) {
-			_ = a.flushActive()
-		}
+		a.dispatchKeys(c)
 
 		a.tabModal(c)
 		a.cellViewer(c)
