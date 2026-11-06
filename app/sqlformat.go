@@ -37,6 +37,9 @@ func FormatSQL(sql string) (string, error) {
 	return out, nil
 }
 
+// colListIndent 是 CREATE TABLE 列定义里的缩进（两个空格）。
+const colListIndent = 2
+
 // formatOne 格式化一段文本；ok=false 表示结构可疑、应保持原样。
 func formatOne(text string) (string, int, bool) {
 	var b strings.Builder
@@ -44,7 +47,24 @@ func formatOne(text string) (string, int, bool) {
 	i := 0
 	pendingSpace := false
 	atLineStart := true
+	colDepth := 0          // >0 表示正在 CREATE TABLE 的列定义括号里（值为该括号的深度）
+	lineIndent := 0        // 行首缩进空格数
+	var stmtWords []string // 当前语句已出现的词（大写），用来认出 CREATE TABLE
+	ourBreak := false      // 上一件事就是本函数自己断的行（用来吸掉输入里的重复换行）
 
+	// writeIndent 在行首补缩进并把行标记为已开始。
+	writeIndent := func() {
+		if atLineStart && lineIndent > 0 {
+			b.WriteString(strings.Repeat(" ", lineIndent))
+		}
+		atLineStart = false
+	}
+	// emit 写一段原样内容（行首会补缩进）。
+	emit := func(s string) {
+		writeIndent()
+		b.WriteString(s)
+		ourBreak = false
+	}
 	writeSpace := func() {
 		if atLineStart {
 			return
@@ -52,6 +72,34 @@ func formatOne(text string) (string, int, bool) {
 		b.WriteByte(' ')
 		atLineStart = false
 	}
+	// newline 断行并清掉行尾空格；缩进由 writeIndent 在下一行补。
+	// 已经在行首时不再多断一次（保证反复格式化结果稳定）。
+	newline := func() {
+		trimTrailingSpace(&b)
+		if !atLineStart {
+			b.WriteByte('\n')
+		}
+		atLineStart = true
+		pendingSpace = false
+		ourBreak = true
+	}
+	// isColumnList 报告当前这个 "(“ 是否打开了 CREATE TABLE 的列定义。
+	isColumnList := func() bool {
+		if depth != 1 || len(stmtWords) == 0 || stmtWords[0] != "CREATE" {
+			return false
+		}
+		table := false
+		for _, w := range stmtWords {
+			if w == "AS" {
+				return false // CTAS：括号是查询里的，不是列定义
+			}
+			if w == "TABLE" {
+				table = true
+			}
+		}
+		return table
+	}
+
 	for i < len(text) {
 		c := text[i]
 		switch {
@@ -64,8 +112,7 @@ func formatOne(text string) (string, int, bool) {
 			if end == len(text) && text[end-1] != c {
 				return "", 0, false // 引号未闭合
 			}
-			b.WriteString(text[i:end])
-			atLineStart = false
+			emit(text[i:end])
 			i = end
 		case c == '-' && i+1 < len(text) && text[i+1] == '-':
 			if pendingSpace {
@@ -76,8 +123,7 @@ func formatOne(text string) (string, int, bool) {
 			for end < len(text) && text[end] != '\n' {
 				end++
 			}
-			b.WriteString(text[i:end])
-			atLineStart = false
+			emit(text[i:end])
 			i = end
 		case c == '/' && i+1 < len(text) && text[i+1] == '*':
 			if pendingSpace {
@@ -91,10 +137,15 @@ func formatOne(text string) (string, int, bool) {
 			if end < len(text) {
 				end += 2
 			}
-			b.WriteString(text[i:end])
-			atLineStart = false
+			emit(text[i:end])
 			i = end
 		case c == '\n':
+			if ourBreak {
+				// 本函数刚断过行，输入里的那个换行是重复的。
+				ourBreak = false
+				i++
+				continue
+			}
 			b.WriteByte('\n')
 			atLineStart = true
 			pendingSpace = false
@@ -108,20 +159,43 @@ func formatOne(text string) (string, int, bool) {
 				writeSpace()
 				pendingSpace = false
 			}
-			b.WriteByte(c)
-			atLineStart = false
+			emit("(")
+			if isColumnList() {
+				// 列定义各占一行，相对 CREATE 缩进两格。
+				colDepth = depth
+				lineIndent = colListIndent
+				newline()
+			}
 			i++
 		case c == ')':
 			depth--
 			if depth < 0 {
 				return "", 0, false
 			}
+			if colDepth > 0 && depth < colDepth {
+				// 列定义结束：右括号另起一行、顶格。
+				colDepth = 0
+				lineIndent = 0
+				newline()
+				emit(")")
+			} else {
+				if pendingSpace {
+					writeSpace()
+					pendingSpace = false
+				}
+				emit(")")
+			}
+			stmtWords = nil
+			i++
+		case c == ',':
 			if pendingSpace {
 				writeSpace()
 				pendingSpace = false
 			}
-			b.WriteByte(c)
-			atLineStart = false
+			emit(",")
+			if colDepth > 0 && depth == colDepth {
+				newline()
+			}
 			i++
 		case isSQLWordStart(c):
 			end := i
@@ -131,28 +205,30 @@ func formatOne(text string) (string, int, bool) {
 			word := strings.ToUpper(text[i:end])
 			if depth == 0 && formatClauseStarts[word] {
 				if !atLineStart {
-					trimTrailingSpace(&b)
-					b.WriteByte('\n')
-					atLineStart = true
+					newline()
 				}
 			} else if pendingSpace {
 				writeSpace()
 			}
 			pendingSpace = false
 			if formatKeywords[word] {
-				b.WriteString(word)
+				emit(word)
 			} else {
-				b.WriteString(text[i:end])
+				emit(text[i:end])
 			}
-			atLineStart = false
+			if depth == 0 {
+				stmtWords = append(stmtWords, word)
+			}
 			i = end
 		default:
 			if pendingSpace {
 				writeSpace()
 				pendingSpace = false
 			}
-			b.WriteByte(c)
-			atLineStart = false
+			if c == ';' {
+				stmtWords = nil // 语句结束，后面的 CREATE 重新认
+			}
+			emit(string(c))
 			i++
 		}
 	}
