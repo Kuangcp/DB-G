@@ -1030,6 +1030,60 @@ func (s *ConnStore) AddWorkspaceMember(wsID, consoleID string) error {
 	return nil
 }
 
+// MoveWorkspaceMember 把控制台移到工作区成员里 beforeID 之前（空 = 末尾）；
+// 位置没变化时不落盘。
+func (s *ConnStore) MoveWorkspaceMember(wsID, consoleID, beforeID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := s.workspaceIndexLocked(wsID)
+	if i < 0 {
+		return fmt.Errorf("工作区不存在: %s", wsID)
+	}
+	if s.consoleIndexLocked(consoleID) < 0 {
+		return fmt.Errorf("控制台不存在: %s", consoleID)
+	}
+	if beforeID == consoleID {
+		return nil
+	}
+	ws := s.workspaces[i]
+	from := -1
+	for j, id := range ws.Members {
+		if id == consoleID {
+			from = j
+			break
+		}
+	}
+	if from < 0 {
+		return fmt.Errorf("控制台不在工作区: %s", consoleID)
+	}
+	members := slices.Clone(ws.Members)
+	members = append(members[:from], members[from+1:]...)
+	to := len(members)
+	if beforeID != "" {
+		to = -1
+		for j, id := range members {
+			if id == beforeID {
+				to = j
+				break
+			}
+		}
+		if to < 0 {
+			return fmt.Errorf("目标控制台不在工作区: %s", beforeID)
+		}
+	}
+	members = slices.Insert(members, to, consoleID)
+	if slices.Equal(members, ws.Members) {
+		return nil
+	}
+	prev := s.snapshot()
+	s.workspaces[i].Members = members
+	if err := s.save(); err != nil {
+		s.restore(prev)
+		return err
+	}
+	return nil
+}
+
 // RemoveWorkspaceMember 从工作区移出控制台；清空指向它的末次激活指针。
 func (s *ConnStore) RemoveWorkspaceMember(wsID, consoleID string) error {
 	s.mu.Lock()

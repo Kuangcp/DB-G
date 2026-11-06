@@ -91,6 +91,8 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 	if btn.Clicked() {
 		a.pendingActivate = rec.ID
 	}
+	attachTabDrag(c, btn, rec.ID)
+	a.attachTabDrop(c, btn, rec)
 	btn.ContextMenu(func(menu *ui.Menu) {
 		if menu.Item("关闭").Chosen() {
 			a.pendingClose = rec.ID
@@ -102,6 +104,130 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 			a.openModal("delete", rec.ID, rec.Name)
 		}
 	})
+}
+
+// tabDrag 是标签拖拽的值：控制台 id。
+type tabDrag struct{ id string }
+
+// attachTabDrag 只在按住 Ctrl 时把标签接成拖拽源，避免普通点击误拖（与侧栏树一致）。
+func attachTabDrag(c *ui.Context, btn ui.Element, id string) {
+	held := c.Modifiers()&ui.Ctrl != 0
+	if !held && !btn.Dragging() {
+		return
+	}
+	btn.Drag(tabDrag{id: id})
+	if held {
+		btn.Cursor(ui.CursorGrab).Tooltip("按住 Ctrl 拖动：调整控制台顺序")
+	}
+	if btn.Dragging() {
+		btn.Opacity(0.45)
+	}
+}
+
+// tabDropSpot 根据指针在标签内的横向位置决定插到前面还是后面。
+func tabDropSpot(btn ui.Element, drag tabDrag, target app.ConsoleRecord) (dropSpot, bool) {
+	if drag.id == target.ID {
+		return dropNone, false
+	}
+	x, _, ok := btn.PointerPosition()
+	if !ok {
+		return dropNone, false
+	}
+	if x < btn.Bounds().W/2 {
+		return dropBefore, true
+	}
+	return dropAfter, true
+}
+
+// attachTabDrop 把标签接成拖拽目标：在左右边缘画插入线。
+func (a *root) attachTabDrop(c *ui.Context, btn ui.Element, target app.ConsoleRecord) {
+	if drag, over := ui.DragOver[tabDrag](btn); over {
+		if spot, ok := tabDropSpot(btn, drag, target); ok {
+			styleTabDrop(btn, spot, c.Theme())
+		}
+	}
+	if drag, ok := ui.Drop[tabDrag](btn); ok {
+		if spot, ok := tabDropSpot(btn, drag, target); ok {
+			a.applyTabDrop(drag, target, spot)
+		}
+	}
+}
+
+func styleTabDrop(btn ui.Element, spot dropSpot, t *ui.Theme) {
+	btn.DrawOver(func(p *ui.Painter, r ui.Rect) {
+		x := r.X
+		if spot == dropAfter {
+			x = r.X + r.W - 2
+		}
+		p.Fill(ui.Rect{X: x, Y: r.Y, W: 2, H: r.H}, t.Accent, 1)
+	})
+}
+
+// applyTabDrop 把拖动的控制台移到目标前/后。
+func (a *root) applyTabDrop(drag tabDrag, target app.ConsoleRecord, spot dropSpot) {
+	m := a.consoleMgr()
+	if m == nil {
+		return
+	}
+	ws, ok := m.ActiveWorkspace()
+	if !ok {
+		return
+	}
+	before := ""
+	if spot == dropBefore {
+		before = target.ID
+	} else {
+		before = nextWorkspaceMember(ws, target.ID)
+	}
+	if err := m.Store().MoveWorkspaceMember(ws.ID, drag.id, before); err != nil {
+		app.LogWarn("console", "tab move failed", "id", drag.id, "before", before, "err", err.Error())
+		return
+	}
+	app.LogInfo("console", "tab moved", "id", drag.id, "before", before)
+}
+
+// nextWorkspaceMember 返回成员里的下一个控制台 id；末尾返回空串。
+func nextWorkspaceMember(ws app.WorkspaceRecord, id string) string {
+	for i, member := range ws.Members {
+		if member == id && i+1 < len(ws.Members) {
+			return ws.Members[i+1]
+		}
+	}
+	return ""
+}
+
+// touchConsoleMRU 把控制台置顶到最近使用列表（Ctrl+Tab 用）；列表封顶 16 条。
+func (a *root) touchConsoleMRU(id string) {
+	kept := make([]string, 0, len(a.consoleMRU)+1)
+	kept = append(kept, id)
+	for _, v := range a.consoleMRU {
+		if v != id {
+			kept = append(kept, v)
+		}
+	}
+	if len(kept) > 16 {
+		kept = kept[:16]
+	}
+	a.consoleMRU = kept
+}
+
+// switchToRecentConsole 切到当前工作区里最近使用过的那个控制台；
+// 连续按就在最近两个之间来回切（Alt-Tab 式）。
+func (a *root) switchToRecentConsole() {
+	m := a.consoleMgr()
+	if m == nil {
+		return
+	}
+	open := make(map[string]bool)
+	for _, rec := range m.Open() {
+		open[rec.ID] = true
+	}
+	for _, id := range a.consoleMRU {
+		if id != a.activeConsole && open[id] {
+			a.pendingActivate = id
+			return
+		}
+	}
 }
 
 // closeConsole 把控制台移出当前工作区（文件与元数据保留）。

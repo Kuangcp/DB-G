@@ -345,3 +345,96 @@ func TestTabBarOverflowMenu(t *testing.T) {
 		t.Fatalf("overflow item did not activate: %q", a.activeConsole)
 	}
 }
+
+// dragTabCtrl 按住 Ctrl 从一个标签拖到另一个标签的指定横向位置（相对文本矩形）。
+func dragTabCtrl(tt *ui.Tester, from, to ui.Rect, toX float32) {
+	tt.HoldModifiers(ui.Ctrl)
+	tt.Frame()
+	sx, sy := from.X+from.W/2, from.Y+from.H/2
+	tt.Press(sx, sy)
+	tt.HoldModifiers(ui.Ctrl)
+	tt.Frame()
+	for k := 1; k <= 4; k++ {
+		f := float32(k) / 4
+		tt.Move(sx+(toX-sx)*f, sy)
+	}
+	tt.Release(toX, sy)
+	tt.Frame()
+	tt.HoldModifiers(0)
+	tt.Frame()
+}
+
+// 按住 Ctrl 拖动标签可以调整控制台在工作区内的顺序。
+func TestTabDragReordersWorkspace(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	c1, _ := m.Create(prof.ID, "一")
+	c2, _ := m.Create(prof.ID, "二")
+	c3, _ := m.Create(prof.ID, "三")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	rc1, ok1 := tt.Find("一")
+	rc3, ok3 := tt.Find("三")
+	if !ok1 || !ok3 {
+		t.Fatalf("tabs missing: %v", tt.Texts())
+	}
+	// 把「一」拖到「三」的右半边（标签右边缘）：插到「三」后面，即工作区末尾。
+	dragTabCtrl(tt, rc1, rc3, rc3.X+rc3.W-2)
+	ws := mustWorkspace(t, m)
+	want := []string{c2.ID, c3.ID, c1.ID}
+	if len(ws.Members) != 3 || ws.Members[0] != want[0] || ws.Members[1] != want[1] || ws.Members[2] != want[2] {
+		t.Fatalf("after drag: %v want %v", ws.Members, want)
+	}
+}
+
+// 不按 Ctrl 拖动不会改顺序。
+func TestTabDragRequiresCtrl(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	c1, _ := m.Create(prof.ID, "一")
+	m.Create(prof.ID, "二")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	r1, _ := tt.Find("一")
+	r2, _ := tt.Find("二")
+	sx, sy := r2.X+r2.W/2, r2.Y+r2.H/2
+	tt.Press(sx, sy)
+	tt.Move(r1.X+2, sy)
+	tt.Release(r1.X+2, sy)
+	tt.Frame()
+	ws := mustWorkspace(t, m)
+	if len(ws.Members) != 2 || ws.Members[0] != c1.ID {
+		t.Fatalf("drag without Ctrl reordered: %v", ws.Members)
+	}
+}
+
+// Ctrl+Tab 在最近使用的两个控制台之间切换。
+func TestCtrlTabSwitchesRecentConsole(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	c1, _ := m.Create(prof.ID, "一")
+	c2, _ := m.Create(prof.ID, "二")
+	if !a.activateConsole(c1.ID) {
+		t.Fatal("activate 1")
+	}
+	if !a.activateConsole(c2.ID) {
+		t.Fatal("activate 2")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeyTab)
+	tt.Frame()
+	tt.Frame()
+	if a.activeConsole != c1.ID {
+		t.Fatalf("Ctrl+Tab should go back to the previous console: %q", a.activeConsole)
+	}
+	tt.Key(ui.Ctrl, ui.KeyTab)
+	tt.Frame()
+	tt.Frame()
+	if a.activeConsole != c2.ID {
+		t.Fatalf("Ctrl+Tab again should toggle back: %q", a.activeConsole)
+	}
+}

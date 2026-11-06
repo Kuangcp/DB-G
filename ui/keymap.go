@@ -54,6 +54,8 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Ctrl | ui.Shift, ui.KeyF}}},
 	{ID: "copyCell", Label: "复制当前单元格", Scope: scopeNoEditor,
 		Def: []chord{{ui.Ctrl, ui.KeyC}}},
+	{ID: "nextConsole", Label: "切换到最近使用的控制台", Scope: scopeAlways,
+		Def: []chord{{ui.Ctrl, ui.KeyTab}}},
 }
 
 // applies 报告该动作在「编辑器是否聚焦」时是否生效。

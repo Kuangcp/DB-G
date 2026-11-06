@@ -40,6 +40,8 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		a.formatActive()
 	case "copyCell":
 		a.copyCurrentCell(c, a.currentRuntime().Result())
+	case "nextConsole":
+		a.switchToRecentConsole()
 	}
 }
 

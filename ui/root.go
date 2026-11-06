@@ -78,6 +78,7 @@ type root struct {
 	useSeq              uint64
 	consoles            map[string]*app.Console // consoleID → 运行态
 	activeConsole       string
+	consoleMRU          []string // 最近使用过的控制台（Ctrl+Tab 切换用，队首最新）
 	pendingActivate     string
 	pendingClose        string
 	pendingSwitchWS     string
@@ -351,6 +352,7 @@ func (a *root) activateConsole(id string) bool {
 	start, end := m.Caret(rec.ID)
 	a.code.SetSelection(start, end)
 	a.activeConsole = rec.ID
+	a.touchConsoleMRU(rec.ID)
 	// 活动控制台的正文惰性取自编辑器：逐帧只比较版本号，落盘时才拷贝。
 	m.SetTextSource(rec.ID, func() string { return a.code.Text() })
 	a.lastVer[rec.ID] = a.code.Version()

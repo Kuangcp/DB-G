@@ -660,3 +660,48 @@ func TestMoveFolderToOrderAndNesting(t *testing.T) {
 		t.Fatal("unknown beforeID must fail")
 	}
 }
+
+func TestMoveWorkspaceMember(t *testing.T) {
+	s := tempStore(t)
+	p := mustAdd(t, s, "本地", filepath.Join(t.TempDir(), "a.db"))
+	ws, _ := s.CreateWorkspace("默认")
+	a, _ := s.CreateConsole(p.ID, "a")
+	b, _ := s.CreateConsole(p.ID, "b")
+	c, _ := s.CreateConsole(p.ID, "c")
+	for _, id := range []string{a.ID, b.ID, c.ID} {
+		if err := s.AddWorkspaceMember(ws.ID, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	members := func() []string {
+		got, _ := LoadStore(s.path).GetWorkspace(ws.ID)
+		return got.Members
+	}
+	// c 移到 a 前面
+	if err := s.MoveWorkspaceMember(ws.ID, c.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := members(); len(got) != 3 || got[0] != c.ID || got[1] != a.ID {
+		t.Fatalf("move before: %v", got)
+	}
+	// a 移到末尾（空 beforeID）
+	if err := s.MoveWorkspaceMember(ws.ID, a.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := members(); got[2] != a.ID {
+		t.Fatalf("move to end: %v", got)
+	}
+	// 位置不变：幂等
+	if err := s.MoveWorkspaceMember(ws.ID, a.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MoveWorkspaceMember(ws.ID, c.ID, c.ID); err != nil {
+		t.Fatal("move before itself is a no-op:", err)
+	}
+	if err := s.MoveWorkspaceMember(ws.ID, "nope", ""); err == nil {
+		t.Fatal("unknown console must fail")
+	}
+	if err := s.MoveWorkspaceMember("nope", a.ID, ""); err == nil {
+		t.Fatal("unknown workspace must fail")
+	}
+}
