@@ -21,19 +21,30 @@ func TestAppIconPixels(t *testing.T) {
 		r, g, bl, a := img.At(x, y).RGBA()
 		return uint8(r >> 8), uint8(g >> 8), uint8(bl >> 8), uint8(a >> 8)
 	}
-	// 圆角外是透明的，取上边缘内侧验证品牌蓝底。
+	// 圆角外是透明的，取上边缘内侧验证白色底。
 	r, g, bl, a := at(128, 20)
-	if a < 200 || r > 80 || g < 90 || bl < 180 {
-		t.Fatalf("background must be brand blue, got %d,%d,%d a=%d", r, g, bl, a)
+	if a < 200 || r < 240 || g < 240 || bl < 240 {
+		t.Fatalf("background must be white, got %d,%d,%d a=%d", r, g, bl, a)
 	}
-	if r, g, bl, _ := at(128, 70); r < 240 || g < 240 || bl < 240 {
-		t.Fatalf("ring must be white, got %d,%d,%d", r, g, bl)
+	// 字母 G 用品牌渐变：上环偏蓝、下环偏靛，二者不同且都不是白色。
+	tr, tg, tb, _ := at(128, 70)
+	br, bg2, bb, _ := at(128, 186)
+	if tr > 140 || tb < 170 {
+		t.Fatalf("top of G must be blue-ish, got %d,%d,%d", tr, tg, tb)
 	}
-	if r, g, bl, _ := at(128, 100); bl < 180 || r > 80 {
-		t.Fatalf("G must have a hole above the bar, got %d,%d,%d", r, g, bl)
+	if br > 160 || bb < 200 {
+		t.Fatalf("bottom of G must be indigo-ish, got %d,%d,%d", br, bg2, bb)
 	}
-	if r, g, bl, _ := at(170, 128); r < 240 || g < 240 || bl < 240 {
-		t.Fatalf("G bar must be white, got %d,%d,%d", r, g, bl)
+	if tr == br && tg == bg2 && tb == bb {
+		t.Fatal("G must be a gradient, not a flat color")
+	}
+	// 环内是白底
+	if r, g, bl, _ := at(128, 100); r < 240 || g < 240 || bl < 240 {
+		t.Fatalf("hole must be white, got %d,%d,%d", r, g, bl)
+	}
+	// 横杠是渐变颜色（非白）
+	if r, g, bl, _ := at(170, 128); r > 220 && g > 220 && bl > 220 {
+		t.Fatalf("G bar must be colored, got %d,%d,%d", r, g, bl)
 	}
 	if _, err := os.Stat("assets/icon.svg"); err != nil {
 		t.Fatalf("svg source missing: %v", err)
