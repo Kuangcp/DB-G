@@ -7,6 +7,7 @@ require (
 	github.com/egoist/mygo v0.7.4
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/jackc/pgx/v5 v5.12.0
+	golang.org/x/image v0.46.0
 	modernc.org/sqlite v1.33.1
 )
 
@@ -35,7 +36,6 @@ require (
 	github.com/shopspring/decimal v1.5.0 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
-	golang.org/x/image v0.46.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

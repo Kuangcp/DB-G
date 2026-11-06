@@ -769,3 +769,20 @@ func TestConnFormLeftRightNav(t *testing.T) {
 		t.Fatalf("clickhouse default port: %q", a.connFormPort)
 	}
 }
+
+func TestConnKindIcons(t *testing.T) {
+	seen := map[ui.Color]bool{}
+	for _, k := range connKinds {
+		if connKindIcon(k.kind) == nil {
+			t.Fatalf("icon missing for %q", k.kind)
+		}
+		col := connKindColor(k.kind)
+		if seen[col] {
+			t.Fatalf("duplicate brand color for %q", k.kind)
+		}
+		seen[col] = true
+	}
+	if connKindIcon("oracle") != nil {
+		t.Fatal("unknown kind must have no icon")
+	}
+}

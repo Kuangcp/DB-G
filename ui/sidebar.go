@@ -163,15 +163,20 @@ func (a *root) connModal(c *ui.Context) {
 		ui.Text(c, title).Bold()
 		// 左右布局：左侧数据源类型导航，右侧配置表单（仿 db-k）。
 		ui.Row(c).Gap(0).Children(func() {
-			ui.Column(c).Width(150).Gap(4).Children(func() {
+			ui.Column(c).Width(160).Gap(2).Children(func() {
 				for _, k := range connKinds {
-					btn := ui.Button(c, k.label)
-					if a.connFormKind == k.kind {
-						btn.Bold()
-					}
-					if btn.Clicked() {
-						a.switchConnKind(k.kind)
-					}
+					ui.Row(c).Gap(8).Children(func() {
+						if icon := connKindIcon(k.kind); icon != nil {
+							ui.Icon(c, icon).FontSize(18).TextColor(connKindColor(k.kind))
+						}
+						btn := ui.Button(c, k.label)
+						if a.connFormKind == k.kind {
+							btn.Bold()
+						}
+						if btn.Clicked() {
+							a.switchConnKind(k.kind)
+						}
+					})
 				}
 			})
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
