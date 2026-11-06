@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -647,117 +648,98 @@ const (
 	ddlPanelHeight = 520
 )
 
-// canViewDDLFromEditor 检查是否可以「从编辑器光标位置」查看 DDL：
-// 需要已选连接 + 有效表名 + 有会话且支持 DDL。
-func (a *root) canViewDDLFromEditor() bool {
-	if a.selConn.ID == "" {
-		return false
-	}
-	word := editorWordAtCaret(a.code)
-	app.LogInfo("ddl", "ctrl+q word from editor", "word", word, "conn", a.selConn.ID)
-	if word == "" || !isValidObjectName(word) {
-		return false
-	}
-	sess := a.sessionFor(a.selConn.ID)
-	if sess == nil {
-		app.LogWarn("ddl", "no session for ctrl+q", "conn", a.selConn.ID)
-		return false
-	}
-	_, ok := sess.(engine.ObjectDDLer)
-	app.LogInfo("ddl", "ctrl+q objectddler check", "ok", ok, "caps", sess.Caps())
-	return ok && sess.Caps().Has(engine.CapObjectDDL)
-}
-
-// findObjectByName 在缓存的对象树中按名称查找对象；如果树未展开则先尝试加载。
-func (a *root) findObjectByName(connID string, kind engine.ObjectKind, name string) (engine.DBObject, bool) {
-	objs, ok := a.treeData[connID][kind]
-	if ok {
-		for _, o := range objs {
-			if o.Name == name {
-				return o, true
-			}
+// ddlConnForCaret 找出「编辑器光标查 DDL」要用的连接：
+// 优先激活控制台所属的连接（用户多半正对着控制台），其次左侧树选中的连接。
+func (a *root) ddlConnForCaret() (app.ConnProfile, bool) {
+	if id := a.activeConnID(); id != "" && a.store != nil {
+		if p, ok := a.store.Get(id); ok {
+			return p, true
 		}
 	}
-	// 未展开时尝试加载该类型对象
-	if !a.treeLoading[connID] && !a.treePageStarted[connID] {
-		a.ensureTreeLoaded(connID)
+	if a.selConn.ID != "" {
+		return a.selConn, true
 	}
-	return engine.DBObject{}, false
+	return app.ConnProfile{}, false
 }
 
-// ensureTreeLoaded 如果连接还没有加载过对象树，触发一次加载。
-func (a *root) ensureTreeLoaded(connID string) {
-	if a.treeLoading[connID] || a.treePageStarted[connID] {
-		return
+// viewDDLFromEditor 尝试「按 Ctrl+Q 时查光标处的表」：成功返回 true。
+// 失败时不弹任何东西（左侧树选中对象那条路还能走）。
+func (a *root) viewDDLFromEditor() bool {
+	word := editorWordAtCaret(a.code)
+	if word == "" {
+		return false
 	}
-	a.treeLoading[connID] = true
-	// async: 由 sidebar 的 loadTree 处理
-	_ = connID
+	p, ok := a.ddlConnForCaret()
+	if !ok {
+		return false
+	}
+	sess := a.sessionFor(p.ID)
+	if sess == nil {
+		return false
+	}
+	if _, ok := sess.(engine.ObjectDDLer); !ok || !sess.Caps().Has(engine.CapObjectDDL) {
+		return false
+	}
+	// 对象树已加载时先确认光标处的词确实是个表/视图，
+	// 免得把 select / 列名也当表名去查、弹一个「未找到」出来。
+	if known := a.knownObjects(p.ID); known != nil && !known[strings.ToLower(word)] {
+		return false
+	}
+	a.showDDL(p, engine.DBObject{Kind: engine.ObjectTable, Name: word})
+	return true
 }
 
-// editorWordAtCaret 从编辑器的光标位置提取标识符（table/column 名）。
+// knownObjects 返回该连接已加载的对象名（小写）；树还没加载时返回 nil。
+func (a *root) knownObjects(connID string) map[string]bool {
+	m := a.treeData[objectTreeKey(connID, "")]
+	if m == nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, kind := range []engine.ObjectKind{engine.ObjectTable, engine.ObjectView} {
+		for _, o := range m[kind] {
+			out[strings.ToLower(o.Name)] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil // 加载过但还空，当作未知
+	}
+	return out
+}
+
+// editorWordAtCaret 从编辑器的光标位置提取标识符（表名/列名）。
+// 光标可能停在词的任意位置（甚至词中间），所以向前后各扫一次完整词边界。
 func editorWordAtCaret(c *codeEditor) string {
 	text := c.Text()
-	_, endRune := c.CaretRunes()
-	end := runeToByte(text, endRune)
+	_, caretRune := c.CaretRunes()
+	pos := runeToByte(text, caretRune)
 
-	// 1. 向后跳过非标识符字符（处理光标在词尾之后的情况）
-	for end < len(text) && !isIdentRuneStr(text[end:]) {
-		end++
+	end := pos
+	for end < len(text) {
+		r, size := utf8.DecodeRuneInString(text[end:])
+		if !isIdentRune(r) {
+			break
+		}
+		end += size
 	}
-
-	// 2. 向前找标识符边界
-	start := end
+	start := pos
 	for start > 0 {
-		if !utf8.RuneStart(text[start-1]) {
-			start--
-			continue
+		r, size := utf8.DecodeLastRuneInString(text[:start])
+		if !isIdentRune(r) {
+			break
 		}
-		// 检查 [start-1] 位置的 rune
-		if !isIdentRuneStr(text[start-1:]) {
-			break // 遇到非标识符字符，停止
-		}
-		start-- // 包含这个字符，继续往前
+		start -= size
 	}
-
 	if start == end {
 		return ""
 	}
-	word := text[start:end]
-	return word
+	return text[start:end]
 }
 
-// isValidObjectName 检查对象名是否有效（非保留字、纯字母开头）。
+// isIdentRune 判断 rune 是否为 SQL 标识符合法字符（字母数字下划线）。
 func isIdentRune(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' ||
 		r >= '0' && r <= '9' || r == '_'
-}
-
-// isIdentRuneStr 判断字符串以该字节开始的 rune 是否为标识符字符。
-func isIdentRuneStr(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	r, _ := utf8.DecodeRuneInString(s)
-	return isIdentRune(r)
-}
-
-// isValidObjectName 检查对象名是否有效（非保留字、纯字母开头）。
-func isValidObjectName(name string) bool {
-	if name == "" {
-		return false
-	}
-	r := []rune(name)[0]
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
-}
-
-// viewDDLFromEditor 从编辑器光标处的表名触发 DDL 查看。
-func (a *root) viewDDLFromEditor() {
-	word := editorWordAtCaret(a.code)
-	if word == "" {
-		return
-	}
-	a.showDDL(a.selConn, engine.DBObject{Kind: engine.ObjectTable, Name: word})
 }
 
 // ddlViewState 返回 DDL 只读编辑器状态（首次用时创建）：SQL 高亮、可选中复制。

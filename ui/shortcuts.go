@@ -45,10 +45,13 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 	case "toggleResults":
 		a.resultsHidden = !a.resultsHidden
 	case "viewDDL":
+		// 光标处的标识符优先（控制台里写 select * from t 时用光标查 t），
+		// 光标不在词上时才用左侧树选中的对象。
+		if a.viewDDLFromEditor() {
+			return
+		}
 		if a.hasSelObj {
 			a.showDDL(a.selConn, a.selObj)
-		} else if a.canViewDDLFromEditor() {
-			a.viewDDLFromEditor()
 		}
 	}
 }

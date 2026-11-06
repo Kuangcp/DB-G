@@ -6,6 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"db-g/app"
 	"db-g/engine"
 )
 
@@ -87,5 +88,93 @@ func TestCtrlQShowsDDL(t *testing.T) {
 	}
 	if !strings.Contains(a.ddlTitle, "users") {
 		t.Fatalf("ddl title: %q", a.ddlTitle)
+	}
+}
+
+// Ctrl+Q：光标停在编辑器里的表名上，即使左侧树没选中任何对象也要能看 DDL。
+func TestCtrlQFromEditorCaret(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	// 激活控制台绑定到该连接（只连库、不选中任何树节点）。
+	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir()})
+	rec, err := a.mgr.Create(prof.ID, "t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate console")
+	}
+	a.hasSelObj = false
+	a.setActiveText("select * from users;")
+	a.setSelection(len([]rune("select * from use")), len([]rune("select * from use")))
+
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if word := editorWordAtCaret(a.code); word != "users" {
+		t.Fatalf("word at caret: %q", word)
+	}
+	tt.Key(ui.Ctrl, ui.KeyQ)
+	tt.Frame()
+	if !a.ddlOpen {
+		t.Fatal("Ctrl+Q 应打开光标处对象的 DDL 弹窗")
+	}
+	if !strings.Contains(a.ddlTitle, "users") {
+		t.Fatalf("ddl title: %q", a.ddlTitle)
+	}
+	if !strings.Contains(a.ddlText, "CREATE TABLE") {
+		t.Fatalf("ddl text: %q", a.ddlText)
+	}
+}
+
+// 光标停在词的不同位置都要取到整词；不在词上返回空。
+func TestEditorWordAtCaret(t *testing.T) {
+	a := newConsoleRoot(t)
+	text := "select * from category where id = 1;"
+	a.setActiveText(text)
+	cases := []struct {
+		caret int
+		want  string
+	}{
+		{0, "select"},                // 词首
+		{3, "select"},                // 词中
+		{6, "select"},                // 词末（空格前）
+		{7, ""},                      // 空白处
+		{14, "category"},             // 词首
+		{17, "category"},             // 词中
+		{21, "category"},             // 词末
+		{len([]rune(text)) - 1, "1"}, // 数字也算标识符
+	}
+	for _, c := range cases {
+		a.setSelection(c.caret, c.caret)
+		if got := editorWordAtCaret(a.code); got != c.want {
+			t.Fatalf("caret %d: got %q want %q", c.caret, got, c.want)
+		}
+	}
+}
+
+// 对象树已加载、光标处的词不是表/视图时，Ctrl+Q 不弹「未找到」的弹窗。
+func TestCtrlQIgnoresNonTableWord(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{
+		objectTreeKey(prof.ID, ""): {
+			engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "users"}},
+		},
+	}
+	a.setActiveText("select * from users;")
+	a.setSelection(2, 2) // 光标在 select 上
+
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeyQ)
+	tt.Frame()
+	if a.ddlOpen {
+		t.Fatalf("光标在关键字上不该弹 DDL：%q", a.ddlTitle)
 	}
 }
