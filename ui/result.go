@@ -268,13 +268,102 @@ func parseJSONValue(text string) (any, bool) {
 	return nil, false
 }
 
+// jsonToolbar JSON 查看器顶部工具栏：标题 + 展开/收缩全部按钮。
+func (a *root) jsonToolbar(c *ui.Context) {
+	ui.Row(c).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, a.cellViewTitle).Bold()
+		ui.Spacer(c)
+		if iconButtonPlain(c, iconCollapseAll, "收起全部层级到第一层", ui.Transparent).Clicked() {
+			a.collapseAllJSON()
+		}
+		if iconButtonPlain(c, iconExpandAll, "展开全部层级", ui.Transparent).Clicked() {
+			a.expandAllJSON()
+		}
+	})
+}
+
+// expandAllJSON 清空折叠状态，让所有 JSON 节点展开。
+func (a *root) expandAllJSON() {
+	a.cellViewCollapsed = make(map[string]bool)
+}
+
+// collapseAllJSON 只保留第一层展开，其他所有子层级折叠。
+func (a *root) collapseAllJSON() {
+	paths := collectAllPaths(a.cellViewJSON)
+	col := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		// $ .key 或 $ [0] 是根的直接子节点，保留展开
+		// 更深一层的才折叠：需要跳过以 $.key.、$ [i]、$ .key.[j 开头但实际要排除的
+		if isTopLevel(p) {
+			continue
+		}
+		col[p] = true
+	}
+	a.cellViewCollapsed = col
+}
+
+// isTopLevel 判断 path 是否为 JSON 根的直接子节点。
+// 路径格式：$ .key → 第二层（顶层子节点），$[0] → 同上；$.a.b 或 $[0].b → 深层。
+func isTopLevel(path string) bool {
+	rest := strings.TrimPrefix(path, "$")
+	// $ 本身不是子节点
+	if rest == "" {
+		return false
+	}
+	// $.key — 第一个 "." 后面没有更多 "." 且不在 "[" 前
+	if idx := strings.IndexByte(rest, '.'); idx >= 0 {
+		// 检查 "." 之后是否还有 "." 或 "]"
+		after := rest[idx+1:]
+		return !strings.ContainsAny(after, ".[")
+	}
+	// $[i] — 单个 "]" 结尾即为顶层
+	if rest[0] == '[' {
+		closeIdx := strings.IndexByte(rest, ']')
+		if closeIdx < 0 {
+			return false
+		}
+		remaining := rest[closeIdx+1:]
+		return remaining == ""
+	}
+	return false
+}
+
+// collectAllPaths 递归收集 JSON 中所有可折叠节点（map/array）的 path。
+func collectAllPaths(v any) []string {
+	var out []string
+	var walk func(any, string)
+	walk = func(node any, path string) {
+		switch n := node.(type) {
+		case map[string]any:
+			for k, v := range n {
+				p := path + "." + k
+				out = append(out, p)
+				walk(v, p)
+			}
+		case []any:
+			for i, e := range n {
+				p := path + "[" + strconv.Itoa(i) + "]"
+				out = append(out, p)
+				walk(e, p)
+			}
+		}
+	}
+	walk(v, "$")
+	return out
+}
+
 // cellViewer 渲染长文本查看弹窗；JSON 时画可展开/折叠的树。
 func (a *root) cellViewer(c *ui.Context) {
 	if !a.cellViewOpen {
 		return
 	}
 	ui.Modal(c, &a.cellViewOpen, func() {
-		ui.Text(c, a.cellViewTitle).Bold().SingleLine()
+		// 标题栏：文件名 + JSON 树控制按钮
+		if a.cellViewJSONOK {
+			a.jsonToolbar(c)
+		} else {
+			ui.Text(c, a.cellViewTitle).Bold().SingleLine()
+		}
 		ui.ScrollBoth(c).Height(340).Children(func() {
 			if a.cellViewJSONOK {
 				nodes := 0
