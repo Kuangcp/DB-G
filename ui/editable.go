@@ -333,19 +333,20 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 	es := a.editSet()
 	n := es.Count()
 	editable := a.editPlan != nil
-	if editable && ui.Button(c, "编辑格").Clicked() {
-		a.beginEditCurrent(r)
-	}
-	if editable && ui.Button(c, "增行").Clicked() {
-		a.addInsertRow()
-	}
-	if editable && ui.Button(c, "删行").Disabled(n == 0 && len(a.rowsForPlan()) == 0).Clicked() {
-		row := a.displayToResult(r, a.resultRow)
-		a.deleteRow(row)
-	}
-	if editable && ui.Button(c, "撤销改动").Disabled(n == 0).Clicked() {
-		a.editSet().Clear()
-		a.editKey = ""
+	if editable {
+		if iconButton(c, iconSquarePen, "编辑当前格", ui.Transparent).Clicked() {
+			a.beginEditCurrent(r)
+		}
+		if iconButton(c, iconPlus, "新增行", ui.Transparent).Clicked() {
+			a.addInsertRow()
+		}
+		if iconButton(c, iconMinus, "删除当前行", c.Theme().Danger).Disabled(len(a.rowsForPlan()) == 0).Clicked() {
+			a.deleteRow(a.displayToResult(r, a.resultRow))
+		}
+		if iconButton(c, iconUndo, "撤销改动", ui.Transparent).Disabled(n == 0).Clicked() {
+			a.editSet().Clear()
+			a.editKey = ""
+		}
 	}
 	if editable {
 		label := "提交"

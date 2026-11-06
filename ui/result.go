@@ -222,18 +222,20 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	insertRows := len(editSet.Inserts)
 	totalRows := len(displayRows) + insertRows
 
-	// 顶部操作条：复制/查看/取更多/筛选状态。
-	ui.Row(c).Gap(6).Children(func() {
-		if ui.Button(c, "复制").Clicked() {
-			a.copyCurrentCell(c, r)
-		}
-		if ui.Button(c, "查看").Clicked() {
-			a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
-		}
-		if ui.Button(c, "取更多").Disabled(!a.canFetchMore()).Clicked() {
-			a.fetchMore()
-		}
-		a.editToolbar(c, r)
+	// 顶部操作条：复制/查看/取更多/编辑/导出。工具条里的按钮悬停前没有面孔。
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Toolbar(c, func() {
+			if iconButton(c, iconCopy, "复制当前单元格 (Ctrl+C)", ui.Transparent).Clicked() {
+				a.copyCurrentCell(c, r)
+			}
+			if iconButton(c, iconEye, "查看完整内容", ui.Transparent).Clicked() {
+				a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
+			}
+			if iconButton(c, iconChevronDown, "取更多行", ui.Transparent).Disabled(!a.canFetchMore()).Clicked() {
+				a.fetchMore()
+			}
+			a.editToolbar(c, r)
+		}).Label("结果操作")
 		ui.MenuButton(c, "导出…", func(m *ui.Menu) {
 			if m.Item("当前结果 CSV").Chosen() {
 				a.pickExport("csv", false)
@@ -254,7 +256,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		})
 		if a.exportStatus != "" {
 			ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
-			if ui.Button(c, "×").Clicked() {
+			if iconButtonPlain(c, iconClose, "清除导出提示", ui.Transparent).Clicked() {
 				a.exportStatus = ""
 			}
 		}

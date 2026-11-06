@@ -11,7 +11,7 @@ import (
 // tabBar 渲染当前工作区的控制台标签、新建按钮与工作区切换器。
 func (a *root) tabBar(c *ui.Context) {
 	m := a.consoleMgr()
-	ui.Row(c).Gap(6).Children(func() {
+	ui.Toolbar(c, func() {
 		var open []app.ConsoleRecord
 		if m != nil {
 			open = m.Open()
@@ -27,7 +27,7 @@ func (a *root) tabBar(c *ui.Context) {
 				}
 			})
 		}
-		if ui.Button(c, "＋").Disabled(a.sess == nil).Clicked() {
+		if iconButton(c, iconPlus, "新建控制台", ui.Transparent).Disabled(a.sess == nil).Clicked() {
 			a.createConsole()
 		}
 		name := "无工作区"
@@ -37,7 +37,7 @@ func (a *root) tabBar(c *ui.Context) {
 			}
 		}
 		ui.MenuButton(c, name, a.workspaceMenu)
-	})
+	}).Label("控制台标签")
 }
 
 func (a *root) openSourceNames(open []app.ConsoleRecord) map[string]bool {
@@ -83,7 +83,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showSource bool) {
 			a.openModal("delete", rec.ID, rec.Name)
 		}
 	})
-	if ui.Button(c, "×").Clicked() {
+	if iconButtonPlain(c, iconClose, "关闭控制台", ui.Transparent).Clicked() {
 		a.pendingClose = rec.ID
 	}
 }

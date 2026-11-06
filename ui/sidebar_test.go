@@ -509,7 +509,7 @@ func TestSidebarMySQLConnFlow(t *testing.T) {
 		t.Fatalf("stored: %+v", p)
 	}
 	tt.Frame()
-	if err := tt.Click("编辑"); err != nil {
+	if err := tt.Click("编辑连接"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -590,7 +590,7 @@ func TestSidebarCreateConsoleWithoutConnection(t *testing.T) {
 	a.treeExpand[prof.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if err := tt.Click("＋ 新建控制台"); err != nil {
+	if err := tt.Click("新建控制台"); err != nil {
 		t.Fatal("must be clickable without a connection:", err)
 	}
 	if len(a.consoleMgr().ConsolesOf(prof.ID)) != 1 {

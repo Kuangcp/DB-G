@@ -484,8 +484,8 @@ func (a *root) view(c *ui.Context) {
 			a.sidebar(c)
 		}, func() {
 			ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
-				// 顶栏：连接状态 + 执行
-				ui.Row(c).Gap(8).Children(func() {
+				// 顶栏：连接状态 + 操作。工具条里的按钮悬停前没有面孔。
+				ui.Toolbar(c, func() {
 					a.connDot(c)
 					if a.connName != "" {
 						ui.Text(c, a.connName).Bold()
@@ -499,31 +499,31 @@ func (a *root) view(c *ui.Context) {
 						}
 					}
 					ui.Spacer(c)
-					if ui.Button(c, "历史").Clicked() {
-						a.historyOpen = true
-					}
-					if ui.Button(c, "设置").Clicked() {
-						a.requestSettings()
-					}
-					if ui.Button(c, "执行").Disabled(a.currentRuntime().Running() || a.sess == nil).Clicked() {
+					if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.sess == nil).Clicked() {
 						a.execPending = true
 					}
-				})
+					if iconButton(c, iconHistory, "历史", ui.Transparent).Clicked() {
+						a.historyOpen = true
+					}
+					if iconButton(c, iconSettings, "设置", ui.Transparent).Clicked() {
+						a.requestSettings()
+					}
+				}).Label("操作")
 
 				// 标签条 + 工作区切换器
 				a.tabBar(c)
 
 				// 工具行：查找（编辑器自带查找栏；性能预设/信息在独立设置窗口里）
-				ui.Row(c).Gap(6).Children(func() {
+				ui.Toolbar(c, func() {
 					ui.Spacer(c)
-					if ui.Button(c, "查找").Clicked() {
+					if iconButton(c, iconSearch, "查找 (Ctrl+F)", ui.Transparent).Clicked() {
 						a.code.Find()
 					}
-					if ui.Button(c, "格式化").Clicked() {
+					if iconButton(c, iconFormat, "格式化 SQL", ui.Transparent).Clicked() {
 						a.formatActive()
 					}
 					ui.Text(c, "Ctrl+F / Ctrl+Space").FontSize(12).TextColor(c.Theme().TextMuted)
-				})
+				}).Label("编辑器工具")
 
 				// 编辑器 / 结果 分屏
 				ui.SplitVertical(c, &a.resultsHeight, func() {

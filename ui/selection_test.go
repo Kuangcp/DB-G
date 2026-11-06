@@ -70,7 +70,7 @@ func TestExecuteButtonRunsCurrentStatementWithoutSelection(t *testing.T) {
 	if a.hasSelection() {
 		t.Fatal("precondition: no selection")
 	}
-	if err := tt.Click("执行"); err != nil {
+	if err := tt.Click("执行 (Ctrl+Enter)"); err != nil {
 		t.Fatalf("执行 must be clickable without a selection (P1): %v", err)
 	}
 	pollResult(t, a, tt)

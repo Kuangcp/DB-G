@@ -14,17 +14,18 @@ import (
 
 func (a *root) sidebar(c *ui.Context) {
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
-		ui.Row(c).Gap(6).Children(func() {
-			if ui.Button(c, "新建连接").Clicked() {
+		ui.Toolbar(c, func() {
+			if iconButton(c, iconPlug, "新建连接", ui.Transparent).Clicked() {
 				a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
 				a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
 				a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
 			}
-			if ui.Button(c, "刷新").Clicked() {
+			if iconButton(c, iconRefresh, "刷新数据源", ui.Transparent).Clicked() {
 				a.reloadTree()
 				a.checkConnHealth()
 			}
-		})
+			ui.Spacer(c)
+		}).Label("数据源操作")
 		if a.store == nil {
 			ui.Text(c, "左上角「新建连接」开始").TextColor(c.Theme().TextMuted)
 			a.connModal(c)
@@ -79,7 +80,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 			a.toggleExpandConn(p)
 		}
 		ui.Spacer(c)
-		if ui.Button(c, "编辑").Clicked() {
+		if iconButtonPlain(c, iconSquarePen, "编辑连接", ui.Transparent).Clicked() {
 			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
 			a.connFormKind = p.Kind
 			a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
@@ -88,7 +89,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 				a.connFormPort = strconv.Itoa(p.Port)
 			}
 		}
-		if ui.Button(c, "删除").Clicked() {
+		if iconButtonPlain(c, iconTrash, "删除连接", c.Theme().Danger).Clicked() {
 			a.connDeleting, a.connDeleteOpen = p.ID, true
 		}
 	})
@@ -104,17 +105,20 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 	if m == nil {
 		return
 	}
-	ui.Text(c, "控制台").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "控制台").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Spacer(c)
+		if iconButtonPlain(c, iconPlus, "新建控制台", ui.Transparent).Clicked() {
+			rec, err := m.Create(p.ID, "")
+			if err != nil {
+				a.consoleErr = "新建控制台失败: " + err.Error()
+				return
+			}
+			a.pendingActivate = rec.ID
+		}
+	})
 	for _, rec := range m.ConsolesOf(p.ID) {
 		a.consoleRow(c, rec, m.IsOpen(rec.ID))
-	}
-	if ui.Button(c, "＋ 新建控制台").Clicked() {
-		rec, err := m.Create(p.ID, "")
-		if err != nil {
-			a.consoleErr = "新建控制台失败: " + err.Error()
-			return
-		}
-		a.pendingActivate = rec.ID
 	}
 }
 
