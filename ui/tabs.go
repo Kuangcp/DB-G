@@ -66,8 +66,11 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showSource bool) {
 		label += " · " + src
 	}
 	btn := ui.Button(c, label)
+	// 每个标签都先占住 2px 边框的位置，激活时只换颜色：宽度不跳。
+	// 工具条里的按钮平时没有面孔，所以激活态必须自己画出明显的框 + 浅底。
+	btn.Border(2, ui.Transparent)
 	if rec.ID == a.activeConsole {
-		btn.Bold()
+		btn.Border(2, c.Theme().Accent).Background(c.Theme().Accent.Alpha(0.12)).Bold()
 	}
 	if btn.Clicked() {
 		a.pendingActivate = rec.ID
@@ -83,9 +86,6 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showSource bool) {
 			a.openModal("delete", rec.ID, rec.Name)
 		}
 	})
-	if iconButtonPlain(c, iconClose, "关闭控制台", ui.Transparent).Clicked() {
-		a.pendingClose = rec.ID
-	}
 }
 
 // createConsole 在当前连接下新建控制台（默认名），下一帧激活。
