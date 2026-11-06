@@ -65,6 +65,7 @@ type WorkspaceRecord struct {
 type ConnStore struct {
 	mu                sync.Mutex
 	path              string
+	vault             *Vault
 	conns             []ConnProfile
 	activeID          string
 	consoles          []ConsoleRecord
@@ -85,6 +86,12 @@ func DefaultStorePath() string {
 // LoadStore 读取持久化文件；缺失为空表，损坏改名为 .bak 后空表并记警告（改名失败则警告仅记损坏）。
 func LoadStore(path string) *ConnStore {
 	s := &ConnStore{path: path}
+	// 先准备密钥（缺失时生成）：即使配置文件还不存在，后续保存也要能加密。
+	if vault, verr := LoadVault(path); verr != nil {
+		s.warning = "密钥不可用，密码将无法保存: " + verr.Error()
+	} else {
+		s.vault = vault
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -106,6 +113,34 @@ func LoadStore(path string) *ConnStore {
 	s.consoles = file.Consoles
 	s.workspaces = file.Workspaces
 	s.activeWorkspaceID = file.ActiveWorkspaceID
+
+	// 密码解密 + 存量明文迁移。
+	vault := s.vault
+	if vault == nil {
+		return s
+	}
+	migrate := false
+	for i := range s.conns {
+		orig := s.conns[i].Password
+		if orig == "" {
+			continue
+		}
+		plain, derr := vault.Decrypt(orig)
+		if derr != nil {
+			s.conns[i].Password = ""
+			s.warning = "无法解密连接密码（密钥已变更？请重新填写）: " + s.conns[i].Name
+			continue
+		}
+		s.conns[i].Password = plain
+		if !strings.HasPrefix(orig, "enc:v1:") {
+			migrate = true
+		}
+	}
+	if migrate {
+		if err := s.save(); err != nil {
+			s.warning = "密码自动加密回写失败: " + err.Error()
+		}
+	}
 	return s
 }
 
@@ -138,8 +173,24 @@ func (s *ConnStore) Get(id string) (ConnProfile, bool) {
 }
 
 func (s *ConnStore) save() error {
+	// 落盘前加密密码；内存里始终是明文。
+	conns := make([]ConnProfile, len(s.conns))
+	copy(conns, s.conns)
+	for i := range conns {
+		if conns[i].Password == "" {
+			continue
+		}
+		if s.vault == nil {
+			return errors.New("密钥不可用，拒绝以明文写入密码")
+		}
+		enc, err := s.vault.Encrypt(conns[i].Password)
+		if err != nil {
+			return err
+		}
+		conns[i].Password = enc
+	}
 	data, err := json.MarshalIndent(storeFile{
-		Conns:             s.conns,
+		Conns:             conns,
 		ActiveID:          s.activeID,
 		Consoles:          s.consoles,
 		Workspaces:        s.workspaces,
