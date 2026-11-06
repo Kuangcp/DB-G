@@ -113,8 +113,9 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 |---|---|---|
 | 连接档案 / 工作区 / 控制台元数据 / 活动项 | `connections.json` | `ConnStore`；密码 **AES-256-GCM** 加密（密钥 `secret.key`，0600），启动时把存量明文自动加密回写 |
 | 控制台正文 | `consoles/<id>.sql` | 一个控制台一个文件；切标签/执行前/退出前落盘，平时防抖 |
+| 数据源元数据缓存 | `meta/<connID>.json` | `app.MetaCache`；schema/计数/已加载对象页，24h TTL，指纹不含密码/名称；删除连接/改目标地址/重载时清理 |
 | SQL 历史 | `history.jsonl` | 5MB 轮转 |
-| 日志 | `logs/app-YYYYMMDD.log` | JSON Lines，一天一文件，5MB 轮转，0600 |
+| 日志 | `logs/YYYY-MM/YYYY-MM-DD_N.log` | 纯文本（时间/级别/标签/消息/kv），一次启动一个文件，0600 |
 | 编辑器显示设置（字号/字体族） | `editor.json` | `app.EditorPrefs`，改动即时生效并落盘 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
