@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/egoist/mygo"
 
@@ -160,45 +161,89 @@ func (a *root) connModal(c *ui.Context) {
 			title = "编辑连接"
 		}
 		ui.Text(c, title).Bold()
-		ui.RadioGroup(c, func() {
-			ui.Row(c).Gap(8).Children(func() {
-				ui.Radio(c, &a.connFormKind, "sqlite", "SQLite")
-				ui.Radio(c, &a.connFormKind, "mysql", "MySQL")
-				ui.Radio(c, &a.connFormKind, "postgres", "PostgreSQL")
-				ui.Radio(c, &a.connFormKind, "clickhouse", "ClickHouse")
-			})
-		})
-		ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
-		if a.connFormKind != "sqlite" {
-			ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）")
-			ui.Row(c).Gap(6).Children(func() {
-				ui.TextInput(c, &a.connFormHost).Placeholder("主机").Fill()
-				ui.TextInput(c, &a.connFormPort).Placeholder("端口")
-			})
-			ui.Row(c).Gap(6).Children(func() {
-				ui.TextInput(c, &a.connFormUser).Placeholder("用户").Fill()
-				ui.TextInput(c, &a.connFormPass).Placeholder("密码").Password()
-			})
-		} else {
-			ui.Row(c).Gap(6).Children(func() {
-				ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Fill()
-				if ui.Button(c, "浏览…").Clicked() {
-					a.browsePath()
+		// 左右布局：左侧数据源类型导航，右侧配置表单（仿 db-k）。
+		ui.Row(c).Gap(0).Children(func() {
+			ui.Column(c).Width(150).Gap(4).Children(func() {
+				for _, k := range connKinds {
+					btn := ui.Button(c, k.label)
+					if a.connFormKind == k.kind {
+						btn.Bold()
+					}
+					if btn.Clicked() {
+						a.switchConnKind(k.kind)
+					}
 				}
 			})
-		}
-		if a.connFormErr != "" {
-			ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
-		}
-		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
-				a.connFormOpen = false
-			}
-			if ui.PrimaryButton(c, "保存").Clicked() {
-				a.saveConnForm()
-			}
+			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
+			ui.Column(c).Width(430).Padding(0, 12).Gap(6).Children(func() {
+				ui.Text(c, kindLabel(a.connFormKind)+" 连接").Bold()
+				ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
+				if a.connFormKind != "sqlite" {
+					ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）")
+					ui.Row(c).Gap(6).Children(func() {
+						ui.TextInput(c, &a.connFormHost).Placeholder("主机").Fill()
+						ui.TextInput(c, &a.connFormPort).Placeholder("端口")
+					})
+					ui.Row(c).Gap(6).Children(func() {
+						ui.TextInput(c, &a.connFormUser).Placeholder("用户").Fill()
+						ui.TextInput(c, &a.connFormPass).Placeholder("密码").Password()
+					})
+				} else {
+					ui.Row(c).Gap(6).Children(func() {
+						ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Fill()
+						if ui.Button(c, "浏览…").Clicked() {
+							a.browsePath()
+						}
+					})
+				}
+				if a.connFormErr != "" {
+					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
+				}
+				ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+					if ui.Button(c, "取消").Clicked() {
+						a.connFormOpen = false
+					}
+					if ui.PrimaryButton(c, "保存").Clicked() {
+						a.saveConnForm()
+					}
+				})
+			})
 		})
 	})
+}
+
+// connKind 是连接类型导航项。
+type connKind struct{ kind, label string }
+
+var connKinds = []connKind{
+	{"sqlite", "SQLite"},
+	{"mysql", "MySQL"},
+	{"postgres", "PostgreSQL"},
+	{"clickhouse", "ClickHouse"},
+}
+
+func kindLabel(kind string) string {
+	for _, k := range connKinds {
+		if k.kind == kind {
+			return k.label
+		}
+	}
+	return kind
+}
+
+// switchConnKind 切换数据源类型；端口还是旧默认值（或空）时跟随新类型的默认端口。
+func (a *root) switchConnKind(kind string) {
+	old := a.connFormKind
+	a.connFormKind = kind
+	port := strings.TrimSpace(a.connFormPort)
+	if port == "" || port == strconv.Itoa(defaultPort(old)) {
+		if p := defaultPort(kind); p > 0 {
+			a.connFormPort = strconv.Itoa(p)
+		} else {
+			a.connFormPort = ""
+		}
+	}
+	a.connFormErr = ""
 }
 
 func (a *root) deleteModal(c *ui.Context) {

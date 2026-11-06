@@ -733,3 +733,39 @@ func TestQualifiedPreviewName(t *testing.T) {
 		t.Fatalf("unqualified: %q", got)
 	}
 }
+
+func TestConnFormLeftRightNav(t *testing.T) {
+	a := newSidebarRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 900)
+	tt.Frame()
+	if err := tt.Click("新建连接"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, label := range []string{"SQLite", "MySQL", "PostgreSQL", "ClickHouse"} {
+		if !tt.HasText(label) {
+			t.Fatalf("kind nav missing %q: %q", label, tt.Texts())
+		}
+	}
+	if err := tt.Click("PostgreSQL"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.connFormKind != "postgres" {
+		t.Fatalf("kind: %q", a.connFormKind)
+	}
+	if a.connFormPort != "5432" {
+		t.Fatalf("default port must follow the kind: %q", a.connFormPort)
+	}
+	if !tt.HasText("PostgreSQL 连接") {
+		t.Fatalf("right pane title missing: %q", tt.Texts())
+	}
+	// 切到 ClickHouse：端口仍跟随新默认值
+	if err := tt.Click("ClickHouse"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.connFormPort != "9000" {
+		t.Fatalf("clickhouse default port: %q", a.connFormPort)
+	}
+}
