@@ -80,8 +80,8 @@ func TestCloseActiveSwitchesEditorContent(t *testing.T) {
 	if got := a.activeText(); got != "SELECT 'A'" {
 		t.Fatalf("editor must show A after closing B, got %q", got)
 	}
-	if !tt.HasText("甲") || tt.HasText("乙") {
-		t.Fatalf("tab bar stale: %q", tt.Texts())
+	if tt.HasText("乙") {
+		t.Fatalf("closed console still in tab bar: %q", tt.Texts())
 	}
 }
 

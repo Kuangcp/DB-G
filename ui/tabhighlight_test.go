@@ -1,17 +1,14 @@
 package ui
 
 import (
-	"image"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
 
-// borderPixel 取标签按钮左边框上的像素：文字左缘往左 11px
-// （按钮内边距 10px + 边框 2px 的内侧一列）。
-func borderPixel(img *image.RGBA, r ui.Rect) (uint8, uint8, uint8) {
-	p := img.RGBAAt(int(r.X)-11, int(r.Y)+int(r.H)/2)
-	return p.R, p.G, p.B
+// tabBox 是标签文字周围的一圈，用来找激活标签底部的 accent 线。
+func tabBox(r ui.Rect) ui.Rect {
+	return ui.Rect{X: r.X - 6, Y: r.Y - 6, W: r.W + 12, H: r.H + 18}
 }
 
 // newTabRoot 建一个有两个控制台、第一个已激活的根状态。
@@ -62,8 +59,8 @@ func TestTabBarHasNoCloseButton(t *testing.T) {
 	}
 }
 
-// 激活的标签有 accent 边框，未激活的没有。
-func TestTabBarActiveTabHasAccentBorder(t *testing.T) {
+// 激活标签的底部有 accent 线，未激活的没有。
+func TestTabBarActiveTabHasAccentLine(t *testing.T) {
 	_, tt, accent := newTabRoot(t)
 	img := tt.Image()
 	active, ok := tt.Find("查询一")
@@ -74,17 +71,16 @@ func TestTabBarActiveTabHasAccentBorder(t *testing.T) {
 	if !ok {
 		t.Fatal("inactive tab missing")
 	}
-	r, g, b := borderPixel(img, active)
-	if uint8(r) != accent.R || uint8(g) != accent.G || uint8(b) != accent.B {
-		t.Fatalf("激活标签的边框应是 accent(%d,%d,%d)，实际 (%d,%d,%d)", accent.R, accent.G, accent.B, r, g, b)
+	if !rectHasColor(img, tabBox(active), accent) {
+		t.Fatal("active tab should show an accent line")
 	}
-	if r, g, b := borderPixel(img, inactive); uint8(r) == accent.R && uint8(g) == accent.G && uint8(b) == accent.B {
-		t.Fatalf("未激活标签不该有 accent 边框，实际 (%d,%d,%d)", r, g, b)
+	if rectHasColor(img, tabBox(inactive), accent) {
+		t.Fatal("inactive tab should have no accent line")
 	}
 }
 
-// 每个标签都预留了边框的位置：切换激活项时标签尺寸与位置不动，不会跳。
-func TestTabBarActiveBorderKeepsLayout(t *testing.T) {
+// 每个标签都预留了底部线的位置：切换激活项时标签尺寸与位置不动，不会跳。
+func TestTabBarActiveTabKeepsLayout(t *testing.T) {
 	a, tt, accent := newTabRoot(t)
 	before1, _ := tt.Find("查询一")
 	before2, _ := tt.Find("查询二")
@@ -101,12 +97,11 @@ func TestTabBarActiveBorderKeepsLayout(t *testing.T) {
 	if before1 != after1 || before2 != after2 {
 		t.Fatalf("切换激活标签后布局动了:\n before %v %v\n after  %v %v", before1, before2, after1, after2)
 	}
-	// 现在第二个才是高亮的，第一个回到无边框。
 	img := tt.Image()
-	if r, g, b := borderPixel(img, after2); uint8(r) != accent.R || uint8(g) != accent.G || uint8(b) != accent.B {
-		t.Fatalf("切换后第二个标签应是 accent 边框，实际 (%d,%d,%d)", r, g, b)
+	if !rectHasColor(img, tabBox(after2), accent) {
+		t.Fatal("second tab should now show the accent line")
 	}
-	if r, g, b := borderPixel(img, after1); uint8(r) == accent.R && uint8(g) == accent.G && uint8(b) == accent.B {
-		t.Fatalf("第一个标签已不是激活项，不该有 accent 边框")
+	if rectHasColor(img, tabBox(after1), accent) {
+		t.Fatal("first tab should no longer show the accent line")
 	}
 }

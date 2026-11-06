@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -43,11 +44,24 @@ func TestTabBarShowsWorkspaceMembers(t *testing.T) {
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if !tt.HasText("查询一") {
+	// 一个数据源只打开一个控制台：标签只显示数据源名。
+	if !tt.HasText("本地") {
 		t.Fatalf("tab missing: %q", tt.Texts())
+	}
+	if tt.HasText("查询一") {
+		t.Fatalf("single console should omit its name: %q", tt.Texts())
 	}
 	if !tt.HasText("默认") {
 		t.Fatalf("workspace switcher missing: %q", tt.Texts())
+	}
+
+	// 同一个数据源再开一个控制台：两个标签都显示「数据源 / 控制台」。
+	if _, err := a.consoleMgr().Create(prof.ID, "查询二"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("查询一") || !tt.HasText("查询二") {
+		t.Fatalf("console names should show with two open consoles: %q", tt.Texts())
 	}
 }
 
@@ -276,5 +290,56 @@ func TestCtrlSSavesActiveConsole(t *testing.T) {
 	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir()}.Read(rec.ID)
 	if err != nil || text != "SELECT 'saved'" {
 		t.Fatalf("Ctrl+S must flush the console: %q %v", text, err)
+	}
+}
+
+func TestTabBarOverflowMenu(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	m := a.consoleMgr()
+	var last app.ConsoleRecord
+	for i := 1; i <= 10; i++ {
+		rec, err := m.Create(prof.ID, fmt.Sprintf("查询%02d", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = rec
+	}
+	tt := ui.NewTester(rootView(a), 760, 700)
+	tt.Frame()
+	if _, ok := tt.Find("More"); !ok {
+		t.Fatalf("窄窗口应出现标签溢出菜单: %q", tt.Texts())
+	}
+	// 第一个标签仍然可见；+ 与工作区切换器不参与标签溢出，也必须可见。
+	if first, ok := tt.Find("查询01"); !ok || first.X < 0 || first.X > 760 {
+		t.Fatalf("第一个标签应留在可视区: %v %v", first, ok)
+	}
+	if _, ok := tt.Find("新建控制台"); !ok {
+		t.Fatal("new console button must stay visible when tabs overflow")
+	}
+	if !tt.HasText("默认") {
+		t.Fatalf("workspace switcher must stay visible: %q", tt.Texts())
+	}
+	if err := tt.Click("More"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	want := "本地 / 查询10"
+	found := false
+	for _, item := range tt.Menu() {
+		if item == want {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("溢出菜单缺少 %q: %v", want, tt.Menu())
+	}
+	if err := tt.ChooseMenuItem(want); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.activeConsole != last.ID {
+		t.Fatalf("overflow item did not activate: %q", a.activeConsole)
 	}
 }

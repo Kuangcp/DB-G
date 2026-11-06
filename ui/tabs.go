@@ -9,69 +9,87 @@ import (
 )
 
 // tabBar 渲染当前工作区的控制台标签、新建按钮与工作区切换器。
+// 标签放进 Toolbar，由它负责「放不下的收进 More 菜单」；+ 与工作区切换器
+// 在外层 Row 里，永远可见，不参与标签溢出。
 func (a *root) tabBar(c *ui.Context) {
 	m := a.consoleMgr()
-	ui.Toolbar(c, func() {
-		var open []app.ConsoleRecord
-		if m != nil {
-			open = m.Open()
+	var open []app.ConsoleRecord
+	if m != nil {
+		open = m.Open()
+	}
+	counts := map[string]int{}
+	for _, rec := range open {
+		counts[rec.ConnectionID]++
+	}
+	name := "无工作区"
+	if m != nil {
+		if ws, ok := m.ActiveWorkspace(); ok {
+			name = ws.Name
 		}
+	}
+	ui.Row(c).AlignItems(ui.Center).Gap(6).FillWidth().Children(func() {
 		if len(open) == 0 {
-			ui.Text(c, "在左侧数据源下新建或打开控制台").TextColor(c.Theme().TextMuted).FontSize(12).SingleLine()
+			ui.Text(c, "在左侧数据源下新建或打开控制台").TextColor(c.Theme().TextMuted).FontSize(11.5).SingleLine()
 			ui.Spacer(c)
 		} else {
-			multiSource := len(a.openSourceNames(open)) > 1
-			ui.ScrollHorizontal(c).Grow(1).Children(func() {
+			ui.Toolbar(c, func() {
 				for _, rec := range open {
-					a.tab(c, rec, multiSource)
+					a.tab(c, rec, counts[rec.ConnectionID] > 1)
 				}
-			})
+			}).Padding(0).Grow(1).Label("控制台标签")
 		}
-		if iconButton(c, iconPlus, "新建控制台", ui.Transparent).Disabled(a.activeConnID() == "").Clicked() {
-			a.createConsole()
-		}
-		name := "无工作区"
-		if m != nil {
-			if ws, ok := m.ActiveWorkspace(); ok {
-				name = ws.Name
+		ui.Toolbar(c, func() {
+			if iconButton(c, iconPlus, "新建控制台", ui.Transparent).Disabled(a.activeConnID() == "").Clicked() {
+				a.createConsole()
 			}
-		}
-		ui.MenuButton(c, name, a.workspaceMenu)
-	}).Label("控制台标签")
+			ui.MenuButton(c, name, a.workspaceMenu)
+		}).Padding(0).Shrink(0)
+	})
 }
 
-func (a *root) openSourceNames(open []app.ConsoleRecord) map[string]bool {
-	names := map[string]bool{}
-	for _, rec := range open {
-		if p, ok := a.store.Get(rec.ConnectionID); ok {
-			names[p.Name] = true
-		} else {
-			names[rec.ConnectionID] = true
-		}
-	}
-	return names
-}
-
-func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showSource bool) {
+// tab 是一个控制台标签：数据源名在前，控制台名在后且字号更小；
+// 当前工作区里这个数据源只打开一个控制台时，省略控制台名。
+func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 	m := a.consoleMgr()
-	label := rec.Name
-	if m != nil && m.Dirty(rec.ID) {
+	t := c.Theme()
+	src := rec.ConnectionID
+	if p, ok := a.store.Get(rec.ConnectionID); ok {
+		src = p.Name
+	}
+	dirty := m != nil && m.Dirty(rec.ID)
+	label := src
+	if showConsole {
+		label += " / " + rec.Name
+	}
+	if dirty {
 		label = "● " + label
 	}
-	if showSource {
-		src := rec.ConnectionID
-		if p, ok := a.store.Get(rec.ConnectionID); ok {
-			src = p.Name
+	active := rec.ID == a.activeConsole
+	btn := ui.ButtonBase(c).Label(label).Gap(4).Height(t.Space(5.5)).
+		Padding(1, 6).Radius(t.Space(1)).
+		BorderWidth(0, 0, 2, 0).BorderColor(ui.Transparent)
+	if active {
+		btn.BorderColor(t.Accent).Background(t.Accent.Alpha(0.10))
+	} else if btn.Hovered() {
+		btn.Background(t.SurfaceHover)
+	}
+	btn.Children(func() {
+		if dirty {
+			ui.Text(c, "●").FontSize(9).TextColor(t.Accent)
 		}
-		label += " · " + src
-	}
-	btn := ui.Button(c, label)
-	// 每个标签都先占住 2px 边框的位置，激活时只换颜色：宽度不跳。
-	// 工具条里的按钮平时没有面孔，所以激活态必须自己画出明显的框 + 浅底。
-	btn.Border(2, ui.Transparent)
-	if rec.ID == a.activeConsole {
-		btn.Border(2, c.Theme().Accent).Background(c.Theme().Accent.Alpha(0.12)).Bold()
-	}
+		srcText := ui.Text(c, src).FontSize(11.5).SingleLine()
+		if active {
+			srcText.Bold()
+		}
+		if showConsole {
+			ui.Text(c, "/").FontSize(9.5).TextColor(t.TextMuted)
+			col := t.TextMuted
+			if active {
+				col = t.Text
+			}
+			ui.Text(c, rec.Name).FontSize(9.5).TextColor(col).SingleLine()
+		}
+	})
 	if btn.Clicked() {
 		a.pendingActivate = rec.ID
 	}
