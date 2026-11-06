@@ -19,6 +19,7 @@ func (a *root) sidebar(c *ui.Context) {
 				a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
 				a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
 				a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
+				a.connFormParams, a.connProto = "", 0
 				a.resetConnTest()
 			}
 			if iconButton(c, iconRefresh, "刷新数据源", ui.Transparent).Clicked() {
@@ -89,6 +90,8 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 			if p.Port > 0 {
 				a.connFormPort = strconv.Itoa(p.Port)
 			}
+			a.connFormParams = p.Params
+			a.connProto = connProtoIndex(p.Protocol)
 			a.resetConnTest()
 		}
 		if iconButtonPlain(c, iconTrash, "删除连接", c.Theme().Danger).Clicked() {
@@ -195,6 +198,18 @@ func (a *root) connModal(c *ui.Context) {
 						ui.TextInput(c, &a.connFormUser).Placeholder("用户").Fill()
 						ui.TextInput(c, &a.connFormPass).Placeholder("密码").Password()
 					})
+					if a.connFormKind == "clickhouse" {
+						// 协议决定 DSN 的 scheme，也决定默认端口：native 9000、
+						// HTTP 8123、HTTPS 8443。填错端口会握手失败。
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							ui.Text(c, "协议").FontSize(12).TextColor(c.Theme().TextMuted)
+							if ui.Segmented(c, &a.connProto, "Native", "HTTP", "HTTPS").Changed() {
+								a.applyConnProto()
+							}
+							ui.Spacer(c)
+						})
+					}
+					ui.TextInput(c, &a.connFormParams).Placeholder(paramsPlaceholder(a.connFormKind))
 				} else {
 					ui.Row(c).Gap(6).Children(func() {
 						ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Fill()
@@ -291,7 +306,13 @@ func (a *root) switchConnKind(kind string) {
 	a.connFormKind = kind
 	port := strings.TrimSpace(a.connFormPort)
 	if port == "" || port == strconv.Itoa(defaultPort(old)) {
-		if p := defaultPort(kind); p > 0 {
+		var p int
+		if kind == "clickhouse" {
+			p = clickhouseProtoPort(a.connProto)
+		} else {
+			p = defaultPort(kind)
+		}
+		if p > 0 {
 			a.connFormPort = strconv.Itoa(p)
 		} else {
 			a.connFormPort = ""
@@ -349,7 +370,74 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 	p.User = a.connFormUser
 	p.Password = a.connFormPass
 	p.Database = a.connFormDB
+	p.Params = strings.TrimSpace(a.connFormParams)
+	if a.connFormKind == "clickhouse" {
+		p.Protocol = connProtoName(a.connProto)
+	}
 	return p, nil
+}
+
+// connProtoName 把协议下拉的下标换成档案里的协议名。
+func connProtoName(idx int) string {
+	switch idx {
+	case 1:
+		return "http"
+	case 2:
+		return "https"
+	}
+	return "native"
+}
+
+// connProtoIndex 是 connProtoName 的反向：编辑连接时把档案读回下拉。
+func connProtoIndex(name string) int {
+	switch strings.ToLower(name) {
+	case "http":
+		return 1
+	case "https":
+		return 2
+	}
+	return 0
+}
+
+// clickhouseProtoPort 返回 ClickHouse 各协议的默认端口。
+func clickhouseProtoPort(idx int) int {
+	switch idx {
+	case 1:
+		return 8123
+	case 2:
+		return 8443
+	}
+	return 9000
+}
+
+// applyConnProto 换协议后把端口跟着换成该协议的默认端口；用户自己填的端口不动。
+func (a *root) applyConnProto() {
+	port := strings.TrimSpace(a.connFormPort)
+	old := false
+	for _, p := range []int{9000, 8123, 8443} {
+		if port == "" || port == strconv.Itoa(p) {
+			old = true
+			break
+		}
+	}
+	if old {
+		a.connFormPort = strconv.Itoa(clickhouseProtoPort(a.connProto))
+	}
+	a.connFormErr = ""
+	a.resetConnTest()
+}
+
+// paramsPlaceholder 返回各数据源常用的连接参数示例。
+func paramsPlaceholder(kind string) string {
+	switch kind {
+	case "mysql":
+		return "连接参数（可选）：tls=true&parseTime=true"
+	case "postgres":
+		return "连接参数（可选）：sslmode=require"
+	case "clickhouse":
+		return "连接参数（可选）：compress=0&secure=false"
+	}
+	return "连接参数（可选）：key=value"
 }
 
 func (a *root) saveConnForm() {

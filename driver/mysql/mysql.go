@@ -54,6 +54,14 @@ func openSession(p engine.Profile) (engine.Session, error) {
 		cfg.Params = map[string]string{}
 	}
 	cfg.Params["charset"] = "utf8mb4"
+	// 额外连接参数排在默认值之后，用户想改 charset/parseTime 之类能覆盖掉。
+	params, err := engine.Params(p.Params)
+	if err != nil {
+		return nil, fmt.Errorf("mysql: %w", err)
+	}
+	for k, v := range params {
+		cfg.Params[k] = v
+	}
 	return &session{cfg: cfg}, nil
 }
 

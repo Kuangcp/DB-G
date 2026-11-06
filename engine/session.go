@@ -16,6 +16,8 @@ type Profile struct {
 	User     string // mysql：用户
 	Password string // mysql：密码
 	Database string // mysql：数据库（可空）
+	Protocol string // clickhouse：连接协议，"native"（默认）/ "http" / "https"
+	Params   string // 额外连接参数，key=value，见 Params
 }
 
 // Session 是协议无关的数据源会话契约；实现由 driver 包提供。

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"strconv"
 	"testing"
@@ -68,5 +69,32 @@ func TestPostgresIntegration(t *testing.T) {
 	}
 	if !foundPK {
 		t.Fatalf("pk not detected: %+v", cols)
+	}
+}
+
+func TestOpenSessionMergesParams(t *testing.T) {
+	s, err := openSession(engine.Profile{
+		Kind: "postgres", Host: "db.example", Port: 5433, User: "u", Database: "app",
+		Params: "sslmode=require&application_name=db-g",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dsn := s.(*session).dsn
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := u.Query().Get("sslmode"); got != "require" {
+		t.Fatalf("用户的参数要覆盖默认的 sslmode=disable，got %q (%q)", got, dsn)
+	}
+	if got := u.Query().Get("application_name"); got != "db-g" {
+		t.Fatalf("application_name: %q (%q)", got, dsn)
+	}
+}
+
+func TestOpenSessionBadParams(t *testing.T) {
+	if _, err := openSession(engine.Profile{Kind: "postgres", Host: "h", Port: 1, Params: "nope"}); err == nil {
+		t.Fatal("bad params must fail")
 	}
 }

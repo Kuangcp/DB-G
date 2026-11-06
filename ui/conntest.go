@@ -38,10 +38,7 @@ func (a *root) testConnForm() {
 	a.connTestMsg, a.connTestErr, a.connTestBusy = "测试中…", false, true
 	probe := func() (string, bool) {
 		start := time.Now()
-		sess, err := engine.Open(engine.Profile{
-			Kind: p.Kind, Name: p.Name, DSN: p.Path,
-			Host: p.Host, Port: p.Port, User: p.User, Password: p.Password, Database: p.Database,
-		})
+		sess, err := engine.Open(engineProfile(p))
 		if err != nil {
 			return "失败：" + err.Error(), true
 		}
@@ -89,6 +86,12 @@ func connFormSummary(p app.ConnProfile) string {
 	}
 	if p.User != "" {
 		lines = append(lines, "用户: "+p.User)
+	}
+	if p.Protocol != "" {
+		lines = append(lines, "协议: "+p.Protocol)
+	}
+	if p.Params != "" {
+		lines = append(lines, "参数: "+p.Params)
 	}
 	return strings.Join(lines, "\n")
 }

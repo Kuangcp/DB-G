@@ -16,12 +16,19 @@ func (a *root) openSQLite(path string) error {
 	return a.openConn(app.ConnProfile{Name: filepath.Base(path), Kind: "sqlite", Path: path})
 }
 
-func (a *root) openConn(p app.ConnProfile) error {
-	app.LogInfo("conn", "open", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path))
-	sess, err := engine.Open(engine.Profile{
+// engineProfile 把连接档案翻成引擎的 Profile：档案多出来的协议和连接参数在这里
+// 一并带上，三处打开连接（正常打开/健康检查/测试连接）都用它。
+func engineProfile(p app.ConnProfile) engine.Profile {
+	return engine.Profile{
 		Kind: p.Kind, Name: p.Name, DSN: p.Path,
 		Host: p.Host, Port: p.Port, User: p.User, Password: p.Password, Database: p.Database,
-	})
+		Protocol: p.Protocol, Params: p.Params,
+	}
+}
+
+func (a *root) openConn(p app.ConnProfile) error {
+	app.LogInfo("conn", "open", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path))
+	sess, err := engine.Open(engineProfile(p))
 	if err != nil {
 		a.connErr = err.Error()
 		a.failedConnID = p.ID

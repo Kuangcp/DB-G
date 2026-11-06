@@ -38,6 +38,8 @@ type root struct {
 	connFormUser   string
 	connFormPass   string
 	connFormDB     string
+	connFormParams string
+	connProto      int    // ClickHouse 协议：0 native / 1 http / 2 https
 	connTestMsg    string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
 	connTestErr    bool
 	connTestBusy   bool

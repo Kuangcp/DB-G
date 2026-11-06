@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"db-g/engine"
@@ -143,5 +144,32 @@ func TestBeginRequiresOpenSession(t *testing.T) {
 	}
 	if _, err := tr.Begin(context.Background()); err == nil {
 		t.Fatal("Begin without an open session must fail")
+	}
+}
+
+func TestOpenSessionMergesParams(t *testing.T) {
+	s, err := openSession(engine.Profile{
+		Kind: "mysql", Host: "db.example", Port: 3306, User: "root", Database: "app",
+		Params: "tls=true&parseTime=false&charset=latin1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := s.(*session).cfg
+	if cfg.Params["tls"] != "true" {
+		t.Fatalf("tls: %v", cfg.Params)
+	}
+	if cfg.Params["charset"] != "latin1" {
+		t.Fatalf("用户参数要覆盖默认 charset，got %v", cfg.Params)
+	}
+	dsn := cfg.FormatDSN()
+	if !strings.Contains(dsn, "tls=true") || !strings.Contains(dsn, "charset=latin1") {
+		t.Fatalf("dsn: %q", dsn)
+	}
+}
+
+func TestOpenSessionBadParams(t *testing.T) {
+	if _, err := openSession(engine.Profile{Kind: "mysql", Host: "h", Port: 3306, Params: "nope"}); err == nil {
+		t.Fatal("bad params must fail")
 	}
 }

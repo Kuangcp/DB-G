@@ -26,6 +26,10 @@ type ConnProfile struct {
 	User     string `json:"user,omitempty"`
 	Password string `json:"password,omitempty"`
 	Database string `json:"database,omitempty"`
+	// Protocol 只有 ClickHouse 用：native（默认）/ http / https，决定 DSN 的 scheme。
+	Protocol string `json:"protocol,omitempty"`
+	// Params 是额外的连接参数，key=value，如 compress=0&secure=true。
+	Params string `json:"params,omitempty"`
 }
 
 // ConsoleRecord 是一个命名控制台的元数据；正文存在它绑定的 .sql 文件里。

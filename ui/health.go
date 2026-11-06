@@ -12,10 +12,7 @@ import (
 func probeConn(p app.ConnProfile) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	sess, err := engine.Open(engine.Profile{
-		Kind: p.Kind, Name: p.Name, DSN: p.Path,
-		Host: p.Host, Port: p.Port, User: p.User, Password: p.Password, Database: p.Database,
-	})
+	sess, err := engine.Open(engineProfile(p))
 	if err != nil {
 		return "fail: " + err.Error()
 	}

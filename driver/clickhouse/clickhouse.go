@@ -31,10 +31,23 @@ type session struct {
 	curCancel atomic.Pointer[context.CancelFunc]
 }
 
+// schemeFor 把连接协议换成 DSN 的 scheme：clickhouse-go 靠它决定走 native 还是
+// HTTP 协议（见 clickhouse_options.go 的 ParseDSN），端口填错就握手失败。
+func schemeFor(protocol string) string {
+	switch strings.ToLower(strings.TrimSpace(protocol)) {
+	case "http":
+		return "http"
+	case "https":
+		return "https"
+	}
+	return "clickhouse"
+}
+
 func openSession(p engine.Profile) (engine.Session, error) {
 	dsn := p.DSN
 	if dsn == "" {
-		u := url.URL{Scheme: "clickhouse", Host: fmt.Sprintf("%s:%d", p.Host, p.Port)}
+		scheme := schemeFor(p.Protocol)
+		u := url.URL{Scheme: scheme, Host: fmt.Sprintf("%s:%d", p.Host, p.Port)}
 		if p.User != "" {
 			if p.Password != "" {
 				u.User = url.UserPassword(p.User, p.Password)
@@ -43,6 +56,21 @@ func openSession(p engine.Profile) (engine.Session, error) {
 			}
 		}
 		u.Path = "/" + p.Database
+		params, err := engine.Params(p.Params)
+		if err != nil {
+			return nil, fmt.Errorf("clickhouse: %w", err)
+		}
+		q := url.Values{}
+		for k, v := range params {
+			q.Set(k, v)
+		}
+		// https 的 scheme 要求 DSN 里有 secure=true，否则 clickhouse-go 拒绝解析。
+		if scheme == "https" {
+			q.Set("secure", "true")
+		}
+		if len(q) > 0 {
+			u.RawQuery = q.Encode()
+		}
 		dsn = u.String()
 	}
 	return &session{dsn: dsn}, nil

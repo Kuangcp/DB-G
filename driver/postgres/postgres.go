@@ -44,7 +44,16 @@ func openSession(p engine.Profile) (engine.Session, error) {
 			}
 		}
 		u.Path = "/" + p.Database
-		dsn = u.String() + "?sslmode=disable"
+		q := url.Values{"sslmode": {"disable"}} // 默认不加密，用户可以用参数覆盖
+		params, err := engine.Params(p.Params)
+		if err != nil {
+			return nil, fmt.Errorf("postgres: %w", err)
+		}
+		for k, v := range params {
+			q.Set(k, v)
+		}
+		u.RawQuery = q.Encode()
+		dsn = u.String()
 	}
 	return &session{dsn: dsn}, nil
 }
