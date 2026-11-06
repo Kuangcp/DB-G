@@ -224,7 +224,7 @@ func (a *root) connModal(c *ui.Context) {
 func (a *root) connKindRow(c *ui.Context, k connKind) {
 	t := c.Theme()
 	selected := a.connFormKind == k.kind
-	row := ui.ButtonBase(c).Label(k.label).Padding(10, 10).Gap(10).AlignItems(ui.Center)
+	row := ui.ButtonBase(c).Label(k.label).Padding(10, 10).Gap(10).Justify(ui.Start).AlignItems(ui.Center)
 	row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
 	switch {
 	case selected:
