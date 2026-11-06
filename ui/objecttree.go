@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -655,14 +654,17 @@ func (a *root) canViewDDLFromEditor() bool {
 		return false
 	}
 	word := editorWordAtCaret(a.code)
+	app.LogInfo("ddl", "ctrl+q word from editor", "word", word, "conn", a.selConn.ID)
 	if word == "" || !isValidObjectName(word) {
 		return false
 	}
 	sess := a.sessionFor(a.selConn.ID)
 	if sess == nil {
+		app.LogWarn("ddl", "no session for ctrl+q", "conn", a.selConn.ID)
 		return false
 	}
 	_, ok := sess.(engine.ObjectDDLer)
+	app.LogInfo("ddl", "ctrl+q objectddler check", "ok", ok, "caps", sess.Caps())
 	return ok && sess.Caps().Has(engine.CapObjectDDL)
 }
 
@@ -697,41 +699,47 @@ func (a *root) ensureTreeLoaded(connID string) {
 func editorWordAtCaret(c *codeEditor) string {
 	text := c.Text()
 	_, endRune := c.CaretRunes()
-	// 转回字节偏移
 	end := runeToByte(text, endRune)
-	// 向前找标识符边界
-	start := end
-	for start > 0 && isIdentRune(runeAtByte(text, start)) {
-		// 往前跳一个 rune
-		for start > 0 && !utf8.RuneStart(text[start-1]) {
-			start--
-		}
-		if start > 0 {
-			start--
-		}
+
+	// 1. 向后跳过非标识符字符（处理光标在词尾之后的情况）
+	for end < len(text) && !isIdentRuneStr(text[end:]) {
+		end++
 	}
+
+	// 2. 向前找标识符边界
+	start := end
+	for start > 0 {
+		if !utf8.RuneStart(text[start-1]) {
+			start--
+			continue
+		}
+		// 检查 [start-1] 位置的 rune
+		if !isIdentRuneStr(text[start-1:]) {
+			break // 遇到非标识符字符，停止
+		}
+		start-- // 包含这个字符，继续往前
+	}
+
 	if start == end {
 		return ""
 	}
-	word := strings.TrimSpace(text[start:end])
+	word := text[start:end]
 	return word
 }
 
-// runeAtByte 返回 s[off] 位置的 rune（不移动指针）。
-func runeAtByte(s string, off int) rune {
-	for i := 0; i < len(s); i++ {
-		r, size := utf8.DecodeRuneInString(s[i:])
-		if i+size > off {
-			return r
-		}
-	}
-	return 0
-}
-
-// isIdentRune 判断 rune 是否为 SQL 标识符合法字符（字母数字下划线）。
+// isValidObjectName 检查对象名是否有效（非保留字、纯字母开头）。
 func isIdentRune(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' ||
 		r >= '0' && r <= '9' || r == '_'
+}
+
+// isIdentRuneStr 判断字符串以该字节开始的 rune 是否为标识符字符。
+func isIdentRuneStr(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	r, _ := utf8.DecodeRuneInString(s)
+	return isIdentRune(r)
 }
 
 // isValidObjectName 检查对象名是否有效（非保留字、纯字母开头）。
