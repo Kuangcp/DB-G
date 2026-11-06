@@ -40,11 +40,12 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	if a.editSets[id] == nil {
 		a.editSets[id] = app.NewEditSet()
 	}
-	if a.sess == nil || !a.sess.Caps().Has(engine.CapEditableResult) {
+	sess := a.activeSession()
+	if sess == nil || !sess.Caps().Has(engine.CapEditableResult) {
 		a.readonlyReason = "当前数据源不支持写操作"
 		return
 	}
-	if _, ok := a.sess.(engine.Transactional); !ok {
+	if _, ok := sess.(engine.Transactional); !ok {
 		a.readonlyReason = "当前数据源不支持事务"
 		return
 	}
@@ -171,7 +172,7 @@ func (a *root) applyEditsSync() error {
 	if len(ops) == 0 {
 		return errors.New("没有实际改动（值与原来相同或行已被删除）")
 	}
-	txer, ok := a.sess.(engine.Transactional)
+	txer, ok := a.activeSession().(engine.Transactional)
 	if !ok {
 		return errors.New("当前数据源不支持事务")
 	}
@@ -236,7 +237,8 @@ func (a *root) applyConfirmedEdits() {
 // refreshResult 重跑最近一次语句（刷新结果，保持排序/筛选与分页状态）。
 func (a *root) refreshResult() {
 	sql := a.lastExecSQL
-	if sql == "" || a.sess == nil {
+	sess := a.activeSession()
+	if sql == "" || sess == nil {
 		return
 	}
 	id := a.currentRuntimeID()
@@ -254,7 +256,7 @@ func (a *root) refreshResult() {
 		}
 		apply()
 	})
-	rt.Run(a.sess, sql)
+	rt.Run(sess, sql)
 }
 
 // editCellModal 渲染单元格编辑弹窗。

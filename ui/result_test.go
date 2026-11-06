@@ -82,8 +82,8 @@ func TestResultPaneErrorAndStop(t *testing.T) {
 	}
 
 	a.con.SetOutcome(nil, "")
-	a.setSession("test", blockingFake{})
-	if !a.con.Run(a.sess, "SELECT 1") {
+	a.testSetSession("test", blockingFake{})
+	if !a.con.Run(a.sessionFor("test"), "SELECT 1") {
 		t.Fatal("run must start")
 	}
 	tt.Frame()
@@ -219,7 +219,7 @@ func TestResultPaneRendersTextBytes(t *testing.T) {
 
 func TestResultCopyRowInsertViaMenu(t *testing.T) {
 	a := openForSelection(t)
-	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice')"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice')"); err != nil {
 		t.Fatal(err)
 	}
 	a.setActiveText("SELECT id, name FROM users ORDER BY id")

@@ -29,8 +29,7 @@ func (a *root) activeConsoleConnID() string {
 			return rec.ConnectionID
 		}
 	}
-	// 没有控制台（临时缓冲执行）时退回到当前会话的连接，补全/写操作仍可用。
-	return a.sessConnID
+	return ""
 }
 
 // completionItems 返回某连接的候选：缓存命中用组装好的，否则只有词表。
@@ -47,9 +46,9 @@ func (a *root) ensureCatalog(connID string) {
 	if !a.catalog.begin(connID) {
 		return
 	}
-	// 在主线程捕获会话，后台协程只用捕获到的接口值（不读 a.sess，避免数据竞争）。
-	sess := a.sess
-	if sess == nil || a.sessConnID != connID {
+	// 在主线程捕获会话，后台协程只用捕获到的接口值（不读会话表，避免数据竞争）。
+	sess := a.sessionFor(connID)
+	if sess == nil {
 		a.catalog.fail(connID)
 		return
 	}
@@ -81,8 +80,8 @@ func (a *root) ensureColumns(connID, table string) {
 	if table == "" || !a.catalog.beginColumns(connID, table) {
 		return
 	}
-	sess := a.sess
-	if sess == nil || a.sessConnID != connID || !sess.Caps().Has(engine.CapColumns) {
+	sess := a.sessionFor(connID)
+	if sess == nil || !sess.Caps().Has(engine.CapColumns) {
 		a.catalog.failColumns(connID, table)
 		return
 	}
@@ -153,10 +152,11 @@ func objectsOf(sess engine.Session) (tables, views []string, err error) {
 
 // loadCatalog 在主线程取一次目录（测试与刷新用）。
 func (a *root) loadCatalog(connID string) (tables, views []string, err error) {
-	if a.sess == nil || a.sessConnID != connID {
+	sess := a.sessionFor(connID)
+	if sess == nil {
 		return nil, nil, errors.New("连接未打开")
 	}
-	return objectsOf(a.sess)
+	return objectsOf(sess)
 }
 
 // completionItemsAt 计算光标 offset 处的候选，并顺手发起缺失的加载。

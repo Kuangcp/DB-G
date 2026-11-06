@@ -30,7 +30,7 @@ func TestEditPlanGating(t *testing.T) {
 		t.Fatalf("single table with pk must be editable: %q", a.readonlyReason)
 	}
 	// JOIN → 只读
-	if _, err := a.sess.RunStatement(t.Context(), "CREATE TABLE other (id INTEGER PRIMARY KEY)"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "CREATE TABLE other (id INTEGER PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}
 	tt = runEditQuery(t, a, "SELECT u.id, u.name FROM users u JOIN other o ON o.id = u.id")
@@ -39,7 +39,7 @@ func TestEditPlanGating(t *testing.T) {
 		t.Fatalf("join must be read-only: plan=%v reason=%q", a.editPlan, a.readonlyReason)
 	}
 	// 视图 → 只读（无主键）
-	if _, err := a.sess.RunStatement(t.Context(), "CREATE VIEW v_users AS SELECT id, name FROM users"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "CREATE VIEW v_users AS SELECT id, name FROM users"); err != nil {
 		t.Fatal(err)
 	}
 	tt = runEditQuery(t, a, "SELECT id, name FROM v_users")
@@ -52,7 +52,7 @@ func TestEditPlanGating(t *testing.T) {
 func TestEditCellCommitThroughUI(t *testing.T) {
 	a := openForSelection(t)
 	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
-	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
@@ -68,7 +68,7 @@ func TestEditCellCommitThroughUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	r, err := a.sess.RunStatement(t.Context(), "SELECT name FROM users WHERE id = 1")
+	r, err := a.testSession(t).RunStatement(t.Context(), "SELECT name FROM users WHERE id = 1")
 	if err != nil || r.Rows[0][0] != "alice2" {
 		t.Fatalf("db value: %+v err=%v", r, err)
 	}
@@ -80,7 +80,7 @@ func TestEditCellCommitThroughUI(t *testing.T) {
 func TestEditInsertAndDeleteThroughUI(t *testing.T) {
 	a := openForSelection(t)
 	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
-	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
@@ -92,7 +92,7 @@ func TestEditInsertAndDeleteThroughUI(t *testing.T) {
 	if err := a.applyEditsSync(); err != nil {
 		t.Fatal(err)
 	}
-	r, err := a.sess.RunStatement(t.Context(), "SELECT id, name FROM users ORDER BY id")
+	r, err := a.testSession(t).RunStatement(t.Context(), "SELECT id, name FROM users ORDER BY id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,10 +104,10 @@ func TestEditInsertAndDeleteThroughUI(t *testing.T) {
 func TestEditCommitFailureKeepsOverlay(t *testing.T) {
 	a := openForSelection(t)
 	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
-	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice'),(2,'bob')"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice'),(2,'bob')"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.sess.RunStatement(t.Context(), "CREATE UNIQUE INDEX ux_users_name ON users(name)"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "CREATE UNIQUE INDEX ux_users_name ON users(name)"); err != nil {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users ORDER BY id")
@@ -119,7 +119,7 @@ func TestEditCommitFailureKeepsOverlay(t *testing.T) {
 	if a.editSet().Count() == 0 {
 		t.Fatal("failed commit must keep the overlay")
 	}
-	r, _ := a.sess.RunStatement(t.Context(), "SELECT name FROM users ORDER BY id")
+	r, _ := a.testSession(t).RunStatement(t.Context(), "SELECT name FROM users ORDER BY id")
 	if r.Rows[0][0] != "alice" || r.Rows[1][0] != "bob" {
 		t.Fatalf("rollback must keep data: %v", r.Rows)
 	}
@@ -128,7 +128,7 @@ func TestEditCommitFailureKeepsOverlay(t *testing.T) {
 func TestCommitThroughPreviewModal(t *testing.T) {
 	a := openForSelection(t)
 	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
-	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice')"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice')"); err != nil {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
@@ -144,7 +144,7 @@ func TestCommitThroughPreviewModal(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Frame()
-	r, err := a.sess.RunStatement(t.Context(), "SELECT name FROM users WHERE id = 1")
+	r, err := a.testSession(t).RunStatement(t.Context(), "SELECT name FROM users WHERE id = 1")
 	if err != nil || r.Rows[0][0] != "alice3" {
 		t.Fatalf("db value: %+v err=%v", r, err)
 	}
@@ -153,7 +153,7 @@ func TestCommitThroughPreviewModal(t *testing.T) {
 func TestReadonlyReasonShownInToolbar(t *testing.T) {
 	a := openForSelection(t)
 	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
-	if _, err := a.sess.RunStatement(t.Context(), "CREATE TABLE other2 (id INTEGER PRIMARY KEY)"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "CREATE TABLE other2 (id INTEGER PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT u.id FROM users u JOIN other2 o ON o.id = u.id")

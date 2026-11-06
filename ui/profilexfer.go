@@ -39,7 +39,6 @@ func (a *root) importProfiles(path string) (int, error) {
 		}
 		n++
 	}
-	a.checkConnHealth()
 	a.reloadTree()
 	app.LogInfo("import", "profiles", "path", path, "count", n)
 	return n, nil

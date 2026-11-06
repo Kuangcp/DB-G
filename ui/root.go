@@ -16,17 +16,12 @@ import (
 type root struct {
 	code           *codeEditor
 	con            *app.Console
-	sess           engine.Session
-	sessConnID     string
 	win            *mygo.Window
 	resultState    ui.ListState
 	resultsHeight  float32
 	sidebarWidth   float32
 	store          *app.ConnStore
-	connName       string
-	connErr        string
-	activeConnID   string
-	failedConnID   string
+	connErr        string // 顶栏一行错误（最近一次连接失败的原因）
 	connFormOpen   bool
 	connFormID     string
 	connFormName   string
@@ -49,13 +44,16 @@ type root struct {
 	treeOpen       map[string]*bool
 	treeData       map[string]map[engine.ObjectKind][]engine.DBObject
 	treeSchemas    map[string][]string
-	connStatus     map[string]string
 	treeErr        map[string]string
 	treeSelected   string
 	execPending    bool
 
 	mgr                 *app.ConsoleManager
 	catalog             *catalogCache
+	sessions            map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
+	sessionUse          map[string]uint64         // connID → 最近使用序号（LRU）
+	sessionErr          map[string]string         // connID → 上次打开失败的原因
+	useSeq              uint64
 	consoles            map[string]*app.Console // consoleID → 运行态
 	activeConsole       string
 	pendingActivate     string
@@ -124,6 +122,9 @@ func newRoot(text string) *root {
 		treeSchemas:   map[string][]string{},
 		treeErr:       map[string]string{},
 		connFormKind:  "sqlite",
+		sessions:      map[string]engine.Session{},
+		sessionUse:    map[string]uint64{},
+		sessionErr:    map[string]string{},
 		consoles:      map[string]*app.Console{},
 		lastVer:       map[string]uint64{},
 	}
@@ -148,7 +149,6 @@ func newRootWithStore(storePath string) *root {
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
 	r.restoreSession()
-	r.checkConnHealth()
 	ws, _ := r.mgr.ActiveWorkspace()
 	app.LogInfo("startup", "session restored", "consoles", len(r.mgr.Open()), "workspace", ws.Name, "conn_warning", r.store.Warning())
 	return r
@@ -174,14 +174,6 @@ func (a *root) FlushAll() {
 		m.FlushCarets()
 		m.FlushAll()
 	}
-}
-
-// setSession 安装唯一的活动会话，并关闭被替换掉的旧会话（连接归属由 sessConnID 记录）。
-func (a *root) setSession(connID string, s engine.Session) {
-	if a.sess != nil && a.sess != s {
-		_ = a.sess.Close()
-	}
-	a.sess, a.sessConnID = s, connID
 }
 
 // consoleMgr 懒初始化控制台管理器；没有连接库（无持久化）时返回 nil。
@@ -491,9 +483,12 @@ func (a *root) view(c *ui.Context) {
 			ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 				// 顶栏：连接状态 + 操作。工具条里的按钮悬停前没有面孔。
 				ui.Toolbar(c, func() {
-					a.connDot(c)
-					if a.connName != "" {
-						ui.Text(c, a.connName).Bold()
+					connID := a.activeConnID()
+					if connID != "" {
+						a.connDot(c, connID)
+						if name := a.activeConnName(); name != "" {
+							ui.Text(c, name).Bold()
+						}
 					}
 					if a.connErr != "" {
 						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
@@ -504,7 +499,7 @@ func (a *root) view(c *ui.Context) {
 						}
 					}
 					ui.Spacer(c)
-					if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.sess == nil).Clicked() {
+					if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
 						a.execPending = true
 					}
 					if iconButton(c, iconHistory, "历史", ui.Transparent).Clicked() {

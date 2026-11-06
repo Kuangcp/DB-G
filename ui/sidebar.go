@@ -22,9 +22,8 @@ func (a *root) sidebar(c *ui.Context) {
 				a.connFormParams, a.connProto = "", 0
 				a.resetConnTest()
 			}
-			if iconButton(c, iconRefresh, "刷新数据源", ui.Transparent).Clicked() {
+			if iconButton(c, iconRefresh, "重载对象树（不连接数据源）", ui.Transparent).Clicked() {
 				a.reloadTree()
-				a.checkConnHealth()
 			}
 			ui.Spacer(c)
 		}).Label("数据源操作")
@@ -50,29 +49,16 @@ func (a *root) sidebar(c *ui.Context) {
 }
 
 func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
-	act, _ := a.store.Active()
-	isActive := act.ID == p.ID && a.sess != nil
+	live := a.connected(p.ID)
 	ui.Row(c).Gap(6).Children(func() {
-		dot := ui.Text(c, "●")
-		status := a.connStatusOf(p.ID)
-		switch {
-		case isActive:
-			dot.TextColor(c.Theme().Success)
-		case a.connErr != "" && a.failedConnID == p.ID:
-			dot.TextColor(c.Theme().Danger)
-		case status == "ok":
-			dot.TextColor(c.Theme().Success)
-		case len(status) > 4 && status[:4] == "fail":
-			dot.TextColor(c.Theme().Danger)
-		default:
-			dot.TextColor(c.Theme().TextMuted)
-		}
+		a.connDot(c, p.ID)
+		// 点数据源名就是「连上它并展开」：启动时不预连，连接时机只有这一处。
 		lbl := ui.Button(c, p.Name)
-		if isActive {
+		if live {
 			lbl.Bold()
 		}
-		if lbl.DoubleClicked() {
-			_ = a.openConn(p)
+		if lbl.Clicked() {
+			a.expandConnAndTree(p)
 		}
 		expandLabel := "▸"
 		if a.treeExpand[p.ID] {
@@ -461,7 +447,6 @@ func (a *root) saveConnForm() {
 	}
 	a.connFormOpen = false
 	a.resetConnTest()
-	a.checkConnHealth()
 }
 
 func (a *root) browsePath() {
@@ -482,17 +467,6 @@ func (a *root) browsePath() {
 		}
 		win.Update(func() { a.connFormPath = paths[0] })
 	}()
-}
-
-func (a *root) connDot(c *ui.Context) {
-	switch {
-	case a.connErr != "":
-		ui.Text(c, "●").TextColor(c.Theme().Danger)
-	case a.sess != nil:
-		ui.Text(c, "●").TextColor(c.Theme().Success)
-	default:
-		ui.Text(c, "●").TextColor(c.Theme().TextMuted)
-	}
 }
 
 // defaultPort 返回各数据源的默认端口。

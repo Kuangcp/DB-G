@@ -15,7 +15,7 @@ import (
 func completionLabels(t *testing.T, a *root) []string {
 	t.Helper()
 	var out []string
-	for _, it := range a.completionItems(a.sessConnID) {
+	for _, it := range a.completionItems(a.activeConnID()) {
 		out = append(out, it.Label)
 	}
 	return out
@@ -40,14 +40,14 @@ func TestCompletionIncludesTablesAndViews(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	tables, _, err := a.loadCatalog(a.sessConnID)
+	tables, _, err := a.loadCatalog(a.testConnID(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(tables) == 0 || tables[0] != "users" {
 		t.Fatalf("tables: %v", tables)
 	}
-	a.ensureCatalog(a.sessConnID) // headless：同步加载，便于断言
+	a.ensureCatalog(a.testConnID(t)) // headless：同步加载，便于断言
 	labels := completionLabels(t, a)
 	found := false
 	for _, l := range labels {
@@ -131,7 +131,7 @@ func TestCompletionColumnsAfterDot(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.sess.RunStatement(t.Context(), `CREATE TABLE a3_t (id INTEGER PRIMARY KEY, zz_col TEXT)`); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), `CREATE TABLE a3_t (id INTEGER PRIMARY KEY, zz_col TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	a.catalog.invalidate(prof.ID)
@@ -196,7 +196,8 @@ func (s noColumnsSession) Objects(context.Context, engine.ObjectKind) ([]engine.
 
 func TestEnsureColumnsDegradesWithoutCapability(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.setSession("c1", noColumnsSession{})
+	a.sessions["c1"] = noColumnsSession{}
+	a.sessionUse["c1"] = 1
 	a.ensureColumns("c1", "t") // 不得 panic，也不得写缓存
 	if _, ok := a.catalog.getColumns("c1", "t"); ok {
 		t.Fatal("session without CapColumns must not produce column items")
@@ -212,7 +213,7 @@ func TestShowCompletionsAtCursorLoadsColumnsAfterCatalog(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.sess.RunStatement(t.Context(), `CREATE TABLE a3_u (zz_two TEXT)`); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), `CREATE TABLE a3_u (zz_two TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	a.catalog.invalidate(prof.ID)
@@ -247,7 +248,7 @@ func setupA4(t *testing.T) (*root, app.ConnProfile) {
 		`CREATE TABLE b (id INTEGER PRIMARY KEY, bcol TEXT)`,
 		`CREATE TABLE inner_t (zz_inner TEXT)`,
 	} {
-		if _, err := a.sess.RunStatement(t.Context(), q); err != nil {
+		if _, err := a.testSession(t).RunStatement(t.Context(), q); err != nil {
 			t.Fatal(err)
 		}
 	}

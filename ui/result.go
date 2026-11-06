@@ -83,7 +83,7 @@ func (a *root) resultPane(c *ui.Context) {
 			a.resultTable(c, r)
 		default:
 			switch {
-			case a.sess == nil:
+			case a.activeSession() == nil:
 				ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
 			case true:
 				ui.Text(c, "Ctrl+Enter 执行光标所在语句（选中则只跑选区）").TextColor(c.Theme().TextMuted)
@@ -160,8 +160,8 @@ func (a *root) rowTable() (string, bool) {
 
 // connKind 返回当前连接的种类（决定引用符），无连接按 sqlite。
 func (a *root) connKind() string {
-	if a.sessConnID != "" {
-		if p, ok := a.store.Get(a.sessConnID); ok && p.Kind != "" {
+	if id := a.activeConnID(); id != "" {
+		if p, ok := a.store.Get(id); ok && p.Kind != "" {
 			return p.Kind
 		}
 	}
@@ -505,7 +505,8 @@ func runeWidth(r rune) int {
 func (a *root) canFetchMore() bool {
 	rt := a.currentRuntime()
 	r := rt.Result()
-	if r == nil || !r.IsQuery || rt.Running() || a.sess == nil || !a.sess.Caps().Has(engine.CapFetchMore) {
+	if r == nil || !r.IsQuery || rt.Running() || a.activeSession() == nil ||
+		!a.activeSession().Caps().Has(engine.CapFetchMore) {
 		return false
 	}
 	if _, ok := fetchMoreSQL(a.lastExecSQL, 0, 1); !ok {
@@ -551,7 +552,7 @@ func (a *root) fetchMore() {
 		}
 		apply()
 	})
-	if !more.Run(a.sess, sql) {
+	if !more.Run(a.activeSession(), sql) {
 		a.consoleErr = "取更多失败：无法启动"
 	}
 }
@@ -592,10 +593,11 @@ func (a *root) recordFetchState(runtimeID string, res *engine.QueryResult) {
 
 // canStream 报告能否全量流式导出（驱动实现 RowStreamer 且有可重放的 SQL）。
 func (a *root) canStream() bool {
-	if a.sess == nil || strings.TrimSpace(a.lastExecSQL) == "" {
+	sess := a.activeSession()
+	if sess == nil || strings.TrimSpace(a.lastExecSQL) == "" {
 		return false
 	}
-	_, ok := a.sess.(engine.RowStreamer)
+	_, ok := sess.(engine.RowStreamer)
 	return ok
 }
 
@@ -674,7 +676,7 @@ func (a *root) exportTo(path, format string, full bool) (int, error) {
 		return 0, errors.New("无法确定表名（多表查询），不能导出 INSERT")
 	}
 	if full {
-		streamer, ok := a.sess.(engine.RowStreamer)
+		streamer, ok := a.activeSession().(engine.RowStreamer)
 		if !ok {
 			return 0, errors.New("当前数据源不支持流式导出")
 		}

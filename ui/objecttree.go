@@ -56,10 +56,25 @@ func (a *root) setTreeErr(key, msg string) {
 	a.treeErr[key] = msg
 }
 
-func (a *root) expandConn(p app.ConnProfile) {
-	if a.sess == nil || a.sessConnID != p.ID {
-		_ = a.openConn(p)
+// expandConnAndTree 连上数据源（没连的话）并展开它的树：点数据源名走这里。
+func (a *root) expandConnAndTree(p app.ConnProfile) {
+	if a.treeExpand == nil {
+		a.treeExpand = map[string]bool{}
 	}
+	a.treeExpand[p.ID] = true
+	if a.treeErr != nil {
+		delete(a.treeErr, p.ID) // 重连后旧的报错不再作数
+	}
+	a.expandConn(p)
+}
+
+// expandConn 保证数据源连着：已经连着只 touch，不重连。
+func (a *root) expandConn(p app.ConnProfile) {
+	if a.connected(p.ID) {
+		a.touchSession(p.ID)
+		return
+	}
+	_ = a.openConn(p)
 }
 
 func (a *root) toggleExpandConn(p app.ConnProfile) {
@@ -83,10 +98,9 @@ func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
 	if _, ok := a.treeData[key]; ok {
 		return
 	}
-	sess := a.sess
-	if sess == nil || a.sessConnID != p.ID {
-		a.setTreeErr(key, "未连接")
-		return
+	sess := a.sessionFor(p.ID)
+	if sess == nil {
+		return // 没连上就不画树（侧栏的圆点已经说明状态），不写「未连接」
 	}
 	if !sess.Caps().Has(engine.CapObjects) {
 		a.setTreeErr(key, "该数据源不支持对象树")
@@ -100,7 +114,7 @@ func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	data := map[engine.ObjectKind][]engine.DBObject{}
-	scoped, multi := a.sess.(engine.SchemaLister)
+	scoped, multi := sess.(engine.SchemaLister)
 	for _, g := range objectKinds {
 		var objs []engine.DBObject
 		var err error
@@ -140,10 +154,11 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
 
 // schemaLister 返回该连接当前会话的 SchemaLister（未连接/不支持时为 false）。
 func (a *root) schemaLister(p app.ConnProfile) (engine.SchemaLister, bool) {
-	if a.sess == nil || a.sessConnID != p.ID {
+	sess := a.sessionFor(p.ID)
+	if sess == nil {
 		return nil, false
 	}
-	lister, ok := a.sess.(engine.SchemaLister)
+	lister, ok := sess.(engine.SchemaLister)
 	return lister, ok
 }
 
@@ -217,7 +232,7 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 	if m == nil {
 		return
 	}
-	if a.sessConnID != p.ID {
+	if !a.connected(p.ID) {
 		if err := a.openConn(p); err != nil {
 			a.consoleErr = err.Error()
 			return
@@ -235,15 +250,16 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 
 // showDDL 取对象的 DDL 并弹窗（headless 同步，有窗口时后台 + Update）。
 func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
-	if a.sessConnID != p.ID {
+	if !a.connected(p.ID) {
 		if err := a.openConn(p); err != nil {
 			a.consoleErr = err.Error()
 			return
 		}
 	}
+	sess := a.sessionFor(p.ID)
 	load := func() {
-		lister, ok := a.sess.(engine.ObjectDDLer)
-		if !ok || !a.sess.Caps().Has(engine.CapObjectDDL) {
+		lister, ok := sess.(engine.ObjectDDLer)
+		if !ok || sess == nil || !sess.Caps().Has(engine.CapObjectDDL) {
 			a.ddlTitle, a.ddlText, a.ddlOpen = o.Name, "该数据源不支持查看 DDL", true
 			return
 		}

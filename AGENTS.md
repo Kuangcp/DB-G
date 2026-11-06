@@ -68,8 +68,19 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | `CapSQLCompletion` | 参与 SQL 补全 |
 
 连接参数：`app.ConnProfile` → `ui.engineProfile()` → `engine.Profile`，**三处打开连接
-（`openConn` / 健康检查 / 测试连接）都走这个函数**，不要各自拼 `engine.Profile`。
+（`connect` / 测试连接）都走这个函数**，不要各自拼 `engine.Profile`。
 `Protocol`（ClickHouse native/http/https）与 `Params`（`key=value`，见 `engine.Params`）在这里带过去。
+
+## 会话管理（★ 必读）
+
+- `sessions map[connID]engine.Session`：一个数据源一个会话，**同时最多 6 个**（`maxOpenSessions`），
+  超过按 LRU 关掉最久没用的；正在跑语句的跳过（全忙就临时超限并记 warn）。
+- 取会话**一律用 `sessionFor(connID)`**（顺带刷新 LRU），不要缓存会话指针；
+  控制台相关操作（执行/结果/可编辑/导出）用 `activeSession()`，它天然属于激活控制台。
+- **启动不连任何数据源、不预载对象树**。连接时机只有两处：点数据源名（`expandConnAndTree`）、
+  执行时 `ensureConsoleConn()` 兜底。不要在任何初始化路径里偷偷建连接。
+- 圆点颜色由 `connDotColor()` 决定：红 = 上次打开失败（`sessionErr`，Tooltip 给原因）、
+  绿 = 有会话、灰 = 没连。没连上时**不要往树里写「未连接」这类错误行**，圆点已经说明状态。
 
 ## 线程与并发（★ 必读）
 
@@ -87,7 +98,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
   go func() { msg, ok := run(); win.Update(func() { done(msg, ok) }) }()
   ```
 
-- 任何可能卡住的操作都要 `context.WithTimeout`：打开连接 5s、健康检查 3s、测试连接 5s、DDL 5s。
+- 任何可能卡住的操作都要 `context.WithTimeout`：打开连接 5s（`openTimeout`）、测试连接 5s、DDL 5s。
 - `rootView` 用 `guardView` 兜 panic：构建期 panic 记日志 + 顶栏显示错误，应用继续跑。
 - 不要在回调里跨线程读 `root` 字段（用闭包捕获值），否则数据竞争。
 

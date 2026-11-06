@@ -15,7 +15,7 @@ func TestPreviewObjectCreatesConsoleAndRuns(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice')"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice')"); err != nil {
 		t.Fatal(err)
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)

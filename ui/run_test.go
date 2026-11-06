@@ -58,8 +58,8 @@ func TestRunSQLiteEndToEnd(t *testing.T) {
 	if err := a.openSQLite(path); err != nil {
 		t.Fatal(err)
 	}
-	if a.connName != "app.db" {
-		t.Fatalf("connName = %q", a.connName)
+	if len(a.sessions) != 1 {
+		t.Fatalf("openSQLite must install one session, got %d", len(a.sessions))
 	}
 	a.setActiveText("SELECT id, name FROM users ORDER BY id")
 	tt := ui.NewTester(rootView(a), 1200, 800)

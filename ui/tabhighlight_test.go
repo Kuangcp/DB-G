@@ -29,7 +29,6 @@ func newTabRoot(t *testing.T) (*root, *ui.Tester, ui.Color) {
 	if !a.activateConsole(first.ID) {
 		t.Fatal("activate")
 	}
-	a.connStatus = map[string]string{prof.ID: "ok"}
 	var accent ui.Color
 	tt := ui.NewTester(func(c *ui.Context) {
 		accent = c.Theme().Accent

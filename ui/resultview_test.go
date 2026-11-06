@@ -80,11 +80,11 @@ func TestCompareCells(t *testing.T) {
 
 func TestFetchMoreAppendsRows(t *testing.T) {
 	a := openForSelection(t)
-	if _, err := a.sess.RunStatement(t.Context(), `CREATE TABLE big (id INTEGER PRIMARY KEY)`); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), `CREATE TABLE big (id INTEGER PRIMARY KEY)`); err != nil {
 		t.Fatal(err)
 	}
 	for i := 1; i <= 600; i++ {
-		if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO big (id) VALUES ("+strconv.Itoa(i)+")"); err != nil {
+		if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO big (id) VALUES ("+strconv.Itoa(i)+")"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -134,7 +134,7 @@ func TestDisplayToResultAfterSort(t *testing.T) {
 
 func TestExportCurrentAndFull(t *testing.T) {
 	a := openForSelection(t)
-	if _, err := a.sess.RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice'),('bob')"); err != nil {
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('alice'),('bob')"); err != nil {
 		t.Fatal(err)
 	}
 	a.setActiveText("SELECT id, name FROM users ORDER BY id")

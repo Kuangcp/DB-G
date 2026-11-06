@@ -27,7 +27,7 @@ func (a *root) tabBar(c *ui.Context) {
 				}
 			})
 		}
-		if iconButton(c, iconPlus, "新建控制台", ui.Transparent).Disabled(a.sess == nil).Clicked() {
+		if iconButton(c, iconPlus, "新建控制台", ui.Transparent).Disabled(a.activeConnID() == "").Clicked() {
 			a.createConsole()
 		}
 		name := "无工作区"
@@ -91,10 +91,11 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showSource bool) {
 // createConsole 在当前连接下新建控制台（默认名），下一帧激活。
 func (a *root) createConsole() {
 	m := a.consoleMgr()
-	if m == nil || a.sess == nil {
+	connID := a.activeConnID()
+	if m == nil || connID == "" {
 		return
 	}
-	rec, err := m.Create(a.sessConnID, "")
+	rec, err := m.Create(connID, "")
 	if err != nil {
 		a.consoleErr = "新建控制台失败: " + err.Error()
 		app.LogWarn("console", "create failed", "err", err.Error())

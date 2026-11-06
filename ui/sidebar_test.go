@@ -116,11 +116,12 @@ func TestOpenConnAndRunEndToEnd(t *testing.T) {
 	if err := a.openConn(stored); err != nil {
 		t.Fatal(err)
 	}
-	if a.sess == nil {
+	if !a.connected(stored.ID) {
 		t.Fatal("openConn must install a session")
 	}
-	if a.connName != "本地库" || a.connErr != "" {
-		t.Fatalf("connName=%q connErr=%q", a.connName, a.connErr)
+	// 没有控制台时顶栏退回「最近用过的」那个数据源
+	if got := a.activeConnName(); got != "本地库" || a.connErr != "" {
+		t.Fatalf("activeConnName=%q connErr=%q", got, a.connErr)
 	}
 	if act, ok := a.store.Active(); !ok || act.ID != stored.ID {
 		t.Fatalf("active: %+v %v", act, ok)
@@ -146,11 +147,11 @@ func TestOpenConnAndRunEndToEnd(t *testing.T) {
 
 func TestOpenConnFailureKeepsState(t *testing.T) {
 	a := newSidebarRoot(t)
-	good := app.ConnProfile{Name: "good", Kind: "sqlite", Path: seedConnFile(t)}
-	if err := a.store.Add(good); err != nil {
+	if err := a.store.Add(app.ConnProfile{Name: "good", Kind: "sqlite", Path: seedConnFile(t)}); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.openConn(a.store.List()[0]); err != nil {
+	good := a.store.List()[0]
+	if err := a.openConn(good); err != nil {
 		t.Fatal(err)
 	}
 	bad := app.ConnProfile{Name: "bad", Kind: "sqlite", Path: filepath.Join(t.TempDir(), "gone.db")}
@@ -160,8 +161,11 @@ func TestOpenConnFailureKeepsState(t *testing.T) {
 	if a.connErr == "" {
 		t.Fatal("connErr must be set")
 	}
-	if a.sess == nil || a.connName != "good" {
-		t.Fatal("failed open must keep previous session")
+	if len(a.sessions) != 1 || !a.connected(good.ID) {
+		t.Fatalf("failed open must keep previous session: %d", len(a.sessions))
+	}
+	if got := a.connErrOf(bad.ID); got == "" {
+		t.Fatal("失败原因要记在该数据源名下（圆点变红）")
 	}
 }
 
@@ -176,8 +180,8 @@ func TestRemoveActiveConnClearsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.removeConn(stored.ID)
-	if a.sess != nil || a.connName != "" {
-		t.Fatalf("session=%v connName=%q", a.sess, a.connName)
+	if len(a.sessions) != 0 || a.connErr != "" {
+		t.Fatalf("sessions=%d connErr=%q", len(a.sessions), a.connErr)
 	}
 	if _, ok := a.store.Get(stored.ID); ok {
 		t.Fatal("profile must be removed")
@@ -207,11 +211,9 @@ func TestObjectTreeRendersLeaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.setSession(stored.ID, treeFakeSession{objs: []engine.DBObject{
+	a.testSetSession(stored.ID, treeFakeSession{objs: []engine.DBObject{
 		{Kind: engine.ObjectTable, Name: "users"},
 	}})
-	a.connName = stored.Name
-	a.activeConnID = stored.ID
 	a.treeExpand[stored.ID] = true
 	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -231,9 +233,7 @@ func TestObjectTreeErrorLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.setSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
-	a.connName = stored.Name
-	a.activeConnID = stored.ID
+	a.testSetSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
 	a.treeExpand[stored.ID] = true
 	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -261,11 +261,9 @@ func TestExpandInactiveAutoConnects(t *testing.T) {
 	}
 	stored := a.store.List()[0]
 	a.treeExpand[stored.ID] = true
-	if a.sess == nil {
-		a.expandConn(stored)
-	}
-	if a.sess == nil || a.connName != "auto" {
-		t.Fatalf("expand of inactive conn must connect: session=%v name=%q", a.sess, a.connName)
+	a.expandConn(stored)
+	if !a.connected(stored.ID) {
+		t.Fatalf("expand of inactive conn must connect: %d sessions", len(a.sessions))
 	}
 }
 
@@ -276,9 +274,7 @@ func TestObjectTreeAfterReloadNoPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.setSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
-	a.connName = stored.Name
-	a.activeConnID = stored.ID
+	a.testSetSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
 	a.reloadTree()
 	a.loadGroupsIn(stored, "")
 	if got := a.treeErr[stored.ID]; got != "枚举失败" {
@@ -286,19 +282,17 @@ func TestObjectTreeAfterReloadNoPanic(t *testing.T) {
 	}
 }
 
-func TestObjectTreeCrossConnBlocked(t *testing.T) {
+func TestObjectTreeWithoutSessionDrawsNothing(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := app.ConnProfile{Name: "other", Kind: "sqlite", Path: seedConnFile(t)}
 	if err := a.store.Add(p); err != nil {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.setSession("", treeFakeSession{objs: []engine.DBObject{{Kind: engine.ObjectTable, Name: "users"}}})
-	a.connName = "active-db"
 	a.reloadTree()
 	a.loadGroupsIn(stored, "")
-	if got := a.treeErr[stored.ID]; got != "未连接" {
-		t.Fatalf("treeErr = %q", got)
+	if got := a.treeErr[stored.ID]; got != "" {
+		t.Fatalf("没连上不该写错误行（点已经是灰的）: %q", got)
 	}
 	if _, ok := a.treeData[stored.ID]; ok {
 		t.Fatal("must not cache another connection's objects")
@@ -350,16 +344,16 @@ func TestDuplicateNameConnsIsolated(t *testing.T) {
 		t.Fatalf("A cache: %+v", objs)
 	}
 	a.loadGroupsIn(pb, "")
-	if got := a.treeErr[pb.ID]; got != "未连接" {
-		t.Fatalf("B must not reuse A's session, treeErr=%q", got)
+	if got := a.treeErr[pb.ID]; got != "" {
+		t.Fatalf("B 没连上时不该写错误行（圆点是灰的）: %q", got)
 	}
 	if _, ok := a.treeData[pb.ID]; ok {
 		t.Fatal("must not cache A's objects under B's ID")
 	}
 	a.treeExpand[pb.ID] = true
 	a.expandConn(pb)
-	if a.sess == nil || a.connName != "db" {
-		t.Fatalf("expand must connect B: session=%v name=%q", a.sess, a.connName)
+	if !a.connected(pb.ID) || !a.connected(pa.ID) {
+		t.Fatal("expand must connect B, and A must stay connected")
 	}
 	a.reloadTree()
 	a.loadGroupsIn(pb, "")
@@ -397,23 +391,20 @@ func TestFailedOpenSetsTreeErrAndRemoveClears(t *testing.T) {
 	if err := a.openConn(bad); err == nil {
 		t.Fatal("missing file must fail")
 	}
-	if a.connErr == "" || a.failedConnID != bad.ID {
-		t.Fatalf("connErr=%q failedConnID=%q", a.connErr, a.failedConnID)
+	if a.connErrOf(bad.ID) == "" || a.connErr == "" {
+		t.Fatalf("失败原因要记在数据源名下: %q / %q", a.connErrOf(bad.ID), a.connErr)
 	}
-	if a.treeErr[bad.ID] == "" {
-		t.Fatal("openConn failure must write treeErr under the failed profile ID")
-	}
-	if a.sess == nil || a.activeConnID != good.ID {
+	if !a.connected(good.ID) {
 		t.Fatal("failed open must keep previous session")
 	}
 	a.removeConn(bad.ID)
-	if a.connErr != "" || a.failedConnID != "" {
-		t.Fatalf("remove of failed profile must clear residue: connErr=%q failedConnID=%q", a.connErr, a.failedConnID)
+	if a.connErrOf(bad.ID) != "" {
+		t.Fatalf("remove of failed profile must clear residue: %q", a.connErrOf(bad.ID))
 	}
 	if _, ok := a.store.Get(bad.ID); ok {
 		t.Fatal("bad profile must be removed")
 	}
-	if a.sess == nil || a.activeConnID != good.ID {
+	if !a.connected(good.ID) {
 		t.Fatal("good session must survive removing bad profile")
 	}
 }
@@ -435,8 +426,12 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 	if !a.treeExpand[p.ID] {
 		t.Fatal("toggle must expand")
 	}
-	if a.treeErr[p.ID] == "" {
-		t.Fatal("failed expand must leave treeErr for the node")
+	// 连不上时不留错误行（树里不再写「未连接」），改为圆点变红 + 记失败原因
+	if got := a.connErrOf(p.ID); got == "" {
+		t.Fatal("failed expand must record the failure for the red dot")
+	}
+	if got := a.treeErr[p.ID]; got != "" {
+		t.Fatalf("failed expand must not write a tree error line: %q", got)
 	}
 	f, err := os.Create(path)
 	if err != nil {
@@ -462,8 +457,8 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 	if a.treeErr[p.ID] != "" {
 		t.Fatalf("re-expand must clear sticky treeErr, got %q", a.treeErr[p.ID])
 	}
-	if a.sess == nil || a.activeConnID != p.ID {
-		t.Fatalf("retry must open: session=%v active=%q", a.sess, a.activeConnID)
+	if !a.connected(p.ID) {
+		t.Fatalf("retry must open: %d sessions", len(a.sessions))
 	}
 	a.reloadTree()
 	a.loadGroupsIn(p, "")
@@ -536,7 +531,7 @@ func TestOpenConnMySQLProfileFields(t *testing.T) {
 		captured.User != "u" || captured.Password != "pw" || captured.Database != "app" {
 		t.Fatalf("profile mapping: %+v", captured)
 	}
-	if a.sess == nil || a.connName != "远程" {
+	if !a.connected(p.ID) {
 		t.Fatal("openConn must install session")
 	}
 }
@@ -584,7 +579,7 @@ func TestSidebarReopenClosedConsole(t *testing.T) {
 func TestSidebarCreateConsoleWithoutConnection(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
-	if a.sess != nil {
+	if len(a.sessions) != 0 {
 		t.Fatal("precondition: not connected")
 	}
 	a.treeExpand[prof.ID] = true
@@ -704,7 +699,7 @@ func TestSchemaTreeRendersSchemasThenObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.setSession(stored.ID, treeSchemaFake{})
+	a.testSetSession(stored.ID, treeSchemaFake{})
 	a.treeExpand[stored.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
