@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,14 +45,69 @@ func (a *root) cursorDataCol(r *engine.QueryResult) int {
 	return -1
 }
 
-// copyCurrentCell 复制当前选中单元格（Ctrl+C 与「复制」按钮共用）。
+// copyCurrentCell 复制当前选区（多格时按 TSV）或光标所在单元格（Ctrl+C 与「复制」按钮共用）。
 func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
+	if rows, cols, multi := a.resultSelection(r); multi {
+		c.WriteClipboard(rowsTSV(r, rows, cols, false))
+		return
+	}
 	col := a.cursorDataCol(r)
 	row := a.displayToResult(r, a.resultRow)
 	if r == nil || row < 0 || col < 0 || col >= len(r.Columns) {
 		return
 	}
 	c.WriteClipboard(cellString(r.Rows[row][col]))
+}
+
+// resultSelection 返回当前单元格块选中的结果行与数据列下标（都按显示顺序），
+// 以及块是否大于 1×1。行号列（#）不算数据列。
+func (a *root) resultSelection(r *engine.QueryResult) (rows, cols []int, multi bool) {
+	if r == nil {
+		return nil, nil, false
+	}
+	chosen := make(map[int]bool)
+	for k := range a.resultSel.All() {
+		chosen[k] = true
+	}
+	for i, ri := range a.resView.apply(r) {
+		if chosen[i] {
+			rows = append(rows, ri)
+		}
+	}
+	for _, id := range a.resultState.SelectedColumns() {
+		if id == "#" {
+			continue
+		}
+		for j, name := range r.Columns {
+			if name == id {
+				cols = append(cols, j)
+				break
+			}
+		}
+	}
+	return rows, cols, len(rows) > 1 || len(cols) > 1
+}
+
+// blockCSV 把选区写成 CSV（与导出同一套转义；二进制给 base64 摘要）。
+func blockCSV(r *engine.QueryResult, rows, cols []int, header bool) string {
+	var b bytes.Buffer
+	w := csv.NewWriter(&b)
+	if header {
+		names := make([]string, len(cols))
+		for i, col := range cols {
+			names[i] = r.Columns[col]
+		}
+		_ = w.Write(names)
+	}
+	for _, row := range rows {
+		rec := make([]string, len(cols))
+		for i, col := range cols {
+			rec[i] = cellString(cellAt(r.Rows[row], col))
+		}
+		_ = w.Write(rec)
+	}
+	w.Flush()
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 func (a *root) resultPane(c *ui.Context) {
@@ -356,7 +413,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	// 顶部操作条：复制/查看/取更多/编辑/导出。工具条里的按钮悬停前没有面孔。
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Toolbar(c, func() {
-			if iconButton(c, iconCopy, "复制当前单元格 (Ctrl+C)", ui.Transparent).Clicked() {
+			if iconButton(c, iconCopy, "复制选区或当前单元格 (Ctrl+C)", ui.Transparent).Clicked() {
 				a.copyCurrentCell(c, r)
 			}
 			if iconButton(c, iconEye, "查看完整内容", ui.Transparent).Clicked() {
@@ -394,7 +451,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if n := len(a.resView.filters); n > 0 {
 			ui.Text(c, fmt.Sprintf("筛选 %d 列", n)).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
-		ui.Text(c, "右键表头排序/筛选；右键单元格复制").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, "右键表头排序/筛选；右键单元格/选区复制与导出").FontSize(12).TextColor(c.Theme().TextMuted)
 	})
 
 	a.resultState.HeaderMenu = func(m *ui.Menu, col int) {
@@ -460,6 +517,29 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			}
 		} else if table, ok := a.rowTable(); !ok {
 			_ = table
+		}
+		if rows, cols, multi := a.resultSelection(r); multi {
+			if m.Item("复制选区（TSV）").Chosen() {
+				c.WriteClipboard(rowsTSV(r, rows, cols, false))
+			}
+			if m.Item("复制选区（含表头 TSV）").Chosen() {
+				c.WriteClipboard(rowsTSV(r, rows, cols, true))
+			}
+			if m.Item("复制选区（CSV）").Chosen() {
+				c.WriteClipboard(blockCSV(r, rows, cols, false))
+			}
+			_, hasTable := a.rowTable()
+			m.Submenu("导出选区", func(sm *ui.Menu) {
+				if sm.Item("CSV…").Chosen() {
+					a.pickExportSelection("csv", rows, cols)
+				}
+				if sm.Item("JSON…").Chosen() {
+					a.pickExportSelection("json", rows, cols)
+				}
+				if it := sm.Item("SQL INSERT…"); it.Disabled(!hasTable).Chosen() {
+					a.pickExportSelection("insert", rows, cols)
+				}
+			})
 		}
 		if dataCol >= 0 && m.Item("查看完整内容").Chosen() {
 			a.openCellViewer(r, row, dataCol)
@@ -810,6 +890,67 @@ func (a *root) pickExport(format string, full bool) {
 			app.LogInfo("export", "done", "path", path, "format", format, "rows", n, "full", full)
 		})
 	}()
+}
+
+// pickExportSelection 弹保存对话框导出当前选区（行/列为结果下标）。
+func (a *root) pickExportSelection(format string, rows, cols []int) {
+	win := a.win
+	if win == nil {
+		return
+	}
+	go func() {
+		ext := "." + format
+		if format == "insert" {
+			ext = ".sql"
+		}
+		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
+			Parent:      win,
+			Title:       "导出选区",
+			DefaultPath: "selection" + ext,
+		})
+		if err != nil || path == "" {
+			return
+		}
+		win.Update(func() { a.exportStatus = "导出中…" })
+		n, err := a.exportSelectionTo(path, format, rows, cols)
+		win.Update(func() {
+			if err != nil {
+				a.exportStatus = "导出失败: " + err.Error()
+				app.LogError("export", "selection failed", "path", path, "format", format, "err", err.Error())
+				return
+			}
+			a.exportStatus = fmt.Sprintf("已导出选区 %d 行 → %s", n, path)
+			app.LogInfo("export", "selection done", "path", path, "format", format, "rows", n)
+		})
+	}()
+}
+
+// exportSelectionTo 同步导出选区（对话框之外的实现；测试直接调用）。
+func (a *root) exportSelectionTo(path, format string, rows, cols []int) (int, error) {
+	r := a.currentRuntime().Result()
+	if r == nil || !r.IsQuery {
+		return 0, errors.New("没有可导出的查询结果")
+	}
+	table := ""
+	if t, ok := a.rowTable(); ok {
+		table = t
+	}
+	if format == "insert" && table == "" {
+		return 0, errors.New("无法确定表名（多表查询），不能导出 INSERT")
+	}
+	names := make([]string, len(cols))
+	for i, col := range cols {
+		names[i] = r.Columns[col]
+	}
+	data := make([][]any, len(rows))
+	for i, row := range rows {
+		rec := make([]any, len(cols))
+		for j, col := range cols {
+			rec[j] = cellAt(r.Rows[row], col)
+		}
+		data[i] = rec
+	}
+	return app.ExportRows(path, format, a.connKind(), table, names, data)
 }
 
 // exportTo 同步导出（对话框之外的实现；测试直接调用）。

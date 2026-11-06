@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -322,5 +324,69 @@ func TestCellViewerJSONTree(t *testing.T) {
 	}
 	if got := tt.Clipboard(); !strings.Contains(got, `"alice"`) {
 		t.Fatalf("copy original: %q", got)
+	}
+}
+
+// 多行多列选区：Ctrl+C 按 TSV 复制，右键可复制 CSV/含表头 TSV，并可导出选区。
+func TestResultSelectionCopyAndExport(t *testing.T) {
+	a := newTestRoot()
+	r := &engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"id", "name"},
+		Rows:    [][]any{{int64(10), "alice, A"}, {int64(20), "bob"}},
+	}
+	a.con.SetOutcome(r, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if err := tt.Click("alice, A"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ClickWith(ui.Shift, "20"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	rows, cols, multi := a.resultSelection(r)
+	if !multi || len(rows) != 2 || len(cols) != 2 {
+		t.Fatalf("selection: rows=%v cols=%v multi=%v", rows, cols, multi)
+	}
+
+	tt.Key(ui.Ctrl, ui.KeyC)
+	tt.Frame()
+	if got := tt.Clipboard(); got != "10\talice, A\n20\tbob" {
+		t.Fatalf("Ctrl+C TSV: %q", got)
+	}
+
+	// 右键落在选区内部：保留块，给出复制/导出项。
+	if err := tt.RightClick("bob"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("复制选区（CSV）"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.Clipboard(); got != "10,\"alice, A\"\n20,bob" {
+		t.Fatalf("CSV copy: %q", got)
+	}
+	if err := tt.RightClick("bob"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("复制选区（含表头 TSV）"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.Clipboard(); got != "id\tname\n10\talice, A\n20\tbob" {
+		t.Fatalf("header TSV copy: %q", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "selection.csv")
+	n, err := a.exportSelectionTo(path, "csv", rows, cols)
+	if err != nil || n != 2 {
+		t.Fatalf("export: n=%d err=%v", n, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "id,name\n10,\"alice, A\"\n20,bob\n"
+	if string(data) != want {
+		t.Fatalf("exported CSV:\n%q\nwant:\n%q", data, want)
 	}
 }
