@@ -519,15 +519,17 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			_ = table
 		}
 		if rows, cols, multi := a.resultSelection(r); multi {
-			if m.Item("复制选区（TSV）").Chosen() {
-				c.WriteClipboard(rowsTSV(r, rows, cols, false))
-			}
-			if m.Item("复制选区（含表头 TSV）").Chosen() {
-				c.WriteClipboard(rowsTSV(r, rows, cols, true))
-			}
-			if m.Item("复制选区（CSV）").Chosen() {
-				c.WriteClipboard(blockCSV(r, rows, cols, false))
-			}
+			m.Submenu("复制选区", func(sm *ui.Menu) {
+				if sm.Item("TSV").Chosen() {
+					c.WriteClipboard(rowsTSV(r, rows, cols, false))
+				}
+				if sm.Item("TSV（含表头）").Chosen() {
+					c.WriteClipboard(rowsTSV(r, rows, cols, true))
+				}
+				if sm.Item("CSV").Chosen() {
+					c.WriteClipboard(blockCSV(r, rows, cols, false))
+				}
+			})
 			_, hasTable := a.rowTable()
 			m.Submenu("导出选区", func(sm *ui.Menu) {
 				if sm.Item("CSV…").Chosen() {

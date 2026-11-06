@@ -360,7 +360,7 @@ func TestResultSelectionCopyAndExport(t *testing.T) {
 	if err := tt.RightClick("bob"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("复制选区（CSV）"); err != nil {
+	if err := tt.ChooseMenuItem("复制选区", "CSV"); err != nil {
 		t.Fatal(err)
 	}
 	if got := tt.Clipboard(); got != "10,\"alice, A\"\n20,bob" {
@@ -369,7 +369,7 @@ func TestResultSelectionCopyAndExport(t *testing.T) {
 	if err := tt.RightClick("bob"); err != nil {
 		t.Fatal(err)
 	}
-	if err := tt.ChooseMenuItem("复制选区（含表头 TSV）"); err != nil {
+	if err := tt.ChooseMenuItem("复制选区", "TSV（含表头）"); err != nil {
 		t.Fatal(err)
 	}
 	if got := tt.Clipboard(); got != "id\tname\n10\talice, A\n20\tbob" {
