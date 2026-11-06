@@ -1,2 +1,6 @@
 db-g
 db-g.bin
+.vscode/
+out/
+log/
+*.log
