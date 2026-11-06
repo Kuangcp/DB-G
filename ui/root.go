@@ -19,7 +19,11 @@ type root struct {
 	con              *app.Console
 	win              *mygo.Window
 	resultState      ui.ListState
-	resultsHeight    float32
+	editorPercent    float32 // 编辑器占上下的百分比（结果区在下方）
+	resultsHidden    bool    // Alt+D 临时隐藏结果区
+	selConn          app.ConnProfile
+	selObj           engine.DBObject
+	hasSelObj        bool
 	sidebarWidth     float32
 	store            *app.ConnStore
 	connErr          string // 顶栏一行错误（最近一次连接失败的原因）
@@ -149,7 +153,7 @@ func newRoot(text string) *root {
 	a := &root{
 		code:             newCodeEditor("在左侧数据源下新建或打开控制台"),
 		con:              app.NewConsole(),
-		resultsHeight:    260,
+		editorPercent:    65,
 		sidebarWidth:     280,
 		treeExpand:       map[string]bool{},
 		treeOpen:         map[string]*bool{},
@@ -576,16 +580,21 @@ func (a *root) view(c *ui.Context) {
 					ui.Text(c, "Ctrl+F / Ctrl+Space").FontSize(12).TextColor(c.Theme().TextMuted)
 				}).Label("编辑器工具")
 
-				// 编辑器 / 结果 分屏
-				ui.SplitVertical(c, &a.resultsHeight, func() {
+				// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
+				editor := func() {
 					a.code.View(c).Label("编辑器")
 					if a.execPending {
 						a.execPending = false
 						a.runSQL()
 					}
-				}, func() {
-					a.resultPane(c)
-				}).Grow(1)
+				}
+				if a.resultsHidden {
+					ui.Column(c).Grow(1).Children(editor)
+				} else {
+					ui.SplitVerticalPercent(c, &a.editorPercent, editor, func() {
+						a.resultPane(c)
+					}).Grow(1).SplitReset(65)
+				}
 			})
 		}).Fill()
 	}

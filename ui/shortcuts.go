@@ -42,6 +42,12 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		a.copyCurrentCell(c, a.currentRuntime().Result())
 	case "nextConsole":
 		a.switchToRecentConsole()
+	case "toggleResults":
+		a.resultsHidden = !a.resultsHidden
+	case "viewDDL":
+		if a.hasSelObj {
+			a.showDDL(a.selConn, a.selObj)
+		}
 	}
 }
 

@@ -546,6 +546,7 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 		leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == selKey)
 		if leaf.Clicked() {
 			a.treeSelected = selKey
+			a.selConn, a.selObj, a.hasSelObj = p, obj, true
 		}
 		if leaf.DoubleClicked() {
 			a.previewObject(p, obj)
