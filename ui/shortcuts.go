@@ -47,6 +47,8 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 	case "viewDDL":
 		if a.hasSelObj {
 			a.showDDL(a.selConn, a.selObj)
+		} else if a.canViewDDLFromEditor() {
+			a.viewDDLFromEditor()
 		}
 	}
 }

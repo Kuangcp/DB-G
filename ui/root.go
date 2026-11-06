@@ -154,6 +154,7 @@ type root struct {
 	folderModalTarget   string
 	folderModalText     string
 	folderModalErr      string
+	ddlConn             app.ConnProfile // DDL 查询用的连接（可能来自编辑器光标）
 }
 
 func newRoot(text string) *root {

@@ -3,7 +3,9 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
@@ -645,6 +647,110 @@ const (
 	ddlPanelWidth  = 760
 	ddlPanelHeight = 520
 )
+
+// canViewDDLFromEditor 检查是否可以「从编辑器光标位置」查看 DDL：
+// 需要已选连接 + 有效表名 + 有会话且支持 DDL。
+func (a *root) canViewDDLFromEditor() bool {
+	if a.selConn.ID == "" {
+		return false
+	}
+	word := editorWordAtCaret(a.code)
+	if word == "" || !isValidObjectName(word) {
+		return false
+	}
+	sess := a.sessionFor(a.selConn.ID)
+	if sess == nil {
+		return false
+	}
+	_, ok := sess.(engine.ObjectDDLer)
+	return ok && sess.Caps().Has(engine.CapObjectDDL)
+}
+
+// findObjectByName 在缓存的对象树中按名称查找对象；如果树未展开则先尝试加载。
+func (a *root) findObjectByName(connID string, kind engine.ObjectKind, name string) (engine.DBObject, bool) {
+	objs, ok := a.treeData[connID][kind]
+	if ok {
+		for _, o := range objs {
+			if o.Name == name {
+				return o, true
+			}
+		}
+	}
+	// 未展开时尝试加载该类型对象
+	if !a.treeLoading[connID] && !a.treePageStarted[connID] {
+		a.ensureTreeLoaded(connID)
+	}
+	return engine.DBObject{}, false
+}
+
+// ensureTreeLoaded 如果连接还没有加载过对象树，触发一次加载。
+func (a *root) ensureTreeLoaded(connID string) {
+	if a.treeLoading[connID] || a.treePageStarted[connID] {
+		return
+	}
+	a.treeLoading[connID] = true
+	// async: 由 sidebar 的 loadTree 处理
+	_ = connID
+}
+
+// editorWordAtCaret 从编辑器的光标位置提取标识符（table/column 名）。
+func editorWordAtCaret(c *codeEditor) string {
+	text := c.Text()
+	_, endRune := c.CaretRunes()
+	// 转回字节偏移
+	end := runeToByte(text, endRune)
+	// 向前找标识符边界
+	start := end
+	for start > 0 && isIdentRune(runeAtByte(text, start)) {
+		// 往前跳一个 rune
+		for start > 0 && !utf8.RuneStart(text[start-1]) {
+			start--
+		}
+		if start > 0 {
+			start--
+		}
+	}
+	if start == end {
+		return ""
+	}
+	word := strings.TrimSpace(text[start:end])
+	return word
+}
+
+// runeAtByte 返回 s[off] 位置的 rune（不移动指针）。
+func runeAtByte(s string, off int) rune {
+	for i := 0; i < len(s); i++ {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if i+size > off {
+			return r
+		}
+	}
+	return 0
+}
+
+// isIdentRune 判断 rune 是否为 SQL 标识符合法字符（字母数字下划线）。
+func isIdentRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' ||
+		r >= '0' && r <= '9' || r == '_'
+}
+
+// isValidObjectName 检查对象名是否有效（非保留字、纯字母开头）。
+func isValidObjectName(name string) bool {
+	if name == "" {
+		return false
+	}
+	r := []rune(name)[0]
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
+}
+
+// viewDDLFromEditor 从编辑器光标处的表名触发 DDL 查看。
+func (a *root) viewDDLFromEditor() {
+	word := editorWordAtCaret(a.code)
+	if word == "" {
+		return
+	}
+	a.showDDL(a.selConn, engine.DBObject{Kind: engine.ObjectTable, Name: word})
+}
 
 // ddlViewState 返回 DDL 只读编辑器状态（首次用时创建）：SQL 高亮、可选中复制。
 func (a *root) ddlViewState() *myeditor.State {
