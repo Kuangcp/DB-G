@@ -48,6 +48,7 @@ type root struct {
 	connTestMsg      string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
 	connTestErr      bool
 	connTestBusy     bool
+	connTestSeq      int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
 	connDeleteOpen   bool
 	connDeleting     string
 	treeExpand       map[string]bool

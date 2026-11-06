@@ -409,7 +409,14 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 			a.connFormFolder = p.FolderID
 			a.resetConnTest()
 		}
-		if iconButtonPlain(c, iconTrash, "删除连接", c.Theme().Danger).Clicked() {
+	})
+	// 复制数据源 / 删除连接是低频且易误触的操作：放右键菜单，不占行内位置。
+	row.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item("复制数据源").Chosen() {
+			a.duplicateConn(p)
+		}
+		menu.Separator()
+		if menu.Item("删除连接…").Chosen() {
 			a.connDeleting, a.connDeleteOpen = p.ID, true
 		}
 	})
@@ -425,6 +432,41 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 			a.objectGroups(c, p)
 		})
 	}
+}
+
+// duplicateConn 在同文件夹下复制一份数据源：名称自动取未被占用的「副本：X」，
+// 只落盘一次（Add 内部生成新 ID）。
+func (a *root) duplicateConn(p app.ConnProfile) {
+	if a.store == nil {
+		a.connErr = "复制失败：连接库不可用"
+		return
+	}
+	taken := make(map[string]bool)
+	for _, q := range a.store.List() {
+		taken[q.Name] = true
+	}
+	name := "副本：" + p.Name
+	for i := 1; taken[name]; i++ {
+		name = fmt.Sprintf("%s (副本%d)", p.Name, i)
+	}
+	cloned := app.ConnProfile{
+		Name:     name,
+		Kind:     p.Kind,
+		Path:     p.Path,
+		Host:     p.Host,
+		Port:     p.Port,
+		User:     p.User,
+		Password: p.Password,
+		Database: p.Database,
+		Protocol: p.Protocol,
+		Params:   p.Params,
+		FolderID: p.FolderID,
+	}
+	if err := a.store.Add(cloned); err != nil {
+		a.connErr = "复制失败：" + err.Error()
+		return
+	}
+	app.LogInfo("conn", "duplicate", "from", p.Name, "to", name, "folder", p.FolderID)
 }
 
 // consoleSection 列出该数据源的全部控制台（打开与否两种状态）并提供新建入口。
@@ -487,7 +529,7 @@ func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
 // 连接弹窗的固定尺寸：切换数据源时表单行数不同，面板却不变，窗口不会一弹一弹。
 const (
 	connFormWidth  = 640
-	connFormHeight = 420
+	connFormHeight = 520
 )
 
 func (a *root) connModal(c *ui.Context) {
@@ -564,7 +606,14 @@ func (a *root) connModal(c *ui.Context) {
 						SingleLine().Tooltip(a.connTestMsg)
 				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					if ui.Button(c, "测试连接").Disabled(a.connTestBusy).Clicked() {
+					if a.connTestBusy {
+						if ui.Button(c, "取消测试").Clicked() {
+							a.cancelConnTest()
+						}
+						ui.Spacer(c)
+						return
+					}
+					if ui.Button(c, "测试连接").Clicked() {
 						a.testConnForm()
 					}
 					if ui.Button(c, "复制").Tooltip("把连接信息按 key: value 复制到剪贴板（含明文密码）").
