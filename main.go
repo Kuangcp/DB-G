@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"log"
 
 	"github.com/egoist/mygo"
@@ -11,6 +12,9 @@ import (
 	_ "db-g/driver/sqlite"
 	"db-g/ui"
 )
+
+//go:embed assets/icon-256.png
+var appIconPNG []byte
 
 func main() {
 	if err := app.InitLogs(app.DefaultLogDir()); err != nil {
@@ -27,6 +31,12 @@ func main() {
 			Height:  800,
 			Content: mygoUI.View(r.View),
 		})
+		if err := win.SetIcon(appIconPNG); err != nil {
+			app.LogWarn("startup", "set window icon failed", "err", err.Error())
+		}
+		if mygo.App.Dock != nil {
+			_ = mygo.App.Dock.SetIcon(appIconPNG)
+		}
 		r.Attach(win)
 	})
 	if err := mygo.App.Run(); err != nil {

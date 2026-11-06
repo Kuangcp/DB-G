@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- db-g 应用图标：品牌蓝圆角方底 + 白色 G（环 + 右侧缺口 + 横杠）。
+       位图由 `go run ./tools/genicon` 用同一几何生成：assets/icon-{256,512}.png -->
+  <rect width="512" height="512" rx="102" fill="#2D6CDF"/>
+  <path fill="#FFFFFF" fill-rule="evenodd"
+        d="M256 102a154 154 0 1 1 0 308a154 154 0 1 1 0-308
+           M256 161a95 95 0 1 0 0 190a95 95 0 1 0 0-190"/>
+  <rect x="308" y="174" width="200" height="164" fill="#2D6CDF"/>
+  <rect x="242" y="230" width="148" height="52" fill="#FFFFFF"/>
+</svg>
