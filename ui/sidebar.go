@@ -154,6 +154,12 @@ func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
 	})
 }
 
+// 连接弹窗的固定尺寸：切换数据源时表单行数不同，面板却不变，窗口不会一弹一弹。
+const (
+	connFormWidth  = 640
+	connFormHeight = 420
+)
+
 func (a *root) connModal(c *ui.Context) {
 	if a.connDeleteOpen {
 		a.deleteModal(c)
@@ -165,26 +171,16 @@ func (a *root) connModal(c *ui.Context) {
 			title = "编辑连接"
 		}
 		ui.Text(c, title).Bold()
-		// 左右布局：左侧数据源类型导航，右侧配置表单（仿 db-k）。
-		ui.Row(c).Gap(0).Children(func() {
-			ui.Column(c).Width(160).Gap(2).Children(func() {
+		// 左右布局：左侧数据源列表（无按钮外观、行间分隔线、选中高亮），右侧表单。
+		ui.Row(c).Fill().Gap(0).Children(func() {
+			ui.Column(c).Width(168).FillHeight().Children(func() {
 				for _, k := range connKinds {
-					ui.Row(c).Gap(8).Children(func() {
-						if icon := connKindIcon(k.kind); icon != nil {
-							ui.Icon(c, icon).FontSize(18).TextColor(connKindColor(k.kind))
-						}
-						btn := ui.Button(c, k.label)
-						if a.connFormKind == k.kind {
-							btn.Bold()
-						}
-						if btn.Clicked() {
-							a.switchConnKind(k.kind)
-						}
-					})
+					a.connKindRow(c, k)
 				}
+				ui.Spacer(c)
 			})
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
-			ui.Column(c).Width(430).Padding(0, 12).Gap(6).Children(func() {
+			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
 				ui.Text(c, kindLabel(a.connFormKind)+" 连接").Bold()
 				ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
 				if a.connFormKind != "sqlite" {
@@ -208,6 +204,8 @@ func (a *root) connModal(c *ui.Context) {
 				if a.connFormErr != "" {
 					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
 				}
+				// 留白：按钮沉到面板底部，上方空着。
+				ui.Spacer(c)
 				ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 					if ui.Button(c, "取消").Clicked() {
 						a.connFormOpen = false
@@ -218,7 +216,36 @@ func (a *root) connModal(c *ui.Context) {
 				})
 			})
 		})
+	}).Width(connFormWidth).Height(connFormHeight)
+}
+
+// connKindRow 是左侧数据源类型的一行：没有按钮的外观，行底下一条分隔线，
+// 选中的一行用浅色高亮 + 加粗。
+func (a *root) connKindRow(c *ui.Context, k connKind) {
+	t := c.Theme()
+	selected := a.connFormKind == k.kind
+	row := ui.ButtonBase(c).Label(k.label).Padding(10, 10).Gap(10).AlignItems(ui.Center)
+	row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	switch {
+	case selected:
+		row.Background(t.Accent.Alpha(0.12))
+	case row.Hovered():
+		row.Background(t.SurfaceHover)
+	}
+	row.Children(func() {
+		if icon := connKindIcon(k.kind); icon != nil {
+			ui.Icon(c, icon).FontSize(18).TextColor(connKindColor(k.kind))
+		}
+		txt := ui.Text(c, k.label).SingleLine()
+		if selected {
+			txt.Bold()
+		} else {
+			txt.TextColor(t.TextMuted)
+		}
 	})
+	if row.Clicked() {
+		a.switchConnKind(k.kind)
+	}
 }
 
 // connKind 是连接类型导航项。
