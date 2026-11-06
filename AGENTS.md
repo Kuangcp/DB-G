@@ -7,6 +7,9 @@
 db-g 是 Go + [mygo](https://github.com/egoist/mygo) 的数据库客户端，对标 db-k（Kotlin + Compose Desktop）。
 界面文案一律中文；不做 i18n。
 
+## Agent harness规约
+- 如果需要使用到 subagent 需要有reviewer 以及多个需要切换模型来调用的场景下，请继续使用当前使用的模型，不要自己做选择去换模型，否则可能用到很贵的模型 消耗很多钱。
+
 ## 工具链（不要改动）
 
 - Go 1.27：`go1.27` 在 PATH 上（`go version` = go1.27.3），Makefile 用的就是它。
