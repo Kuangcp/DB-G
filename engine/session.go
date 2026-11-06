@@ -82,6 +82,15 @@ func Register(kind string, f Factory) {
 	factories[kind] = f
 }
 
+// Registered 报告某种数据源的工厂是否已注册：程序没有链接对应的 driver 包时
+// 它就是 false，Open 会报 unknown kind。
+func Registered(kind string) bool {
+	regMu.RLock()
+	defer regMu.RUnlock()
+	_, ok := factories[kind]
+	return ok
+}
+
 // Open 按 Profile.Kind 创建未打开的会话。
 func Open(p Profile) (Session, error) {
 	regMu.RLock()

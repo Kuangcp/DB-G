@@ -8,7 +8,9 @@ import (
 	mygoUI "github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	_ "db-g/driver/clickhouse"
 	_ "db-g/driver/mysql"
+	_ "db-g/driver/postgres"
 	_ "db-g/driver/sqlite"
 	"db-g/ui"
 )

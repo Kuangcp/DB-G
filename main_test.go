@@ -5,6 +5,8 @@ import (
 	"image/png"
 	"os"
 	"testing"
+
+	"db-g/engine"
 )
 
 // TestAppIconPixels 验证自绘图标真的画出来了：品牌蓝底 + 白色 G（环与横杠），中心是镂空。
@@ -48,5 +50,16 @@ func TestAppIconPixels(t *testing.T) {
 	}
 	if _, err := os.Stat("assets/icon.svg"); err != nil {
 		t.Fatalf("svg source missing: %v", err)
+	}
+}
+
+// TestAllConnKindsLinked 保证 main 把每个数据源的 driver 都链接进来了。少一个
+// `_ "db-g/driver/xxx"`，它的 init() 就不跑，注册表里没有这个类型，新建连接时
+// 一打开就报 "engine: unknown data source kind"。
+func TestAllConnKindsLinked(t *testing.T) {
+	for _, kind := range []string{"sqlite", "mysql", "postgres", "clickhouse"} {
+		if !engine.Registered(kind) {
+			t.Fatalf("%s 未注册：main.go 缺 _ \"db-g/driver/%s\"", kind, kind)
+		}
 	}
 }
