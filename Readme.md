@@ -81,21 +81,6 @@
 
 ## 构建与测试
 
-本地 mygo 处于开发状态（`ui.CellsStyle` 等 API 尚未发布）时，用不提交的 `go.work`
-把本地仓库挂进来；上游合并后删掉它、升级 `go.mod` 的 require 即可：
-
-```
-go.work
-go 1.27.3
-
-use (
-	.
-	/home/zk/Code/go/mygo
-)
-```
-
-`go.work` / `go.work.sum` 已在 `.gitignore` 中忽略。
-
 ```bash
 export GO=/home/zk/Code/go/bin/go1.27.3
 CGO_ENABLED=0 $GO run .     # 交互窗口（本机 cgo 链接有 .sframe 环境问题，统一关掉 cgo）
