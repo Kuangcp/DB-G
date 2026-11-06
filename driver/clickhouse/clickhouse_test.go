@@ -30,13 +30,20 @@ func TestClickHouseIntegration(t *testing.T) {
 	if host == "" {
 		t.Skip("DB_G_CK_HOST 未设置")
 	}
+	protocol := os.Getenv("DB_G_CK_PROTOCOL")
 	port := 9000
+	switch protocol {
+	case "http":
+		port = 8123
+	case "https":
+		port = 8443
+	}
 	if v := os.Getenv("DB_G_CK_PORT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			port = n
 		}
 	}
-	s, err := engine.Open(engine.Profile{Kind: "clickhouse", Host: host, Port: port,
+	s, err := engine.Open(engine.Profile{Kind: "clickhouse", Host: host, Port: port, Protocol: protocol,
 		User: os.Getenv("DB_G_CK_USER"), Password: os.Getenv("DB_G_CK_PASSWORD"), Database: os.Getenv("DB_G_CK_DATABASE")})
 	if err != nil {
 		t.Fatal(err)
