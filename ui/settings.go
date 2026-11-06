@@ -98,7 +98,7 @@ func (a *root) editorSection(c *ui.Context) {
 // logSection 显示日志目录与打开入口。
 func (a *root) logSection(c *ui.Context) {
 	ui.Text(c, "日志").Bold()
-	ui.Text(c, "一次启动一个文件，JSON Lines，5MB 轮转。").FontSize(12).
+	ui.Text(c, "一次启动一个文件，纯文本（时间 / 级别 / 标签 / 消息）。").FontSize(12).
 		TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)

@@ -24,11 +24,20 @@ func initTestLogs(t *testing.T) string {
 
 func readLogs(t *testing.T, dir string) string {
 	t.Helper()
-	entries, _ := os.ReadDir(dir)
 	var b strings.Builder
-	for _, e := range entries {
-		data, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".log") {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
 		b.Write(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	return b.String()
 }
@@ -45,7 +54,7 @@ func TestOpenConnLogsWithoutPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := readLogs(t, dir)
-	if !strings.Contains(logs, `"tag":"conn"`) {
+	if !strings.Contains(logs, `[conn]`) {
 		t.Fatalf("conn log missing: %s", logs)
 	}
 	if !strings.Contains(logs, stored.Path) {
@@ -63,7 +72,7 @@ func TestExecLogsSQLAndDuration(t *testing.T) {
 	a.runSQL()
 	pollResult(t, a, tt)
 	logs := readLogs(t, dir)
-	if !strings.Contains(logs, `"tag":"exec"`) || !strings.Contains(logs, "SELECT 1 AS x") {
+	if !strings.Contains(logs, `[exec]`) || !strings.Contains(logs, "SELECT 1 AS x") {
 		t.Fatalf("exec log missing sql/tag: %s", logs)
 	}
 	if !strings.Contains(logs, "dur_ms") {

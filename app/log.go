@@ -1,11 +1,13 @@
 package app
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -34,22 +36,17 @@ func (l LogLevel) String() string {
 	return "unknown"
 }
 
-const defaultMaxLogSize = 5 << 20 // 单文件 5MB 后轮转
-
-// Logger 是 JSON Lines 日志：一天一文件、超过 maxSize 轮转、0600 权限。
+// Logger 是纯文本日志：一次启动一个文件，文件名按启动时刻的日期 + 当天下一个序号。
 // 写入失败不影响调用方（日志不能把应用搞崩）。
 type Logger struct {
 	mu         sync.Mutex
 	dir        string
 	now        func() time.Time
 	level      LogLevel
-	maxSize    int64
 	alsoStderr bool
 
 	f    *os.File
 	path string
-	day  string
-	size int64
 }
 
 // DefaultLogDir 返回日志目录（与 connections.json 同级）。
@@ -57,22 +54,19 @@ func DefaultLogDir() string {
 	return filepath.Join(filepath.Dir(DefaultStorePath()), "logs")
 }
 
-// NewLogger 在 dir 下打开（或创建）当天的日志文件。
+// NewLogger 按当前日期创建本次启动专属的日志文件：
+// <dir>/<YYYY-MM>/<YYYY-MM-DD>_<N>.log。同一天再次启动时 N 递增，旧文件不覆盖。
 func NewLogger(dir string) (*Logger, error) {
 	l := &Logger{
-		dir:     dir,
-		now:     time.Now,
-		level:   LevelInfo,
-		maxSize: defaultMaxLogSize,
+		dir:   dir,
+		now:   time.Now,
+		level: LevelInfo,
 		// stderr 同步便于 go run 排查；测试里用 DBG_LOG_STDERR=0 关掉噪音。
 		alsoStderr: os.Getenv("DBG_LOG_STDERR") != "0",
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, err
-	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if err := l.openLocked(l.now()); err != nil {
+	if err := l.openStartupLocked(l.now()); err != nil {
 		return nil, err
 	}
 	return l, nil
@@ -85,10 +79,10 @@ func (l *Logger) SetLevel(level LogLevel) {
 	l.level = level
 }
 
-// Dir 返回日志目录。
+// Dir 返回日志根目录。
 func (l *Logger) Dir() string { return l.dir }
 
-// Path 返回当前日志文件路径（可能随时间轮转变化）。
+// Path 返回本次启动的日志文件路径。
 func (l *Logger) Path() string {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -99,41 +93,23 @@ func (l *Logger) Path() string {
 func (l *Logger) Log(level LogLevel, tag, msg string, kv ...any) {
 	l.mu.Lock()
 	enabled := level >= l.level
-	now := l.now()
 	l.mu.Unlock()
 	if !enabled {
 		return
 	}
-
-	kvMap := map[string]any{}
-	for i := 0; i+1 < len(kv); i += 2 {
-		kvMap[fmt.Sprint(kv[i])] = kv[i+1]
-	}
-	line, err := json.Marshal(map[string]any{
-		"ts":    now.Format(time.RFC3339Nano),
-		"level": level.String(),
-		"tag":   tag,
-		"msg":   msg,
-		"kv":    kvMap,
-	})
-	if err != nil {
-		return
-	}
-	line = append(line, '\n')
+	line := formatLogLine(l.now(), level, tag, msg, kv...)
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if err := l.rotateLocked(now, int64(len(line))); err != nil {
+	if l.f == nil {
 		return
 	}
-	n, werr := l.f.Write(line)
-	l.size += int64(n)
-	if werr != nil {
+	if _, err := l.f.WriteString(line); err != nil {
 		// 写失败：放弃本行，不打扰调用方。
 		return
 	}
 	if l.alsoStderr {
-		_, _ = os.Stderr.Write(line)
+		_, _ = os.Stderr.WriteString(line)
 	}
 }
 
@@ -149,39 +125,78 @@ func (l *Logger) Close() error {
 	return err
 }
 
-// openLocked 打开某天的日志文件（追加）。
-func (l *Logger) openLocked(t time.Time) error {
-	day := t.Format("20060102")
-	path := filepath.Join(l.dir, "app-"+day+".log")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
+// openStartupLocked 在当天的文件里挑下一个未使用的序号，用 O_EXCL 创建。
+func (l *Logger) openStartupLocked(t time.Time) error {
+	month := t.Format("2006-01")
+	day := t.Format("2006-01-02")
+	monthDir := filepath.Join(l.dir, month)
+	if err := os.MkdirAll(monthDir, 0o700); err != nil {
 		return err
 	}
-	size := int64(0)
-	if fi, statErr := f.Stat(); statErr == nil {
-		size = fi.Size()
+	prefix := day + "_"
+	next := 0
+	if entries, err := os.ReadDir(monthDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || !strings.HasSuffix(e.Name(), ".log") {
+				continue
+			}
+			n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(e.Name(), prefix), ".log"))
+			if err == nil && n >= next {
+				next = n + 1
+			}
+		}
 	}
-	l.f, l.path, l.day, l.size = f, path, day, size
-	return nil
-}
-
-// rotateLocked 在跨天或超过上限时换文件。
-func (l *Logger) rotateLocked(t time.Time, add int64) error {
-	day := t.Format("20060102")
-	if l.f != nil && day == l.day && l.size+add <= l.maxSize {
+	for part := next; part < next+100000; part++ {
+		path := filepath.Join(monthDir, fmt.Sprintf("%s%d.log", prefix, part))
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		l.f, l.path = f, path
 		return nil
 	}
-	if l.f != nil {
-		_ = l.f.Close()
-		l.f = nil
+	return fmt.Errorf("log: too many startup files for %s", day)
+}
+
+// formatLogLine 输出便于人读的纯文本：
+// 2026-11-06 18:00:54.849 INFO  [conn] open name=prd_57 dsn=...
+func formatLogLine(t time.Time, level LogLevel, tag, msg string, kv ...any) string {
+	var b strings.Builder
+	b.Grow(128)
+	b.WriteString(t.Format("2006-01-02 15:04:05.000"))
+	b.WriteByte(' ')
+	lv := strings.ToUpper(level.String())
+	b.WriteString(lv)
+	for i := len(lv); i < 5; i++ {
+		b.WriteByte(' ')
 	}
-	if day == l.day {
-		// 同一天超限：当前文件改名 .1 后重开。
-		rotated := filepath.Join(l.dir, "app-"+day+".1.log")
-		_ = os.Remove(rotated)
-		_ = os.Rename(l.path, rotated)
+	b.WriteString(" [")
+	if tag == "" {
+		tag = "-"
 	}
-	return l.openLocked(t)
+	b.WriteString(tag)
+	b.WriteString("] ")
+	b.WriteString(msg)
+	for i := 0; i+1 < len(kv); i += 2 {
+		b.WriteByte(' ')
+		b.WriteString(fmt.Sprint(kv[i]))
+		b.WriteByte('=')
+		b.WriteString(logValue(kv[i+1]))
+	}
+	b.WriteByte('\n')
+	return b.String()
+}
+
+// logValue 让带空格/引号/换行的值保持单行可读。
+func logValue(v any) string {
+	s := fmt.Sprint(v)
+	if s == "" || strings.ContainsAny(s, " \t\r\n\"'=") {
+		return strconv.Quote(s)
+	}
+	return s
 }
 
 var (
