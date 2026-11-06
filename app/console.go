@@ -74,6 +74,15 @@ func (c *Console) SetOutcome(res *engine.QueryResult, errMsg string) {
 
 // Run 在后台协程用 sess 执行 query；无会话、已在执行或空串时返回 false。
 func (c *Console) Run(sess engine.Session, query string) bool {
+	return c.RunTimeout(sess, query, 0)
+}
+
+// RunTimeout 同 Run，但用 timeout 作为本次执行的超时（<=0 用默认 queryTimeout）；
+// 到期后 context 取消，驱动随之中止语句，错误改写为「查询超时」。
+func (c *Console) RunTimeout(sess engine.Session, query string, timeout time.Duration) bool {
+	if timeout <= 0 {
+		timeout = queryTimeout
+	}
 	c.mu.Lock()
 	if sess == nil || c.running || query == "" {
 		c.mu.Unlock()
@@ -81,7 +90,7 @@ func (c *Console) Run(sess engine.Session, query string) bool {
 	}
 	c.gen++
 	gen := c.gen
-	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	c.cancel = cancel
 	c.running, c.result, c.err = true, nil, ""
 	c.mu.Unlock()
@@ -89,7 +98,11 @@ func (c *Console) Run(sess engine.Session, query string) bool {
 	start := time.Now()
 	go func() {
 		res, err := sess.RunStatement(ctx, query)
+		ctxErr := ctx.Err()
 		cancel()
+		if err != nil && ctxErr == context.DeadlineExceeded {
+			err = &TimeoutError{Timeout: timeout}
+		}
 		dur := time.Since(start)
 		var done func(*engine.QueryResult, string, time.Duration)
 		c.mu.Lock()
@@ -111,6 +124,13 @@ func (c *Console) Run(sess engine.Session, query string) bool {
 		}
 	}()
 	return true
+}
+
+// TimeoutError 是一次执行超过连接配置的查询超时；错误文案给 UI 直接展示。
+type TimeoutError struct{ Timeout time.Duration }
+
+func (e *TimeoutError) Error() string {
+	return "查询超时（" + e.Timeout.String() + "），已取消"
 }
 
 // Cancel 取消当前执行；完成回调把取消错误写入 Err。

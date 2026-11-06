@@ -127,3 +127,27 @@ func TestCancelLeavesNoStaleResult(t *testing.T) {
 		t.Fatalf("err after rerun: %q", c.Err())
 	}
 }
+
+func TestRunTimeoutFires(t *testing.T) {
+	f := &fakeSession{block: make(chan struct{})}
+	c := NewConsole()
+	if !c.RunTimeout(f, "SELECT slow", 30*time.Millisecond) {
+		t.Fatal("run must start")
+	}
+	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
+	if !strings.Contains(c.Err(), "查询超时") {
+		t.Fatalf("err = %q", c.Err())
+	}
+	if c.Result() != nil {
+		t.Fatalf("timeout must not keep a result: %+v", c.Result())
+	}
+	// 超时后同一 Console 仍可继续执行。
+	f2 := &fakeSession{}
+	if !c.Run(f2, "SELECT 1") {
+		t.Fatal("must be runnable again after timeout")
+	}
+	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
+	if c.Err() != "" {
+		t.Fatalf("err after rerun: %q", c.Err())
+	}
+}

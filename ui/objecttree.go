@@ -53,6 +53,16 @@ func objectGroupKey(base string, kind engine.ObjectKind) string {
 	return base + "|" + kindKey(kind)
 }
 
+// groupOpen 是搜索期间强制展开的分组开关：搜索时返回新的 true 指针，
+// 不污染用户平时折叠/展开的状态；搜索清空后恢复原来的 treeOpen。
+func (a *root) groupOpen(key string, v bool) *bool {
+	if a.objSearchActive() {
+		open := true
+		return &open
+	}
+	return a.groupOpenPtr(key, v)
+}
+
 func (a *root) groupOpenPtr(key string, v bool) *bool {
 	if a.treeOpen == nil {
 		a.treeOpen = map[string]*bool{}
@@ -458,9 +468,12 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 	}
 	ui.Tree(c, func() {
 		for _, schema := range a.treeSchemas[p.ID] {
+			if a.searchFiltersObjects(p) && !a.schemaHasMatch(p.ID, schema) {
+				continue
+			}
 			key := p.ID + "|" + schema
 			base := objectTreeKey(p.ID, schema)
-			open := a.groupOpenPtr(key+"|schema", false)
+			open := a.groupOpen(key+"|schema", false)
 			ui.TreeItem(c, "▣ "+schema, open, func() {
 				a.ensureObjectCounts(p, schema)
 				if err := a.treeErr[base]; err != "" {
@@ -477,12 +490,24 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 // 标题只显示计数，不拉正文；正文在组展开时按页加载。
 func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string) {
 	base := objectTreeKey(p.ID, schema)
+	searching := a.searchFiltersObjects(p)
 	for _, g := range objectKinds {
 		label := g.label
-		if total, ok := a.treeCountOf(base, g.kind); ok {
+		if searching {
+			n := 0
+			for _, o := range a.treeData[base][g.kind] {
+				if a.objMatch(o.Name) {
+					n++
+				}
+			}
+			if n == 0 {
+				continue
+			}
+			label = fmt.Sprintf("%s (%d)", g.label, n)
+		} else if total, ok := a.treeCountOf(base, g.kind); ok {
 			label = fmt.Sprintf("%s (%d)", g.label, total)
 		}
-		open := a.groupOpenPtr(base+"|"+kindKey(g.kind), false)
+		open := a.groupOpen(base+"|"+kindKey(g.kind), false)
 		kind := g.kind
 		ui.TreeItem(c, label, open, func() {
 			a.ensureObjectPage(p, schema, kind)
@@ -502,7 +527,17 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 	if m := a.treeData[base]; m != nil {
 		objs = m[kind]
 	}
-	if len(objs) == 0 && (a.treeLoading[groupKey] || a.treeLoading[base+"|all"] || a.treeLoading[base+"|counts"]) {
+	searching := a.searchFiltersObjects(p)
+	if searching {
+		kept := objs[:0:0]
+		for _, o := range objs {
+			if a.objMatch(o.Name) {
+				kept = append(kept, o)
+			}
+		}
+		objs = kept
+	}
+	if !searching && !a.objSearchActive() && len(objs) == 0 && (a.treeLoading[groupKey] || a.treeLoading[base+"|all"] || a.treeLoading[base+"|counts"]) {
 		ui.TreeItem(c, "加载中…", nil, nil)
 	}
 	for _, o := range objs {
@@ -511,6 +546,7 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 		leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == selKey)
 		if leaf.Clicked() {
 			a.treeSelected = selKey
+			a.selConn, a.selObj, a.hasSelObj = p, obj, true
 		}
 		if leaf.DoubleClicked() {
 			a.previewObject(p, obj)
@@ -526,6 +562,9 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 				a.code.Insert(obj.Name)
 			}
 		})
+	}
+	if searching {
+		return
 	}
 	if total, ok := a.treeCountOf(base, kind); ok && len(objs) < total {
 		if len(objs) >= objectMaxLoaded {

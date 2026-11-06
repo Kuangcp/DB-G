@@ -247,3 +247,45 @@ func TestCancelConnTest(t *testing.T) {
 		t.Fatalf("取消反馈: %q", a.connTestMsg)
 	}
 }
+
+// 连接弹窗的查询超时：解析、校验、落盘与执行侧换算。
+func TestConnFormQueryTimeout(t *testing.T) {
+	a, tt := openConnModal(t)
+	a.connFormTimeout = "120"
+	p, err := a.connFormProfile()
+	if err != nil || p.QueryTimeout != 120 {
+		t.Fatalf("profile: %+v err=%v", p, err)
+	}
+	if !strings.Contains(connFormSummary(p), "查询超时: 120 秒") {
+		t.Fatalf("summary: %q", connFormSummary(p))
+	}
+	a.connFormTimeout = "abc"
+	if _, err := a.connFormProfile(); err == nil {
+		t.Fatal("non-numeric timeout must fail")
+	}
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	if a.connFormErr == "" || !a.connFormOpen {
+		t.Fatalf("invalid timeout must keep the form open with an error: %q", a.connFormErr)
+	}
+	a.connFormTimeout = "3600"
+	a.connFormKind, a.connFormPath = "sqlite", seedConnFile(t)
+	a.connFormName = "本地"
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	if a.connFormOpen {
+		t.Fatalf("form should close: %q", a.connFormErr)
+	}
+	stored := a.store.List()[0]
+	if stored.QueryTimeout != 3600 {
+		t.Fatalf("stored timeout: %+v", stored)
+	}
+	a.store.SetActive(stored.ID)
+	a.touchSession(stored.ID) // 执行时一定有会话；这里模拟「刚用过该数据源」
+	if got := a.queryTimeoutFor(); got.Seconds() != 3600 {
+		t.Fatalf("queryTimeoutFor: %v", got)
+	}
+}

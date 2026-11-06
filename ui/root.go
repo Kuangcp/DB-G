@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -19,7 +20,11 @@ type root struct {
 	con              *app.Console
 	win              *mygo.Window
 	resultState      ui.ListState
-	resultsHeight    float32
+	editorPercent    float32 // 编辑器占上下的百分比（结果区在下方）
+	resultsHidden    bool    // Alt+D 临时隐藏结果区
+	selConn          app.ConnProfile
+	selObj           engine.DBObject
+	hasSelObj        bool
 	sidebarWidth     float32
 	store            *app.ConnStore
 	connErr          string // 顶栏一行错误（最近一次连接失败的原因）
@@ -35,6 +40,7 @@ type root struct {
 	connFormPass     string
 	connFormDB       string
 	connFormParams   string
+	connFormTimeout  string             // 查询超时（秒，空 = 默认 30）
 	connProto        int                // ClickHouse 协议：0 native / 1 http / 2 https
 	connFormFolder   string             // 连接所属文件夹；空 = 根级
 	chords           map[string][]chord // 动作 → 键位（见 keymap.go）
@@ -42,6 +48,12 @@ type root struct {
 	editorPrefs      app.EditorPrefs    // 编辑器字号/字体族
 	editorPrefsPath  string             // editor.json 的位置（空 = 不落盘）
 	editorPrefsWarn  string
+	themePrefs       app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
+	themePath        string         // theme.json 的位置（空 = 不落盘）
+	themeWarn        string
+	themeSaveSeq     atomic.Uint64
+	themeHex         string // 外观分区里自定义强调色的输入框
+	themeHexErr      string
 	settingsSection  int    // 设置窗口选中的分区
 	captureAction    string // 设置窗口正在录制键位的动作
 	keymapWarn       string // 键位文件读写问题的提示
@@ -60,6 +72,7 @@ type root struct {
 	treeSchemas      map[string][]string
 	treeErr          map[string]string
 	treeSelected     string
+	objSearch        string          // 对象树搜索词（非空时过滤连接/文件夹/已加载对象）
 	folderCollapsed  map[string]bool // folderID → 收起；缺省 = 展开
 	metaCache        *app.MetaCache
 	metaCacheTried   map[string]bool
@@ -147,7 +160,7 @@ func newRoot(text string) *root {
 	a := &root{
 		code:             newCodeEditor("在左侧数据源下新建或打开控制台"),
 		con:              app.NewConsole(),
-		resultsHeight:    260,
+		editorPercent:    65,
 		sidebarWidth:     280,
 		treeExpand:       map[string]bool{},
 		treeOpen:         map[string]*bool{},
@@ -166,6 +179,7 @@ func newRoot(text string) *root {
 		connFormKind:     "sqlite",
 		chords:           defaultChords(),
 		editorPrefs:      app.DefaultEditorPrefs(),
+		themePrefs:       app.DefaultThemePrefs(),
 		sessions:         map[string]engine.Session{},
 		sessionUse:       map[string]uint64{},
 		sessionErr:       map[string]string{},
@@ -197,6 +211,8 @@ func newRootWithStore(storePath string) *root {
 	r.editorPrefsPath = app.DefaultEditorPrefsPath()
 	r.editorPrefs, r.editorPrefsWarn = app.LoadEditorPrefs(r.editorPrefsPath)
 	r.applyEditorPrefs()
+	r.themePath = app.DefaultThemePrefsPath()
+	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
 	r.store = app.LoadStore(storePath)
 	r.metaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
@@ -478,6 +494,7 @@ func rootView(a *root) func(c *ui.Context) {
 
 // view 是一帧的真正构建（由 guardView 包裹）。
 func (a *root) view(c *ui.Context) {
+	a.applyTheme(c)
 	{
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
 		a.maybeOpenSettings()
@@ -574,16 +591,21 @@ func (a *root) view(c *ui.Context) {
 					ui.Text(c, "Ctrl+F / Ctrl+Space").FontSize(12).TextColor(c.Theme().TextMuted)
 				}).Label("编辑器工具")
 
-				// 编辑器 / 结果 分屏
-				ui.SplitVertical(c, &a.resultsHeight, func() {
+				// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
+				editor := func() {
 					a.code.View(c).Label("编辑器")
 					if a.execPending {
 						a.execPending = false
 						a.runSQL()
 					}
-				}, func() {
-					a.resultPane(c)
-				}).Grow(1)
+				}
+				if a.resultsHidden {
+					ui.Column(c).Grow(1).Children(editor)
+				} else {
+					ui.SplitVerticalPercent(c, &a.editorPercent, editor, func() {
+						a.resultPane(c)
+					}).Grow(1).SplitReset(65)
+				}
 			})
 		}).Fill()
 	}

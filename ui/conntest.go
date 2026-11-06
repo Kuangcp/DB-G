@@ -16,6 +16,9 @@ import (
 // errPort 是端口填错的哨兵错误：调用方据此给中文提示。
 var errPort = errors.New("端口必须是数字")
 
+// errQueryTimeout 是查询超时填错的哨兵错误。
+var errQueryTimeout = errors.New("查询超时需要是整数秒（0–86400）")
+
 // connTestTimeout 是一次「测试连接」的上限。
 const connTestTimeout = 5 * time.Second
 
@@ -94,6 +97,9 @@ func connFormSummary(p app.ConnProfile) string {
 	}
 	if p.Kind == "sqlite" {
 		lines = append(lines, "文件: "+p.Path)
+		if p.QueryTimeout > 0 {
+			lines = append(lines, fmt.Sprintf("查询超时: %d 秒", p.QueryTimeout))
+		}
 		return strings.Join(lines, "\n")
 	}
 	lines = append(lines, fmt.Sprintf("主机: %s", p.Host), fmt.Sprintf("端口: %d", p.Port))
@@ -111,6 +117,9 @@ func connFormSummary(p app.ConnProfile) string {
 	}
 	if p.Params != "" {
 		lines = append(lines, "参数: "+p.Params)
+	}
+	if p.QueryTimeout > 0 {
+		lines = append(lines, fmt.Sprintf("查询超时: %d 秒", p.QueryTimeout))
 	}
 	return strings.Join(lines, "\n")
 }

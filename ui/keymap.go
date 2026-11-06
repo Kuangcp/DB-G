@@ -56,6 +56,10 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Ctrl, ui.KeyC}}},
 	{ID: "nextConsole", Label: "切换到最近使用的控制台", Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyTab}}},
+	{ID: "toggleResults", Label: "显示/隐藏查询结果", Scope: scopeAlways,
+		Def: []chord{{ui.Alt, ui.KeyD}}},
+	{ID: "viewDDL", Label: "查看所选对象的 DDL", Scope: scopeAlways,
+		Def: []chord{{ui.Ctrl, ui.KeyQ}}},
 }
 
 // applies 报告该动作在「编辑器是否聚焦」时是否生效。

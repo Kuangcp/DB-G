@@ -148,10 +148,23 @@ func (a *root) startStmt(i int) {
 		app.LogWarn("exec", "no session", "index", i)
 		return
 	}
-	if !rt.Run(sess, sql) {
+	if !rt.RunTimeout(sess, sql, a.queryTimeoutFor()) {
 		app.LogWarn("exec", "statement not started", "index", i)
 	}
 	a.refreshStmtBackgrounds()
+}
+
+// queryTimeoutFor 返回当前执行数据源配置的查询超时；0 交给 Console 用默认 30 秒。
+func (a *root) queryTimeoutFor() time.Duration {
+	id := a.activeConnID()
+	if a.store == nil || id == "" {
+		return 0
+	}
+	p, ok := a.store.Get(id)
+	if !ok || p.QueryTimeout <= 0 {
+		return 0
+	}
+	return time.Duration(p.QueryTimeout) * time.Second
 }
 
 // stmtDone 返回第 i 条语句的完成回调：记日志，并在成功时推进下一条。

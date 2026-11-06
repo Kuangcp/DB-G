@@ -705,3 +705,25 @@ func TestMoveWorkspaceMember(t *testing.T) {
 		t.Fatal("unknown workspace must fail")
 	}
 }
+
+func TestStoreQueryTimeoutRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	s := LoadStore(filepath.Join(dir, "connections.json"))
+	p := mustAdd(t, s, "本地", filepath.Join(dir, "a.db"))
+	p.QueryTimeout = 120
+	if err := s.Update(p); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := LoadStore(filepath.Join(dir, "connections.json")).Get(p.ID)
+	if !ok || got.QueryTimeout != 120 {
+		t.Fatalf("query timeout: %+v %v", got, ok)
+	}
+	bad := ConnProfile{Name: "x", Kind: "sqlite", Path: p.Path, QueryTimeout: -1}
+	if err := s.Add(bad); err == nil {
+		t.Fatal("negative query timeout must be rejected")
+	}
+	bad.QueryTimeout = 90000
+	if err := s.Add(bad); err == nil {
+		t.Fatal("query timeout over a day must be rejected")
+	}
+}
