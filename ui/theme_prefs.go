@@ -27,6 +27,11 @@ func (a *root) resolvedThemeFor(base *ui.Theme, desk ui.Preferences) resolvedThe
 func (a *root) setThemePrefs(p app.ThemePrefs) {
 	prefs, warn := p.Normalize()
 	a.themePrefs = prefs
+	if strings.HasPrefix(prefs.Accent, "#") {
+		a.themeHex = prefs.Accent
+	} else {
+		a.themeHex = ""
+	}
 	if len(warn) > 0 {
 		a.themeWarn = strings.Join(warn, "；")
 	} else {

@@ -338,6 +338,8 @@ func (a *root) appearanceSection(c *ui.Context) {
 			want := strings.ToLower(strings.TrimSpace(a.themeHex))
 			if want == "" {
 				a.themeHexErr = ""
+				prefs.Accent = ""
+				a.setThemePrefs(prefs)
 			} else if p, warn := (app.ThemePrefs{
 				Mode: prefs.Mode, Accent: want, Density: prefs.Density,
 				Radius: prefs.Radius, FontSize: prefs.FontSize,
