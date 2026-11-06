@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -130,14 +131,15 @@ func stmtScopeAt(text string, offset int) string {
 }
 
 // scopeInSegment 在给定片段内做语句/括号作用域分析（offset 相对片段起点）。
+//
+// 只有**子查询**括号（内容以 SELECT / WITH 开头）才切出独立作用域；函数调用、
+// 表达式分组、IN (…) 列表等括号不改变可见的表，光标在 sum( 里仍按整条语句
+// 解析 FROM/JOIN，从而能补出列名。
 func scopeInSegment(text string, offset int) string {
 	start, end := statementBounds(text, offset)
-	// 在语句内找最内层括号；同时记下不含光标的括号块（稍后抹掉，防止内层 FROM 泄漏到外层作用域）
 	type span struct{ open, close int }
-	var blanks []span
-	depth := 0
-	open := -1
-	bestOpen, bestClose := -1, -1
+	var spans []span // 内层先闭合，先记录
+	var stack []int
 	for i := start; i < end; {
 		switch c := text[i]; c {
 		case '\'', '"', '`':
@@ -162,32 +164,58 @@ func scopeInSegment(text string, offset int) string {
 				continue
 			}
 		case '(':
-			if open < 0 {
-				open = i
-			}
-			depth++
+			stack = append(stack, i)
 		case ')':
-			if depth > 0 {
-				depth--
-				if depth == 0 {
-					if open < offset && offset <= i {
-						bestOpen, bestClose = open, i
-					} else {
-						blanks = append(blanks, span{open: open, close: i})
-					}
-					open = -1
+			if n := len(stack); n > 0 {
+				open := stack[n-1]
+				stack = stack[:n-1]
+				if open < offset && offset <= i {
+					spans = append(spans, span{open: open, close: i})
 				}
 			}
 		}
 		i++
 	}
-	if bestOpen >= 0 {
-		return strings.TrimSpace(text[bestOpen+1 : bestClose])
+	// 未闭合的括号（边输入边补全时常见）：光标在里面的也算候选，闭合位置取语句尾。
+	var blankAt []int
+	for _, open := range stack {
+		if open < offset {
+			spans = append(spans, span{open: open, close: end})
+		}
 	}
-	// 外层作用域：返回整条语句，由 relationsIn 按括号深度只取本层关系
-	// （子查询里的 FROM 在更深的括号里，因此不会泄漏到外层；CTE 定义仍可见）。
-	_ = blanks
-	return strings.TrimSpace(text[start:end])
+	// 按左括号位置从大到小 = 从内到外。
+	sort.Slice(spans, func(i, j int) bool { return spans[i].open > spans[j].open })
+	for _, sp := range spans {
+		body := text[sp.open+1 : sp.close]
+		if isSubqueryBody(body) {
+			return strings.TrimSpace(body)
+		}
+		if sp.close == end {
+			blankAt = append(blankAt, sp.open)
+		}
+	}
+	// 没有包住光标的子查询：返回整条语句，由 relationsIn 按括号深度只取本层
+	// 关系；未闭合的函数/表达式括号抹掉，让 FROM 回到本层可见。
+	scope := text[start:end]
+	if len(blankAt) > 0 {
+		b := []byte(scope)
+		for _, at := range blankAt {
+			b[at-start] = ' '
+		}
+		scope = string(b)
+	}
+	return strings.TrimSpace(scope)
+}
+
+// isSubqueryBody 报告括号内容是否是子查询（首个词是 SELECT / WITH）。
+func isSubqueryBody(body string) bool {
+	for _, tok := range tokenizeSQL(body) {
+		if tok.kind != 'i' {
+			continue
+		}
+		return strings.EqualFold(tok.text, "select") || strings.EqualFold(tok.text, "with")
+	}
+	return false
 }
 
 // statementBounds 返回光标所在语句的 [start,end)（跳过字符串/注释，深度 0 的 ; 切分）。

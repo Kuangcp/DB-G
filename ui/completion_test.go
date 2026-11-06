@@ -353,3 +353,23 @@ func TestAliasDotColumns(t *testing.T) {
 		t.Fatalf("alias dot column missing: %v", texts)
 	}
 }
+
+// 函数括号内也要补字段：sum/avg/coalesce 等表达式不切断语句的表。
+func TestStatementColumnsInsideFunction(t *testing.T) {
+	a, _ := setupA4(t)
+	cases := []struct{ sql, typed, want string }{
+		{"select sum(na|) from med_school", "m", "name"},
+		{"select avg(na| from med_school", "m", "name"}, // 括号还没闭合
+		{"select count(*) from med_school where coalesce(zz|, '') <> ''", "_", "zz_col"},
+		{"select sum(bc|) from med_school m join b on m.id = b.id", "o", "bcol"},
+	}
+	for _, tc := range cases {
+		if texts := menuAt(t, a, tc.sql, tc.typed); !hasText(texts, tc.want) {
+			t.Fatalf("%q: missing %q in %v", tc.sql, tc.want, texts)
+		}
+	}
+	// 函数里的子查询仍按子查询自己的表补列。
+	if texts := menuAt(t, a, "select max((select zz| from inner_t)) from med_school", "_"); !hasText(texts, "zz_inner") {
+		t.Fatalf("subquery in function: %v", texts)
+	}
+}

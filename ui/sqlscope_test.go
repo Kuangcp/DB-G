@@ -111,3 +111,27 @@ func TestStmtScopeAtIsBounded(t *testing.T) {
 		t.Fatalf("relations lost in the windowed scan: %q", scope)
 	}
 }
+
+// 函数/表达式括号不切作用域：光标在 sum( 里仍能看到整条语句的表。
+func TestScopeFunctionParenKeepsStatementRelations(t *testing.T) {
+	for _, text := range []string{
+		"select sum(amount) from record",
+		"select sum(amount from record",               // 括号还没闭合
+		"select coalesce(sum(amount), 0) from record", // 嵌套函数
+		"select count(*) from record where (amount > 0 and id = 1)",
+	} {
+		offset := strings.Index(text, "amount") + 3
+		if strings.Contains(text, "count(*)") {
+			offset = strings.Index(text, "amount")
+		}
+		if got := relationsOf(stmtScopeAt(text, offset)); strings.Join(got, ",") != "record" {
+			t.Fatalf("%q → relations %v (scope %q)", text, got, stmtScopeAt(text, offset))
+		}
+	}
+	// 函数里的子查询仍按子查询作用域解析。
+	text := "select max((select zz from inner_t)) from record"
+	offset := strings.Index(text, "zz") + 2
+	if got := relationsOf(stmtScopeAt(text, offset)); strings.Join(got, ",") != "inner_t" {
+		t.Fatalf("subquery in function: %v", got)
+	}
+}
