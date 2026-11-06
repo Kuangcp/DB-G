@@ -57,3 +57,39 @@ func TestShowDDLOpensPanel(t *testing.T) {
 		t.Fatalf("panel title missing: %q", tt.Texts())
 	}
 }
+
+// DDL 弹窗：正文格式化 + SQL 高亮 + 可选中部分复制。
+func TestDDLPanelFormatsAndSupportsPartialCopy(t *testing.T) {
+	a := newConsoleRoot(t)
+	raw := "create table users ( id integer primary key, name text )"
+	a.setDDL("users", raw)
+	if a.ddlText != raw {
+		t.Fatalf("raw ddl must be kept for copy-all: %q", a.ddlText)
+	}
+	formatted := a.ddlState.Buffer.String()
+	if !strings.Contains(formatted, "CREATE TABLE") || !strings.Contains(formatted, "PRIMARY KEY") {
+		t.Fatalf("ddl must be formatted (keywords uppercased): %q", formatted)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if !tt.HasText("DDL：users") {
+		t.Fatalf("panel title missing: %q", tt.Texts())
+	}
+	// 选中前 6 个字符再 Ctrl+C：剪贴板只该有选区内容。
+	if n := len(formatted); n > 6 {
+		a.ddlState.Select(0, 6)
+		tt.Frame()
+		tt.Key(ui.Ctrl, ui.KeyC)
+		tt.Frame()
+		if got := tt.Clipboard(); got != formatted[:6] {
+			t.Fatalf("partial copy: %q want %q", got, formatted[:6])
+		}
+	}
+	// 「复制全部」拿完整（格式化后的）DDL。
+	if err := tt.Click("复制全部"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.Clipboard(); got != formatted {
+		t.Fatalf("copy all: %q", got)
+	}
+}

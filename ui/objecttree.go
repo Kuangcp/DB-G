@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	myeditor "github.com/egoist/mygo/ui/editor"
 
 	"db-g/app"
 	"db-g/engine"
@@ -572,20 +573,19 @@ func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 	load := func() {
 		lister, ok := sess.(engine.ObjectDDLer)
 		if !ok || sess == nil || !sess.Caps().Has(engine.CapObjectDDL) {
-			a.ddlTitle, a.ddlText, a.ddlOpen = o.Name, "该数据源不支持查看 DDL", true
+			a.setDDLNote(o.Name, "该数据源不支持查看 DDL")
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		ddl, err := lister.ObjectDDL(ctx, o.Kind, o.Name)
 		apply := func() {
-			a.ddlTitle, a.ddlOpen = o.Name, true
 			if err != nil {
-				a.ddlText = "读取 DDL 失败: " + err.Error()
+				a.setDDLNote(o.Name, "读取 DDL 失败: "+err.Error())
 				app.LogWarn("ddl", "load failed", "object", o.Name, "err", err.Error())
 				return
 			}
-			a.ddlText = ddl
+			a.setDDL(o.Name, ddl)
 		}
 		if a.win != nil {
 			win := a.win
@@ -601,25 +601,62 @@ func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 	go load()
 }
 
-// ddlPanel 渲染 DDL 弹窗。
+// DDL 弹窗的固定尺寸：正文是可滚动编辑器，面板不随 DDL 长短跳动。
+const (
+	ddlPanelWidth  = 760
+	ddlPanelHeight = 520
+)
+
+// ddlViewState 返回 DDL 只读编辑器状态（首次用时创建）：SQL 高亮、可选中复制。
+func (a *root) ddlViewState() *myeditor.State {
+	if a.ddlState == nil {
+		buf := myeditor.NewBuffer("")
+		buf.SetLanguage(myeditor.LanguageNamed("SQL"))
+		a.ddlState = &myeditor.State{
+			Buffer:       buf,
+			ReadOnly:     true,
+			LineNumbers:  myeditor.LineNumbersOff,
+			NoActiveLine: true,
+			NoFolding:    true,
+		}
+	}
+	return a.ddlState
+}
+
+// setDDL 把格式化后的 DDL 装进只读高亮视图并打开弹窗。
+func (a *root) setDDL(title, ddl string) {
+	a.ddlTitle, a.ddlText, a.ddlOpen = title, ddl, true
+	text := ddl
+	if out, err := app.FormatSQL(ddl); err == nil {
+		text = out
+	}
+	a.ddlViewState().Buffer.Reset(text)
+}
+
+// setDDLNote 在弹窗里显示一行提示（不支持 / 读取失败），不做格式化。
+func (a *root) setDDLNote(title, msg string) {
+	a.ddlTitle, a.ddlText, a.ddlOpen = title, msg, true
+	a.ddlViewState().Buffer.Reset(msg)
+}
+
+// ddlPanel 渲染 DDL 弹窗：只读 SQL 编辑器支持高亮与部分选中复制。
 func (a *root) ddlPanel(c *ui.Context) {
 	if !a.ddlOpen {
 		return
 	}
 	ui.Modal(c, &a.ddlOpen, func() {
 		ui.Text(c, "DDL："+a.ddlTitle).Bold().SingleLine()
-		ui.ScrollBoth(c).Height(360).Children(func() {
-			ui.Text(c, a.ddlText).Font("monospace").FontSize(12)
-		})
+		myeditor.View(c, a.ddlViewState()).FillWidth().Height(ddlPanelHeight - 110)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "复制").Clicked() {
-				c.WriteClipboard(a.ddlText)
+			if ui.Button(c, "复制全部").Tooltip("复制整段 DDL；先在正文里选中部分再 Ctrl+C 只复制选区").
+				Clicked() {
+				c.WriteClipboard(a.ddlState.Buffer.String())
 			}
 			if ui.PrimaryButton(c, "关闭").Clicked() {
 				a.ddlOpen = false
 			}
 		})
-	})
+	}).Width(ddlPanelWidth).Height(ddlPanelHeight)
 }
 
 // qualifiedName 按对象所在的 schema 生成引用名（跨 schema 预览/DDL 用）。

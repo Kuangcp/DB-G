@@ -110,6 +110,7 @@ type root struct {
 	ddlOpen             bool
 	ddlTitle            string
 	ddlText             string
+	ddlState            *myeditor.State // DDL 弹窗的只读高亮编辑器（惰性创建）
 	historyOpen         bool
 	exportConfirm       bool
 	exportFormat        string
