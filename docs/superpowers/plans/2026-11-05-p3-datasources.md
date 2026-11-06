@@ -32,3 +32,12 @@
 - 全量 `CGO_ENABLED=0 go test -p 1 ./...` 绿（PG/CK 集成无实例时 skip）。
 - 有真实 PG/CK 时：设置 `DB_G_PG_HOST`（及 `_PORT/_USER/_PASSWORD/_DATABASE`）或 `DB_G_CK_*`，再跑
   `go test ./driver/postgres ./driver/clickhouse -v`；UI 用手动新建连接验证。
+
+## 追加完成（task3）
+
+- `engine.SchemaLister`（Schemas/ObjectsIn）+ `DBObject.Schema`
+- PG/MySQL/CK 实现 schema 列表与按 schema 取对象；对象树先列 schema 再列分组（懒加载、错误行）
+- PG 的 DDL：视图用 `pg_get_viewdef`；表用 information_schema 尽力拼 `CREATE TABLE`（列/类型/非空/默认/主键）
+- CK 的 DDL：`SHOW CREATE TABLE`
+- 预览/DDL 用 `"schema"."table"` 限定名；**跨 schema 查询结果只读**（写操作不越 schema）
+- 测试：schema 树渲染（fake SchemaLister）、限定名校验、驱动 DSN/能力位；全量绿
