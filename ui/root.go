@@ -38,6 +38,9 @@ type root struct {
 	connFormUser   string
 	connFormPass   string
 	connFormDB     string
+	connTestMsg    string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	connTestErr    bool
+	connTestBusy   bool
 	connDeleteOpen bool
 	connDeleting   string
 	treeExpand     map[string]bool

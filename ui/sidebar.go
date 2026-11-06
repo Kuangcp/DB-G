@@ -19,6 +19,7 @@ func (a *root) sidebar(c *ui.Context) {
 				a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
 				a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
 				a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
+				a.resetConnTest()
 			}
 			if iconButton(c, iconRefresh, "刷新数据源", ui.Transparent).Clicked() {
 				a.reloadTree()
@@ -88,6 +89,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 			if p.Port > 0 {
 				a.connFormPort = strconv.Itoa(p.Port)
 			}
+			a.resetConnTest()
 		}
 		if iconButtonPlain(c, iconTrash, "删除连接", c.Theme().Danger).Clicked() {
 			a.connDeleting, a.connDeleteOpen = p.ID, true
@@ -206,7 +208,23 @@ func (a *root) connModal(c *ui.Context) {
 				}
 				// 留白：按钮沉到面板底部，上方空着。
 				ui.Spacer(c)
-				ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+				if a.connTestMsg != "" {
+					col := c.Theme().Success
+					if a.connTestErr {
+						col = c.Theme().Danger
+					}
+					ui.Text(c, a.connTestMsg).FontSize(12).TextColor(col).
+						SingleLine().Tooltip(a.connTestMsg)
+				}
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					if ui.Button(c, "测试连接").Disabled(a.connTestBusy).Clicked() {
+						a.testConnForm()
+					}
+					if ui.Button(c, "复制").Tooltip("把连接信息按 key: value 复制到剪贴板（不含密码）").
+						Clicked() {
+						a.copyConnForm(c)
+					}
+					ui.Spacer(c)
 					if ui.Button(c, "取消").Clicked() {
 						a.connFormOpen = false
 					}
@@ -280,6 +298,7 @@ func (a *root) switchConnKind(kind string) {
 		}
 	}
 	a.connFormErr = ""
+	a.resetConnTest()
 }
 
 func (a *root) deleteModal(c *ui.Context) {
@@ -310,29 +329,39 @@ func (a *root) deleteModal(c *ui.Context) {
 	})
 }
 
+// connFormProfile 把表单当前内容读成一份连接档案（只读，不落盘）：保存、测试连接
+// 和复制连接信息都用它，免得三处各读一遍表单。
+func (a *root) connFormProfile() (app.ConnProfile, error) {
+	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath}
+	if a.connFormKind == "sqlite" {
+		return p, nil
+	}
+	portText := a.connFormPort
+	if portText == "" {
+		portText = strconv.Itoa(defaultPort(a.connFormKind))
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		return p, errPort
+	}
+	p.Host = a.connFormHost
+	p.Port = port
+	p.User = a.connFormUser
+	p.Password = a.connFormPass
+	p.Database = a.connFormDB
+	return p, nil
+}
+
 func (a *root) saveConnForm() {
 	if a.store == nil {
 		a.connFormErr = "连接库不可用"
 		return
 	}
-	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath}
-	if a.connFormKind != "sqlite" {
-		portText := a.connFormPort
-		if portText == "" {
-			portText = strconv.Itoa(defaultPort(a.connFormKind))
-		}
-		port, err := strconv.Atoi(portText)
-		if err != nil {
-			a.connFormErr = "端口必须是数字"
-			return
-		}
-		p.Host = a.connFormHost
-		p.Port = port
-		p.User = a.connFormUser
-		p.Password = a.connFormPass
-		p.Database = a.connFormDB
+	p, err := a.connFormProfile()
+	if err != nil {
+		a.connFormErr = "端口必须是数字"
+		return
 	}
-	var err error
 	if a.connFormID == "" {
 		err = a.store.Add(p)
 	} else {
@@ -343,6 +372,7 @@ func (a *root) saveConnForm() {
 		return
 	}
 	a.connFormOpen = false
+	a.resetConnTest()
 	a.checkConnHealth()
 }
 
