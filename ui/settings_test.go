@@ -234,3 +234,70 @@ func TestSettingsShowsVersion(t *testing.T) {
 		t.Fatalf("缺少版本号 %q: %q", app.Version(), tt.Texts())
 	}
 }
+
+// 外观分区：默认项齐全，切换模式/强调色/密度即时生效并落盘。
+func TestAppearanceSectionControls(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	tt := openSettingsSection(t, a, "外观")
+	for _, want := range []string{"跟随系统", "浅色", "深色", "强调色", "密度", "预览", "恢复默认", "导出主题…", "导入主题…"} {
+		if !tt.HasText(want) {
+			t.Fatalf("appearance section missing %q: %q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("深色"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.themePrefs.Mode != app.ThemeModeDark {
+		t.Fatalf("mode: %+v", a.themePrefs)
+	}
+	if got, _ := app.LoadThemePrefs(a.themePath); got.Mode != app.ThemeModeDark {
+		t.Fatalf("persisted mode: %+v", got)
+	}
+	if err := tt.Click("强调色：紫"); err != nil {
+		t.Fatal(err)
+	}
+	if a.themePrefs.Accent != "violet" {
+		t.Fatalf("accent: %+v", a.themePrefs)
+	}
+	if err := tt.Click("紧凑"); err != nil {
+		t.Fatal(err)
+	}
+	if a.themePrefs.Density != app.ThemeDensityCompact {
+		t.Fatalf("density: %+v", a.themePrefs)
+	}
+}
+
+// 恢复默认清空覆盖项。
+func TestAppearanceReset(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	a.setThemePrefs(app.ThemePrefs{Mode: "dark", Accent: "violet", Density: "compact", Radius: 10, FontSize: 16})
+	tt := openSettingsSection(t, a, "外观")
+	if err := tt.Click("恢复默认"); err != nil {
+		t.Fatal(err)
+	}
+	if a.themePrefs != app.DefaultThemePrefs() {
+		t.Fatalf("reset: %+v", a.themePrefs)
+	}
+}
+
+// 主题文件导出/导入往返（对话框之外的实现）。
+func TestThemeExportImport(t *testing.T) {
+	a := newConsoleRoot(t)
+	path := filepath.Join(t.TempDir(), "theme.json")
+	a.setThemePrefs(app.ThemePrefs{Mode: "light", Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15})
+	if err := a.exportThemeTo(path); err != nil {
+		t.Fatal(err)
+	}
+	a.setThemePrefs(app.DefaultThemePrefs())
+	warn, err := a.importThemeFrom(path)
+	if err != nil || len(warn) != 0 {
+		t.Fatalf("import: warn=%v err=%v", warn, err)
+	}
+	want := app.ThemePrefs{Mode: "light", Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15}
+	if a.themePrefs != want {
+		t.Fatalf("imported: %+v want %+v", a.themePrefs, want)
+	}
+}

@@ -52,6 +52,8 @@ type root struct {
 	themePath        string         // theme.json 的位置（空 = 不落盘）
 	themeWarn        string
 	themeSaveSeq     atomic.Uint64
+	themeHex         string // 外观分区里自定义强调色的输入框
+	themeHexErr      string
 	settingsSection  int    // 设置窗口选中的分区
 	captureAction    string // 设置窗口正在录制键位的动作
 	keymapWarn       string // 键位文件读写问题的提示
