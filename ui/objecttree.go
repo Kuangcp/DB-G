@@ -20,6 +20,15 @@ var objectKinds = []struct {
 	{engine.ObjectIndex, "索引"},
 }
 
+const (
+	// objectPageSize 是展开一个对象分组时一次拉取的条数。mygo 的 Tree 不做虚拟化，
+	// 页大小压小，保证大库展开时也能流畅渲染；更多内容靠「继续加载」。
+	objectPageSize = 1000
+	// objectMaxLoaded 是单个分组最多加载的条数（对齐 db-k 的 AUTO_LOAD_CAP），
+	// 避免把 6 万张表全塞进内存和非虚拟化的树里。
+	objectMaxLoaded = 5000
+)
+
 func kindKey(k engine.ObjectKind) string {
 	switch k {
 	case engine.ObjectTable:
@@ -29,6 +38,18 @@ func kindKey(k engine.ObjectKind) string {
 	default:
 		return "index"
 	}
+}
+
+// objectTreeKey 是对象缓存/计数/加载状态的键：连接 + schema（空 = 默认 schema）。
+func objectTreeKey(connID, schema string) string {
+	if schema == "" {
+		return connID
+	}
+	return connID + "|" + schema
+}
+
+func objectGroupKey(base string, kind engine.ObjectKind) string {
+	return base + "|" + kindKey(kind)
 }
 
 func (a *root) groupOpenPtr(key string, v bool) *bool {
@@ -46,6 +67,9 @@ func (a *root) groupOpenPtr(key string, v bool) *bool {
 
 func (a *root) reloadTree() {
 	a.treeData = nil
+	a.treeCounts = nil
+	a.treeLoading = nil
+	a.treePageStarted = nil
 	a.treeErr = nil
 }
 
@@ -54,6 +78,15 @@ func (a *root) setTreeErr(key, msg string) {
 		a.treeErr = map[string]string{}
 	}
 	a.treeErr[key] = msg
+}
+
+// treeCountOf 返回某组的总数；nil 计数视为未知（仍在加载或驱动不支持计数）。
+func (a *root) treeCountOf(base string, kind engine.ObjectKind) (int, bool) {
+	m, ok := a.treeCounts[base]
+	if !ok {
+		return 0, false
+	}
+	return m[kind], true
 }
 
 // expandConnAndTree 连上数据源（没连的话）并展开它的树：点数据源名走这里。
@@ -90,26 +123,15 @@ func (a *root) toggleExpandConn(p app.ConnProfile) {
 	}
 }
 
-func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
-	key := p.ID
-	if schema != "" {
-		key = p.ID + "|" + schema
-	}
-	if _, ok := a.treeData[key]; ok {
-		return
-	}
-	sess := a.sessionFor(p.ID)
+// loadAllObjectKinds 是驱动不支持计数/分页时的兜底：一次拉全量。
+// 只有未知驱动或测试假会话会走这里；内置驱动都实现了 ObjectCounter/PagedObjectLister。
+func (a *root) loadAllObjectKinds(sess engine.Session, schema string) (map[engine.ObjectKind][]engine.DBObject, error) {
 	if sess == nil {
-		return // 没连上就不画树（侧栏的圆点已经说明状态），不写「未连接」
-	}
-	if !sess.Caps().Has(engine.CapObjects) {
-		a.setTreeErr(key, "该数据源不支持对象树")
-		return
+		return nil, nil
 	}
 	lister, ok := sess.(engine.ObjectLister)
-	if !ok {
-		a.setTreeErr(key, "该数据源不支持对象树")
-		return
+	if !ok || !sess.Caps().Has(engine.CapObjects) {
+		return nil, fmt.Errorf("该数据源不支持对象树")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -124,19 +146,217 @@ func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
 			objs, err = lister.Objects(ctx, g.kind)
 		}
 		if err != nil {
-			a.setTreeErr(key, err.Error())
-			return
+			return nil, err
 		}
 		data[g.kind] = objs
 	}
-	if a.treeData == nil {
-		a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{}
+	return data, nil
+}
+
+// loadAllObjects 异步/同步装载全量对象（兜底路径）并写进缓存。
+func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
+	if _, ok := a.treeData[base]; ok {
+		return
 	}
-	a.treeData[key] = data
+	key := base + "|all"
+	if a.treeLoading == nil {
+		a.treeLoading = map[string]bool{}
+	}
+	if a.treeLoading[key] {
+		return
+	}
+	sess := a.sessionFor(p.ID)
+	if sess == nil {
+		return
+	}
+	a.treeLoading[key] = true
+	done := func(data map[engine.ObjectKind][]engine.DBObject, err error) {
+		delete(a.treeLoading, key)
+		if err != nil {
+			a.setTreeErr(base, err.Error())
+			return
+		}
+		if data == nil {
+			return
+		}
+		if a.treeData == nil {
+			a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{}
+		}
+		if a.treeCounts == nil {
+			a.treeCounts = map[string]map[engine.ObjectKind]int{}
+		}
+		a.treeData[base] = data
+		counts := map[engine.ObjectKind]int{}
+		for kind, objs := range data {
+			counts[kind] = len(objs)
+		}
+		a.treeCounts[base] = counts
+	}
+	if a.win == nil {
+		data, err := a.loadAllObjectKinds(sess, schema)
+		done(data, err)
+		return
+	}
+	win := a.win
+	go func() {
+		data, err := a.loadAllObjectKinds(sess, schema)
+		win.Update(func() { done(data, err) })
+	}()
+}
+
+// ensureObjectCounts 只取各类型数量；有 ObjectCounter 用 count 查询，
+// 否则退化为全量加载（内置驱动都已实现计数）。
+func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
+	base := objectTreeKey(p.ID, schema)
+	if _, ok := a.treeCounts[base]; ok {
+		return
+	}
+	countKey := base + "|counts"
+	if a.treeLoading == nil {
+		a.treeLoading = map[string]bool{}
+	}
+	if a.treeLoading[countKey] {
+		return
+	}
+	sess := a.sessionFor(p.ID)
+	if sess == nil {
+		return // 没连上就不画树（侧栏的圆点已经说明状态），不写「未连接」
+	}
+	if !sess.Caps().Has(engine.CapObjects) {
+		a.setTreeErr(base, "该数据源不支持对象树")
+		return
+	}
+	counter, ok := sess.(engine.ObjectCounter)
+	if !ok {
+		a.loadAllObjects(p, schema, base)
+		return
+	}
+	a.treeLoading[countKey] = true
+	load := func() (map[engine.ObjectKind]int, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return counter.ObjectCounts(ctx, schema)
+	}
+	done := func(counts map[engine.ObjectKind]int, err error) {
+		delete(a.treeLoading, countKey)
+		if err != nil {
+			a.setTreeErr(base, err.Error())
+			return
+		}
+		if a.treeCounts == nil {
+			a.treeCounts = map[string]map[engine.ObjectKind]int{}
+		}
+		a.treeCounts[base] = counts
+	}
+	if a.win == nil {
+		counts, err := load()
+		done(counts, err)
+		return
+	}
+	win := a.win
+	go func() {
+		counts, err := load()
+		win.Update(func() { done(counts, err) })
+	}()
+}
+
+// ensureObjectPage 只在分组第一次展开时加载第一页，之后由「继续加载」显式追加；
+// 避免开着的分组每一帧都自动拉下一页。
+func (a *root) ensureObjectPage(p app.ConnProfile, schema string, kind engine.ObjectKind) {
+	groupKey := objectGroupKey(objectTreeKey(p.ID, schema), kind)
+	if a.treePageStarted == nil {
+		a.treePageStarted = map[string]bool{}
+	}
+	if a.treePageStarted[groupKey] {
+		return
+	}
+	a.treePageStarted[groupKey] = true
+	a.loadObjectPage(p, schema, kind)
+}
+
+// loadObjectPage 加载某类型分组的下一页；已加载满或达到上限时不动。
+func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.ObjectKind) {
+	base := objectTreeKey(p.ID, schema)
+	groupKey := objectGroupKey(base, kind)
+	if a.treeLoading == nil {
+		a.treeLoading = map[string]bool{}
+	}
+	if a.treeLoading[groupKey] {
+		return
+	}
+	loaded := 0
+	if m := a.treeData[base]; m != nil {
+		loaded = len(m[kind])
+	}
+	total, hasTotal := a.treeCountOf(base, kind)
+	if hasTotal && loaded >= total {
+		return
+	}
+	if loaded >= objectMaxLoaded {
+		return
+	}
+	sess := a.sessionFor(p.ID)
+	if sess == nil {
+		return
+	}
+	pager, ok := sess.(engine.PagedObjectLister)
+	if !ok {
+		a.loadAllObjects(p, schema, base)
+		return
+	}
+	limit := objectPageSize
+	if hasTotal && total-loaded < limit {
+		limit = total - loaded
+	}
+	if loaded+limit > objectMaxLoaded {
+		limit = objectMaxLoaded - loaded
+	}
+	if limit <= 0 {
+		return
+	}
+	a.treeLoading[groupKey] = true
+	load := func() ([]engine.DBObject, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return pager.ObjectsPage(ctx, schema, kind, loaded, limit)
+	}
+	done := func(objs []engine.DBObject, err error) {
+		delete(a.treeLoading, groupKey)
+		if err != nil {
+			a.setTreeErr(groupKey, err.Error())
+			return
+		}
+		if a.treeData == nil {
+			a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{}
+		}
+		if a.treeData[base] == nil {
+			a.treeData[base] = map[engine.ObjectKind][]engine.DBObject{}
+		}
+		a.treeData[base][kind] = append(a.treeData[base][kind], objs...)
+	}
+	if a.win == nil {
+		objs, err := load()
+		done(objs, err)
+		return
+	}
+	win := a.win
+	go func() {
+		objs, err := load()
+		win.Update(func() { done(objs, err) })
+	}()
+}
+
+// loadGroupsIn 保留为同步入口（测试/兼容）：取计数并把每个类型的第一页装好。
+func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
+	a.ensureObjectCounts(p, schema)
+	for _, g := range objectKinds {
+		a.ensureObjectPage(p, schema, g.kind)
+	}
 }
 
 func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
-	if err := a.treeErr[p.ID]; err != "" {
+	base := objectTreeKey(p.ID, "")
+	if err := a.treeErr[base]; err != "" {
 		ui.Text(c, err).TextColor(c.Theme().Danger)
 		return
 	}
@@ -145,10 +365,13 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
 		a.schemaTree(c, p, lister)
 		return
 	}
-	a.loadGroupsIn(p, "")
-	data := a.treeData[p.ID]
+	a.ensureObjectCounts(p, "")
+	if err := a.treeErr[base]; err != "" {
+		ui.Text(c, err).TextColor(c.Theme().Danger)
+		return
+	}
 	ui.Tree(c, func() {
-		a.kindGroups(c, p, "", data)
+		a.kindGroups(c, p, "")
 	})
 }
 
@@ -180,49 +403,83 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 	ui.Tree(c, func() {
 		for _, schema := range a.treeSchemas[p.ID] {
 			key := p.ID + "|" + schema
+			base := objectTreeKey(p.ID, schema)
 			open := a.groupOpenPtr(key+"|schema", false)
 			ui.TreeItem(c, "▣ "+schema, open, func() {
-				a.loadGroupsIn(p, schema)
-				a.kindGroups(c, p, schema, a.treeData[key])
+				a.ensureObjectCounts(p, schema)
+				if err := a.treeErr[base]; err != "" {
+					ui.TreeItem(c, err, nil, nil)
+					return
+				}
+				a.kindGroups(c, p, schema)
 			})
 		}
 	})
 }
 
 // kindGroups 渲染某个 schema（或默认 schema，schema=""）下的对象分组。
-func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string, data map[engine.ObjectKind][]engine.DBObject) {
-	base := p.ID
-	if schema != "" {
-		base = p.ID + "|" + schema
-	}
+// 标题只显示计数，不拉正文；正文在组展开时按页加载。
+func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string) {
+	base := objectTreeKey(p.ID, schema)
 	for _, g := range objectKinds {
-		objs := data[g.kind]
-		label := fmt.Sprintf("%s (%d)", g.label, len(objs))
+		label := g.label
+		if total, ok := a.treeCountOf(base, g.kind); ok {
+			label = fmt.Sprintf("%s (%d)", g.label, total)
+		}
 		open := a.groupOpenPtr(base+"|"+kindKey(g.kind), false)
+		kind := g.kind
 		ui.TreeItem(c, label, open, func() {
-			for _, o := range objs {
-				obj := o
-				selKey := base + "|" + obj.Name
-				leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == selKey)
-				if leaf.Clicked() {
-					a.treeSelected = selKey
-				}
-				if leaf.DoubleClicked() {
-					a.previewObject(p, obj)
-				}
-				leaf.ContextMenu(func(m *ui.Menu) {
-					if m.Item("预览数据").Chosen() {
-						a.previewObject(p, obj)
-					}
-					if m.Item("查看 DDL").Chosen() {
-						a.showDDL(p, obj)
-					}
-					if m.Item("插入名称").Chosen() {
-						a.code.Insert(obj.Name)
-					}
-				})
+			a.ensureObjectPage(p, schema, kind)
+			a.objectLeaves(c, p, schema, base, kind)
+		})
+	}
+}
+
+// objectLeaves 渲染某组已加载的对象，以及加载中/失败/继续加载行。
+func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base string, kind engine.ObjectKind) {
+	groupKey := objectGroupKey(base, kind)
+	if err := a.treeErr[groupKey]; err != "" {
+		ui.TreeItem(c, err, nil, nil)
+		return
+	}
+	var objs []engine.DBObject
+	if m := a.treeData[base]; m != nil {
+		objs = m[kind]
+	}
+	if len(objs) == 0 && (a.treeLoading[groupKey] || a.treeLoading[base+"|all"] || a.treeLoading[base+"|counts"]) {
+		ui.TreeItem(c, "加载中…", nil, nil)
+	}
+	for _, o := range objs {
+		obj := o
+		selKey := base + "|" + obj.Name
+		leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == selKey)
+		if leaf.Clicked() {
+			a.treeSelected = selKey
+		}
+		if leaf.DoubleClicked() {
+			a.previewObject(p, obj)
+		}
+		leaf.ContextMenu(func(m *ui.Menu) {
+			if m.Item("预览数据").Chosen() {
+				a.previewObject(p, obj)
+			}
+			if m.Item("查看 DDL").Chosen() {
+				a.showDDL(p, obj)
+			}
+			if m.Item("插入名称").Chosen() {
+				a.code.Insert(obj.Name)
 			}
 		})
+	}
+	if total, ok := a.treeCountOf(base, kind); ok && len(objs) < total {
+		if len(objs) >= objectMaxLoaded {
+			ui.TreeItem(c, fmt.Sprintf("已显示前 %d 个，共 %d 个", len(objs), total), nil, nil)
+			return
+		}
+		label := fmt.Sprintf("继续加载（已 %d / 共 %d）", len(objs), total)
+		if ui.TreeItem(c, label, nil, nil).Clicked() {
+			a.loadObjectPage(p, schema, kind)
+		}
 	}
 }
 

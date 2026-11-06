@@ -238,31 +238,99 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
-// ObjectsIn 列出某库的表/视图/索引。
-func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+func (s *session) mysqlSchema(schema string) (string, error) {
+	if schema == "" {
+		schema = s.cfg.DBName
+	}
+	if schema == "" {
+		return "", errors.New("mysql: 未选择数据库")
+	}
+	return schema, nil
+}
+
+func mysqlObjectQuery(kind engine.ObjectKind) (string, error) {
+	switch kind {
+	case engine.ObjectTable:
+		return `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'`, nil
+	case engine.ObjectView:
+		return `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'VIEW'`, nil
+	case engine.ObjectIndex:
+		return `SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? GROUP BY INDEX_NAME`, nil
+	default:
+		return "", fmt.Errorf("mysql: unknown object kind %d", kind)
+	}
+}
+
+// ObjectCounts 只查 information_schema 的计数，供大库树分组标题使用。
+func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.ObjectKind]int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("mysql: session not open")
 	}
-	if schema == "" {
-		schema = s.cfg.DBName
+	schema, err := s.mysqlSchema(schema)
+	if err != nil {
+		return nil, err
 	}
-	if schema == "" {
-		return nil, errors.New("mysql: 未选择数据库")
+	out := map[engine.ObjectKind]int{}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT TABLE_TYPE, COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? GROUP BY TABLE_TYPE`, schema)
+	if err != nil {
+		return nil, err
 	}
-	var q string
-	switch kind {
-	case engine.ObjectTable:
-		q = `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`
-	case engine.ObjectView:
-		q = `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'VIEW' ORDER BY TABLE_NAME`
-	case engine.ObjectIndex:
-		q = `SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? GROUP BY INDEX_NAME ORDER BY INDEX_NAME`
-	default:
-		return nil, fmt.Errorf("mysql: unknown object kind %d", kind)
+	for rows.Next() {
+		var typ string
+		var n int
+		if err := rows.Scan(&typ, &n); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		switch typ {
+		case "BASE TABLE":
+			out[engine.ObjectTable] = n
+		case "VIEW":
+			out[engine.ObjectView] = n
+		}
 	}
-	rows, err := s.db.QueryContext(ctx, q, schema)
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var indexes int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ?`, schema).Scan(&indexes); err != nil {
+		return nil, err
+	}
+	out[engine.ObjectIndex] = indexes
+	return out, nil
+}
+
+// ObjectsPage 按页列出某库的对象；limit <= 0 表示不分页。
+func (s *session) ObjectsPage(ctx context.Context, schema string, kind engine.ObjectKind, offset, limit int) ([]engine.DBObject, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("mysql: session not open")
+	}
+	schema, err := s.mysqlSchema(schema)
+	if err != nil {
+		return nil, err
+	}
+	q, err := mysqlObjectQuery(kind)
+	if err != nil {
+		return nil, err
+	}
+	q += ` ORDER BY 1`
+	args := []any{schema}
+	if limit > 0 {
+		if offset < 0 {
+			offset = 0
+		}
+		q += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -278,40 +346,13 @@ func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.Obje
 	return out, rows.Err()
 }
 
+// ObjectsIn 列出某库的表/视图/索引。
+func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	return s.ObjectsPage(ctx, schema, kind, 0, 0)
+}
+
 func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
-	}
-	if s.cfg.DBName == "" {
-		return nil, errors.New("mysql: 未选择数据库")
-	}
-	var q string
-	switch kind {
-	case engine.ObjectTable:
-		q = `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`
-	case engine.ObjectView:
-		q = `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'VIEW' ORDER BY TABLE_NAME`
-	case engine.ObjectIndex:
-		q = `SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? GROUP BY INDEX_NAME ORDER BY INDEX_NAME`
-	default:
-		return nil, fmt.Errorf("mysql: unknown object kind %d", kind)
-	}
-	rows, err := s.db.QueryContext(ctx, q, s.cfg.DBName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []engine.DBObject
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		out = append(out, engine.DBObject{Kind: kind, Name: name})
-	}
-	return out, rows.Err()
+	return s.ObjectsPage(ctx, "", kind, 0, 0)
 }
 
 // Columns 列出一个表的列（information_schema）。

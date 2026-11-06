@@ -209,25 +209,95 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
-// ObjectsIn 列出某 schema 的表/视图/索引。
-func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+func pgObjectQuery(kind engine.ObjectKind) (string, error) {
+	switch kind {
+	case engine.ObjectTable:
+		return `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE'`, nil
+	case engine.ObjectView:
+		return `SELECT table_name FROM information_schema.views WHERE table_schema = $1`, nil
+	case engine.ObjectIndex:
+		return `SELECT indexname FROM pg_indexes WHERE schemaname = $1`, nil
+	default:
+		return "", fmt.Errorf("postgres: unknown object kind %d", kind)
+	}
+}
+
+// ObjectCounts 只查系统目录的计数，供大库树分组标题使用。
+func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.ObjectKind]int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("postgres: session not open")
 	}
-	var q string
-	switch kind {
-	case engine.ObjectTable:
-		q = `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY 1`
-	case engine.ObjectView:
-		q = `SELECT table_name FROM information_schema.views WHERE table_schema = $1 ORDER BY 1`
-	case engine.ObjectIndex:
-		q = `SELECT indexname FROM pg_indexes WHERE schemaname = $1 ORDER BY 1`
-	default:
-		return nil, fmt.Errorf("postgres: unknown object kind %d", kind)
+	if schema == "" {
+		var err error
+		schema, err = s.currentSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
-	rows, err := s.db.QueryContext(ctx, q, schema)
+	out := map[engine.ObjectKind]int{}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT table_type, count(*) FROM information_schema.tables WHERE table_schema = $1 GROUP BY table_type`, schema)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var typ string
+		var n int
+		if err := rows.Scan(&typ, &n); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		switch typ {
+		case "BASE TABLE":
+			out[engine.ObjectTable] = n
+		case "VIEW":
+			out[engine.ObjectView] = n
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	var indexes int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM pg_indexes WHERE schemaname = $1`, schema).Scan(&indexes); err != nil {
+		return nil, err
+	}
+	out[engine.ObjectIndex] = indexes
+	return out, nil
+}
+
+// ObjectsPage 按页列出某 schema 的对象；limit <= 0 表示不分页。
+func (s *session) ObjectsPage(ctx context.Context, schema string, kind engine.ObjectKind, offset, limit int) ([]engine.DBObject, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("postgres: session not open")
+	}
+	if schema == "" {
+		var err error
+		schema, err = s.currentSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	q, err := pgObjectQuery(kind)
+	if err != nil {
+		return nil, err
+	}
+	q += ` ORDER BY 1`
+	args := []any{schema}
+	if limit > 0 {
+		if offset < 0 {
+			offset = 0
+		}
+		q += ` LIMIT $2 OFFSET $3`
+		args = append(args, limit, offset)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +311,11 @@ func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.Obje
 		out = append(out, engine.DBObject{Kind: kind, Name: name, Schema: schema})
 	}
 	return out, rows.Err()
+}
+
+// ObjectsIn 列出某 schema 的表/视图/索引。
+func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	return s.ObjectsPage(ctx, schema, kind, 0, 0)
 }
 
 // Objects 列出当前 schema 的对象（保持 ObjectLister 兼容）。

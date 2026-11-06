@@ -119,6 +119,10 @@ func columnsOf(sess engine.Session, table string) ([]engine.Column, error) {
 	return lister.Columns(ctx, table)
 }
 
+// catalogObjectLimit 是补全目录最多取的表/视图数量。大库（几万张表）不全量拉，
+// 与 db-k 的元数据策略一致：只取第一页，避免后台构建几万条候选拖慢 UI。
+const catalogObjectLimit = 2000
+
 // objectsOf 用会话枚举表与视图（纯函数，可被后台协程安全调用）。
 func objectsOf(sess engine.Session) (tables, views []string, err error) {
 	lister, ok := sess.(engine.ObjectLister)
@@ -127,8 +131,17 @@ func objectsOf(sess engine.Session) (tables, views []string, err error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
 	defer cancel()
+	pager, _ := sess.(engine.PagedObjectLister)
 	names := func(kind engine.ObjectKind) ([]string, error) {
-		objs, err := lister.Objects(ctx, kind)
+		var objs []engine.DBObject
+		if pager != nil {
+			objs, err = pager.ObjectsPage(ctx, "", kind, 0, catalogObjectLimit)
+		} else {
+			objs, err = lister.Objects(ctx, kind)
+			if len(objs) > catalogObjectLimit {
+				objs = objs[:catalogObjectLimit]
+			}
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -13,6 +13,9 @@ import (
 
 	"db-g/engine"
 
+	// clickhouse-go 固定在 v2.36.0：v2.37 重写的 HTTP 实现会查询 displayName()，
+	// v2.38+ 还会无条件发送 client_protocol_version；ClickHouse 22.3 等老服务器
+	// 分别报 UNKNOWN_FUNCTION / UNKNOWN_SETTING。升级前先确认目标服务器支持。
 	_ "github.com/ClickHouse/clickhouse-go/v2"
 )
 
@@ -224,23 +227,79 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
-// ObjectsIn 列出某库的表/视图。
-func (s *session) ObjectsIn(ctx context.Context, database string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+// clickhouseObjectClause 返回某类对象的 engine 过滤条件。
+func clickhouseObjectClause(kind engine.ObjectKind) (string, error) {
+	switch kind {
+	case engine.ObjectTable:
+		return "engine NOT IN ('View','MaterializedView')", nil
+	case engine.ObjectView:
+		return "engine IN ('View','MaterializedView')", nil
+	case engine.ObjectIndex:
+		return "", nil // ClickHouse 无索引对象
+	default:
+		return "", fmt.Errorf("clickhouse: unknown object kind %d", kind)
+	}
+}
+
+// ObjectCounts 只查 system.tables 的计数，供大库树分组标题使用。
+func (s *session) ObjectCounts(ctx context.Context, database string) (map[engine.ObjectKind]int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("clickhouse: session not open")
 	}
-	var q string
-	switch kind {
-	case engine.ObjectTable:
-		q = `SELECT name FROM system.tables WHERE database = ? AND engine NOT IN ('View','MaterializedView') ORDER BY name`
-	case engine.ObjectView:
-		q = `SELECT name FROM system.tables WHERE database = ? AND engine IN ('View','MaterializedView') ORDER BY name`
-	default:
+	q := `SELECT countIf(engine NOT IN ('View','MaterializedView')),
+	             countIf(engine IN ('View','MaterializedView'))
+	      FROM system.tables WHERE is_temporary = 0`
+	var args []any
+	if database != "" {
+		q += ` AND database = ?`
+		args = append(args, database)
+	} else {
+		q += ` AND database = currentDatabase()`
+	}
+	var tables, views uint64
+	if err := s.db.QueryRowContext(ctx, q, args...).Scan(&tables, &views); err != nil {
+		return nil, err
+	}
+	return map[engine.ObjectKind]int{
+		engine.ObjectTable: int(tables),
+		engine.ObjectView:  int(views),
+		engine.ObjectIndex: 0,
+	}, nil
+}
+
+// ObjectsPage 按页列出某库的表/视图；limit <= 0 表示不分页。
+func (s *session) ObjectsPage(ctx context.Context, database string, kind engine.ObjectKind, offset, limit int) ([]engine.DBObject, error) {
+	clause, err := clickhouseObjectClause(kind)
+	if err != nil {
+		return nil, err
+	}
+	if kind == engine.ObjectIndex {
 		return []engine.DBObject{}, nil
 	}
-	rows, err := s.db.QueryContext(ctx, q, database)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("clickhouse: session not open")
+	}
+	q := `SELECT name FROM system.tables WHERE is_temporary = 0 AND ` + clause
+	var args []any
+	if database != "" {
+		q += ` AND database = ?`
+		args = append(args, database)
+	} else {
+		q += ` AND database = currentDatabase()`
+	}
+	q += ` ORDER BY name`
+	if limit > 0 {
+		if offset < 0 {
+			offset = 0
+		}
+		q += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -254,6 +313,11 @@ func (s *session) ObjectsIn(ctx context.Context, database string, kind engine.Ob
 		out = append(out, engine.DBObject{Kind: kind, Name: name, Schema: database})
 	}
 	return out, rows.Err()
+}
+
+// ObjectsIn 列出某库的表/视图。
+func (s *session) ObjectsIn(ctx context.Context, database string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	return s.ObjectsPage(ctx, database, kind, 0, 0)
 }
 
 // ObjectDDL 用 SHOW CREATE TABLE 取建表语句。
@@ -303,34 +367,7 @@ func quoteIdent(name string) string {
 }
 
 func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.db == nil {
-		return nil, errors.New("clickhouse: session not open")
-	}
-	var q string
-	switch kind {
-	case engine.ObjectTable:
-		q = `SELECT name FROM system.tables WHERE database = currentDatabase() AND engine NOT IN ('View','MaterializedView') ORDER BY name`
-	case engine.ObjectView:
-		q = `SELECT name FROM system.tables WHERE database = currentDatabase() AND engine IN ('View','MaterializedView') ORDER BY name`
-	default:
-		return []engine.DBObject{}, nil // ClickHouse 无索引对象
-	}
-	rows, err := s.db.QueryContext(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []engine.DBObject
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		out = append(out, engine.DBObject{Kind: kind, Name: name})
-	}
-	return out, rows.Err()
+	return s.ObjectsPage(ctx, "", kind, 0, 0)
 }
 
 func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {

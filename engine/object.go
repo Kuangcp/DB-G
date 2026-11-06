@@ -30,3 +30,15 @@ type SchemaLister interface {
 	Schemas(ctx context.Context) ([]string, error)
 	ObjectsIn(ctx context.Context, schema string, kind ObjectKind) ([]DBObject, error)
 }
+
+// ObjectCounter 是可选能力接口：快速返回某 schema 下各类型对象的数量。
+// 大库（几万张表）先只取计数，树分组标题即可显示总数，不拉对象正文。
+type ObjectCounter interface {
+	ObjectCounts(ctx context.Context, schema string) (map[ObjectKind]int, error)
+}
+
+// PagedObjectLister 是可选能力接口：按 offset/limit 分页枚举某类型对象。
+// schema 为空表示默认 schema；limit <= 0 表示不限制。
+type PagedObjectLister interface {
+	ObjectsPage(ctx context.Context, schema string, kind ObjectKind, offset, limit int) ([]DBObject, error)
+}

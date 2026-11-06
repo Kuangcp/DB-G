@@ -190,25 +190,72 @@ func trimBytes(b []byte, max int) []byte {
 	return b[:max]
 }
 
-func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
-	var t string
+func sqliteObjectType(kind engine.ObjectKind) (string, error) {
 	switch kind {
 	case engine.ObjectTable:
-		t = "table"
+		return "table", nil
 	case engine.ObjectView:
-		t = "view"
+		return "view", nil
 	case engine.ObjectIndex:
-		t = "index"
+		return "index", nil
 	default:
-		return nil, fmt.Errorf("sqlite: unknown object kind %d", kind)
+		return "", fmt.Errorf("sqlite: unknown object kind %d", kind)
 	}
+}
+
+// ObjectCounts 用 sqlite_master 的分组计数，不拉对象正文。
+func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.ObjectKind]int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("sqlite: session not open")
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name`, t)
+		`SELECT type, count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' GROUP BY type`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[engine.ObjectKind]int{}
+	for rows.Next() {
+		var typ string
+		var n int
+		if err := rows.Scan(&typ, &n); err != nil {
+			return nil, err
+		}
+		switch typ {
+		case "table":
+			out[engine.ObjectTable] = n
+		case "view":
+			out[engine.ObjectView] = n
+		case "index":
+			out[engine.ObjectIndex] = n
+		}
+	}
+	return out, rows.Err()
+}
+
+// ObjectsPage 按页列出对象；limit <= 0 表示不分页。
+func (s *session) ObjectsPage(ctx context.Context, _ string, kind engine.ObjectKind, offset, limit int) ([]engine.DBObject, error) {
+	t, err := sqliteObjectType(kind)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("sqlite: session not open")
+	}
+	q := `SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name`
+	args := []any{t}
+	if limit > 0 {
+		if offset < 0 {
+			offset = 0
+		}
+		q += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +269,10 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 		out = append(out, engine.DBObject{Kind: kind, Name: name})
 	}
 	return out, rows.Err()
+}
+
+func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	return s.ObjectsPage(ctx, "", kind, 0, 0)
 }
 
 // quoteIdent 把 SQL 标识符包成双引号并转义内部双引号（PRAGMA 不吃占位符）。

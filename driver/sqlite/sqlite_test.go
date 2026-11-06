@@ -419,3 +419,41 @@ func TestTransactionalCommitAndRollback(t *testing.T) {
 		t.Fatalf("no-match update: n=%d err=%v", n, err)
 	}
 }
+
+func TestObjectCountsAndPages(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	for _, q := range []string{
+		"CREATE TABLE a (id INTEGER)",
+		"CREATE TABLE b (id INTEGER)",
+		"CREATE TABLE c (id INTEGER)",
+		"CREATE VIEW v AS SELECT 1 AS id",
+		"CREATE INDEX idx_a ON a(id)",
+	} {
+		if _, err := s.RunStatement(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	counter, ok := s.(engine.ObjectCounter)
+	if !ok {
+		t.Fatal("sqlite must implement ObjectCounter")
+	}
+	counts, err := counter.ObjectCounts(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts[engine.ObjectTable] != 3 || counts[engine.ObjectView] != 1 || counts[engine.ObjectIndex] != 1 {
+		t.Fatalf("counts: %+v", counts)
+	}
+	pager, ok := s.(engine.PagedObjectLister)
+	if !ok {
+		t.Fatal("sqlite must implement PagedObjectLister")
+	}
+	page, err := pager.ObjectsPage(ctx, "", engine.ObjectTable, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page) != 1 || page[0].Name != "b" {
+		t.Fatalf("page: %+v", page)
+	}
+}
