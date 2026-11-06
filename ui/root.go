@@ -90,6 +90,8 @@ type root struct {
 	resView             *resultView
 	fetchStates         map[string]fetchState // runtimeID → 分页状态
 	resultRow           int
+	resultSel           ui.Selection[int]   // 结果表选中的单元格块（按显示行号）
+	lastResult          *engine.QueryResult // 上次渲染的结果指针（换结果时清空选区）
 	filterOpen          bool
 	filterCol           int
 	filterText          string
@@ -118,6 +120,9 @@ type root struct {
 	cellViewOpen        bool
 	cellViewTitle       string
 	cellViewText        string
+	cellViewJSON        any // 解析后的 JSON（非 JSON 为 nil）
+	cellViewJSONOK      bool
+	cellViewCollapsed   map[string]bool // JSON 树里折叠的节点路径
 	consoleErr          string
 	widthsFor           *engine.QueryResult
 	widths              []float32

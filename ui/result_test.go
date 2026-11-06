@@ -258,3 +258,69 @@ func TestResultCellViewerShowsFullValue(t *testing.T) {
 		t.Fatalf("viewer must show the full value: %q", tt.Texts())
 	}
 }
+
+// 结果表可以选中单个单元格：点击同时移动行/列光标，Ctrl+C 只复制该格。
+func TestResultCellSelectionAndCopy(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"id", "name"},
+		Rows:    [][]any{{int64(1), "alice"}, {int64(2), "bob"}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if err := tt.Click("bob"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.resultRow != 1 {
+		t.Fatalf("row cursor: %d", a.resultRow)
+	}
+	if got := a.resultState.Cells.Cursor; got != "name" {
+		t.Fatalf("column cursor: %q", got)
+	}
+	if !a.resultSel.Has(1) {
+		t.Fatal("the clicked row is not chosen")
+	}
+	if a.resultState.CellsStyle.Cell == (ui.Color{}) || a.resultState.CellsStyle.Row == (ui.Color{}) {
+		t.Fatal("result table must paint chosen cells and rows with CellsStyle")
+	}
+	tt.Key(ui.Ctrl, ui.KeyC)
+	tt.Frame()
+	if got := tt.Clipboard(); got != "bob" {
+		t.Fatalf("Ctrl+C copied %q, want the chosen cell only", got)
+	}
+}
+
+// 查看完整内容：合法 JSON 渲染成可折叠树，折叠后隐藏子节点。
+func TestCellViewerJSONTree(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"payload"},
+		Rows:    [][]any{{`{"user":{"name":"alice","age":30},"ok":true}`}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.openCellViewer(a.con.Result(), 0, 0)
+	tt.Frame()
+	if !a.cellViewJSONOK {
+		t.Fatal("JSON should render as a tree")
+	}
+	if !tt.HasText("user") || !tt.HasText(`"alice"`) {
+		t.Fatalf("json tree: %q", tt.Texts())
+	}
+	if err := tt.Click("收起：user"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("name:") || tt.HasText("age:") {
+		t.Fatalf("collapsed node still shows its children: %q", tt.Texts())
+	}
+	if err := tt.Click("复制原文"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.Clipboard(); !strings.Contains(got, `"alice"`) {
+		t.Fatalf("copy original: %q", got)
+	}
+}

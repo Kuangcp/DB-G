@@ -2,8 +2,10 @@ package ui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -165,7 +167,8 @@ func (a *root) connKind() string {
 	return "sqlite"
 }
 
-// openCellViewer 打开单元格完整内容弹窗（JSON 美化）。
+// openCellViewer 打开单元格完整内容弹窗：合法 JSON 对象/数组渲染成可折叠树，
+// 其它内容按原文本显示。
 func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 	if r == nil || row < 0 || row >= len(r.Rows) || col < 0 || col >= len(r.Columns) {
 		return
@@ -176,28 +179,159 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 		a.cellViewTitle += "（JSON）"
 	}
 	a.cellViewText = text
+	a.cellViewJSON, a.cellViewJSONOK = nil, false
+	a.cellViewCollapsed = map[string]bool{}
+	// 避免对超大文本做树解析（解析与节点量都随大小爆炸），超出就退回纯文本。
+	if isJSON && len(a.cellViewText) <= 1<<20 {
+		if v, ok := parseJSONValue(a.cellViewText); ok {
+			a.cellViewJSON, a.cellViewJSONOK = v, true
+		}
+	}
 	a.cellViewOpen = true
 }
 
-// cellViewer 渲染长文本查看弹窗。
+// jsonNodeLimit 是 JSON 树一次最多渲染的节点数，超过后停止展开。
+const jsonNodeLimit = 5000
+
+// parseJSONValue 把文本解析成 JSON 树；只接受对象或数组顶层。
+func parseJSONValue(text string) (any, bool) {
+	dec := json.NewDecoder(strings.NewReader(text))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return nil, false
+	}
+	if dec.More() {
+		return nil, false
+	}
+	switch v.(type) {
+	case map[string]any, []any:
+		return v, true
+	}
+	return nil, false
+}
+
+// cellViewer 渲染长文本查看弹窗；JSON 时画可展开/折叠的树。
 func (a *root) cellViewer(c *ui.Context) {
 	if !a.cellViewOpen {
 		return
 	}
 	ui.Modal(c, &a.cellViewOpen, func() {
-		ui.Text(c, a.cellViewTitle).Bold()
-		ui.ScrollBoth(c).Height(320).Children(func() {
+		ui.Text(c, a.cellViewTitle).Bold().SingleLine()
+		ui.ScrollBoth(c).Height(340).Children(func() {
+			if a.cellViewJSONOK {
+				nodes := 0
+				a.jsonTree(c, "$", a.cellViewJSON, 0, &nodes)
+				return
+			}
 			ui.Text(c, a.cellViewText).Font("monospace").FontSize(12)
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "复制").Clicked() {
+			if ui.Button(c, "复制原文").Tooltip("复制完整原文（未折叠的 JSON 文本）").Clicked() {
 				c.WriteClipboard(a.cellViewText)
 			}
 			if ui.PrimaryButton(c, "关闭").Clicked() {
 				a.cellViewOpen = false
 			}
 		})
+	}).Width(680).Height(500)
+}
+
+// jsonTree 递归渲染 JSON 节点；path 是折叠状态的键。
+func (a *root) jsonTree(c *ui.Context, path string, v any, depth int, nodes *int) {
+	if *nodes >= jsonNodeLimit {
+		ui.Text(c, "…节点过多，只显示前 "+strconv.Itoa(jsonNodeLimit)+" 个").TextColor(c.Theme().TextMuted).FontSize(12)
+		return
+	}
+	switch t := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			*nodes++
+			a.jsonEntry(c, path+"."+k, k, t[k], depth, nodes)
+		}
+	case []any:
+		for i, e := range t {
+			*nodes++
+			a.jsonEntry(c, path+"["+strconv.Itoa(i)+"]", strconv.Itoa(i), e, depth, nodes)
+		}
+	}
+}
+
+// jsonEntry 渲染一个键（或数组下标）及其值；对象/数组可点击折叠。
+func (a *root) jsonEntry(c *ui.Context, path, key string, v any, depth int, nodes *int) {
+	t := c.Theme()
+	indent := ui.Row(c).MarginStart(float32(depth) * 16)
+	var kids map[string]any
+	var list []any
+	switch x := v.(type) {
+	case map[string]any:
+		kids = x
+	case []any:
+		list = x
+	}
+	if kids != nil || list != nil {
+		open := !a.cellViewCollapsed[path]
+		label := "展开：" + key
+		if open {
+			label = "收起：" + key
+		}
+		indent.Gap(4).AlignItems(ui.Center).Children(func() {
+			btn := ui.ButtonBase(c).Label(label).Padding(t.Space(0.5)).Radius(t.Space(0.75))
+			if btn.Hovered() {
+				btn.Background(t.SurfaceHover)
+			}
+			btn.Children(func() {
+				ic := ui.Icon(c, iconChevronDown).FontSize(12).TextColor(t.TextMuted)
+				if !open {
+					ic.Rotate(-90)
+				}
+			})
+			if btn.Clicked() {
+				if open {
+					a.cellViewCollapsed[path] = true
+				} else {
+					delete(a.cellViewCollapsed, path)
+				}
+			}
+			ui.Text(c, key).FontSize(12.5).Bold()
+			summary := fmt.Sprintf("{ %d 项 }", len(kids))
+			if list != nil {
+				summary = fmt.Sprintf("[ %d 项 ]", len(list))
+			}
+			ui.Text(c, summary).FontSize(11.5).TextColor(t.TextMuted)
+		})
+		if open {
+			a.jsonTree(c, path, v, depth+1, nodes)
+		}
+		return
+	}
+	indent.Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Box(c).Width(12)
+		ui.Text(c, key+":").FontSize(12.5).TextColor(t.TextMuted)
+		text, col := jsonLeafText(v, t)
+		ui.Text(c, text).FontSize(12.5).Font("monospace").TextColor(col).SingleLine()
 	})
+}
+
+// jsonLeafText 返回叶子值的展示文本与颜色。
+func jsonLeafText(v any, t *ui.Theme) (string, ui.Color) {
+	switch x := v.(type) {
+	case nil:
+		return "null", t.TextMuted
+	case bool:
+		return strconv.FormatBool(x), t.Success
+	case json.Number:
+		return x.String(), t.Accent
+	case string:
+		return `"` + cutRunes(x, 200) + `"`, t.Text
+	default:
+		return fmt.Sprint(x), t.Text
+	}
 }
 
 func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
@@ -287,8 +421,26 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		}
 	}
 
+	// 单元格级选择：Selection 与 Selected 同时设置才真正进入 CellSelect
+	// （mygo 要求两者都有），点击会同时移动行与列光标。
+	if a.lastResult != r {
+		a.lastResult = r
+		a.resultSel.Clear()
+		// 列光标默认落在第一列数据（不是行号列），未点击时的复制/查看也有目标。
+		a.resultState.Cells = ui.ColumnRange{}
+		if len(r.Columns) > 0 {
+			a.resultState.Cells = ui.ColumnRange{Cursor: r.Columns[0], Anchor: r.Columns[0]}
+		}
+	}
+	a.resultState.Selection = &a.resultSel
 	a.resultState.CellSelect = true
 	a.resultState.Selected = &a.resultRow
+	a.resultState.CellsStyle = ui.CellsStyle{
+		Cell:     c.Theme().Accent,
+		CellText: c.Theme().AccentText,
+		Row:      c.Theme().Accent.Alpha(0.12),
+		Stripe:   c.Theme().Text.Alpha(0.035),
+	}
 	a.resultState.CellMenu = func(m *ui.Menu, row, col int) {
 		// resultRow 与 Table 一致，存「显示顺序」；取数据时再映射到结果行。
 		a.resultRow = row
