@@ -30,6 +30,16 @@ type ConnProfile struct {
 	Protocol string `json:"protocol,omitempty"`
 	// Params 是额外的连接参数，key=value，如 compress=0&secure=true。
 	Params string `json:"params,omitempty"`
+	// FolderID 是连接所属文件夹；空串表示根级。
+	FolderID string `json:"folderID,omitempty"`
+}
+
+// ConnFolder 是侧栏连接列表里的一个文件夹；ParentID 为空表示根级。
+// 同层级的显示顺序就是 Folders() 里的切片顺序，不单独存排序字段。
+type ConnFolder struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ParentID string `json:"parentID,omitempty"`
 }
 
 // ConsoleRecord 是一个命名控制台的元数据；正文存在它绑定的 .sql 文件里。
@@ -48,6 +58,7 @@ type ConsoleRecord struct {
 // storeFile 是 connections.json 的全部内容；LoadStore 与 save 共用，避免两处漂移。
 type storeFile struct {
 	Conns             []ConnProfile     `json:"conns"`
+	Folders           []ConnFolder      `json:"folders,omitempty"`
 	ActiveID          string            `json:"activeID"`
 	Consoles          []ConsoleRecord   `json:"consoles"`
 	Workspaces        []WorkspaceRecord `json:"workspaces"`
@@ -71,6 +82,7 @@ type ConnStore struct {
 	path              string
 	vault             *Vault
 	conns             []ConnProfile
+	folders           []ConnFolder
 	activeID          string
 	consoles          []ConsoleRecord
 	workspaces        []WorkspaceRecord
@@ -113,10 +125,12 @@ func LoadStore(path string) *ConnStore {
 		return s
 	}
 	s.conns = file.Conns
+	s.folders = file.Folders
 	s.activeID = file.ActiveID
 	s.consoles = file.Consoles
 	s.workspaces = file.Workspaces
 	s.activeWorkspaceID = file.ActiveWorkspaceID
+	s.normalizeFoldersLocked()
 
 	// 密码解密 + 存量明文迁移。
 	vault := s.vault
@@ -164,6 +178,52 @@ func (s *ConnStore) List() []ConnProfile {
 	return out
 }
 
+// Folders 返回全部文件夹（副本，切片顺序即同层显示顺序）。
+func (s *ConnStore) Folders() []ConnFolder {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]ConnFolder, len(s.folders))
+	copy(out, s.folders)
+	return out
+}
+
+// normalizeFoldersLocked 修正损坏或手改过的文件夹引用：未知父级、父子环、
+// 连接指向不存在的文件夹，一律回到根级。日志记一条，便于排查。
+func (s *ConnStore) normalizeFoldersLocked() {
+	byID := make(map[string]int, len(s.folders))
+	for i := range s.folders {
+		byID[s.folders[i].ID] = i
+	}
+	changed := false
+	for i := range s.folders {
+		parent := s.folders[i].ParentID
+		seen := map[string]bool{s.folders[i].ID: true}
+		for parent != "" {
+			idx, ok := byID[parent]
+			if !ok || seen[parent] {
+				s.folders[i].ParentID = ""
+				changed = true
+				break
+			}
+			seen[parent] = true
+			parent = s.folders[idx].ParentID
+		}
+	}
+	for i := range s.conns {
+		if s.conns[i].FolderID == "" {
+			continue
+		}
+		if _, ok := byID[s.conns[i].FolderID]; !ok {
+			s.conns[i].FolderID = ""
+			changed = true
+		}
+	}
+	if changed {
+		LogWarn("conn", "fixed orphan folder references",
+			"folders", len(s.folders), "conns", len(s.conns))
+	}
+}
+
 // Get 按 ID 查找连接。
 func (s *ConnStore) Get(id string) (ConnProfile, bool) {
 	s.mu.Lock()
@@ -195,6 +255,7 @@ func (s *ConnStore) save() error {
 	}
 	data, err := json.MarshalIndent(storeFile{
 		Conns:             conns,
+		Folders:           s.folders,
 		ActiveID:          s.activeID,
 		Consoles:          s.consoles,
 		Workspaces:        s.workspaces,
@@ -218,6 +279,7 @@ func (s *ConnStore) save() error {
 // storeState 是落盘失败时的回滚快照（切片深拷贝）。
 type storeState struct {
 	conns             []ConnProfile
+	folders           []ConnFolder
 	consoles          []ConsoleRecord
 	workspaces        []WorkspaceRecord
 	activeID          string
@@ -227,6 +289,7 @@ type storeState struct {
 func (s *ConnStore) snapshot() storeState {
 	return storeState{
 		conns:             slices.Clone(s.conns),
+		folders:           slices.Clone(s.folders),
 		consoles:          slices.Clone(s.consoles),
 		workspaces:        slices.Clone(s.workspaces),
 		activeID:          s.activeID,
@@ -236,6 +299,7 @@ func (s *ConnStore) snapshot() storeState {
 
 func (s *ConnStore) restore(st storeState) {
 	s.conns, s.consoles, s.workspaces = st.conns, st.consoles, st.workspaces
+	s.folders = st.folders
 	s.activeID, s.activeWorkspaceID = st.activeID, st.activeWorkspaceID
 }
 
@@ -273,6 +337,26 @@ func validateProfile(p ConnProfile) error {
 	return nil
 }
 
+// folderIndexLocked 返回文件夹下标；不存在为 -1。调用方需持有锁。
+func (s *ConnStore) folderIndexLocked(id string) int {
+	for i := range s.folders {
+		if s.folders[i].ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// folderNameTakenLocked 判断同层级是否已有同名文件夹（skipID 用于重命名）。
+func (s *ConnStore) folderNameTakenLocked(parentID, name, skipID string) bool {
+	for _, f := range s.folders {
+		if f.ID != skipID && f.ParentID == parentID && f.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Add 校验并新增连接；ID 为空时自动生成。
 func (s *ConnStore) Add(p ConnProfile) error {
 	if err := validateProfile(p); err != nil {
@@ -280,6 +364,9 @@ func (s *ConnStore) Add(p ConnProfile) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if p.FolderID != "" && s.folderIndexLocked(p.FolderID) < 0 {
+		return fmt.Errorf("文件夹不存在: %s", p.FolderID)
+	}
 	if p.ID == "" {
 		id, err := genID()
 		if err != nil {
@@ -301,17 +388,25 @@ func (s *ConnStore) Add(p ConnProfile) error {
 	return nil
 }
 
-// Update 按 ID 更新连接（校验同 Add）。
+// Update 按 ID 更新连接（校验同 Add）；换了文件夹时移到该文件夹末尾。
 func (s *ConnStore) Update(p ConnProfile) error {
 	if err := validateProfile(p); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if p.FolderID != "" && s.folderIndexLocked(p.FolderID) < 0 {
+		return fmt.Errorf("文件夹不存在: %s", p.FolderID)
+	}
 	for i, e := range s.conns {
 		if e.ID == p.ID {
 			prev := s.snapshot()
-			s.conns[i] = p
+			if e.FolderID != p.FolderID {
+				s.conns = append(s.conns[:i], s.conns[i+1:]...)
+				s.conns = append(s.conns, p)
+			} else {
+				s.conns[i] = p
+			}
 			if err := s.save(); err != nil {
 				s.restore(prev)
 				return err
@@ -354,6 +449,234 @@ func (s *ConnStore) Remove(id string) error {
 		return nil
 	}
 	return fmt.Errorf("连接不存在: %s", id)
+}
+
+// AddFolder 新建文件夹；parentID 为空表示根级，同层级不允许重名。
+func (s *ConnStore) AddFolder(name, parentID string) (ConnFolder, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ConnFolder{}, errors.New("文件夹名称不能为空")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if parentID != "" && s.folderIndexLocked(parentID) < 0 {
+		return ConnFolder{}, fmt.Errorf("父文件夹不存在: %s", parentID)
+	}
+	if s.folderNameTakenLocked(parentID, name, "") {
+		return ConnFolder{}, errors.New("同层级已有同名文件夹")
+	}
+	id, err := genID()
+	if err != nil {
+		return ConnFolder{}, err
+	}
+	f := ConnFolder{ID: id, Name: name, ParentID: parentID}
+	prev := s.snapshot()
+	s.folders = append(s.folders, f)
+	if err := s.save(); err != nil {
+		s.restore(prev)
+		return ConnFolder{}, err
+	}
+	return f, nil
+}
+
+// RenameFolder 重命名文件夹；同层级不允许重名。
+func (s *ConnStore) RenameFolder(id, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("文件夹名称不能为空")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.folderIndexLocked(id)
+	if idx < 0 {
+		return fmt.Errorf("文件夹不存在: %s", id)
+	}
+	if s.folderNameTakenLocked(s.folders[idx].ParentID, name, id) {
+		return errors.New("同层级已有同名文件夹")
+	}
+	prev := s.snapshot()
+	s.folders[idx].Name = name
+	if err := s.save(); err != nil {
+		s.restore(prev)
+		return err
+	}
+	return nil
+}
+
+// DeleteFolder 删除文件夹：其中的连接和子文件夹都上移到它的父级。
+// 连接配置、控制台与数据库本身都不删除。
+func (s *ConnStore) DeleteFolder(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.folderIndexLocked(id)
+	if idx < 0 {
+		return fmt.Errorf("文件夹不存在: %s", id)
+	}
+	parent := s.folders[idx].ParentID
+	prev := s.snapshot()
+	for i := range s.folders {
+		if i != idx && s.folders[i].ParentID == id {
+			s.folders[i].ParentID = parent
+		}
+	}
+	for i := range s.conns {
+		if s.conns[i].FolderID == id {
+			s.conns[i].FolderID = parent
+		}
+	}
+	s.folders = append(s.folders[:idx], s.folders[idx+1:]...)
+	if err := s.save(); err != nil {
+		s.restore(prev)
+		return err
+	}
+	return nil
+}
+
+// MoveConnection 把连接移到另一个文件夹（空串 = 根级），并放到该文件夹末尾。
+// 连接已经在目标文件夹时不做任何事。
+func (s *ConnStore) MoveConnection(id, folderID string) error {
+	return s.MoveConnectionTo(id, folderID, "")
+}
+
+// MoveConnectionTo 把连接移到 folderID，插在 beforeID 之前；beforeID 为空表示
+// 放到该文件夹末尾。folderID 与 beforeID 必须属于同一层级，否则拒绝。
+func (s *ConnStore) MoveConnectionTo(id, folderID, beforeID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if folderID != "" && s.folderIndexLocked(folderID) < 0 {
+		return fmt.Errorf("文件夹不存在: %s", folderID)
+	}
+	idx := -1
+	for i := range s.conns {
+		if s.conns[i].ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("连接不存在: %s", id)
+	}
+	if beforeID == id {
+		return nil
+	}
+	if beforeID != "" {
+		bi := -1
+		for i := range s.conns {
+			if s.conns[i].ID == beforeID {
+				bi = i
+				break
+			}
+		}
+		if bi < 0 {
+			return fmt.Errorf("目标连接不存在: %s", beforeID)
+		}
+		if s.conns[bi].FolderID != folderID {
+			return errors.New("目标连接不在该文件夹")
+		}
+	}
+	prev := s.snapshot()
+	p := s.conns[idx]
+	p.FolderID = folderID
+	s.conns = append(s.conns[:idx], s.conns[idx+1:]...)
+	at := len(s.conns)
+	if beforeID != "" {
+		for i := range s.conns {
+			if s.conns[i].ID == beforeID {
+				at = i
+				break
+			}
+		}
+	}
+	s.conns = slices.Insert(s.conns, at, p)
+	if err := s.save(); err != nil {
+		s.restore(prev)
+		return err
+	}
+	return nil
+}
+
+// folderDescendantLocked 判断 id 是否是 rootID 自身或它的子孙。
+func (s *ConnStore) folderDescendantLocked(rootID, id string) bool {
+	seen := map[string]bool{}
+	for id != "" && !seen[id] {
+		if id == rootID {
+			return true
+		}
+		seen[id] = true
+		idx := s.folderIndexLocked(id)
+		if idx < 0 {
+			return false
+		}
+		id = s.folders[idx].ParentID
+	}
+	return false
+}
+
+// MoveFolderTo 把文件夹移到 parentID，插在 beforeID 之前；beforeID 为空表示
+// 放到该层级末尾。不能移进自身或自己的子孙。
+func (s *ConnStore) MoveFolderTo(id, parentID, beforeID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.folderIndexLocked(id)
+	if idx < 0 {
+		return fmt.Errorf("文件夹不存在: %s", id)
+	}
+	if parentID != "" && s.folderIndexLocked(parentID) < 0 {
+		return fmt.Errorf("父文件夹不存在: %s", parentID)
+	}
+	if parentID != "" && s.folderDescendantLocked(id, parentID) {
+		return errors.New("不能把文件夹移进自身或其子文件夹")
+	}
+	if beforeID == id {
+		return nil
+	}
+	if beforeID != "" {
+		bi := s.folderIndexLocked(beforeID)
+		if bi < 0 {
+			return fmt.Errorf("目标文件夹不存在: %s", beforeID)
+		}
+		if s.folders[bi].ParentID != parentID {
+			return errors.New("目标文件夹不在同一层级")
+		}
+	}
+	prev := s.snapshot()
+	f := s.folders[idx]
+	f.ParentID = parentID
+	s.folders = append(s.folders[:idx], s.folders[idx+1:]...)
+	at := len(s.folders)
+	if beforeID != "" {
+		at = s.folderIndexLocked(beforeID)
+		if at < 0 {
+			at = len(s.folders)
+		}
+	}
+	s.folders = slices.Insert(s.folders, at, f)
+	if err := s.save(); err != nil {
+		s.restore(prev)
+		return err
+	}
+	return nil
+}
+
+// FolderPath 返回文件夹的完整路径（如 "生产 / 订单"）；不存在或成环时返回空串。
+func FolderPath(folders []ConnFolder, id string) string {
+	byID := make(map[string]ConnFolder, len(folders))
+	for _, f := range folders {
+		byID[f.ID] = f
+	}
+	var parts []string
+	seen := map[string]bool{}
+	for id != "" && !seen[id] {
+		f, ok := byID[id]
+		if !ok {
+			break
+		}
+		seen[id] = true
+		parts = append(parts, f.Name)
+		id = f.ParentID
+	}
+	slices.Reverse(parts)
+	return strings.Join(parts, " / ")
 }
 
 // stripConsoleRefs 从所有工作区移除这些控制台成员，并清空指向它们的末次激活。

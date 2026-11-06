@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -400,5 +401,262 @@ func TestValidateProfilePostgresAndClickHouse(t *testing.T) {
 	}
 	if err := s.Add(ConnProfile{Name: "bad2", Kind: "clickhouse", Host: "h", Port: 0}); err == nil {
 		t.Fatal("clickhouse without port must be rejected")
+	}
+}
+
+func TestFolderStoreRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "connections.json")
+	s := LoadStore(path)
+	root, err := s.AddFolder("生产", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := s.AddFolder("订单", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := mustAdd(t, s, "订单库", filepath.Join(dir, "orders.db"))
+	if err := s.MoveConnection(p.ID, child.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	s2 := LoadStore(path)
+	folders := s2.Folders()
+	if len(folders) != 2 || folders[0].Name != "生产" || folders[1].ParentID != root.ID {
+		t.Fatalf("folders after reload: %+v", folders)
+	}
+	got, ok := s2.Get(p.ID)
+	if !ok || got.FolderID != child.ID {
+		t.Fatalf("connection folder after reload: %+v %v", got, ok)
+	}
+	if path := FolderPath(folders, child.ID); path != "生产 / 订单" {
+		t.Fatalf("folder path = %q", path)
+	}
+}
+
+func TestFolderDeleteMovesContents(t *testing.T) {
+	s := tempStore(t)
+	a, _ := s.AddFolder("A", "")
+	b, _ := s.AddFolder("B", a.ID)
+	c, _ := s.AddFolder("C", b.ID)
+	p := mustAdd(t, s, "库", filepath.Join(t.TempDir(), "a.db"))
+	if err := s.MoveConnection(p.ID, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteFolder(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Get(p.ID)
+	if got.FolderID != a.ID {
+		t.Fatalf("connection must move to parent: %+v", got)
+	}
+	folders := s.Folders()
+	for _, f := range folders {
+		if f.ID == c.ID && f.ParentID != a.ID {
+			t.Fatalf("child folder must move to parent: %+v", f)
+		}
+	}
+	if err := s.DeleteFolder(a.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.Get(p.ID)
+	if got.FolderID != "" {
+		t.Fatalf("connection must move to root: %+v", got)
+	}
+}
+
+func TestFolderDuplicateNames(t *testing.T) {
+	s := tempStore(t)
+	a, err := s.AddFolder("生产", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddFolder("生产", ""); err == nil {
+		t.Fatal("same-level duplicate folder name must fail")
+	}
+	if _, err := s.AddFolder("生产", a.ID); err != nil {
+		t.Fatalf("same name in another parent is fine: %v", err)
+	}
+	b, _ := s.AddFolder("测试", "")
+	if err := s.RenameFolder(b.ID, "生产"); err == nil {
+		t.Fatal("rename to existing sibling must fail")
+	}
+	if err := s.RenameFolder(b.ID, "预发"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMoveConnection(t *testing.T) {
+	s := tempStore(t)
+	f, _ := s.AddFolder("生产", "")
+	p := mustAdd(t, s, "库", filepath.Join(t.TempDir(), "a.db"))
+	if err := s.MoveConnection(p.ID, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Get(p.ID); got.FolderID != f.ID {
+		t.Fatalf("move into folder: %+v", got)
+	}
+	if err := s.MoveConnection(p.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Get(p.ID); got.FolderID != "" {
+		t.Fatalf("move to root: %+v", got)
+	}
+	if err := s.MoveConnection(p.ID, "nope"); err == nil {
+		t.Fatal("unknown folder must fail")
+	}
+	if err := s.MoveConnection("nope", ""); err == nil {
+		t.Fatal("unknown connection must fail")
+	}
+}
+
+func TestFolderOrphanRefsNormalized(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "connections.json")
+	raw := `{
+  "conns": [{"id":"c1","name":"c","kind":"sqlite","path":"x","folderID":"gone"}],
+  "folders": [
+    {"id":"f1","name":"A","parentID":"missing"},
+    {"id":"f2","name":"B","parentID":"f2"}
+  ]
+}`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := LoadStore(path)
+	folders := s.Folders()
+	if len(folders) != 2 || folders[0].ParentID != "" || folders[1].ParentID != "" {
+		t.Fatalf("orphan/cycle folders must return to root: %+v", folders)
+	}
+	got, _ := s.Get("c1")
+	if got.FolderID != "" {
+		t.Fatalf("orphan connection folder must return to root: %+v", got)
+	}
+}
+
+func TestExportProfilesStripsFolderID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "export.json")
+	if _, err := ExportProfiles(path, []ConnProfile{{
+		Name: "x", Kind: "sqlite", Path: "x.db", FolderID: "f1",
+	}}, false); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle ProfileBundle
+	if err := json.Unmarshal(data, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.Conns) != 1 || bundle.Conns[0].FolderID != "" {
+		t.Fatalf("folder id must not be exported: %+v", bundle.Conns)
+	}
+}
+
+func TestUpdateConnectionFolder(t *testing.T) {
+	dir := t.TempDir()
+	s := tempStore(t)
+	f, err := s.AddFolder("生产", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := mustAdd(t, s, "库", filepath.Join(dir, "a.db"))
+	p.FolderID = f.ID
+	if err := s.Update(p); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Get(p.ID); got.FolderID != f.ID {
+		t.Fatalf("update folder: %+v", got)
+	}
+	p.FolderID = "missing"
+	if err := s.Update(p); err == nil {
+		t.Fatal("update to unknown folder must fail")
+	}
+	if got, _ := s.Get(p.ID); got.FolderID != f.ID {
+		t.Fatalf("failed update must not change folder: %+v", got)
+	}
+}
+
+func TestMoveConnectionToOrder(t *testing.T) {
+	dir := t.TempDir()
+	s := tempStore(t)
+	a := mustAdd(t, s, "a", filepath.Join(dir, "a.db"))
+	b := mustAdd(t, s, "b", filepath.Join(dir, "b.db"))
+	c := mustAdd(t, s, "c", filepath.Join(dir, "c.db"))
+	f, _ := s.AddFolder("F", "")
+
+	if err := s.MoveConnectionTo(c.ID, "", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	names := func() []string {
+		var out []string
+		for _, p := range s.List() {
+			out = append(out, p.Name)
+		}
+		return out
+	}
+	if got := names(); len(got) != 3 || got[0] != "c" || got[1] != "a" || got[2] != "b" {
+		t.Fatalf("reorder root: %v", got)
+	}
+	if err := s.MoveConnectionTo(b.ID, f.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Get(b.ID); got.FolderID != f.ID {
+		t.Fatalf("move into folder: %+v", got)
+	}
+	if err := s.MoveConnectionTo(b.ID, "", c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(); len(got) != 3 || got[0] != "b" || got[1] != "c" || got[2] != "a" {
+		t.Fatalf("move back before c: %v", got)
+	}
+	if err := s.MoveConnectionTo(a.ID, "", "missing"); err == nil {
+		t.Fatal("unknown beforeID must fail")
+	}
+}
+
+func TestMoveFolderToOrderAndNesting(t *testing.T) {
+	s := tempStore(t)
+	a, _ := s.AddFolder("A", "")
+	b, _ := s.AddFolder("B", "")
+	c, _ := s.AddFolder("C", "")
+
+	if err := s.MoveFolderTo(c.ID, "", b.ID); err != nil {
+		t.Fatal(err)
+	}
+	rootNames := func() []string {
+		var out []string
+		for _, f := range s.Folders() {
+			if f.ParentID == "" {
+				out = append(out, f.Name)
+			}
+		}
+		return out
+	}
+	if got := rootNames(); len(got) != 3 || got[0] != "A" || got[1] != "C" || got[2] != "B" {
+		t.Fatalf("reorder folders: %v", got)
+	}
+	if err := s.MoveFolderTo(c.ID, a.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := rootNames(); len(got) != 2 || got[0] != "A" || got[1] != "B" {
+		t.Fatalf("nested folder still at root: %v", got)
+	}
+	got, _ := s.Folders(), s.Folders()
+	for _, f := range got {
+		if f.ID == c.ID && f.ParentID != a.ID {
+			t.Fatalf("nested folder parent: %+v", f)
+		}
+	}
+	if err := s.MoveFolderTo(a.ID, c.ID, ""); err == nil {
+		t.Fatal("moving a folder into its descendant must fail")
+	}
+	if err := s.MoveFolderTo(a.ID, a.ID, ""); err == nil {
+		t.Fatal("moving a folder into itself must fail")
+	}
+	if err := s.MoveFolderTo(b.ID, "", "missing"); err == nil {
+		t.Fatal("unknown beforeID must fail")
 	}
 }

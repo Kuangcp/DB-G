@@ -22,6 +22,8 @@ func ExportProfiles(path string, conns []ConnProfile, includePassword bool) (int
 		if !includePassword {
 			c.Password = ""
 		}
+		// 文件夹不随档案导出；导入后统一落在根级，避免指向不存在的文件夹。
+		c.FolderID = ""
 		out.Conns = append(out.Conns, c)
 	}
 	data, err := json.MarshalIndent(out, "", "  ")

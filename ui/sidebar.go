@@ -16,11 +16,10 @@ func (a *root) sidebar(c *ui.Context) {
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 		ui.Toolbar(c, func() {
 			if iconButton(c, iconPlug, "新建连接", ui.Transparent).Clicked() {
-				a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
-				a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
-				a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
-				a.connFormParams, a.connProto = "", 0
-				a.resetConnTest()
+				a.openNewConnForm("")
+			}
+			if iconButton(c, iconFolderPlus, "新建文件夹", ui.Transparent).Clicked() {
+				a.openFolderModal("new", "", "")
 			}
 			if iconButton(c, iconRefresh, "重载对象树（不连接数据源）", ui.Transparent).Clicked() {
 				a.reloadTree()
@@ -30,44 +29,373 @@ func (a *root) sidebar(c *ui.Context) {
 		if a.store == nil {
 			ui.Text(c, "左上角「新建连接」开始").TextColor(c.Theme().TextMuted)
 			a.connModal(c)
+			a.folderModal(c)
 			return
 		}
 		if w := a.store.Warning(); w != "" {
 			ui.Text(c, w).TextColor(c.Theme().Danger)
 		}
-		list := a.store.List()
-		if len(list) == 0 {
+		if len(a.store.List()) == 0 && len(a.store.Folders()) == 0 {
 			ui.Text(c, "左上角「新建连接」开始").TextColor(c.Theme().TextMuted)
 		}
 		ui.Scroll(c).Grow(1).Children(func() {
-			for _, p := range list {
-				a.connRow(c, p)
-			}
+			a.connTree(c)
 		})
 	})
 	a.connModal(c)
+	a.folderModal(c)
 }
 
-func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
-	live := a.connected(p.ID)
-	ui.Row(c).Gap(6).Children(func() {
-		a.connDot(c, p.ID)
-		// 点数据源名就是「连上它并展开」：启动时不预连，连接时机只有这一处。
-		lbl := ui.Button(c, p.Name)
-		if live {
-			lbl.Bold()
+// connTreeIndex 是一帧内的连接树索引：父级 → 子项、ID → 记录。
+// 数据量是几十个量级，每帧重建足够快，也避免缓存失效。
+type connTreeIndex struct {
+	foldersByParent map[string][]app.ConnFolder
+	connsByFolder   map[string][]app.ConnProfile
+	folders         map[string]app.ConnFolder
+	conns           map[string]app.ConnProfile
+}
+
+func (a *root) treeIndex() *connTreeIndex {
+	idx := &connTreeIndex{
+		foldersByParent: map[string][]app.ConnFolder{},
+		connsByFolder:   map[string][]app.ConnProfile{},
+		folders:         map[string]app.ConnFolder{},
+		conns:           map[string]app.ConnProfile{},
+	}
+	for _, f := range a.store.Folders() {
+		idx.foldersByParent[f.ParentID] = append(idx.foldersByParent[f.ParentID], f)
+		idx.folders[f.ID] = f
+	}
+	for _, p := range a.store.List() {
+		idx.connsByFolder[p.FolderID] = append(idx.connsByFolder[p.FolderID], p)
+		idx.conns[p.ID] = p
+	}
+	return idx
+}
+
+func (idx *connTreeIndex) folderWithin(rootID, id string) bool {
+	seen := map[string]bool{}
+	for id != "" && !seen[id] {
+		if id == rootID {
+			return true
 		}
-		if lbl.Clicked() {
-			a.expandConnAndTree(p)
+		seen[id] = true
+		f, ok := idx.folders[id]
+		if !ok {
+			return false
 		}
-		expandLabel := "▸"
-		if a.treeExpand[p.ID] {
-			expandLabel = "▾"
+		id = f.ParentID
+	}
+	return false
+}
+
+// connTree 渲染连接列表：同层先文件夹、后连接；文件夹可递归嵌套。
+func (a *root) connTree(c *ui.Context) {
+	if a.store == nil {
+		return
+	}
+	a.connBranch(c, "", 0, a.treeIndex())
+}
+
+func (a *root) connBranch(c *ui.Context, parent string, depth int, idx *connTreeIndex) {
+	for _, f := range idx.foldersByParent[parent] {
+		a.folderRow(c, f, depth, idx)
+	}
+	for _, p := range idx.connsByFolder[parent] {
+		a.connRow(c, p, depth, idx)
+	}
+}
+
+// folderIndent 是每层文件夹/连接的缩进宽度（DIP）。
+const folderIndent = 14
+
+// treeRowBase 是侧栏树/控制台的一行：没有按钮外观，悬停浅底，整行可点。
+// 有 Spacer 的行会铺满可用宽度。
+func treeRowBase(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	row := ui.ButtonBase(c).Label(label).Gap(6).AlignItems(ui.Center).
+		Padding(t.Space(0.75), t.Space(1)).Radius(t.Space(1)).FillWidth()
+	if row.Hovered() {
+		row.Background(t.SurfaceHover)
+	}
+	return row
+}
+
+// treeArrow 是树行的展开箭头：统一 Lucide 描线，标签带名称，读屏和测试都能定位。
+func treeArrow(c *ui.Context, label string, open bool) ui.Element {
+	t := c.Theme()
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Padding(t.Space(0.5)).Radius(t.Space(1))
+	if b.Hovered() {
+		b.Background(t.SurfaceHover)
+	}
+	b.Children(func() {
+		ic := ui.Icon(c, iconChevronDown).FontSize(14)
+		if !open {
+			ic.Rotate(-90)
 		}
-		if ui.Button(c, expandLabel).Clicked() {
-			a.toggleExpandConn(p)
+		ic.TextColor(t.TextMuted)
+	})
+	return b
+}
+
+// treeDrag 是侧栏拖拽的值：kind 区分数据源和文件夹。
+type treeDrag struct{ kind, id string }
+
+const (
+	treeDragConn   = "conn"
+	treeDragFolder = "folder"
+)
+
+// attachTreeDrag 只在按住 Ctrl 时把行接成拖拽源，避免普通点击误拖；
+// 已经开始拖的行即使松开 Ctrl 也继续保留拖拽源，直到放手。
+func attachTreeDrag(c *ui.Context, row ui.Element, v treeDrag) {
+	held := c.Modifiers()&ui.Ctrl != 0
+	if !held && !row.Dragging() {
+		return
+	}
+	row.Drag(v)
+	if held {
+		row.Cursor(ui.CursorGrab).Tooltip("按住 Ctrl 拖动：上下排序，拖到文件夹中间移入")
+	}
+	if row.Dragging() {
+		row.Opacity(0.45)
+	}
+}
+
+type dropSpot uint8
+
+const (
+	dropNone dropSpot = iota
+	dropBefore
+	dropAfter
+	dropInto
+)
+
+// treeDropSpot 根据指针在行内的位置决定插入到前面/后面，还是移入文件夹。
+func treeDropSpot(row ui.Element, targetKind, targetID string, drag treeDrag, idx *connTreeIndex) dropSpot {
+	switch drag.kind {
+	case treeDragFolder:
+		if targetKind != "folder" || idx.folderWithin(drag.id, targetID) {
+			return dropNone
+		}
+	case treeDragConn:
+		if targetKind == "conn" && drag.id == targetID {
+			return dropNone
+		}
+	default:
+		return dropNone
+	}
+	_, y, ok := row.PointerPosition()
+	if !ok {
+		return dropNone
+	}
+	h := row.Bounds().H
+	if h <= 0 {
+		return dropNone
+	}
+	if targetKind == "folder" {
+		if drag.kind == treeDragConn {
+			return dropInto
+		}
+		switch {
+		case y < h*0.28:
+			return dropBefore
+		case y > h*0.72:
+			return dropAfter
+		default:
+			return dropInto
+		}
+	}
+	if y < h/2 {
+		return dropBefore
+	}
+	return dropAfter
+}
+
+func styleTreeDrop(row ui.Element, spot dropSpot, t *ui.Theme) {
+	switch spot {
+	case dropInto:
+		row.Background(t.Accent.Alpha(0.12))
+	case dropBefore:
+		row.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: 2}, t.Accent, 1)
+		})
+	case dropAfter:
+		row.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X, Y: r.Y + r.H - 2, W: r.W, H: 2}, t.Accent, 1)
+		})
+	}
+}
+
+func nextFolderSibling(idx *connTreeIndex, f app.ConnFolder) string {
+	sib := idx.foldersByParent[f.ParentID]
+	for i := range sib {
+		if sib[i].ID == f.ID && i+1 < len(sib) {
+			return sib[i+1].ID
+		}
+	}
+	return ""
+}
+
+func nextConnSibling(idx *connTreeIndex, p app.ConnProfile) string {
+	sib := idx.connsByFolder[p.FolderID]
+	for i := range sib {
+		if sib[i].ID == p.ID && i+1 < len(sib) {
+			return sib[i+1].ID
+		}
+	}
+	return ""
+}
+
+func (a *root) applyTreeDrop(drag treeDrag, targetKind, targetID string, spot dropSpot, idx *connTreeIndex) {
+	if a.store == nil {
+		return
+	}
+	var parent, before string
+	switch targetKind {
+	case "folder":
+		f, ok := idx.folders[targetID]
+		if !ok {
+			return
+		}
+		switch spot {
+		case dropInto:
+			parent, before = targetID, ""
+		case dropBefore:
+			parent, before = f.ParentID, targetID
+		case dropAfter:
+			parent, before = f.ParentID, nextFolderSibling(idx, f)
+		default:
+			return
+		}
+	case "conn":
+		p, ok := idx.conns[targetID]
+		if !ok {
+			return
+		}
+		switch spot {
+		case dropBefore:
+			parent, before = p.FolderID, targetID
+		case dropAfter:
+			parent, before = p.FolderID, nextConnSibling(idx, p)
+		default:
+			return
+		}
+	default:
+		return
+	}
+	var err error
+	switch drag.kind {
+	case treeDragConn:
+		err = a.store.MoveConnectionTo(drag.id, parent, before)
+	case treeDragFolder:
+		err = a.store.MoveFolderTo(drag.id, parent, before)
+	default:
+		return
+	}
+	if err != nil {
+		app.LogWarn("conn", "tree move failed", "kind", drag.kind, "id", drag.id,
+			"parent", parent, "before", before, "err", err.Error())
+		return
+	}
+	if spot == dropInto && targetKind == "folder" {
+		delete(a.folderCollapsed, targetID) // 移入后展开，结果立即可见
+	}
+	app.LogInfo("conn", "tree moved", "kind", drag.kind, "id", drag.id, "parent", parent, "before", before)
+}
+
+// attachTreeDrop 把行接成拖拽目标：上下插入线，文件夹中间高亮表示移入。
+func (a *root) attachTreeDrop(c *ui.Context, row ui.Element, targetKind, targetID string, idx *connTreeIndex) {
+	if drag, over := ui.DragOver[treeDrag](row); over {
+		if spot := treeDropSpot(row, targetKind, targetID, drag, idx); spot != dropNone {
+			styleTreeDrop(row, spot, c.Theme())
+		}
+	}
+	if drag, ok := ui.Drop[treeDrag](row); ok {
+		if spot := treeDropSpot(row, targetKind, targetID, drag, idx); spot != dropNone {
+			a.applyTreeDrop(drag, targetKind, targetID, spot, idx)
+		}
+	}
+}
+
+func (a *root) folderRow(c *ui.Context, f app.ConnFolder, depth int, idx *connTreeIndex) {
+	collapsed := a.folderCollapsed[f.ID]
+	row := treeRowBase(c, "文件夹 "+f.Name).PaddingStart(float32(4 + depth*folderIndent))
+	row.Children(func() {
+		var label string
+		if collapsed {
+			label = "展开 " + f.Name
+		} else {
+			label = "收起 " + f.Name
+		}
+		if treeArrow(c, label, !collapsed).Clicked() {
+			a.toggleFolder(f.ID)
+		}
+		folderIcon := iconFolder
+		if !collapsed {
+			folderIcon = iconFolderOpen
+		}
+		ui.Icon(c, folderIcon).FontSize(15).TextColor(c.Theme().TextMuted)
+		ui.Text(c, f.Name).SingleLine()
+		if n := len(idx.foldersByParent[f.ID]) + len(idx.connsByFolder[f.ID]); n > 0 && collapsed {
+			ui.Text(c, strconv.Itoa(n)).FontSize(10.5).TextColor(c.Theme().TextMuted)
 		}
 		ui.Spacer(c)
+	})
+	if row.Clicked() {
+		a.toggleFolder(f.ID)
+	}
+	row.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item("新建子文件夹…").Chosen() {
+			a.openFolderModal("new", f.ID, "")
+		}
+		if menu.Item("在此新建连接…").Chosen() {
+			a.openNewConnForm(f.ID)
+		}
+		if menu.Item("重命名…").Chosen() {
+			a.openFolderModal("rename", f.ID, f.Name)
+		}
+		if menu.Item("删除…").Chosen() {
+			a.openFolderModal("delete", f.ID, f.Name)
+		}
+	})
+	attachTreeDrag(c, row, treeDrag{kind: treeDragFolder, id: f.ID})
+	a.attachTreeDrop(c, row, "folder", f.ID, idx)
+	if !collapsed {
+		a.connBranch(c, f.ID, depth+1, idx)
+	}
+}
+
+func (a *root) toggleFolder(id string) {
+	if a.folderCollapsed == nil {
+		a.folderCollapsed = map[string]bool{}
+	}
+	a.folderCollapsed[id] = !a.folderCollapsed[id]
+}
+
+func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTreeIndex) {
+	live := a.connected(p.ID)
+	expanded := a.treeExpand[p.ID]
+	row := treeRowBase(c, "连接 "+p.Name).PaddingStart(float32(4 + depth*folderIndent))
+	row.Children(func() {
+		var label string
+		if expanded {
+			label = "收起 " + p.Name
+		} else {
+			label = "展开 " + p.Name
+		}
+		if treeArrow(c, label, expanded).Clicked() {
+			a.toggleExpandConn(p)
+		}
+		if icon := connKindIcon(p.Kind); icon != nil {
+			ui.Icon(c, icon).FontSize(15).TextColor(connKindColor(p.Kind))
+		}
+		name := ui.Text(c, p.Name).SingleLine()
+		if live {
+			name.Bold()
+		}
+		ui.Spacer(c)
+		a.connDot(c, p.ID)
 		if iconButtonPlain(c, iconSquarePen, "编辑连接", ui.Transparent).Clicked() {
 			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
 			a.connFormKind = p.Kind
@@ -78,15 +406,24 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 			}
 			a.connFormParams = p.Params
 			a.connProto = connProtoIndex(p.Protocol)
+			a.connFormFolder = p.FolderID
 			a.resetConnTest()
 		}
 		if iconButtonPlain(c, iconTrash, "删除连接", c.Theme().Danger).Clicked() {
 			a.connDeleting, a.connDeleteOpen = p.ID, true
 		}
 	})
-	if a.treeExpand[p.ID] {
-		a.consoleSection(c, p)
-		a.objectGroups(c, p)
+	// 点数据源名/行就是「连上它并展开」：启动时不预连，连接时机只有这一处。
+	if row.Clicked() {
+		a.expandConnAndTree(p)
+	}
+	attachTreeDrag(c, row, treeDrag{kind: treeDragConn, id: p.ID})
+	a.attachTreeDrop(c, row, "conn", p.ID, idx)
+	if expanded {
+		ui.Column(c).PaddingStart(float32((depth + 1) * folderIndent)).Children(func() {
+			a.consoleSection(c, p)
+			a.objectGroups(c, p)
+		})
 	}
 }
 
@@ -115,33 +452,35 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 
 // consoleRow 渲染一个控制台：已打开加粗，点击打开或激活，右键关闭/重命名/删除。
 func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
-	ui.Row(c).Gap(4).Children(func() {
+	row := treeRowBase(c, "控制台 "+rec.Name)
+	row.Children(func() {
 		dot := ui.Text(c, "●")
 		if isOpen {
 			dot.TextColor(c.Theme().Success)
 		} else {
 			dot.TextColor(c.Theme().TextMuted)
 		}
-		btn := ui.Button(c, rec.Name)
+		name := ui.Text(c, rec.Name).SingleLine()
 		if isOpen {
-			btn.Bold()
+			name.Bold()
 		} else {
-			btn.TextColor(c.Theme().TextMuted)
+			name.TextColor(c.Theme().TextMuted)
 		}
-		if btn.Clicked() {
-			a.pendingActivate = rec.ID
+		ui.Spacer(c)
+	})
+	if row.Clicked() {
+		a.pendingActivate = rec.ID
+	}
+	row.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item("关闭").Disabled(!isOpen).Chosen() {
+			a.pendingClose = rec.ID
 		}
-		btn.ContextMenu(func(menu *ui.Menu) {
-			if menu.Item("关闭").Disabled(!isOpen).Chosen() {
-				a.pendingClose = rec.ID
-			}
-			if menu.Item("重命名…").Chosen() {
-				a.openModal("rename", rec.ID, rec.Name)
-			}
-			if menu.Item("删除…").Chosen() {
-				a.openModal("delete", rec.ID, rec.Name)
-			}
-		})
+		if menu.Item("重命名…").Chosen() {
+			a.openModal("rename", rec.ID, rec.Name)
+		}
+		if menu.Item("删除…").Chosen() {
+			a.openModal("delete", rec.ID, rec.Name)
+		}
 	})
 }
 
@@ -174,6 +513,13 @@ func (a *root) connModal(c *ui.Context) {
 			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
 				ui.Text(c, kindLabel(a.connFormKind)+" 连接").Bold()
 				ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
+				if a.store != nil && len(a.store.Folders()) > 0 {
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, "位置").FontSize(12).TextColor(c.Theme().TextMuted)
+						a.folderSelect(c)
+						ui.Spacer(c)
+					})
+				}
 				if a.connFormKind != "sqlite" {
 					ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）")
 					ui.Row(c).Gap(6).Children(func() {
@@ -221,7 +567,7 @@ func (a *root) connModal(c *ui.Context) {
 					if ui.Button(c, "测试连接").Disabled(a.connTestBusy).Clicked() {
 						a.testConnForm()
 					}
-					if ui.Button(c, "复制").Tooltip("把连接信息按 key: value 复制到剪贴板（不含密码）").
+					if ui.Button(c, "复制").Tooltip("把连接信息按 key: value 复制到剪贴板（含明文密码）").
 						Clicked() {
 						a.copyConnForm(c)
 					}
@@ -320,7 +666,7 @@ func (a *root) deleteModal(c *ui.Context) {
 // connFormProfile 把表单当前内容读成一份连接档案（只读，不落盘）：保存、测试连接
 // 和复制连接信息都用它，免得三处各读一遍表单。
 func (a *root) connFormProfile() (app.ConnProfile, error) {
-	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath}
+	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath, FolderID: a.connFormFolder}
 	if a.connFormKind == "sqlite" {
 		return p, nil
 	}
@@ -461,4 +807,181 @@ func defaultPort(kind string) int {
 		return 9000
 	}
 	return 0
+}
+
+// openNewConnForm 重置新建连接表单；folderID 为空表示根级。
+func (a *root) openNewConnForm(folderID string) {
+	a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
+	a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
+	a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
+	a.connFormParams, a.connProto = "", 0
+	a.connFormFolder = folderID
+	a.resetConnTest()
+}
+
+// openFolderModal 打开文件夹弹窗；new 用 target 作父文件夹，rename/delete 用 target 作文件夹 ID。
+func (a *root) openFolderModal(kind, target, text string) {
+	a.folderModalKind, a.folderModalTarget, a.folderModalText, a.folderModalErr = kind, target, text, ""
+}
+
+func (a *root) folderContentCounts(id string) (conns, folders int) {
+	if a.store == nil {
+		return 0, 0
+	}
+	for _, p := range a.store.List() {
+		if p.FolderID == id {
+			conns++
+		}
+	}
+	for _, f := range a.store.Folders() {
+		if f.ParentID == id {
+			folders++
+		}
+	}
+	return conns, folders
+}
+
+// folderModal 渲染新建/重命名/删除文件夹；数据层负责校验与落盘。
+func (a *root) folderModal(c *ui.Context) {
+	if a.folderModalKind == "" {
+		return
+	}
+	if a.store == nil {
+		a.folderModalKind = ""
+		return
+	}
+	open := true
+	ui.Modal(c, &open, func() {
+		switch a.folderModalKind {
+		case "new":
+			title := "新建文件夹"
+			if a.folderModalTarget != "" {
+				title = "新建子文件夹"
+			}
+			ui.Text(c, title).Bold()
+			ui.TextInput(c, &a.folderModalText).Placeholder("文件夹名称").AutoFocus()
+		case "rename":
+			ui.Text(c, "重命名文件夹").Bold()
+			ui.TextInput(c, &a.folderModalText).Placeholder("文件夹名称").AutoFocus()
+		case "delete":
+			conns, folders := a.folderContentCounts(a.folderModalTarget)
+			ui.Text(c, "删除文件夹「"+a.folderModalText+"」？").Bold()
+			ui.Text(c, fmt.Sprintf("其中 %d 个连接和 %d 个子文件夹将移到上一级；连接配置不会删除。", conns, folders)).
+				TextColor(c.Theme().TextMuted)
+		}
+		if a.folderModalErr != "" {
+			ui.Text(c, a.folderModalErr).TextColor(c.Theme().Danger)
+		}
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "取消").Clicked() {
+				a.folderModalKind = ""
+			}
+			if a.folderModalKind == "delete" {
+				btn := ui.Button(c, "删除").TextColor(c.Theme().Danger)
+				if btn.Clicked() {
+					if err := a.store.DeleteFolder(a.folderModalTarget); err != nil {
+						a.folderModalErr = "删除失败: " + err.Error()
+						return
+					}
+					delete(a.folderCollapsed, a.folderModalTarget)
+					app.LogInfo("conn", "folder deleted", "id", a.folderModalTarget)
+					a.folderModalKind = ""
+				}
+				return
+			}
+			if ui.PrimaryButton(c, "保存").Clicked() {
+				name := strings.TrimSpace(a.folderModalText)
+				if name == "" {
+					a.folderModalErr = "名称不能为空"
+					return
+				}
+				switch a.folderModalKind {
+				case "new":
+					f, err := a.store.AddFolder(name, a.folderModalTarget)
+					if err != nil {
+						a.folderModalErr = "新建失败: " + err.Error()
+						return
+					}
+					delete(a.folderCollapsed, a.folderModalTarget) // 父级展开，新文件夹可见
+					app.LogInfo("conn", "folder added", "id", f.ID, "name", f.Name, "parent", f.ParentID)
+				case "rename":
+					if err := a.store.RenameFolder(a.folderModalTarget, name); err != nil {
+						a.folderModalErr = "重命名失败: " + err.Error()
+						return
+					}
+					app.LogInfo("conn", "folder renamed", "id", a.folderModalTarget, "name", name)
+				}
+				a.folderModalKind = ""
+			}
+		})
+	})
+	if !open {
+		a.folderModalKind = ""
+	}
+}
+
+// folderChoice 是连接弹窗「位置」下拉的一项：ID + 全路径标签。
+type folderChoice struct{ id, label string }
+
+func folderOptions(folders []app.ConnFolder) []folderChoice {
+	byParent := map[string][]app.ConnFolder{}
+	for _, f := range folders {
+		byParent[f.ParentID] = append(byParent[f.ParentID], f)
+	}
+	var out []folderChoice
+	seen := map[string]bool{}
+	var walk func(parent string)
+	walk = func(parent string) {
+		for _, f := range byParent[parent] {
+			if seen[f.ID] {
+				continue
+			}
+			seen[f.ID] = true
+			label := app.FolderPath(folders, f.ID)
+			if label == "" {
+				label = f.Name
+			}
+			out = append(out, folderChoice{id: f.ID, label: label})
+			walk(f.ID)
+		}
+	}
+	walk("")
+	return out
+}
+
+func (a *root) folderLabel(id string) string {
+	if id == "" || a.store == nil {
+		return "根目录"
+	}
+	if path := app.FolderPath(a.store.Folders(), id); path != "" {
+		return path
+	}
+	return "根目录"
+}
+
+// folderSelect 是连接弹窗里的文件夹选择器：直接绑定 folder ID，避免标签映射。
+func (a *root) folderSelect(c *ui.Context) {
+	t := c.Theme()
+	sel := ui.SelectBase(c, &a.connFormFolder)
+	sel.Trigger.Gap(6).Padding(6, 10).Radius(t.Space(1)).Border(1, t.Border).
+		Children(func() {
+			ui.Text(c, a.folderLabel(a.connFormFolder)).SingleLine()
+			ui.Icon(c, iconChevronDown).FontSize(14).TextColor(t.TextMuted)
+		})
+	sel.Popup(func(panel ui.Element) {
+		panel.Padding(4).Radius(t.Space(1)).Background(t.Background).Border(1, t.Border).Width(260)
+		item := func(id, label string) {
+			it := sel.Item(id).Padding(6, 10).Radius(t.Space(0.5))
+			if it.Highlighted() {
+				it.Background(t.Accent.Alpha(0.12))
+			}
+			it.Children(func() { ui.Text(c, label).SingleLine() })
+		}
+		item("", "根目录")
+		if a.store != nil {
+			for _, o := range folderOptions(a.store.Folders()) {
+				item(o.id, o.label)
+			}
+		}
+	})
 }

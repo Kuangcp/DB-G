@@ -35,6 +35,7 @@ type root struct {
 	connFormDB      string
 	connFormParams  string
 	connProto       int                // ClickHouse 协议：0 native / 1 http / 2 https
+	connFormFolder  string             // 连接所属文件夹；空 = 根级
 	chords          map[string][]chord // 动作 → 键位（见 keymap.go）
 	keymapPath      string             // keymap.json 的位置（空 = 不读盘，测试用）
 	editorPrefs     app.EditorPrefs    // 编辑器字号/字体族
@@ -51,9 +52,13 @@ type root struct {
 	treeExpand      map[string]bool
 	treeOpen        map[string]*bool
 	treeData        map[string]map[engine.ObjectKind][]engine.DBObject
+	treeCounts      map[string]map[engine.ObjectKind]int
+	treeLoading     map[string]bool
+	treePageStarted map[string]bool
 	treeSchemas     map[string][]string
 	treeErr         map[string]string
 	treeSelected    string
+	folderCollapsed map[string]bool // folderID → 收起；缺省 = 展开
 	execPending     bool
 
 	mgr                 *app.ConsoleManager
@@ -116,27 +121,35 @@ type root struct {
 	modalTarget         string
 	modalText           string
 	modalErr            string
+	folderModalKind     string // "" / "new" / "rename" / "delete"
+	folderModalTarget   string
+	folderModalText     string
+	folderModalErr      string
 }
 
 func newRoot(text string) *root {
 	a := &root{
-		code:          newCodeEditor("在左侧数据源下新建或打开控制台"),
-		con:           app.NewConsole(),
-		resultsHeight: 260,
-		sidebarWidth:  280,
-		treeExpand:    map[string]bool{},
-		treeOpen:      map[string]*bool{},
-		treeData:      map[string]map[engine.ObjectKind][]engine.DBObject{},
-		treeSchemas:   map[string][]string{},
-		treeErr:       map[string]string{},
-		connFormKind:  "sqlite",
-		chords:        defaultChords(),
-		editorPrefs:   app.DefaultEditorPrefs(),
-		sessions:      map[string]engine.Session{},
-		sessionUse:    map[string]uint64{},
-		sessionErr:    map[string]string{},
-		consoles:      map[string]*app.Console{},
-		lastVer:       map[string]uint64{},
+		code:            newCodeEditor("在左侧数据源下新建或打开控制台"),
+		con:             app.NewConsole(),
+		resultsHeight:   260,
+		sidebarWidth:    280,
+		treeExpand:      map[string]bool{},
+		treeOpen:        map[string]*bool{},
+		treeData:        map[string]map[engine.ObjectKind][]engine.DBObject{},
+		treeCounts:      map[string]map[engine.ObjectKind]int{},
+		treeLoading:     map[string]bool{},
+		treePageStarted: map[string]bool{},
+		treeSchemas:     map[string][]string{},
+		treeErr:         map[string]string{},
+		folderCollapsed: map[string]bool{},
+		connFormKind:    "sqlite",
+		chords:          defaultChords(),
+		editorPrefs:     app.DefaultEditorPrefs(),
+		sessions:        map[string]engine.Session{},
+		sessionUse:      map[string]uint64{},
+		sessionErr:      map[string]string{},
+		consoles:        map[string]*app.Console{},
+		lastVer:         map[string]uint64{},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.resView = newResultView()

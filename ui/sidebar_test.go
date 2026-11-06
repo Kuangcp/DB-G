@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"image"
 	"os"
 	"path/filepath"
 	"testing"
@@ -779,5 +780,381 @@ func TestConnKindIcons(t *testing.T) {
 	}
 	if connKindIcon("oracle") != nil {
 		t.Fatal("unknown kind must have no icon")
+	}
+}
+
+// rectHasColor 在矩形里找是否有指定颜色（用于确认品牌图标真的画出来了）。
+func rectHasColor(img *image.RGBA, r ui.Rect, want ui.Color) bool {
+	x0, y0 := int(r.X), int(r.Y)
+	x1, y1 := int(r.X+r.W), int(r.Y+r.H)
+	if x0 < 0 {
+		x0 = 0
+	}
+	if y0 < 0 {
+		y0 = 0
+	}
+	if x1 > img.Bounds().Dx() {
+		x1 = img.Bounds().Dx()
+	}
+	if y1 > img.Bounds().Dy() {
+		y1 = img.Bounds().Dy()
+	}
+	for y := y0; y < y1; y++ {
+		for x := x0; x < x1; x++ {
+			c := img.RGBAAt(x, y)
+			if c.R == want.R && c.G == want.G && c.B == want.B {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestSidebarFolderTreeAndIndent(t *testing.T) {
+	path := seedConnFile(t)
+	a := newSidebarRoot(t)
+	root, err := a.store.AddFolder("生产", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := a.store.AddFolder("订单", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := app.ConnProfile{Name: "订单库", Kind: "sqlite", Path: path, FolderID: sub.ID}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	for _, want := range []string{"生产", "订单", "订单库"} {
+		if !tt.HasText(want) {
+			t.Fatalf("folder tree missing %q: %q", want, tt.Texts())
+		}
+	}
+	rootRect, _ := tt.Find("生产")
+	subRect, _ := tt.Find("订单")
+	connRect, _ := tt.Find("订单库")
+	if !(subRect.X > rootRect.X && connRect.X > subRect.X) {
+		t.Fatalf("indent not applied: root=%v sub=%v conn=%v", rootRect, subRect, connRect)
+	}
+	// 连接名左边应该能看到品牌色图标。
+	iconArea := ui.Rect{X: connRect.X - 44, Y: connRect.Y, W: 44, H: connRect.H}
+	if !rectHasColor(tt.Image(), iconArea, connKindColor("sqlite")) {
+		t.Fatalf("sqlite brand icon not painted in %v", iconArea)
+	}
+
+	// 收起根文件夹后，子文件夹和连接都不可见。
+	if err := tt.Click("收起 生产"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("订单") || tt.HasText("订单库") {
+		t.Fatalf("collapsed folder still shows children: %q", tt.Texts())
+	}
+	if err := tt.Click("展开 生产"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("订单库") {
+		t.Fatalf("expanded folder must show connection: %q", tt.Texts())
+	}
+}
+
+func TestSidebarFolderCreateRenameDelete(t *testing.T) {
+	path := seedConnFile(t)
+	a := newSidebarRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+
+	if err := tt.Click("新建文件夹"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	a.folderModalText = "生产"
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	folders := a.store.Folders()
+	if len(folders) != 1 || folders[0].Name != "生产" {
+		t.Fatalf("folder not created: %+v", folders)
+	}
+	if !tt.HasText("生产") {
+		t.Fatalf("folder row missing: %q", tt.Texts())
+	}
+
+	// 往文件夹里放一个连接，删除文件夹后连接应留在根级。
+	p := app.ConnProfile{Name: "订单库", Kind: "sqlite", Path: path, FolderID: folders[0].ID}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+
+	if err := tt.RightClick("生产"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("重命名…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	a.folderModalText = "线上"
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := a.store.Folders(); len(got) != 1 || got[0].Name != "线上" {
+		t.Fatalf("folder not renamed: %+v", got)
+	}
+
+	if err := tt.RightClick("线上"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("删除…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("删除"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(a.store.Folders()) != 0 {
+		t.Fatalf("folder not deleted: %+v", a.store.Folders())
+	}
+	stored := a.store.List()
+	if len(stored) != 1 || stored[0].FolderID != "" {
+		t.Fatalf("connection must move to root: %+v", stored)
+	}
+	if !tt.HasText("订单库") {
+		t.Fatalf("connection disappeared after folder delete: %q", tt.Texts())
+	}
+}
+
+func TestSidebarConnFormFolderSelect(t *testing.T) {
+	path := seedConnFile(t)
+	a := newSidebarRoot(t)
+	f, err := a.store.AddFolder("生产", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("新建连接"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("位置") {
+		t.Fatalf("folder select missing in conn form: %q", tt.Texts())
+	}
+	a.connFormName = "订单库"
+	a.connFormPath = path
+	a.connFormFolder = f.ID
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	stored := a.store.List()
+	if len(stored) != 1 || stored[0].FolderID != f.ID {
+		t.Fatalf("connection folder not saved: %+v", stored)
+	}
+	folderRect, _ := tt.Find("生产")
+	connRect, _ := tt.Find("订单库")
+	if connRect.X <= folderRect.X {
+		t.Fatalf("connection under folder must be indented: folder=%v conn=%v", folderRect, connRect)
+	}
+}
+
+func TestConnFormFolderSelectChoosesFolder(t *testing.T) {
+	a := newSidebarRoot(t)
+	root, _ := a.store.AddFolder("生产", "")
+	sub, err := a.store.AddFolder("订单", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("新建连接"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	// 打开「位置」下拉，选嵌套文件夹（唯一标签，避免和侧栏的「订单」混淆）。
+	if err := tt.Click("根目录"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("生产 / 订单"); err != nil {
+		t.Fatalf("choose folder: %v (texts %q)", err, tt.Texts())
+	}
+	tt.Frame()
+	if a.connFormFolder != sub.ID {
+		t.Fatalf("folder select = %q, want %q", a.connFormFolder, sub.ID)
+	}
+	p, err := a.connFormProfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.FolderID != sub.ID {
+		t.Fatalf("profile folder = %q", p.FolderID)
+	}
+}
+
+// dragRow 按住 Ctrl 从 from 拖到 to 的指定纵向位置（相对文本矩形）。
+func dragRowCtrl(tt *ui.Tester, from, to ui.Rect, toY float32) {
+	tt.HoldModifiers(ui.Ctrl)
+	tt.Frame()
+	sx, sy := from.X+from.W/2, from.Y+from.H/2
+	tx := to.X + to.W/2
+	tt.Press(sx, sy)
+	// Tester 的 Press 不带修饰键（真实窗口的按下事件会带上 Ctrl）。
+	// 按下后重新按住 Ctrl，让下一帧把行接成拖拽源，再移动。
+	tt.HoldModifiers(ui.Ctrl)
+	tt.Frame()
+	for k := 1; k <= 4; k++ {
+		f := float32(k) / 4
+		tt.Move(sx+(tx-sx)*f, sy+(toY-sy)*f)
+	}
+	tt.Release(tx, toY)
+	tt.Frame()
+	tt.HoldModifiers(0)
+	tt.Frame()
+}
+
+func TestSidebarDragFolderRequiresCtrl(t *testing.T) {
+	a := newSidebarRoot(t)
+	fa, _ := a.store.AddFolder("A", "")
+	fb, _ := a.store.AddFolder("B", "")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	ra, _ := tt.Find("A")
+	rb, _ := tt.Find("B")
+
+	// 不按 Ctrl：普通拖动不应改变结构。
+	sx, sy := rb.X+rb.W/2, rb.Y+rb.H/2
+	tx, ty := ra.X+ra.W/2, ra.Y+ra.H/2
+	tt.Press(sx, sy)
+	tt.Move(tx, ty)
+	tt.Release(tx, ty)
+	tt.Frame()
+	if got, _ := folderByID(t, a, fb.ID); got.ParentID != "" {
+		t.Fatalf("drag without Ctrl moved folder: %+v", got)
+	}
+
+	// 按住 Ctrl 拖到 A 中间：B 移入 A。
+	dragRowCtrl(tt, rb, ra, ra.Y+ra.H/2)
+	got, _ := folderByID(t, a, fb.ID)
+	if got.ParentID != fa.ID {
+		t.Fatalf("Ctrl+drag into folder: %+v", got)
+	}
+}
+
+func folderByID(t *testing.T, a *root, id string) (app.ConnFolder, bool) {
+	t.Helper()
+	for _, f := range a.store.Folders() {
+		if f.ID == id {
+			return f, true
+		}
+	}
+	return app.ConnFolder{}, false
+}
+
+func TestSidebarDragSortConnections(t *testing.T) {
+	dir := t.TempDir()
+	a := newSidebarRoot(t)
+	mk := func(name, file string) string {
+		path := filepath.Join(dir, file)
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		p := app.ConnProfile{Name: name, Kind: "sqlite", Path: path}
+		if err := a.store.Add(p); err != nil {
+			t.Fatal(err)
+		}
+		return a.store.List()[len(a.store.List())-1].ID
+	}
+	mk("Alpha", "a.db")
+	beta := mk("Beta", "b.db")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	ra, _ := tt.Find("Alpha")
+	rb, _ := tt.Find("Beta")
+
+	// 拖 Beta 到 Alpha 的上沿：插到前面。
+	dragRowCtrl(tt, rb, ra, ra.Y+1)
+	list := a.store.List()
+	if len(list) != 2 || list[0].ID != beta {
+		t.Fatalf("sort connections: %+v", list)
+	}
+	rb2, _ := tt.Find("Beta")
+	ra2, _ := tt.Find("Alpha")
+	if rb2.Y >= ra2.Y {
+		t.Fatalf("rendered order: Beta.Y=%v Alpha.Y=%v", rb2.Y, ra2.Y)
+	}
+}
+
+func TestSidebarDragSortFolders(t *testing.T) {
+	a := newSidebarRoot(t)
+	if _, err := a.store.AddFolder("A", ""); err != nil {
+		t.Fatal(err)
+	}
+	fb, _ := a.store.AddFolder("B", "")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	ra, _ := tt.Find("A")
+	rb, _ := tt.Find("B")
+	dragRowCtrl(tt, rb, ra, ra.Y+1)
+	folders := a.store.Folders()
+	if len(folders) != 2 || folders[0].ID != fb.ID {
+		t.Fatalf("sort folders: %+v", folders)
+	}
+}
+
+func TestSidebarDragFolderCycleRejected(t *testing.T) {
+	a := newSidebarRoot(t)
+	fa, _ := a.store.AddFolder("A", "")
+	fb, err := a.store.AddFolder("B", fa.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	ra, _ := tt.Find("A")
+	rb, _ := tt.Find("B")
+	// 把 A 拖进自己的子文件夹 B：必须拒绝，A 仍在根、B 仍是 A 的子级。
+	dragRowCtrl(tt, ra, rb, rb.Y+rb.H/2)
+	gotA, _ := folderByID(t, a, fa.ID)
+	gotB, _ := folderByID(t, a, fb.ID)
+	if gotA.ParentID != "" || gotB.ParentID != fa.ID {
+		t.Fatalf("cycle drop changed tree: A=%+v B=%+v", gotA, gotB)
+	}
+}
+
+func TestSidebarFolderRowClickToggles(t *testing.T) {
+	path := seedConnFile(t)
+	a := newSidebarRoot(t)
+	f, err := a.store.AddFolder("生产", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.Add(app.ConnProfile{Name: "订单库", Kind: "sqlite", Path: path, FolderID: f.ID}); err != nil {
+		t.Fatal(err)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("生产"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("订单库") {
+		t.Fatalf("clicking folder row should collapse it: %q", tt.Texts())
+	}
+	if err := tt.Click("生产"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("订单库") {
+		t.Fatalf("clicking folder row again should expand: %q", tt.Texts())
 	}
 }
