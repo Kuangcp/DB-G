@@ -280,7 +280,7 @@ func TestObjectTreeAfterReloadNoPanic(t *testing.T) {
 	a.connName = stored.Name
 	a.activeConnID = stored.ID
 	a.reloadTree()
-	a.loadGroups(stored)
+	a.loadGroupsIn(stored, "")
 	if got := a.treeErr[stored.ID]; got != "枚举失败" {
 		t.Fatalf("treeErr = %q", got)
 	}
@@ -296,7 +296,7 @@ func TestObjectTreeCrossConnBlocked(t *testing.T) {
 	a.setSession("", treeFakeSession{objs: []engine.DBObject{{Kind: engine.ObjectTable, Name: "users"}}})
 	a.connName = "active-db"
 	a.reloadTree()
-	a.loadGroups(stored)
+	a.loadGroupsIn(stored, "")
 	if got := a.treeErr[stored.ID]; got != "未连接" {
 		t.Fatalf("treeErr = %q", got)
 	}
@@ -345,11 +345,11 @@ func TestDuplicateNameConnsIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.reloadTree()
-	a.loadGroups(pa)
+	a.loadGroupsIn(pa, "")
 	if objs := a.treeData[pa.ID][engine.ObjectTable]; len(objs) != 1 || objs[0].Name != "alpha" {
 		t.Fatalf("A cache: %+v", objs)
 	}
-	a.loadGroups(pb)
+	a.loadGroupsIn(pb, "")
 	if got := a.treeErr[pb.ID]; got != "未连接" {
 		t.Fatalf("B must not reuse A's session, treeErr=%q", got)
 	}
@@ -362,7 +362,7 @@ func TestDuplicateNameConnsIsolated(t *testing.T) {
 		t.Fatalf("expand must connect B: session=%v name=%q", a.sess, a.connName)
 	}
 	a.reloadTree()
-	a.loadGroups(pb)
+	a.loadGroupsIn(pb, "")
 	if err := a.treeErr[pb.ID]; err != "" {
 		t.Fatalf("B load after reconnect: %q", err)
 	}
@@ -466,7 +466,7 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 		t.Fatalf("retry must open: session=%v active=%q", a.sess, a.activeConnID)
 	}
 	a.reloadTree()
-	a.loadGroups(p)
+	a.loadGroupsIn(p, "")
 	if got := a.treeData[p.ID][engine.ObjectTable]; len(got) != 1 || got[0].Name != "recovered" {
 		t.Fatalf("recovered objects: %+v err=%q", got, a.treeErr[p.ID])
 	}
@@ -681,5 +681,55 @@ func TestSidebarDeleteConsoleFlow(t *testing.T) {
 	}
 	if a.activeConsole != "" {
 		t.Fatalf("active must clear: %q", a.activeConsole)
+	}
+}
+
+type treeSchemaFake struct{ treeFakeSession }
+
+func (f treeSchemaFake) Schemas(ctx context.Context) ([]string, error) {
+	return []string{"app", "public"}, nil
+}
+
+func (f treeSchemaFake) ObjectsIn(ctx context.Context, schema string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	if kind != engine.ObjectTable {
+		return nil, nil
+	}
+	return []engine.DBObject{{Kind: kind, Name: schema + "_t", Schema: schema}}, nil
+}
+
+func TestSchemaTreeRendersSchemasThenObjects(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{Name: "pg", Kind: "postgres", Host: "h", Port: 5432}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	stored := a.store.List()[0]
+	a.setSession(stored.ID, treeSchemaFake{})
+	a.treeExpand[stored.ID] = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	for _, want := range []string{"▣ app", "▣ public"} {
+		if !tt.HasText(want) {
+			t.Fatalf("schema %q missing: %q", want, tt.Texts())
+		}
+	}
+	// 展开 app schema → 出现它的表（测试里直接置展开态，再走两帧让懒加载完成）
+	*a.groupOpenPtr(stored.ID+"|app|schema", true) = true
+	tt.Frame()
+	*a.groupOpenPtr(stored.ID+"|app|"+kindKey(engine.ObjectTable), true) = true
+	tt.Frame()
+	tt.Frame()
+	if !tt.HasText("app_t") {
+		t.Fatalf("object under schema missing: %q", tt.Texts())
+	}
+}
+
+func TestQualifiedPreviewName(t *testing.T) {
+	got := qualifiedName("postgres", engine.DBObject{Kind: engine.ObjectTable, Name: "t", Schema: "app"})
+	if got != `"app"."t"` {
+		t.Fatalf("qualified: %q", got)
+	}
+	if got := qualifiedName("sqlite", engine.DBObject{Name: "t"}); got != `"t"` {
+		t.Fatalf("unqualified: %q", got)
 	}
 }

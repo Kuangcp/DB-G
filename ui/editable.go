@@ -59,6 +59,12 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		a.readonlyReason = "只有单表查询可编辑（JOIN/子查询结果只读）"
 		return
 	}
+	for _, rel := range rels {
+		if rel.Table != "" && rel.Schema != "" {
+			a.readonlyReason = "跨 schema 的查询暂不支持写操作"
+			return
+		}
+	}
 	var table string
 	for _, name := range seen {
 		table = name

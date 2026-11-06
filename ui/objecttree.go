@@ -75,8 +75,11 @@ func (a *root) toggleExpandConn(p app.ConnProfile) {
 	}
 }
 
-func (a *root) loadGroups(p app.ConnProfile) {
+func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
 	key := p.ID
+	if schema != "" {
+		key = p.ID + "|" + schema
+	}
 	if _, ok := a.treeData[key]; ok {
 		return
 	}
@@ -97,8 +100,15 @@ func (a *root) loadGroups(p app.ConnProfile) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	data := map[engine.ObjectKind][]engine.DBObject{}
+	scoped, multi := a.sess.(engine.SchemaLister)
 	for _, g := range objectKinds {
-		objs, err := lister.Objects(ctx, g.kind)
+		var objs []engine.DBObject
+		var err error
+		if schema != "" && multi {
+			objs, err = scoped.ObjectsIn(ctx, schema, g.kind)
+		} else {
+			objs, err = lister.Objects(ctx, g.kind)
+		}
 		if err != nil {
 			a.setTreeErr(key, err.Error())
 			return
@@ -116,48 +126,89 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
 		ui.Text(c, err).TextColor(c.Theme().Danger)
 		return
 	}
-	if _, ok := a.treeData[p.ID]; !ok {
-		ui.Text(c, "加载中…").TextColor(c.Theme().TextMuted)
-		a.loadGroups(p)
-		if err := a.treeErr[p.ID]; err != "" {
-			ui.Text(c, err).TextColor(c.Theme().Danger)
-			return
-		}
+	// 多 schema 数据源：先列 schema，再在 schema 下列对象分组。
+	if lister, ok := a.schemaLister(p); ok {
+		a.schemaTree(c, p, lister)
+		return
 	}
+	a.loadGroupsIn(p, "")
 	data := a.treeData[p.ID]
 	ui.Tree(c, func() {
-		for _, g := range objectKinds {
-			objs := data[g.kind]
-			label := g.label
-			if _, loaded := a.treeData[p.ID]; loaded {
-				label = fmt.Sprintf("%s (%d)", g.label, len(objs))
-			}
-			open := a.groupOpenPtr(p.ID+"|"+kindKey(g.kind), false)
-			ui.TreeItem(c, label, open, func() {
-				for _, o := range objs {
-					obj := o
-					leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == p.ID+"|"+obj.Name)
-					if leaf.Clicked() {
-						a.treeSelected = p.ID + "|" + obj.Name
-					}
-					if leaf.DoubleClicked() {
-						a.previewObject(p, obj)
-					}
-					leaf.ContextMenu(func(m *ui.Menu) {
-						if m.Item("预览数据").Chosen() {
-							a.previewObject(p, obj)
-						}
-						if m.Item("查看 DDL").Chosen() {
-							a.showDDL(p, obj)
-						}
-						if m.Item("插入名称").Chosen() {
-							a.code.Insert(obj.Name)
-						}
-					})
-				}
+		a.kindGroups(c, p, "", data)
+	})
+}
+
+// schemaLister 返回该连接当前会话的 SchemaLister（未连接/不支持时为 false）。
+func (a *root) schemaLister(p app.ConnProfile) (engine.SchemaLister, bool) {
+	if a.sess == nil || a.sessConnID != p.ID {
+		return nil, false
+	}
+	lister, ok := a.sess.(engine.SchemaLister)
+	return lister, ok
+}
+
+// schemaTree 渲染 schema 列表（懒加载）。
+func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.SchemaLister) {
+	if a.treeSchemas == nil {
+		a.treeSchemas = map[string][]string{}
+	}
+	if _, ok := a.treeSchemas[p.ID]; !ok {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		schemas, err := lister.Schemas(ctx)
+		cancel()
+		if err != nil {
+			ui.Text(c, err.Error()).TextColor(c.Theme().Danger)
+			return
+		}
+		a.treeSchemas[p.ID] = schemas
+	}
+	ui.Tree(c, func() {
+		for _, schema := range a.treeSchemas[p.ID] {
+			key := p.ID + "|" + schema
+			open := a.groupOpenPtr(key+"|schema", false)
+			ui.TreeItem(c, "▣ "+schema, open, func() {
+				a.loadGroupsIn(p, schema)
+				a.kindGroups(c, p, schema, a.treeData[key])
 			})
 		}
 	})
+}
+
+// kindGroups 渲染某个 schema（或默认 schema，schema=""）下的对象分组。
+func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string, data map[engine.ObjectKind][]engine.DBObject) {
+	base := p.ID
+	if schema != "" {
+		base = p.ID + "|" + schema
+	}
+	for _, g := range objectKinds {
+		objs := data[g.kind]
+		label := fmt.Sprintf("%s (%d)", g.label, len(objs))
+		open := a.groupOpenPtr(base+"|"+kindKey(g.kind), false)
+		ui.TreeItem(c, label, open, func() {
+			for _, o := range objs {
+				obj := o
+				selKey := base + "|" + obj.Name
+				leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == selKey)
+				if leaf.Clicked() {
+					a.treeSelected = selKey
+				}
+				if leaf.DoubleClicked() {
+					a.previewObject(p, obj)
+				}
+				leaf.ContextMenu(func(m *ui.Menu) {
+					if m.Item("预览数据").Chosen() {
+						a.previewObject(p, obj)
+					}
+					if m.Item("查看 DDL").Chosen() {
+						a.showDDL(p, obj)
+					}
+					if m.Item("插入名称").Chosen() {
+						a.code.Insert(obj.Name)
+					}
+				})
+			}
+		})
+	}
 }
 
 // previewObject 在新控制台里预览对象数据（SELECT * … LIMIT 200）并立即执行。
@@ -178,7 +229,7 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 		return
 	}
 	a.pendingActivate = rec.ID
-	a.pendingText = "SELECT * FROM " + app.QuoteIdent(p.Kind, o.Name) + " LIMIT 200"
+	a.pendingText = "SELECT * FROM " + qualifiedName(p.Kind, o) + " LIMIT 200"
 	a.pendingExec = true
 }
 
@@ -241,4 +292,12 @@ func (a *root) ddlPanel(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// qualifiedName 按对象所在的 schema 生成引用名（跨 schema 预览/DDL 用）。
+func qualifiedName(kind string, o engine.DBObject) string {
+	if o.Schema != "" {
+		return app.QuoteIdent(kind, o.Schema) + "." + app.QuoteIdent(kind, o.Name)
+	}
+	return app.QuoteIdent(kind, o.Name)
 }

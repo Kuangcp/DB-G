@@ -8,8 +8,9 @@ import (
 // relationRef 是语句里出现的一张表；Alias 非空表示 FROM/JOIN 给了别名。
 // Table 为空、Alias 非空表示派生表（FROM (SELECT …) d）：不提供列，只挡住目录回退。
 type relationRef struct {
-	Table string
-	Alias string
+	Table  string
+	Schema string // 限定名里的 schema（"" = 未限定）
+	Alias  string
 }
 
 // sqlToken 是词法扫描的最小单位：标识符（去掉引号包裹）、标点、或需要忽略的字面量。
@@ -391,6 +392,7 @@ func parseRelation(toks []sqlToken, i int) ([]relationRef, int, bool) {
 	i++
 	// schema.table
 	for i+1 < len(toks) && toks[i].kind == 'p' && toks[i].text == "." && toks[i+1].kind == 'i' {
+		ref.Schema = ref.Table
 		ref.Table = toks[i+1].text
 		i += 2
 	}

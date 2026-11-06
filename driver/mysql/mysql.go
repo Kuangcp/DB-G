@@ -205,6 +205,71 @@ func trimBytes(b []byte, max int) []byte {
 	return b[:max]
 }
 
+// Schemas 列出可切换的库（排除系统库）。
+func (s *session) Schemas(ctx context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("mysql: session not open")
+	}
+	const q = `SELECT schema_name FROM information_schema.schemata
+		WHERE schema_name NOT IN ('mysql','information_schema','performance_schema','sys') ORDER BY 1`
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+// ObjectsIn 列出某库的表/视图/索引。
+func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("mysql: session not open")
+	}
+	if schema == "" {
+		schema = s.cfg.DBName
+	}
+	if schema == "" {
+		return nil, errors.New("mysql: 未选择数据库")
+	}
+	var q string
+	switch kind {
+	case engine.ObjectTable:
+		q = `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`
+	case engine.ObjectView:
+		q = `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'VIEW' ORDER BY TABLE_NAME`
+	case engine.ObjectIndex:
+		q = `SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? GROUP BY INDEX_NAME ORDER BY INDEX_NAME`
+	default:
+		return nil, fmt.Errorf("mysql: unknown object kind %d", kind)
+	}
+	rows, err := s.db.QueryContext(ctx, q, schema)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.DBObject
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, engine.DBObject{Kind: kind, Name: name, Schema: schema})
+	}
+	return out, rows.Err()
+}
+
 func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

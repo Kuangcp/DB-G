@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -70,7 +71,7 @@ func (s *session) Close() error {
 
 // Caps：只读数据源（无事务/无 DDL）。
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL
 }
 
 func (s *session) Cancel() bool {
@@ -170,6 +171,107 @@ func trimBytes(b []byte, max int) []byte {
 		max--
 	}
 	return b[:max]
+}
+
+// Schemas 列出可切换的库。
+func (s *session) Schemas(ctx context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("clickhouse: session not open")
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT name FROM system.databases WHERE name NOT IN ('system','INFORMATION_SCHEMA','information_schema') ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+// ObjectsIn 列出某库的表/视图。
+func (s *session) ObjectsIn(ctx context.Context, database string, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("clickhouse: session not open")
+	}
+	var q string
+	switch kind {
+	case engine.ObjectTable:
+		q = `SELECT name FROM system.tables WHERE database = ? AND engine NOT IN ('View','MaterializedView') ORDER BY name`
+	case engine.ObjectView:
+		q = `SELECT name FROM system.tables WHERE database = ? AND engine IN ('View','MaterializedView') ORDER BY name`
+	default:
+		return []engine.DBObject{}, nil
+	}
+	rows, err := s.db.QueryContext(ctx, q, database)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.DBObject
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, engine.DBObject{Kind: kind, Name: name, Schema: database})
+	}
+	return out, rows.Err()
+}
+
+// ObjectDDL 用 SHOW CREATE TABLE 取建表语句。
+func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", errors.New("clickhouse: session not open")
+	}
+	if kind != engine.ObjectTable && kind != engine.ObjectView {
+		return "", errors.New("clickhouse: 该对象不支持查看 DDL")
+	}
+	q := "SHOW CREATE TABLE " + quoteIdent(name)
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	cols, err := rows.Columns()
+	if err != nil {
+		return "", err
+	}
+	if !rows.Next() {
+		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+	}
+	vals := make([]any, len(cols))
+	ptrs := make([]any, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if err := rows.Scan(ptrs...); err != nil {
+		return "", err
+	}
+	for i := len(vals) - 1; i >= 0; i-- {
+		switch t := vals[i].(type) {
+		case string:
+			return t, nil
+		case []byte:
+			return string(t), nil
+		}
+	}
+	return "", fmt.Errorf("未找到 %s 的 DDL", name)
+}
+
+func quoteIdent(name string) string {
+	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
 func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {

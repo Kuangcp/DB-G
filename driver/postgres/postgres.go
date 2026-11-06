@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -70,7 +71,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL
 }
 
 func (s *session) Cancel() bool {
@@ -173,7 +174,34 @@ func trimBytes(b []byte, max int) []byte {
 	return b[:max]
 }
 
-func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
+// Schemas 列出可切换的 schema（排除系统 schema）。
+func (s *session) Schemas(ctx context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return nil, errors.New("postgres: session not open")
+	}
+	const q = `SELECT schema_name FROM information_schema.schemata
+		WHERE schema_name NOT IN ('pg_catalog','information_schema')
+		  AND schema_name NOT LIKE 'pg_%' ORDER BY 1`
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out = append(out, name)
+	}
+	return out, rows.Err()
+}
+
+// ObjectsIn 列出某 schema 的表/视图/索引。
+func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.ObjectKind) ([]engine.DBObject, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
@@ -182,15 +210,15 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 	var q string
 	switch kind {
 	case engine.ObjectTable:
-		q = `SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' ORDER BY 1`
+		q = `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY 1`
 	case engine.ObjectView:
-		q = `SELECT table_name FROM information_schema.views WHERE table_schema = current_schema() ORDER BY 1`
+		q = `SELECT table_name FROM information_schema.views WHERE table_schema = $1 ORDER BY 1`
 	case engine.ObjectIndex:
-		q = `SELECT indexname FROM pg_indexes WHERE schemaname = current_schema() ORDER BY 1`
+		q = `SELECT indexname FROM pg_indexes WHERE schemaname = $1 ORDER BY 1`
 	default:
 		return nil, fmt.Errorf("postgres: unknown object kind %d", kind)
 	}
-	rows, err := s.db.QueryContext(ctx, q)
+	rows, err := s.db.QueryContext(ctx, q, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -201,9 +229,116 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 		if err := rows.Scan(&name); err != nil {
 			return nil, err
 		}
-		out = append(out, engine.DBObject{Kind: kind, Name: name})
+		out = append(out, engine.DBObject{Kind: kind, Name: name, Schema: schema})
 	}
 	return out, rows.Err()
+}
+
+// Objects 列出当前 schema 的对象（保持 ObjectLister 兼容）。
+func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
+	schema, err := s.currentSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.ObjectsIn(ctx, schema, kind)
+}
+
+func (s *session) currentSchema(ctx context.Context) (string, error) {
+	var schema string
+	err := s.db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schema)
+	return schema, err
+}
+
+// ObjectDDL 尽力拼出建表语句（列/类型/非空/默认/主键）；视图用 pg_get_viewdef。
+func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", errors.New("postgres: session not open")
+	}
+	schema, err := s.currentSchema(ctx)
+	if err != nil {
+		return "", err
+	}
+	if kind == engine.ObjectView {
+		var def string
+		err := s.db.QueryRowContext(ctx,
+			`SELECT 'CREATE OR REPLACE VIEW '||quote_ident($1)||'.'||quote_ident($2)||' AS '||pg_get_viewdef($1||'.'||$2, true)`,
+			schema, name).Scan(&def)
+		if err != nil {
+			return "", err
+		}
+		return def + ";", nil
+	}
+	if kind != engine.ObjectTable {
+		return "", errors.New("postgres: 该对象不支持查看 DDL")
+	}
+	const q = `
+SELECT c.column_name, c.data_type, c.is_nullable, coalesce(c.column_default,''), coalesce(c.character_maximum_length,0),
+       EXISTS (
+         SELECT 1 FROM information_schema.table_constraints tc
+         JOIN information_schema.key_column_usage k
+           ON k.constraint_name = tc.constraint_name AND k.table_schema = tc.table_schema AND k.table_name = tc.table_name
+         WHERE tc.constraint_type='PRIMARY KEY' AND tc.table_schema=$1 AND tc.table_name=$2 AND k.column_name=c.column_name)
+FROM information_schema.columns c
+WHERE c.table_schema=$1 AND c.table_name=$2 ORDER BY c.ordinal_position`
+	rows, err := s.db.QueryContext(ctx, q, schema, name)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	type col struct {
+		name, typ, def string
+		nullable       bool
+		length         int64
+		pk             bool
+	}
+	var cols []col
+	for rows.Next() {
+		var c col
+		if err := rows.Scan(&c.name, &c.typ, &c.nullable, &c.def, &c.length, &c.pk); err != nil {
+			return "", err
+		}
+		cols = append(cols, c)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if len(cols) == 0 {
+		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "CREATE TABLE %s.%s (\n", quoteIdent(schema), quoteIdent(name))
+	var pks []string
+	for i, c := range cols {
+		typ := c.typ
+		if c.length > 0 {
+			typ = fmt.Sprintf("%s(%d)", typ, c.length)
+		}
+		fmt.Fprintf(&b, "  %s %s", quoteIdent(c.name), typ)
+		if !c.nullable {
+			b.WriteString(" NOT NULL")
+		}
+		if c.def != "" {
+			b.WriteString(" DEFAULT " + c.def)
+		}
+		if c.pk {
+			pks = append(pks, quoteIdent(c.name))
+		}
+		if i < len(cols)-1 || len(pks) > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString("\n")
+	}
+	if len(pks) > 0 {
+		fmt.Fprintf(&b, "  PRIMARY KEY (%s)\n", strings.Join(pks, ", "))
+	}
+	b.WriteString(");")
+	return b.String(), nil
+}
+
+func quoteIdent(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
 func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {

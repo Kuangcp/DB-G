@@ -43,6 +43,7 @@ type root struct {
 	treeExpand     map[string]bool
 	treeOpen       map[string]*bool
 	treeData       map[string]map[engine.ObjectKind][]engine.DBObject
+	treeSchemas    map[string][]string
 	treeErr        map[string]string
 	treeSelected   string
 	execPending    bool
@@ -114,6 +115,7 @@ func newRoot(text string) *root {
 		treeExpand:    map[string]bool{},
 		treeOpen:      map[string]*bool{},
 		treeData:      map[string]map[engine.ObjectKind][]engine.DBObject{},
+		treeSchemas:   map[string][]string{},
 		treeErr:       map[string]string{},
 		connFormKind:  "sqlite",
 		consoles:      map[string]*app.Console{},
