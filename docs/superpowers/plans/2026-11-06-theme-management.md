@@ -2,7 +2,7 @@
 
 依据：`docs/superpowers/specs/2026-11-06-theme-management-design.md`
 日期：2026-11-06
-状态：待执行（按任务顺序，每步 TDD）
+状态：已完成（2026-11-06，按任务顺序 TDD）
 
 ## 全局约束
 

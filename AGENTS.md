@@ -117,6 +117,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | SQL 历史 | `history.jsonl` | 5MB 轮转 |
 | 日志 | `logs/YYYY-MM/YYYY-MM-DD_N.log` | 纯文本（时间/级别/标签/消息/kv），一次启动一个文件，0600 |
 | 编辑器显示设置（字号/字体族） | `editor.json` | `app.EditorPrefs`，改动即时生效并落盘 |
+| 外观设置（模式/强调色/密度/圆角/字号） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
 
