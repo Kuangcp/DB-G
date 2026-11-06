@@ -33,6 +33,17 @@ func (a *root) sidebar(c *ui.Context) {
 			a.folderModal(c)
 			return
 		}
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+			ui.TextInput(c, &a.objSearch).Placeholder("搜索表/视图…").Label("搜索对象").Fill()
+			if a.objSearch != "" {
+				if iconButtonPlain(c, iconClose, "清除搜索", ui.Transparent).Clicked() {
+					a.objSearch = ""
+				}
+			}
+		})
+		if a.objSearchActive() {
+			ui.Text(c, "搜索仅覆盖已加载的对象").FontSize(11.5).TextColor(c.Theme().TextMuted)
+		}
 		if w := a.store.Warning(); w != "" {
 			ui.Text(c, w).TextColor(c.Theme().Danger)
 		}
@@ -99,12 +110,87 @@ func (a *root) connTree(c *ui.Context) {
 }
 
 func (a *root) connBranch(c *ui.Context, parent string, depth int, idx *connTreeIndex) {
+	searching := a.objSearchActive()
 	for _, f := range idx.foldersByParent[parent] {
+		if searching && !a.folderMatches(idx, f.ID) {
+			continue
+		}
 		a.folderRow(c, f, depth, idx)
 	}
 	for _, p := range idx.connsByFolder[parent] {
+		if searching && !a.connMatches(p) {
+			continue
+		}
 		a.connRow(c, p, depth, idx)
 	}
+}
+
+// objSearchActive 报告对象树搜索是否生效。
+func (a *root) objSearchActive() bool { return strings.TrimSpace(a.objSearch) != "" }
+
+// objMatch 报告名字是否命中当前搜索词（大小写不敏感）。
+func (a *root) objMatch(name string) bool {
+	q := strings.ToLower(strings.TrimSpace(a.objSearch))
+	return q != "" && strings.Contains(strings.ToLower(name), q)
+}
+
+// connObjectMatches 报告连接已加载的对象里是否有命中搜索词的对象。
+func (a *root) connObjectMatches(connID string) bool {
+	for base, m := range a.treeData {
+		if base != connID && !strings.HasPrefix(base, connID+"|") {
+			continue
+		}
+		for _, objs := range m {
+			for _, o := range objs {
+				if a.objMatch(o.Name) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// searchFiltersObjects 报告搜索时是否要过滤该数据源的对象：数据源名本身命中时
+// 展示完整子树，只有对象命中时才按对象名过滤。
+func (a *root) searchFiltersObjects(p app.ConnProfile) bool {
+	return a.objSearchActive() && !a.objMatch(p.Name)
+}
+
+// connMatches 报告数据源是否应在搜索结果里显示（名称命中或已加载对象命中）。
+func (a *root) connMatches(p app.ConnProfile) bool {
+	return a.objMatch(p.Name) || a.connObjectMatches(p.ID)
+}
+
+// folderMatches 报告文件夹或其子孙里是否有命中（文件夹名本身也算）。
+func (a *root) folderMatches(idx *connTreeIndex, folderID string) bool {
+	if f, ok := idx.folders[folderID]; ok && a.objMatch(f.Name) {
+		return true
+	}
+	for _, f := range idx.foldersByParent[folderID] {
+		if a.folderMatches(idx, f.ID) {
+			return true
+		}
+	}
+	for _, p := range idx.connsByFolder[folderID] {
+		if a.connMatches(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// schemaHasMatch 报告某 schema 下已加载对象是否有命中。
+func (a *root) schemaHasMatch(connID, schema string) bool {
+	base := objectTreeKey(connID, schema)
+	for _, objs := range a.treeData[base] {
+		for _, o := range objs {
+			if a.objMatch(o.Name) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // folderIndent 是每层文件夹/连接的缩进宽度（DIP）。
@@ -320,7 +406,7 @@ func (a *root) attachTreeDrop(c *ui.Context, row ui.Element, targetKind, targetI
 }
 
 func (a *root) folderRow(c *ui.Context, f app.ConnFolder, depth int, idx *connTreeIndex) {
-	collapsed := a.folderCollapsed[f.ID]
+	collapsed := a.folderCollapsed[f.ID] && !a.objSearchActive()
 	row := treeRowBase(c, "文件夹 "+f.Name).PaddingStart(float32(4 + depth*folderIndent))
 	row.Children(func() {
 		var label string
@@ -376,7 +462,7 @@ func (a *root) toggleFolder(id string) {
 
 func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTreeIndex) {
 	live := a.connected(p.ID)
-	expanded := a.treeExpand[p.ID]
+	expanded := a.treeExpand[p.ID] || a.objSearchActive()
 	row := treeRowBase(c, "连接 "+p.Name).PaddingStart(float32(4 + depth*folderIndent))
 	row.Children(func() {
 		var label string

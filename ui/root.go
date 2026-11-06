@@ -61,6 +61,7 @@ type root struct {
 	treeSchemas      map[string][]string
 	treeErr          map[string]string
 	treeSelected     string
+	objSearch        string          // 对象树搜索词（非空时过滤连接/文件夹/已加载对象）
 	folderCollapsed  map[string]bool // folderID → 收起；缺省 = 展开
 	metaCache        *app.MetaCache
 	metaCacheTried   map[string]bool

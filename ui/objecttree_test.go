@@ -117,3 +117,59 @@ func TestObjectsOfCapsCatalog(t *testing.T) {
 		t.Fatal("paged catalog must not fall back to full Objects")
 	}
 }
+
+// 侧栏搜索：按已加载对象过滤，自动展开命中；清空恢复原树。
+func TestSidebarObjectSearch(t *testing.T) {
+	a := newSidebarRoot(t)
+	if err := a.store.Add(app.ConnProfile{Name: "主库", Kind: "sqlite", Path: seedConnFile(t)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.Add(app.ConnProfile{Name: "仓库", Kind: "sqlite", Path: seedConnFile(t)}); err != nil {
+		t.Fatal(err)
+	}
+	list := a.store.List()
+	main, store := list[0].ID, list[1].ID
+	a.treeData[main] = map[engine.ObjectKind][]engine.DBObject{
+		engine.ObjectTable: {
+			{Kind: engine.ObjectTable, Name: "users"},
+			{Kind: engine.ObjectTable, Name: "orders"},
+		},
+		engine.ObjectView: {{Kind: engine.ObjectView, Name: "user_stats"}},
+	}
+	a.treeData[store] = map[engine.ObjectKind][]engine.DBObject{
+		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "inventory"}},
+	}
+	a.treeExpand[main], a.treeExpand[store] = true, true
+	a.groupOpenPtr(main+"|"+kindKey(engine.ObjectTable), true)
+	a.groupOpenPtr(main+"|"+kindKey(engine.ObjectView), true)
+	a.groupOpenPtr(store+"|"+kindKey(engine.ObjectTable), true)
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+
+	a.objSearch = "user"
+	tt.Frame()
+	if !tt.HasText("users") || !tt.HasText("user_stats") {
+		t.Fatalf("matching objects should show: %q", tt.Texts())
+	}
+	if tt.HasText("orders") || tt.HasText("inventory") {
+		t.Fatalf("non-matching objects should hide: %q", tt.Texts())
+	}
+	if tt.HasText("仓库") {
+		t.Fatalf("connection without matches should hide: %q", tt.Texts())
+	}
+
+	// 数据源名命中：展示完整子树，不按对象名过滤。
+	a.objSearch = "主"
+	tt.Frame()
+	if !tt.HasText("users") || !tt.HasText("orders") {
+		t.Fatalf("connection name match should show all its loaded objects: %q", tt.Texts())
+	}
+
+	a.objSearch = ""
+	tt.Frame()
+	for _, want := range []string{"orders", "inventory"} {
+		if !tt.HasText(want) {
+			t.Fatalf("clearing the search must restore the tree: %q", tt.Texts())
+		}
+	}
+}
