@@ -1,9 +1,14 @@
 db-g
 db-g.bin
-.vscode/
+
 out/
 log/
 *.log
 # 本地 mygo 工作区（不提交）：CellsStyle 未发布前用 go.work 挂本地仓库
 go.work
 go.work.sum
+
+
+.idea/
+.vscode/
+
