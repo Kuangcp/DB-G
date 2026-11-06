@@ -29,7 +29,7 @@ func (a *root) tabBar(c *ui.Context) {
 	}
 	ui.Row(c).AlignItems(ui.Center).Gap(6).FillWidth().Children(func() {
 		if len(open) == 0 {
-			ui.Text(c, "在左侧数据源下新建或打开控制台").TextColor(c.Theme().TextMuted).FontSize(11.5).SingleLine()
+			ui.Text(c, "在左侧数据源下新建或打开控制台").TextColor(c.Theme().TextMuted).FontSize(12.5).SingleLine()
 			ui.Spacer(c)
 		} else {
 			ui.Toolbar(c, func() {
@@ -38,10 +38,8 @@ func (a *root) tabBar(c *ui.Context) {
 				}
 			}).Padding(0).Grow(1).Label("控制台标签")
 		}
+		// 新建控制台只从左侧数据源下的入口走，这里只留工作区切换器。
 		ui.Toolbar(c, func() {
-			if iconButton(c, iconPlus, "新建控制台", ui.Transparent).Disabled(a.activeConnID() == "").Clicked() {
-				a.createConsole()
-			}
 			ui.MenuButton(c, name, a.workspaceMenu)
 		}).Padding(0).Shrink(0)
 	})
@@ -65,8 +63,8 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 		label = "● " + label
 	}
 	active := rec.ID == a.activeConsole
-	btn := ui.ButtonBase(c).Label(label).Gap(4).Height(t.Space(5.5)).
-		Padding(1, 6).Radius(t.Space(1)).
+	btn := ui.ButtonBase(c).Label(label).Gap(5).Height(t.Space(6.5)).
+		Padding(2, 9).Radius(t.Space(1.25)).
 		BorderWidth(0, 0, 2, 0).BorderColor(ui.Transparent)
 	if active {
 		btn.BorderColor(t.Accent).Background(t.Accent.Alpha(0.10))
@@ -75,19 +73,19 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 	}
 	btn.Children(func() {
 		if dirty {
-			ui.Text(c, "●").FontSize(9).TextColor(t.Accent)
+			ui.Text(c, "●").FontSize(10).TextColor(t.Accent)
 		}
-		srcText := ui.Text(c, src).FontSize(11.5).SingleLine()
+		srcText := ui.Text(c, src).FontSize(12.5).SingleLine()
 		if active {
 			srcText.Bold()
 		}
 		if showConsole {
-			ui.Text(c, "/").FontSize(9.5).TextColor(t.TextMuted)
+			ui.Text(c, "/").FontSize(10.5).TextColor(t.TextMuted)
 			col := t.TextMuted
 			if active {
 				col = t.Text
 			}
-			ui.Text(c, rec.Name).FontSize(9.5).TextColor(col).SingleLine()
+			ui.Text(c, rec.Name).FontSize(10.5).TextColor(col).SingleLine()
 		}
 	})
 	if btn.Clicked() {
@@ -104,23 +102,6 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 			a.openModal("delete", rec.ID, rec.Name)
 		}
 	})
-}
-
-// createConsole 在当前连接下新建控制台（默认名），下一帧激活。
-func (a *root) createConsole() {
-	m := a.consoleMgr()
-	connID := a.activeConnID()
-	if m == nil || connID == "" {
-		return
-	}
-	rec, err := m.Create(connID, "")
-	if err != nil {
-		a.consoleErr = "新建控制台失败: " + err.Error()
-		app.LogWarn("console", "create failed", "err", err.Error())
-		return
-	}
-	app.LogInfo("console", "create", "id", rec.ID, "name", rec.Name)
-	a.pendingActivate = rec.ID
 }
 
 // closeConsole 把控制台移出当前工作区（文件与元数据保留）。

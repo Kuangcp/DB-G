@@ -311,12 +311,13 @@ func TestTabBarOverflowMenu(t *testing.T) {
 	if _, ok := tt.Find("More"); !ok {
 		t.Fatalf("窄窗口应出现标签溢出菜单: %q", tt.Texts())
 	}
-	// 第一个标签仍然可见；+ 与工作区切换器不参与标签溢出，也必须可见。
+	// 第一个标签仍然可见；工作区切换器不参与标签溢出，也必须可见。
 	if first, ok := tt.Find("查询01"); !ok || first.X < 0 || first.X > 760 {
 		t.Fatalf("第一个标签应留在可视区: %v %v", first, ok)
 	}
-	if _, ok := tt.Find("新建控制台"); !ok {
-		t.Fatal("new console button must stay visible when tabs overflow")
+	// 标签行不再放「新建控制台」：新建入口只在左侧数据源下。
+	if tt.HasText("新建控制台") {
+		t.Fatal("tab bar must not carry a new-console button")
 	}
 	if !tt.HasText("默认") {
 		t.Fatalf("workspace switcher must stay visible: %q", tt.Texts())
