@@ -17,9 +17,9 @@ type fakeSession struct {
 }
 
 func (f *fakeSession) Open(context.Context) error { return nil }
-func (f *fakeSession) Close() error                { return nil }
-func (f *fakeSession) Caps() engine.Capabilities   { return 0 }
-func (f *fakeSession) Cancel() bool                { return false }
+func (f *fakeSession) Close() error               { return nil }
+func (f *fakeSession) Caps() engine.Capabilities  { return 0 }
+func (f *fakeSession) Cancel() bool               { return false }
 
 func (f *fakeSession) RunStatement(ctx context.Context, q string) (*engine.QueryResult, error) {
 	f.mu.Lock()
