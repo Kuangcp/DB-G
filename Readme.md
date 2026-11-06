@@ -4,7 +4,7 @@
 
 # DB-G
 
-对标 db-k 的数据库客户端（Go + mygo），规格与里程碑见
+对标 [db-k](https://github.com/Kuangcp/DB-K) 的数据库客户端（Go + mygo），规格与里程碑见
 `docs/superpowers/specs/2026-10-14-db-g-roadmap-design.md`。
 
 ## 功能清单
