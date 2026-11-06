@@ -20,6 +20,7 @@ func newSidebarRoot(t *testing.T) *root {
 	t.Helper()
 	a := newTestRoot()
 	a.store = app.LoadStore(filepath.Join(t.TempDir(), "connections.json"))
+	a.metaCache = app.NewMetaCache(filepath.Join(t.TempDir(), "meta"))
 	return a
 }
 

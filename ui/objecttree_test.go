@@ -94,7 +94,7 @@ func TestObjectTreeLargeSchemaUsesCountsAndPages(t *testing.T) {
 		t.Fatalf("load-more row missing: %q", tt.Texts())
 	}
 	// 行在树底部、窗口外，直接走同一入口验证追加（点击路径由 Tester 的命中检查限制）。
-	a.loadObjectPage(stored, "", engine.ObjectTable)
+	a.loadObjectPage(stored, "", engine.ObjectTable, false)
 	tt.Frame()
 	if got := len(a.treeData[stored.ID][engine.ObjectTable]); got != 2*objectPageSize {
 		t.Fatalf("second page = %d, want %d", got, 2*objectPageSize)

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"path/filepath"
 	"runtime/debug"
 	"time"
 
@@ -14,52 +15,59 @@ import (
 )
 
 type root struct {
-	code            *codeEditor
-	con             *app.Console
-	win             *mygo.Window
-	resultState     ui.ListState
-	resultsHeight   float32
-	sidebarWidth    float32
-	store           *app.ConnStore
-	connErr         string // 顶栏一行错误（最近一次连接失败的原因）
-	connFormOpen    bool
-	connFormID      string
-	connFormName    string
-	connFormPath    string
-	connFormErr     string
-	connFormKind    string
-	connFormHost    string
-	connFormPort    string
-	connFormUser    string
-	connFormPass    string
-	connFormDB      string
-	connFormParams  string
-	connProto       int                // ClickHouse 协议：0 native / 1 http / 2 https
-	connFormFolder  string             // 连接所属文件夹；空 = 根级
-	chords          map[string][]chord // 动作 → 键位（见 keymap.go）
-	keymapPath      string             // keymap.json 的位置（空 = 不读盘，测试用）
-	editorPrefs     app.EditorPrefs    // 编辑器字号/字体族
-	editorPrefsPath string             // editor.json 的位置（空 = 不落盘）
-	editorPrefsWarn string
-	settingsSection int    // 设置窗口选中的分区
-	captureAction   string // 设置窗口正在录制键位的动作
-	keymapWarn      string // 键位文件读写问题的提示
-	connTestMsg     string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
-	connTestErr     bool
-	connTestBusy    bool
-	connDeleteOpen  bool
-	connDeleting    string
-	treeExpand      map[string]bool
-	treeOpen        map[string]*bool
-	treeData        map[string]map[engine.ObjectKind][]engine.DBObject
-	treeCounts      map[string]map[engine.ObjectKind]int
-	treeLoading     map[string]bool
-	treePageStarted map[string]bool
-	treeSchemas     map[string][]string
-	treeErr         map[string]string
-	treeSelected    string
-	folderCollapsed map[string]bool // folderID → 收起；缺省 = 展开
-	execPending     bool
+	code             *codeEditor
+	con              *app.Console
+	win              *mygo.Window
+	resultState      ui.ListState
+	resultsHeight    float32
+	sidebarWidth     float32
+	store            *app.ConnStore
+	connErr          string // 顶栏一行错误（最近一次连接失败的原因）
+	connFormOpen     bool
+	connFormID       string
+	connFormName     string
+	connFormPath     string
+	connFormErr      string
+	connFormKind     string
+	connFormHost     string
+	connFormPort     string
+	connFormUser     string
+	connFormPass     string
+	connFormDB       string
+	connFormParams   string
+	connProto        int                // ClickHouse 协议：0 native / 1 http / 2 https
+	connFormFolder   string             // 连接所属文件夹；空 = 根级
+	chords           map[string][]chord // 动作 → 键位（见 keymap.go）
+	keymapPath       string             // keymap.json 的位置（空 = 不读盘，测试用）
+	editorPrefs      app.EditorPrefs    // 编辑器字号/字体族
+	editorPrefsPath  string             // editor.json 的位置（空 = 不落盘）
+	editorPrefsWarn  string
+	settingsSection  int    // 设置窗口选中的分区
+	captureAction    string // 设置窗口正在录制键位的动作
+	keymapWarn       string // 键位文件读写问题的提示
+	connTestMsg      string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	connTestErr      bool
+	connTestBusy     bool
+	connDeleteOpen   bool
+	connDeleting     string
+	treeExpand       map[string]bool
+	treeOpen         map[string]*bool
+	treeData         map[string]map[engine.ObjectKind][]engine.DBObject
+	treeCounts       map[string]map[engine.ObjectKind]int
+	treeLoading      map[string]bool
+	treePageStarted  map[string]bool
+	treeSchemas      map[string][]string
+	treeErr          map[string]string
+	treeSelected     string
+	folderCollapsed  map[string]bool // folderID → 收起；缺省 = 展开
+	metaCache        *app.MetaCache
+	metaCacheTried   map[string]bool
+	metaCacheLoading map[string]bool
+	metaCacheStale   map[string]bool
+	metaSaveSeq      map[string]uint64
+	treeGroupStale   map[string]bool // 过期缓存的分组；展开时替换首页
+	treeGen          uint64          // 重载/删除时递增，丢弃旧的异步结果
+	execPending      bool
 
 	mgr                 *app.ConsoleManager
 	catalog             *catalogCache
@@ -129,27 +137,32 @@ type root struct {
 
 func newRoot(text string) *root {
 	a := &root{
-		code:            newCodeEditor("在左侧数据源下新建或打开控制台"),
-		con:             app.NewConsole(),
-		resultsHeight:   260,
-		sidebarWidth:    280,
-		treeExpand:      map[string]bool{},
-		treeOpen:        map[string]*bool{},
-		treeData:        map[string]map[engine.ObjectKind][]engine.DBObject{},
-		treeCounts:      map[string]map[engine.ObjectKind]int{},
-		treeLoading:     map[string]bool{},
-		treePageStarted: map[string]bool{},
-		treeSchemas:     map[string][]string{},
-		treeErr:         map[string]string{},
-		folderCollapsed: map[string]bool{},
-		connFormKind:    "sqlite",
-		chords:          defaultChords(),
-		editorPrefs:     app.DefaultEditorPrefs(),
-		sessions:        map[string]engine.Session{},
-		sessionUse:      map[string]uint64{},
-		sessionErr:      map[string]string{},
-		consoles:        map[string]*app.Console{},
-		lastVer:         map[string]uint64{},
+		code:             newCodeEditor("在左侧数据源下新建或打开控制台"),
+		con:              app.NewConsole(),
+		resultsHeight:    260,
+		sidebarWidth:     280,
+		treeExpand:       map[string]bool{},
+		treeOpen:         map[string]*bool{},
+		treeData:         map[string]map[engine.ObjectKind][]engine.DBObject{},
+		treeCounts:       map[string]map[engine.ObjectKind]int{},
+		treeLoading:      map[string]bool{},
+		treePageStarted:  map[string]bool{},
+		treeSchemas:      map[string][]string{},
+		treeErr:          map[string]string{},
+		folderCollapsed:  map[string]bool{},
+		metaCacheTried:   map[string]bool{},
+		metaCacheLoading: map[string]bool{},
+		metaCacheStale:   map[string]bool{},
+		metaSaveSeq:      map[string]uint64{},
+		treeGroupStale:   map[string]bool{},
+		connFormKind:     "sqlite",
+		chords:           defaultChords(),
+		editorPrefs:      app.DefaultEditorPrefs(),
+		sessions:         map[string]engine.Session{},
+		sessionUse:       map[string]uint64{},
+		sessionErr:       map[string]string{},
+		consoles:         map[string]*app.Console{},
+		lastVer:          map[string]uint64{},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.resView = newResultView()
@@ -177,6 +190,7 @@ func newRootWithStore(storePath string) *root {
 	r.editorPrefs, r.editorPrefsWarn = app.LoadEditorPrefs(r.editorPrefsPath)
 	r.applyEditorPrefs()
 	r.store = app.LoadStore(storePath)
+	r.metaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
 	r.restoreSession()

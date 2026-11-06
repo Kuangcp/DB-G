@@ -66,11 +66,19 @@ func (a *root) groupOpenPtr(key string, v bool) *bool {
 }
 
 func (a *root) reloadTree() {
+	a.treeGen++
 	a.treeData = nil
 	a.treeCounts = nil
 	a.treeLoading = nil
 	a.treePageStarted = nil
+	a.treeGroupStale = nil
+	a.metaCacheTried = nil
+	a.metaCacheLoading = nil
+	a.metaCacheStale = nil
 	a.treeErr = nil
+	if a.metaCache != nil {
+		a.metaCache.DeleteAll()
+	}
 }
 
 func (a *root) setTreeErr(key, msg string) {
@@ -98,6 +106,7 @@ func (a *root) expandConnAndTree(p app.ConnProfile) {
 	if a.treeErr != nil {
 		delete(a.treeErr, p.ID) // 重连后旧的报错不再作数
 	}
+	a.loadMetaCache(p)
 	a.expandConn(p)
 }
 
@@ -119,6 +128,7 @@ func (a *root) toggleExpandConn(p app.ConnProfile) {
 		if a.treeErr != nil {
 			delete(a.treeErr, p.ID)
 		}
+		a.loadMetaCache(p)
 		a.expandConn(p)
 	}
 }
@@ -170,8 +180,12 @@ func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
 		return
 	}
 	a.treeLoading[key] = true
+	gen := a.treeGen
 	done := func(data map[engine.ObjectKind][]engine.DBObject, err error) {
 		delete(a.treeLoading, key)
+		if gen != a.treeGen {
+			return
+		}
 		if err != nil {
 			a.setTreeErr(base, err.Error())
 			return
@@ -191,6 +205,7 @@ func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
 			counts[kind] = len(objs)
 		}
 		a.treeCounts[base] = counts
+		a.saveMetaCache(p)
 	}
 	if a.win == nil {
 		data, err := a.loadAllObjectKinds(sess, schema)
@@ -232,6 +247,7 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 		return
 	}
 	a.treeLoading[countKey] = true
+	gen := a.treeGen
 	load := func() (map[engine.ObjectKind]int, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -239,6 +255,9 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 	}
 	done := func(counts map[engine.ObjectKind]int, err error) {
 		delete(a.treeLoading, countKey)
+		if gen != a.treeGen {
+			return
+		}
 		if err != nil {
 			a.setTreeErr(base, err.Error())
 			return
@@ -247,6 +266,7 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 			a.treeCounts = map[string]map[engine.ObjectKind]int{}
 		}
 		a.treeCounts[base] = counts
+		a.saveMetaCache(p)
 	}
 	if a.win == nil {
 		counts, err := load()
@@ -267,15 +287,26 @@ func (a *root) ensureObjectPage(p app.ConnProfile, schema string, kind engine.Ob
 	if a.treePageStarted == nil {
 		a.treePageStarted = map[string]bool{}
 	}
+	if a.treeGroupStale[groupKey] {
+		if a.sessionFor(p.ID) == nil {
+			return // 还没连上：保留 stale 标记，连上后再刷新
+		}
+		delete(a.treeGroupStale, groupKey)
+		a.loadObjectPage(p, schema, kind, true)
+		return
+	}
 	if a.treePageStarted[groupKey] {
 		return
 	}
+	if a.sessionFor(p.ID) == nil {
+		return // 不留下 started 标记，连上后下一帧再加载
+	}
 	a.treePageStarted[groupKey] = true
-	a.loadObjectPage(p, schema, kind)
+	a.loadObjectPage(p, schema, kind, false)
 }
 
-// loadObjectPage 加载某类型分组的下一页；已加载满或达到上限时不动。
-func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.ObjectKind) {
+// loadObjectPage 加载某类型分组的下一页；replace=true 时用第一页替换过期缓存。
+func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.ObjectKind, replace bool) {
 	base := objectTreeKey(p.ID, schema)
 	groupKey := objectGroupKey(base, kind)
 	if a.treeLoading == nil {
@@ -285,11 +316,11 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 		return
 	}
 	loaded := 0
-	if m := a.treeData[base]; m != nil {
+	if m := a.treeData[base]; m != nil && !replace {
 		loaded = len(m[kind])
 	}
 	total, hasTotal := a.treeCountOf(base, kind)
-	if hasTotal && loaded >= total {
+	if !replace && hasTotal && loaded >= total {
 		return
 	}
 	if loaded >= objectMaxLoaded {
@@ -305,7 +336,10 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 		return
 	}
 	limit := objectPageSize
-	if hasTotal && total-loaded < limit {
+	if hasTotal && total > 0 && total < limit {
+		limit = total
+	}
+	if !replace && hasTotal && total-loaded < limit {
 		limit = total - loaded
 	}
 	if loaded+limit > objectMaxLoaded {
@@ -315,6 +349,7 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 		return
 	}
 	a.treeLoading[groupKey] = true
+	gen := a.treeGen
 	load := func() ([]engine.DBObject, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -322,6 +357,9 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 	}
 	done := func(objs []engine.DBObject, err error) {
 		delete(a.treeLoading, groupKey)
+		if gen != a.treeGen {
+			return
+		}
 		if err != nil {
 			a.setTreeErr(groupKey, err.Error())
 			return
@@ -332,7 +370,12 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 		if a.treeData[base] == nil {
 			a.treeData[base] = map[engine.ObjectKind][]engine.DBObject{}
 		}
-		a.treeData[base][kind] = append(a.treeData[base][kind], objs...)
+		if replace {
+			a.treeData[base][kind] = objs
+		} else {
+			a.treeData[base][kind] = append(a.treeData[base][kind], objs...)
+		}
+		a.saveMetaCache(p)
 	}
 	if a.win == nil {
 		objs, err := load()
@@ -360,8 +403,16 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
 		ui.Text(c, err).TextColor(c.Theme().Danger)
 		return
 	}
-	// 多 schema 数据源：先列 schema，再在 schema 下列对象分组。
-	if lister, ok := a.schemaLister(p); ok {
+	if a.metaCacheLoading[p.ID] {
+		ui.Text(c, "加载元数据…").TextColor(c.Theme().TextMuted)
+		return
+	}
+	if a.metaCacheStale[p.ID] && a.connected(p.ID) {
+		a.refreshStaleMeta(p)
+	}
+	// 多 schema 数据源：先列 schema，再在 schema 下列对象分组；
+	// 有磁盘缓存时即使还没连上也先把 schema 节点画出来。
+	if lister, ok := a.schemaLister(p); ok || len(a.treeSchemas[p.ID]) > 0 {
 		a.schemaTree(c, p, lister)
 		return
 	}
@@ -391,6 +442,9 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 		a.treeSchemas = map[string][]string{}
 	}
 	if _, ok := a.treeSchemas[p.ID]; !ok {
+		if lister == nil {
+			return
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		schemas, err := lister.Schemas(ctx)
 		cancel()
@@ -399,6 +453,7 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 			return
 		}
 		a.treeSchemas[p.ID] = schemas
+		a.saveMetaCache(p)
 	}
 	ui.Tree(c, func() {
 		for _, schema := range a.treeSchemas[p.ID] {
@@ -478,7 +533,7 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 		}
 		label := fmt.Sprintf("继续加载（已 %d / 共 %d）", len(objs), total)
 		if ui.TreeItem(c, label, nil, nil).Clicked() {
-			a.loadObjectPage(p, schema, kind)
+			a.loadObjectPage(p, schema, kind, false)
 		}
 	}
 }

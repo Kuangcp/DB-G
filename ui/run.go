@@ -47,6 +47,7 @@ func (a *root) removeConn(id string) {
 	if a.catalog != nil {
 		a.catalog.invalidate(id)
 	}
+	a.forgetConnMeta(id)
 	a.closeSession(id, "connection removed")
 	if a.connErrOf(id) != "" {
 		delete(a.sessionErr, id)

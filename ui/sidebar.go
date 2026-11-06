@@ -766,7 +766,19 @@ func (a *root) saveConnForm() {
 	if a.connFormID == "" {
 		err = a.store.Add(p)
 	} else {
+		old, had := a.store.Get(a.connFormID)
 		err = a.store.Update(p)
+		if err == nil && had && app.MetaFingerprint(old) != app.MetaFingerprint(p) {
+			// 目标库变了：关掉旧会话，旧元数据缓存与内存树都不再适用。
+			a.closeSession(p.ID, "connection changed")
+			if a.catalog != nil {
+				a.catalog.invalidate(p.ID)
+			}
+			if a.sessionErr != nil {
+				delete(a.sessionErr, p.ID)
+			}
+			a.forgetConnMeta(p.ID)
+		}
 	}
 	if err != nil {
 		a.connFormErr = err.Error()
