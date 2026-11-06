@@ -35,6 +35,7 @@ type root struct {
 	connFormPass     string
 	connFormDB       string
 	connFormParams   string
+	connFormTimeout  string             // 查询超时（秒，空 = 默认 30）
 	connProto        int                // ClickHouse 协议：0 native / 1 http / 2 https
 	connFormFolder   string             // 连接所属文件夹；空 = 根级
 	chords           map[string][]chord // 动作 → 键位（见 keymap.go）

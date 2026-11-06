@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -405,6 +406,10 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 				a.connFormPort = strconv.Itoa(p.Port)
 			}
 			a.connFormParams = p.Params
+			a.connFormTimeout = ""
+			if p.QueryTimeout > 0 {
+				a.connFormTimeout = strconv.Itoa(p.QueryTimeout)
+			}
 			a.connProto = connProtoIndex(p.Protocol)
 			a.connFormFolder = p.FolderID
 			a.resetConnTest()
@@ -450,17 +455,18 @@ func (a *root) duplicateConn(p app.ConnProfile) {
 		name = fmt.Sprintf("%s (副本%d)", p.Name, i)
 	}
 	cloned := app.ConnProfile{
-		Name:     name,
-		Kind:     p.Kind,
-		Path:     p.Path,
-		Host:     p.Host,
-		Port:     p.Port,
-		User:     p.User,
-		Password: p.Password,
-		Database: p.Database,
-		Protocol: p.Protocol,
-		Params:   p.Params,
-		FolderID: p.FolderID,
+		Name:         name,
+		Kind:         p.Kind,
+		Path:         p.Path,
+		Host:         p.Host,
+		Port:         p.Port,
+		User:         p.User,
+		Password:     p.Password,
+		Database:     p.Database,
+		Protocol:     p.Protocol,
+		Params:       p.Params,
+		FolderID:     p.FolderID,
+		QueryTimeout: p.QueryTimeout,
 	}
 	if err := a.store.Add(cloned); err != nil {
 		a.connErr = "复制失败：" + err.Error()
@@ -592,6 +598,9 @@ func (a *root) connModal(c *ui.Context) {
 						}
 					})
 				}
+				ui.TextInput(c, &a.connFormTimeout).
+					Placeholder("查询超时（秒，空或 0 = 默认 30）")
+
 				if a.connFormErr != "" {
 					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
 				}
@@ -716,6 +725,18 @@ func (a *root) deleteModal(c *ui.Context) {
 // 和复制连接信息都用它，免得三处各读一遍表单。
 func (a *root) connFormProfile() (app.ConnProfile, error) {
 	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath, FolderID: a.connFormFolder}
+	sec := 0
+	if t := strings.TrimSpace(a.connFormTimeout); t != "" {
+		n, err := strconv.Atoi(t)
+		if err != nil {
+			return p, errQueryTimeout
+		}
+		if n < 0 || n > 86400 {
+			return p, errors.New("查询超时需在 0–86400 秒")
+		}
+		sec = n
+	}
+	p.QueryTimeout = sec
 	if a.connFormKind == "sqlite" {
 		return p, nil
 	}
@@ -809,7 +830,7 @@ func (a *root) saveConnForm() {
 	}
 	p, err := a.connFormProfile()
 	if err != nil {
-		a.connFormErr = "端口必须是数字"
+		a.connFormErr = err.Error()
 		return
 	}
 	if a.connFormID == "" {
@@ -875,7 +896,7 @@ func (a *root) openNewConnForm(folderID string) {
 	a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
 	a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
 	a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
-	a.connFormParams, a.connProto = "", 0
+	a.connFormParams, a.connFormTimeout, a.connProto = "", "", 0
 	a.connFormFolder = folderID
 	a.resetConnTest()
 }

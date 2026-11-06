@@ -32,6 +32,8 @@ type ConnProfile struct {
 	Params string `json:"params,omitempty"`
 	// FolderID 是连接所属文件夹；空串表示根级。
 	FolderID string `json:"folderID,omitempty"`
+	// QueryTimeout 是单条语句的查询超时（秒）；0 = 默认 30 秒。
+	QueryTimeout int `json:"queryTimeout,omitempty"`
 }
 
 // ConnFolder 是侧栏连接列表里的一个文件夹；ParentID 为空表示根级。
@@ -333,6 +335,9 @@ func validateProfile(p ConnProfile) error {
 		}
 	default:
 		return fmt.Errorf("不支持的数据源类型: %q", p.Kind)
+	}
+	if p.QueryTimeout < 0 || p.QueryTimeout > 86400 {
+		return errors.New("查询超时需在 0–86400 秒")
 	}
 	return nil
 }
