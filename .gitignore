@@ -1,6 +1,7 @@
 db-g
 db-g.bin
 
+test-data/
 out/
 log/
 *.log
