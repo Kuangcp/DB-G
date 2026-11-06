@@ -31,7 +31,7 @@ func TestConnFormSummarySQLite(t *testing.T) {
 	}
 }
 
-func TestConnFormSummaryNoPassword(t *testing.T) {
+func TestConnFormSummaryIncludesPassword(t *testing.T) {
 	a, _ := openConnModal(t)
 	a.connFormKind = "mysql"
 	a.connFormName = "远程库"
@@ -45,12 +45,9 @@ func TestConnFormSummaryNoPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := connFormSummary(p)
-	want := "名称: 远程库\n类型: MySQL\n主机: 10.0.0.1\n端口: 3306\n数据库: app\n用户: root"
+	want := "名称: 远程库\n类型: MySQL\n主机: 10.0.0.1\n端口: 3306\n数据库: app\n用户: root\n密码: secret"
 	if got != want {
 		t.Fatalf("summary:\n%q\nwant:\n%q", got, want)
-	}
-	if strings.Contains(got, "secret") {
-		t.Fatal("summary must not include the password")
 	}
 }
 
@@ -115,5 +112,27 @@ func TestConnFormButtonsFit(t *testing.T) {
 	test, _ := tt.Find("测试连接")
 	if test.X >= save.X {
 		t.Fatalf("测试连接 must sit left of 保存: test=%v save=%v", test, save)
+	}
+}
+
+func TestConnFormCopyIncludesPassword(t *testing.T) {
+	a, tt := openConnModal(t)
+	a.connFormKind = "mysql"
+	a.connFormName = "远程库"
+	a.connFormHost = "10.0.0.1"
+	a.connFormPort = "3306"
+	a.connFormUser = "root"
+	a.connFormPass = "secret"
+	a.connFormDB = "app"
+	tt.Frame()
+	if err := tt.Click("复制"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := tt.Clipboard(); !strings.Contains(got, "密码: secret") {
+		t.Fatalf("clipboard must include plaintext password: %q", got)
+	}
+	if !strings.Contains(a.connTestMsg, "含明文密码") {
+		t.Fatalf("copy feedback: %q", a.connTestMsg)
 	}
 }

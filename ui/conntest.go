@@ -70,7 +70,7 @@ func (a *root) testConnForm() {
 }
 
 // connFormSummary 把连接信息排成多行 "key: value"，供「复制」放进剪贴板。
-// 和「导出连接」一致，不含密码。
+// 这里按用户要求带上明文密码；「导出连接」仍然不含密码。
 func connFormSummary(p app.ConnProfile) string {
 	lines := []string{
 		"名称: " + p.Name,
@@ -86,6 +86,9 @@ func connFormSummary(p app.ConnProfile) string {
 	}
 	if p.User != "" {
 		lines = append(lines, "用户: "+p.User)
+	}
+	if p.Password != "" {
+		lines = append(lines, "密码: "+p.Password)
 	}
 	if p.Protocol != "" {
 		lines = append(lines, "协议: "+p.Protocol)
@@ -104,5 +107,5 @@ func (a *root) copyConnForm(c *ui.Context) {
 		return
 	}
 	c.WriteClipboard(connFormSummary(p))
-	a.connTestMsg, a.connTestErr = "已复制连接信息（不含密码）", false
+	a.connTestMsg, a.connTestErr = "已复制连接信息（含明文密码）", false
 }
