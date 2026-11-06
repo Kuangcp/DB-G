@@ -92,7 +92,7 @@
 ## 构建与测试
 
 ```bash
-export GO=/home/zk/Code/go/bin/go1.27.3
+export GO=$GOBIN/go1.27.3
 CGO_ENABLED=0 $GO run .     # 交互窗口（本机 cgo 链接有 .sframe 环境问题，统一关掉 cgo）
 CGO_ENABLED=0 $GO test -p 1 ./... # 全量（含编辑器与结果网格基准；-p 1 避免并行包争 CPU 导致基准超限）
 CGO_ENABLED=0 $GO test ./ui -run 'TestEditor.*Perf' -v   # 只跑编辑器性能基准
