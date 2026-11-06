@@ -2,6 +2,8 @@ package main
 
 import (
 	_ "embed"
+	"flag"
+	"fmt"
 	"log"
 
 	"github.com/egoist/mygo"
@@ -19,6 +21,12 @@ import (
 var appIconPNG []byte
 
 func main() {
+	showVersion := flag.Bool("version", false, "打印版本号后退出")
+	flag.Parse()
+	if *showVersion {
+		fmt.Println("db-g", app.Version())
+		return
+	}
 	if err := app.InitLogs(app.DefaultLogDir()); err != nil {
 		log.Printf("日志初始化失败: %v", err)
 	}

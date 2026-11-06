@@ -136,7 +136,11 @@ func TestRemapPersistsAndRebinds(t *testing.T) {
 func TestRecordChordInSettings(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.keymapPath = filepath.Join(t.TempDir(), "keymap.json")
-	tt := ui.NewTester(a.settingsView, 560, 500)
+	tt := ui.NewTester(a.settingsView, 720, 520)
+	tt.Frame()
+	if err := tt.Click("快捷键"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
 	if err := tt.Click("录制"); err != nil {
 		t.Fatal(err)

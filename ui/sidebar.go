@@ -238,30 +238,11 @@ func (a *root) connModal(c *ui.Context) {
 	}).Width(connFormWidth).Height(connFormHeight)
 }
 
-// connKindRow 是左侧数据源类型的一行：没有按钮的外观，行底下一条分隔线，
-// 选中的一行用浅色高亮 + 加粗。
+// connKindRow 是左侧数据源类型的一行：走通用的侧边导航样式（无按钮外观、
+// 行底分隔线、选中高亮）。
 func (a *root) connKindRow(c *ui.Context, k connKind) {
-	t := c.Theme()
 	selected := a.connFormKind == k.kind
-	row := ui.ButtonBase(c).Label(k.label).Padding(10, 10).Gap(10).Justify(ui.Start).AlignItems(ui.Center)
-	row.BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
-	switch {
-	case selected:
-		row.Background(t.Accent.Alpha(0.12))
-	case row.Hovered():
-		row.Background(t.SurfaceHover)
-	}
-	row.Children(func() {
-		if icon := connKindIcon(k.kind); icon != nil {
-			ui.Icon(c, icon).FontSize(18).TextColor(connKindColor(k.kind))
-		}
-		txt := ui.Text(c, k.label).SingleLine()
-		if selected {
-			txt.Bold()
-		} else {
-			txt.TextColor(t.TextMuted)
-		}
-	})
+	row := sideNavRow(c, k.label, connKindIcon(k.kind), connKindColor(k.kind), selected)
 	if row.Clicked() {
 		a.switchConnKind(k.kind)
 	}

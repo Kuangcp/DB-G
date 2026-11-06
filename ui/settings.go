@@ -9,60 +9,156 @@ import (
 	"db-g/app"
 )
 
-// settingsView 是独立设置窗口的内容：开发用的编辑器性能面板（HUD/预设/高亮策略）。
+// settingsSection 是设置窗口左侧导航的一项。
+type settingsSection struct {
+	label string
+	build func(*ui.Context)
+}
+
+// settingsSections 是设置窗口的分区（顺序即导航顺序）。
+func (a *root) settingsSections() []settingsSection {
+	return []settingsSection{
+		{"编辑器", a.editorSection},
+		{"快捷键", a.keymapSection},
+		{"连接档案", a.profilesSection},
+		{"日志", a.logSection},
+		{"开发", a.devSection},
+	}
+}
+
+// settingsView 是独立设置窗口：左边分区导航，右边内容，左下角版本号。
 func (a *root) settingsView(c *ui.Context) {
-	disabled := a.activeConsole == ""
-	// 内容比窗口高（快捷键一节就不短），整块可滚。
-	ui.Scroll(c).Fill().Children(func() {
-		ui.Column(c).FillWidth().Padding(12).Gap(8).Children(func() {
-			ui.Text(c, "编辑器性能（开发用）").Bold()
-			ui.Text(c, fmt.Sprintf(
-				"行数=%d 字节=%d 版本=%d",
-				a.code.LineCount(), a.code.ByteLen(), a.code.Version(),
-			)).FontSize(12).SingleLine()
-			ui.Row(c).Gap(6).Children(func() {
-				if ui.Button(c, "刷新").Clicked() {
-					a.updateSettingsWindow()
+	sections := a.settingsSections()
+	if a.settingsSection < 0 || a.settingsSection >= len(sections) {
+		a.settingsSection = 0
+	}
+	ui.Row(c).Fill().Gap(0).Children(func() {
+		// 左：分区导航（无按钮外观、行间分隔线、选中高亮），底部版本号。
+		ui.Column(c).Width(168).FillHeight().Children(func() {
+			for i, sec := range sections {
+				row := sideNavRow(c, sec.label, nil, ui.Transparent, i == a.settingsSection)
+				if row.Clicked() {
+					a.settingsSection = i
 				}
-			})
-
-			ui.Text(c, "预设（写入当前激活控制台并立即保存）").FontSize(12).TextColor(c.Theme().TextMuted)
-			ui.Row(c).Gap(6).Children(func() {
-				for _, n := range []int{3_000, 12_000, 100_000} {
-					label := fmt.Sprintf("%dk", n/1_000)
-					if ui.Button(c, label).Disabled(disabled).Clicked() {
-						a.applyEditorPreset(n)
-					}
-				}
-			})
-
-			ui.Text(c, "补全").FontSize(12).TextColor(c.Theme().TextMuted)
-			ui.Row(c).Gap(6).Children(func() {
-				if ui.Button(c, "刷新补全缓存").Clicked() {
-					a.refreshCompletions()
-				}
-			})
-
-			a.keymapSection(c)
-
-			a.profilesSection(c)
-
-			ui.Text(c, "日志").FontSize(12).TextColor(c.Theme().TextMuted)
-			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)
-				if ui.Button(c, "打开日志目录").Clicked() {
-					mygo.Shell.ShowItemInFolder(app.LogDir())
-				}
-			})
-
-			if disabled {
-				ui.Text(c, "没有激活的控制台：预设不可用").FontSize(12).TextColor(c.Theme().TextMuted)
 			}
-			if a.consoleErr != "" {
-				ui.Text(c, a.consoleErr).TextColor(c.Theme().Danger).FontSize(12)
-			}
+			ui.Spacer(c)
+			ui.Text(c, app.Version()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(10, 10)
+		})
+		ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
+		// 右：当前分区的内容，整块可滚。
+		ui.Scroll(c).Fill().Children(func() {
+			ui.Column(c).FillWidth().Padding(14).Gap(10).Children(func() {
+				sections[a.settingsSection].build(c)
+			})
 		})
 	})
+}
+
+// editorSection 是编辑器显示设置：字号、字体族，带实时预览。
+func (a *root) editorSection(c *ui.Context) {
+	ui.Text(c, "编辑器").Bold()
+	ui.Text(c, "字号").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		if ui.NumberInput(c, &a.editorPrefs.FontSize, app.MinFontSize, app.MaxFontSize, 1).
+			Label("字号").Width(90).Changed() {
+			a.applyEditorPrefs()
+		}
+		ui.Text(c, fmt.Sprintf("%.0f pt", a.editorPrefs.FontSize)).FontSize(12).
+			TextColor(c.Theme().TextMuted)
+		ui.Spacer(c)
+		if ui.Button(c, "恢复默认").Clicked() {
+			a.editorPrefs = app.DefaultEditorPrefs()
+			a.applyEditorPrefs()
+		}
+	})
+
+	ui.Text(c, "字体族（留空 = 系统等宽）").FontSize(12).TextColor(c.Theme().TextMuted)
+	if ui.TextInput(c, &a.editorPrefs.FontFamily).
+		Placeholder("例如 JetBrains Mono / Sarasa Mono SC").Changed() {
+		a.applyEditorPrefs()
+	}
+
+	// 预览：用当前字体渲染一段 SQL。
+	ui.Text(c, "预览").FontSize(12).TextColor(c.Theme().TextMuted)
+	preview := "SELECT id, name FROM users WHERE id = 1; -- 预览 Preview"
+	ui.Box(c).FillWidth().Padding(10).Radius(6).
+		Background(c.Theme().Surface).Border(1, c.Theme().Border).Children(func() {
+		txt := ui.Text(c, preview).FontSize(a.code.state.Font.Size)
+		if fam := a.editorPrefs.FontFamily; fam != "" {
+			txt.Font(fam)
+		} else {
+			txt.Font("monospace")
+		}
+	})
+	if a.editorPrefsWarn != "" {
+		ui.Text(c, a.editorPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
+	}
+}
+
+// logSection 显示日志目录与打开入口。
+func (a *root) logSection(c *ui.Context) {
+	ui.Text(c, "日志").Bold()
+	ui.Text(c, "一次启动一个文件，JSON Lines，5MB 轮转。").FontSize(12).
+		TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)
+		if ui.Button(c, "打开日志目录").Clicked() {
+			mygo.Shell.ShowItemInFolder(app.LogDir())
+		}
+	})
+}
+
+// devSection 是开发用的编辑器性能面板：HUD、演示预设、补全缓存。
+func (a *root) devSection(c *ui.Context) {
+	disabled := a.activeConsole == ""
+	ui.Text(c, "编辑器性能（开发用）").Bold()
+	ui.Text(c, fmt.Sprintf(
+		"行数=%d 字节=%d 版本=%d",
+		a.code.LineCount(), a.code.ByteLen(), a.code.Version(),
+	)).FontSize(12).SingleLine()
+	ui.Row(c).Gap(6).Children(func() {
+		if ui.Button(c, "刷新").Clicked() {
+			a.updateSettingsWindow()
+		}
+	})
+
+	ui.Text(c, "预设（写入当前激活控制台并立即保存）").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(6).Children(func() {
+		for _, n := range []int{3_000, 12_000, 100_000} {
+			label := fmt.Sprintf("%dk", n/1_000)
+			if ui.Button(c, label).Disabled(disabled).Clicked() {
+				a.applyEditorPreset(n)
+			}
+		}
+	})
+
+	ui.Text(c, "补全").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(6).Children(func() {
+		if ui.Button(c, "刷新补全缓存").Clicked() {
+			a.refreshCompletions()
+		}
+	})
+	if disabled {
+		ui.Text(c, "没有激活的控制台：预设不可用").FontSize(12).TextColor(c.Theme().TextMuted)
+	}
+	if a.consoleErr != "" {
+		ui.Text(c, a.consoleErr).TextColor(c.Theme().Danger).FontSize(12)
+	}
+}
+
+// applyEditorPrefs 把设置应用到编辑器并落盘。
+func (a *root) applyEditorPrefs() {
+	a.code.state.Font = ui.Font{
+		Family: a.editorPrefs.FontFamily,
+		Size:   float32(a.editorPrefs.FontSize),
+	}
+	if a.editorPrefsPath == "" {
+		return
+	}
+	if err := app.SaveEditorPrefs(a.editorPrefsPath, a.editorPrefs); err != nil {
+		a.editorPrefsWarn = "保存编辑器设置失败: " + err.Error()
+	}
+	a.updateSettingsWindow()
 }
 
 // applyEditorPreset 把 n 行的演示 SQL 写进当前激活控制台并立即落盘（spike 回归用）。
@@ -73,7 +169,6 @@ func (a *root) applyEditorPreset(n int) {
 	a.setActiveText(buildSQL(n))
 	a.syncActiveBuffer()
 	_ = a.flushActive()
-	a.updateSettingsWindow()
 }
 
 // settingsWin 是设置窗口需要的最小能力（便于 headless 测试注入假窗口）。
@@ -106,8 +201,8 @@ func (a *root) openSettings() {
 	}
 	a.settingsWin = open(mygo.WindowOptions{
 		Title:   "设置 — db-g",
-		Width:   620,
-		Height:  560,
+		Width:   720,
+		Height:  520,
 		Content: ui.View(a.settingsView),
 	})
 }

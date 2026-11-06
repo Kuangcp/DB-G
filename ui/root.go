@@ -14,43 +14,47 @@ import (
 )
 
 type root struct {
-	code           *codeEditor
-	con            *app.Console
-	win            *mygo.Window
-	resultState    ui.ListState
-	resultsHeight  float32
-	sidebarWidth   float32
-	store          *app.ConnStore
-	connErr        string // 顶栏一行错误（最近一次连接失败的原因）
-	connFormOpen   bool
-	connFormID     string
-	connFormName   string
-	connFormPath   string
-	connFormErr    string
-	connFormKind   string
-	connFormHost   string
-	connFormPort   string
-	connFormUser   string
-	connFormPass   string
-	connFormDB     string
-	connFormParams string
-	connProto      int                // ClickHouse 协议：0 native / 1 http / 2 https
-	chords         map[string][]chord // 动作 → 键位（见 keymap.go）
-	keymapPath     string             // keymap.json 的位置（空 = 不读盘，测试用）
-	captureAction  string             // 设置窗口正在录制键位的动作
-	keymapWarn     string             // 键位文件读写问题的提示
-	connTestMsg    string             // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
-	connTestErr    bool
-	connTestBusy   bool
-	connDeleteOpen bool
-	connDeleting   string
-	treeExpand     map[string]bool
-	treeOpen       map[string]*bool
-	treeData       map[string]map[engine.ObjectKind][]engine.DBObject
-	treeSchemas    map[string][]string
-	treeErr        map[string]string
-	treeSelected   string
-	execPending    bool
+	code            *codeEditor
+	con             *app.Console
+	win             *mygo.Window
+	resultState     ui.ListState
+	resultsHeight   float32
+	sidebarWidth    float32
+	store           *app.ConnStore
+	connErr         string // 顶栏一行错误（最近一次连接失败的原因）
+	connFormOpen    bool
+	connFormID      string
+	connFormName    string
+	connFormPath    string
+	connFormErr     string
+	connFormKind    string
+	connFormHost    string
+	connFormPort    string
+	connFormUser    string
+	connFormPass    string
+	connFormDB      string
+	connFormParams  string
+	connProto       int                // ClickHouse 协议：0 native / 1 http / 2 https
+	chords          map[string][]chord // 动作 → 键位（见 keymap.go）
+	keymapPath      string             // keymap.json 的位置（空 = 不读盘，测试用）
+	editorPrefs     app.EditorPrefs    // 编辑器字号/字体族
+	editorPrefsPath string             // editor.json 的位置（空 = 不落盘）
+	editorPrefsWarn string
+	settingsSection int    // 设置窗口选中的分区
+	captureAction   string // 设置窗口正在录制键位的动作
+	keymapWarn      string // 键位文件读写问题的提示
+	connTestMsg     string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	connTestErr     bool
+	connTestBusy    bool
+	connDeleteOpen  bool
+	connDeleting    string
+	treeExpand      map[string]bool
+	treeOpen        map[string]*bool
+	treeData        map[string]map[engine.ObjectKind][]engine.DBObject
+	treeSchemas     map[string][]string
+	treeErr         map[string]string
+	treeSelected    string
+	execPending     bool
 
 	mgr                 *app.ConsoleManager
 	catalog             *catalogCache
@@ -127,6 +131,7 @@ func newRoot(text string) *root {
 		treeErr:       map[string]string{},
 		connFormKind:  "sqlite",
 		chords:        defaultChords(),
+		editorPrefs:   app.DefaultEditorPrefs(),
 		sessions:      map[string]engine.Session{},
 		sessionUse:    map[string]uint64{},
 		sessionErr:    map[string]string{},
@@ -140,6 +145,7 @@ func newRoot(text string) *root {
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
 	a.applyEditorBindings()
+	a.applyEditorPrefs()
 	return a
 }
 
@@ -154,6 +160,9 @@ func newRootWithStore(storePath string) *root {
 	r.keymapPath = app.DefaultKeymapPath()
 	r.keymapWarn = r.loadKeymap()
 	r.applyEditorBindings()
+	r.editorPrefsPath = app.DefaultEditorPrefsPath()
+	r.editorPrefs, r.editorPrefsWarn = app.LoadEditorPrefs(r.editorPrefsPath)
+	r.applyEditorPrefs()
 	r.store = app.LoadStore(storePath)
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})

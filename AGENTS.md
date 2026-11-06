@@ -112,6 +112,8 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 控制台正文 | `consoles/<id>.sql` | 一个控制台一个文件；切标签/执行前/退出前落盘，平时防抖 |
 | SQL 历史 | `history.jsonl` | 5MB 轮转 |
 | 日志 | `logs/app-YYYYMMDD.log` | JSON Lines，一天一文件，5MB 轮转，0600 |
+| 编辑器显示设置（字号/字体族） | `editor.json` | `app.EditorPrefs`，改动即时生效并落盘 |
+| 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
 
 判断口诀：**删掉实体要不要一起消失、要不要按它查询？** 要 → `connections.json` 的结构化字段；
@@ -134,6 +136,17 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
   原来的动作解绑（`breakConflicts`）。设置窗口「快捷键」一节点「录制」后按新组合即可。
 - 持久化：`<config>/db-g/keymap.json`，只存与默认值不同的动作（`app/keymap.go`）。
   测试要改键就把 `a.keymapPath` 指到 `t.TempDir()`，**不要写用户的真实配置**。
+
+## 设置窗口（★ 必读）
+
+左右布局：左侧分区导航 + 右侧内容 + 左下角版本号（`app.Version()`，`db-g -version` 也能看）。
+
+- 分区在 `ui/settings.go` 的 `settingsSections()`：编辑器 / 快捷键 / 连接档案 / 日志 / 开发。
+  新增一个分区 = 加一行 `{标签, 构建函数}`，右侧内容自动可滚。
+- 导航行用 `ui/navrow.go` 的 `sideNavRow()`：无按钮外观、行底 1px 分隔线、选中 accent 浅底 +
+  加粗。连接弹窗左侧的数据源列表用的是同一个（`connKindRow`），新增侧边列表照这个来。
+- 编辑器设置（字号 8–24 / 字体族）改完立即 `applyEditorPrefs()`：更新 `code.state.Font`
+  并写 `editor.json`；预览框用同一份数据渲染，别另算。
 
 ## UI 约定（★ 必读）
 
