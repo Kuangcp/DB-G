@@ -41,6 +41,8 @@ func (a *root) settingsView(c *ui.Context) {
 			}
 		})
 
+		a.profilesSection(c)
+
 		ui.Text(c, "日志").FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Row(c).Gap(6).Children(func() {
 			ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)

@@ -44,6 +44,7 @@ type root struct {
 	treeOpen       map[string]*bool
 	treeData       map[string]map[engine.ObjectKind][]engine.DBObject
 	treeSchemas    map[string][]string
+	connStatus     map[string]string
 	treeErr        map[string]string
 	treeSelected   string
 	execPending    bool
@@ -142,6 +143,7 @@ func newRootWithStore(storePath string) *root {
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
 	r.restoreSession()
+	r.checkConnHealth()
 	ws, _ := r.mgr.ActiveWorkspace()
 	app.LogInfo("startup", "session restored", "consoles", len(r.mgr.Open()), "workspace", ws.Name, "conn_warning", r.store.Warning())
 	return r

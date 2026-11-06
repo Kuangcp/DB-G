@@ -21,6 +21,7 @@ func (a *root) sidebar(c *ui.Context) {
 			}
 			if ui.Button(c, "刷新").Clicked() {
 				a.reloadTree()
+				a.checkConnHealth()
 			}
 		})
 		if a.store == nil {
@@ -49,10 +50,15 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile) {
 	isActive := act.ID == p.ID && a.sess != nil
 	ui.Row(c).Gap(6).Children(func() {
 		dot := ui.Text(c, "●")
+		status := a.connStatusOf(p.ID)
 		switch {
 		case isActive:
 			dot.TextColor(c.Theme().Success)
 		case a.connErr != "" && a.failedConnID == p.ID:
+			dot.TextColor(c.Theme().Danger)
+		case status == "ok":
+			dot.TextColor(c.Theme().Success)
+		case len(status) > 4 && status[:4] == "fail":
 			dot.TextColor(c.Theme().Danger)
 		default:
 			dot.TextColor(c.Theme().TextMuted)
@@ -256,6 +262,7 @@ func (a *root) saveConnForm() {
 		return
 	}
 	a.connFormOpen = false
+	a.checkConnHealth()
 }
 
 func (a *root) browsePath() {
