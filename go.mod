@@ -55,7 +55,3 @@ require (
 )
 
 tool github.com/egoist/mygo/cmd/mygo
-
-// 本地 mygo 开发：ui.CellsStyle（结果表两级高亮/斑马纹）尚未发布。
-// 上游合并后删掉这行并升级 require 版本。
-replace github.com/egoist/mygo => /home/zk/Code/go/mygo
