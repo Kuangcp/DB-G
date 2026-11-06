@@ -28,6 +28,7 @@ func (a *root) settingsSections() []settingsSection {
 
 // settingsView 是独立设置窗口：左边分区导航，右边内容，左下角版本号。
 func (a *root) settingsView(c *ui.Context) {
+	a.applyTheme(c)
 	sections := a.settingsSections()
 	if a.settingsSection < 0 || a.settingsSection >= len(sections) {
 		a.settingsSection = 0

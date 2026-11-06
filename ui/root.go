@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -47,6 +48,10 @@ type root struct {
 	editorPrefs      app.EditorPrefs    // 编辑器字号/字体族
 	editorPrefsPath  string             // editor.json 的位置（空 = 不落盘）
 	editorPrefsWarn  string
+	themePrefs       app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
+	themePath        string         // theme.json 的位置（空 = 不落盘）
+	themeWarn        string
+	themeSaveSeq     atomic.Uint64
 	settingsSection  int    // 设置窗口选中的分区
 	captureAction    string // 设置窗口正在录制键位的动作
 	keymapWarn       string // 键位文件读写问题的提示
@@ -172,6 +177,7 @@ func newRoot(text string) *root {
 		connFormKind:     "sqlite",
 		chords:           defaultChords(),
 		editorPrefs:      app.DefaultEditorPrefs(),
+		themePrefs:       app.DefaultThemePrefs(),
 		sessions:         map[string]engine.Session{},
 		sessionUse:       map[string]uint64{},
 		sessionErr:       map[string]string{},
@@ -203,6 +209,8 @@ func newRootWithStore(storePath string) *root {
 	r.editorPrefsPath = app.DefaultEditorPrefsPath()
 	r.editorPrefs, r.editorPrefsWarn = app.LoadEditorPrefs(r.editorPrefsPath)
 	r.applyEditorPrefs()
+	r.themePath = app.DefaultThemePrefsPath()
+	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
 	r.store = app.LoadStore(storePath)
 	r.metaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
@@ -484,6 +492,7 @@ func rootView(a *root) func(c *ui.Context) {
 
 // view 是一帧的真正构建（由 guardView 包裹）。
 func (a *root) view(c *ui.Context) {
+	a.applyTheme(c)
 	{
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
 		a.maybeOpenSettings()

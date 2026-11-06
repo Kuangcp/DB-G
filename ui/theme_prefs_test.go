@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -100,5 +101,43 @@ func TestResolveThemeSystemKeepsBaseMetrics(t *testing.T) {
 	}
 	if got.Theme.Spacing != base.Spacing || got.Theme.FontSize != base.FontSize {
 		t.Fatal("unrelated metrics must keep the theme's")
+	}
+}
+
+// 帧首接入：显式模式把主题换掉，系统+无覆盖时不干预。
+func TestApplyThemeInFrame(t *testing.T) {
+	a := newTestRoot()
+	a.themePrefs = app.ThemePrefs{Mode: "dark"}
+	tt := ui.NewTester(rootView(a), 1000, 700)
+	tt.Frame() // 不 panic 且能出帧
+	if !tt.HasText("编辑器") {
+		t.Fatalf("frame should build: %q", tt.Texts())
+	}
+	got := a.resolvedThemeFor(ui.LightTheme(), ui.Preferences{})
+	if !got.Apply || !got.Theme.Dark {
+		t.Fatalf("dark mode must apply: %+v", got)
+	}
+	a.themePrefs = app.DefaultThemePrefs()
+	got = a.resolvedThemeFor(ui.LightTheme(), ui.Preferences{})
+	if got.Apply {
+		t.Fatal("system without overrides must not SetTheme")
+	}
+}
+
+// 设置修改同步落盘（headless），并可用 LoadThemePrefs 读回。
+func TestSetThemePrefsPersists(t *testing.T) {
+	a := newTestRoot()
+	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	a.setThemePrefs(app.ThemePrefs{Mode: "light", Accent: "violet", Density: "compact", Radius: 9, FontSize: 16})
+	got, warn := app.LoadThemePrefs(a.themePath)
+	if warn != "" {
+		t.Fatalf("warn: %s", warn)
+	}
+	want := app.ThemePrefs{Mode: "light", Accent: "violet", Density: "compact", Radius: 9, FontSize: 16}
+	if got != want {
+		t.Fatalf("persisted: %+v want %+v", got, want)
+	}
+	if a.themeWarn != "" {
+		t.Fatalf("unexpected warn: %s", a.themeWarn)
 	}
 }

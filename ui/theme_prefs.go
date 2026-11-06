@@ -3,11 +3,71 @@ package ui
 import (
 	"math"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
 )
+
+// applyTheme 在帧首应用外观设置；跟随系统且无覆盖时不调 SetTheme。
+func (a *root) applyTheme(c *ui.Context) {
+	r := resolveTheme(c.Theme(), a.themePrefs, c.Preferences())
+	if r.Apply {
+		c.SetTheme(r.Theme)
+	}
+}
+
+// resolvedThemeFor 是 resolvedTheme 的测试友好入口（用当前设置）。
+func (a *root) resolvedThemeFor(base *ui.Theme, desk ui.Preferences) resolvedTheme {
+	return resolveTheme(base, a.themePrefs, desk)
+}
+
+// setThemePrefs 更新外观设置：规范化、持久化（有窗口时防抖）、重画两个窗口。
+func (a *root) setThemePrefs(p app.ThemePrefs) {
+	prefs, warn := p.Normalize()
+	a.themePrefs = prefs
+	if len(warn) > 0 {
+		a.themeWarn = strings.Join(warn, "；")
+	} else {
+		a.themeWarn = ""
+	}
+	a.saveThemePrefs()
+	a.updateSettingsWindow()
+	if a.win != nil {
+		win := a.win
+		win.Update(func() {})
+	}
+}
+
+// saveThemePrefs 写盘：有窗口时延迟 300ms 合并连续改动（滑杆/输入框），
+// headless（测试）同步写，便于断言。
+func (a *root) saveThemePrefs() {
+	path := a.themePath
+	if path == "" {
+		return
+	}
+	prefs := a.themePrefs
+	if a.win == nil {
+		if err := app.SaveThemePrefs(path, prefs); err != nil {
+			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
+			a.themeWarn = "保存外观设置失败: " + err.Error()
+		}
+		return
+	}
+	seq := a.themeSaveSeq.Add(1)
+	win := a.win
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		if a.themeSaveSeq.Load() != seq {
+			return
+		}
+		if err := app.SaveThemePrefs(path, prefs); err != nil {
+			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
+			win.Update(func() { a.themeWarn = "保存外观设置失败: " + err.Error() })
+		}
+	}()
+}
 
 // resolvedTheme 是外观设置解析后的主题：Apply=false 表示完全交给 mygo
 // 的默认主题（跟随系统且没有任何覆盖项）。
