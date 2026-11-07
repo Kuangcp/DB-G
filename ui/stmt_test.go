@@ -115,3 +115,88 @@ func TestSingleStatementKeepsCurrentRuntime(t *testing.T) {
 		t.Fatal("unreachable")
 	}
 }
+
+// 改过的语句不能再保留 gutter 底色：同长度的编辑也要让该语句的颜色消失。
+func TestEditingStatementClearsItsBackground(t *testing.T) {
+	a, tt := focusEditor(t, "SELECT 1;\nSELECT 2;")
+	a.setSelection(0, len([]rune(a.code.Text())))
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 2)
+	tt.Frame()
+	if got := len(a.code.state.LineBackgrounds); got != 2 {
+		t.Fatalf("两条语句都应着色: %d", got)
+	}
+	// 只改第一行的 1 → 9，长度不变，第二段的偏移仍然有效。
+	a.setSelection(7, 8)
+	tt.Frame()
+	tt.Type("9")
+	tt.Frame()
+	if got := a.code.Text(); got != "SELECT 9;\nSELECT 2;" {
+		t.Fatalf("text: %q", got)
+	}
+	lbs := a.code.state.LineBackgrounds
+	if len(lbs) != 1 || lbs[0].First != 1 || lbs[0].Last != 1 {
+		t.Fatalf("只有未改动的第二段保留底色: %+v", lbs)
+	}
+}
+
+// 删除一行后，旧语句的行号不能漂移到下面的行上。
+func TestDeleteLineClearsStmtBackground(t *testing.T) {
+	a, tt := focusEditor(t, "SELECT 1;\nSELECT 2;")
+	a.setSelection(0, len([]rune(a.code.Text())))
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 2)
+	tt.Frame()
+	a.setSelection(0, 0)
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeyD)
+	tt.Frame()
+	if got := a.code.Text(); got != "SELECT 2;" {
+		t.Fatalf("text: %q", got)
+	}
+	if lbs := a.code.state.LineBackgrounds; len(lbs) != 0 {
+		t.Fatalf("删行后不能再有旧行号底色: %+v", lbs)
+	}
+}
+
+// 执行排队后正文被改，后续语句仍按入队时的快照执行，不能拿失效偏移切片。
+func TestStartStmtUsesSnapshotAfterEdit(t *testing.T) {
+	a, tt := focusEditor(t, "SELECT 1;\nSELECT 2;")
+	a.setSelection(0, len([]rune(a.code.Text())))
+	tt.Frame()
+	a.resetStmtRuns(a.execRanges(a.code.Text()))
+	a.setActiveText("x")
+	a.startStmt(0) // 旧实现会在这里用新正文切旧偏移而 panic
+	if a.lastExecSQL != "SELECT 1" {
+		t.Fatalf("应执行快照语句，实际 %q", a.lastExecSQL)
+	}
+}
+
+// 没有激活控制台的临时缓冲：编辑后同样不能留下旧行底色。
+func TestEditingScratchBufferClearsBackground(t *testing.T) {
+	a := openForSelection(t)
+	a.setActiveText("SELECT 1;\nSELECT 2;")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("编辑器"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	a.setSelection(0, len([]rune(a.code.Text())))
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 2)
+	tt.Frame()
+	if got := len(a.code.state.LineBackgrounds); got != 2 {
+		t.Fatalf("两条语句都应着色: %d", got)
+	}
+	a.setSelection(7, 8)
+	tt.Frame()
+	tt.Type("9")
+	tt.Frame()
+	if lbs := a.code.state.LineBackgrounds; len(lbs) != 1 || lbs[0].First != 1 {
+		t.Fatalf("只有未改动的第二段保留底色: %+v", lbs)
+	}
+}

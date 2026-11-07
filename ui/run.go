@@ -76,6 +76,7 @@ func (a *root) removeConn(id string) {
 // 顺序约定与 db-k 一致：pinned 始终在左侧，非 pinned 在右侧。
 type stmtRun struct {
 	stmt      app.SQLStatement
+	sql       string // 执行时的语句快照：正文被编辑后偏移失效，执行/历史/行底色都只认它
 	runtimeID string // 运行态 id；pin 后换成独立 id，结果不被同控制台的新执行覆盖
 	started   bool
 	pinned    bool // 钉住（仅内存态，重启消失）
@@ -259,6 +260,14 @@ func (a *root) execRanges(text string) []app.SQLStatement {
 	return nil
 }
 
+// textSlice 安全截取 [start,end)：偏移可能来自已被编辑的正文，越界时返回空串。
+func textSlice(text string, start, end int) string {
+	if start < 0 || start >= end || end > len(text) {
+		return ""
+	}
+	return text[start:end]
+}
+
 // resetStmtRuns 为本次执行准备运行时：单条语句沿用当前控制台的运行态（兼容既有行为），
 // 多条语句各建一个（id = consoleID#i）。
 func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
@@ -276,6 +285,7 @@ func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 		}
 	}
 	multi := len(ranges) > 1
+	text := a.code.Text()
 	runs := make([]stmtRun, 0, len(pinned)+len(ranges))
 	runs = append(runs, pinned...)
 	for i, st := range ranges {
@@ -284,7 +294,7 @@ func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 			id = fmt.Sprintf("%s#%d", a.activeConsole, i)
 		}
 		a.nextTabNo++
-		runs = append(runs, stmtRun{stmt: st, runtimeID: id, tabNo: a.nextTabNo})
+		runs = append(runs, stmtRun{stmt: st, sql: textSlice(text, st.Start, st.End), runtimeID: id, tabNo: a.nextTabNo})
 	}
 	a.stmtRuns = runs
 	a.activeStmt = len(pinned)
@@ -298,8 +308,7 @@ func (a *root) startStmt(i int) {
 	}
 	a.stmtRuns[i].started = true
 	a.activeStmt = i
-	stmt := a.stmtRuns[i].stmt
-	sql := a.code.Text()[stmt.Start:stmt.End]
+	sql := a.stmtRuns[i].sql
 	a.lastExecSQL = sql
 	rt := a.runtimeFor(a.stmtRuns[i].runtimeID)
 	rt.SetOnDone(a.stmtDone(i))
@@ -333,8 +342,7 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 	rtID := a.stmtRuns[i].runtimeID
 	logDone := a.execDoneLogger(rtID)
 	// 在主线程捕获历史所需字段（回调在后台协程）。
-	stmt := a.stmtRuns[i].stmt
-	sql := a.code.Text()[stmt.Start:stmt.End]
+	sql := a.stmtRuns[i].sql
 	connID, connName := a.activeConnID(), a.activeConnName()
 	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
 		logDone(res, errMsg, dur)

@@ -339,11 +339,17 @@ func (a *root) refreshStmtBackgrounds() {
 	out := make([]myeditor.LineBackground, 0, len(a.stmtRuns))
 	for i, run := range a.stmtRuns {
 		// 钉住的结果来自旧正文，行号已经失效，不画 gutter 底色。
-		if run.pinned || !run.started {
+		if run.pinned || !run.started || run.sql == "" {
+			continue
+		}
+		// 正文被编辑后偏移不再可信：只有当前切片仍等于执行时的语句快照才上色。
+		// 这样改过的语句、删掉的行以及被编辑挤位的后续语句都不会再挂错颜色。
+		if run.stmt.Start < 0 || run.stmt.Start >= run.stmt.End || run.stmt.End > buf.Len() ||
+			buf.Slice(run.stmt.Start, run.stmt.End) != run.sql {
 			continue
 		}
 		first := buf.Pos(run.stmt.Start).Line
-		last := buf.Pos(max(run.stmt.End-1, run.stmt.Start)).Line
+		last := buf.Pos(run.stmt.End - 1).Line
 		rt := a.runtimeFor(run.runtimeID)
 		var col ui.Color
 		switch {
@@ -458,14 +464,20 @@ func (a *root) flushActive() error {
 // syncActiveBuffer 把编辑器改动同步给管理器：只在文本版本变化时取 String()（O(n)），
 // 只在选区变化时记光标，保持逐帧成本为常数级。
 func (a *root) syncActiveBuffer() {
+	// 没有激活控制台时的临时缓冲同样要响应编辑：否则旧语句的行底色会留在正文上。
+	ver := a.code.Version()
 	if a.activeConsole == "" {
+		if ver != a.lastVer[""] {
+			a.lastVer[""] = ver
+			a.refreshStmtBackgrounds()
+		}
 		return
 	}
 	m := a.consoleMgr()
 	if m == nil {
 		return
 	}
-	if ver := a.code.Version(); ver != a.lastVer[a.activeConsole] {
+	if ver != a.lastVer[a.activeConsole] {
 		a.lastVer[a.activeConsole] = ver
 		m.TouchVersion(a.activeConsole, ver)
 		a.refreshStmtBackgrounds()
