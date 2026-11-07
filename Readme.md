@@ -5,8 +5,9 @@
 # DB-G
 
 对标 [db-k](https://github.com/Kuangcp/DB-K) 的数据库客户端（Go + mygo）。
-**已完成与后续规划见 [`Roadmap.md`](Roadmap.md)**；阶段规格见
-`docs/superpowers/specs/2026-11-05-db-g-roadmap-v2-design.md`。
+**已完成与后续规划见 [`Roadmap.md`](Roadmap.md)**
+
+![](/docs/snapshots/Snipaste_2026-11-07_12-55-39.webp)
 
 ## 功能清单
 
