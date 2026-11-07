@@ -47,7 +47,7 @@ type InstallStatus struct {
 	BinPath     string // ~/.config/db-g/bin/db-g（或 XDG_CONFIG_HOME 下）
 	VersionPath string // ~/.config/db-g/version
 	DesktopPath string // ~/.local/share/applications/db-g.desktop
-	IconPath    string // ~/.local/share/icons/hicolor/256x256/apps/db-g.png
+	IconPath    string // ~/.local/share/icons/db-g.png
 
 	Running        string // 当前运行版本（display）
 	Installed      string // version 文件里记录的版本（display）
@@ -56,6 +56,7 @@ type InstallStatus struct {
 
 	BinExists   bool
 	Upgrade     bool // bin 已存在且运行版本更新 → 显示「升级」
+	Repair      bool // 已安装同版本但 desktop/图标缺失 → 显示「修复」
 	NeedInstall bool // 需要显示安装/升级图标
 }
 
@@ -70,7 +71,7 @@ func CheckInstall() InstallStatus {
 	st.VersionPath = filepath.Join(cfg, "version")
 	if data, err := installDataHome(); err == nil {
 		st.DesktopPath = filepath.Join(data, "applications", "db-g.desktop")
-		st.IconPath = filepath.Join(data, "icons", "hicolor", "256x256", "apps", "db-g.png")
+		st.IconPath = filepath.Join(data, "icons", "db-g.png")
 	}
 	build, ok := ParseBuildNumber(st.Running)
 	if !ok {
@@ -92,6 +93,13 @@ func CheckInstall() InstallStatus {
 	if st.RunningBuild > rec.Build {
 		st.NeedInstall = true
 		st.Upgrade = st.BinExists
+	}
+	// 二进制与 version 都在但菜单项/图标丢了（例如旧版安装路径变更）：提示修复。
+	if st.BinExists && !st.Upgrade {
+		if !fileExists(st.DesktopPath) || !fileExists(st.IconPath) {
+			st.NeedInstall = true
+			st.Repair = true
+		}
 	}
 	return st
 }
@@ -117,12 +125,13 @@ func InstallSelf(iconPNG []byte) (InstallStatus, error) {
 	if err := installBinary(exe, st.BinPath); err != nil {
 		return st, fmt.Errorf("复制程序失败: %w", err)
 	}
-	if len(iconPNG) > 0 {
-		if err := writeFileAtomic(st.IconPath, iconPNG, 0o644); err != nil {
-			return st, fmt.Errorf("写入图标失败: %w", err)
-		}
+	if len(iconPNG) == 0 {
+		return st, errors.New("缺少图标数据")
 	}
-	if err := writeFileAtomic(st.DesktopPath, []byte(desktopEntry(st.BinPath)), 0o644); err != nil {
+	if err := writeFileAtomic(st.IconPath, iconPNG, 0o644); err != nil {
+		return st, fmt.Errorf("写入图标失败: %w", err)
+	}
+	if err := writeFileAtomic(st.DesktopPath, []byte(desktopEntry(st.BinPath, st.IconPath)), 0o644); err != nil {
 		return st, fmt.Errorf("写入应用菜单项失败: %w", err)
 	}
 	rec := InstalledVersion{Build: build, Display: strings.TrimPrefix(Version(), "v")}
@@ -186,8 +195,8 @@ func loadVersionFile(path string) (InstalledVersion, error) {
 	return rec, nil
 }
 
-// desktopEntry 生成 XDG 桌面菜单项；Exec 指向安装后的绝对路径。
-func desktopEntry(execPath string) string {
+// desktopEntry 生成 XDG 桌面菜单项；Exec/Icon 都用绝对路径，不依赖图标主题缓存。
+func desktopEntry(execPath, iconPath string) string {
 	lines := []string{
 		"[Desktop Entry]",
 		"Type=Application",
@@ -195,7 +204,7 @@ func desktopEntry(execPath string) string {
 		"Name=DB-G",
 		"Comment=SQLite / MySQL / PostgreSQL / ClickHouse 数据库客户端",
 		"Exec=" + desktopExecQuote(execPath),
-		"Icon=db-g",
+		"Icon=" + iconPath,
 		"Terminal=false",
 		"Categories=Development;Database;",
 		"StartupWMClass=db-g",
@@ -265,6 +274,12 @@ func installBinary(src, dst string) error {
 		return err
 	}
 	return os.Rename(tmp, dst)
+}
+
+// fileExists 报告路径是否存在。
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // writeFileAtomic 原子写文件（先临时文件再 rename），用于 version/desktop/图标。

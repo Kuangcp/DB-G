@@ -137,7 +137,8 @@ Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` o
       or the running version is newer, an install/upgrade icon appears next to Settings in the top bar;
       confirming atomically copies the current executable to `bin/db-g`, writes `version`
       (`build=10000` plus the display version), and creates
-      `~/.local/share/applications/db-g.desktop` and a hicolor icon, so the app appears in the application menu;
+      `~/.local/share/applications/db-g.desktop` and `~/.local/share/icons/db-g.png`
+      (the desktop entry uses the icon's absolute path, so no icon-cache refresh is needed);
       paths honor `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
 - [x] Settings window: left/right layout (Appearance / Editor / Shortcuts / Connection profiles / Logs / Developer),
       version in the bottom-left corner; editor font size (8–24) and font family are adjustable with a live

@@ -104,3 +104,33 @@ func TestSelfInstallUpgradeLabelAndFailure(t *testing.T) {
 		t.Fatalf("失败原因不可见: %q", tt.Texts())
 	}
 }
+
+// 已安装同版本但图标丢失：顶栏应提示修复，确认后重写菜单项与图标。
+func TestSelfInstallRepairLabel(t *testing.T) {
+	a := installRoot(t)
+	a.installNeed = app.InstallStatus{
+		NeedInstall: true,
+		Repair:      true,
+		Running:     "v1.2.3",
+		Installed:   "1.2.3",
+		BinPath:     "/home/u/.config/db-g/bin/db-g",
+	}
+	calls := 0
+	a.installFn = func([]byte) (app.InstallStatus, error) {
+		calls++
+		return app.InstallStatus{Running: "v1.2.3", Installed: "1.2.3", BinExists: true}, nil
+	}
+	tt := ui.NewTester(rootView(a), 1200, 700)
+	tt.Frame()
+	if err := tt.Click("修复应用菜单"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("修复"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if calls != 1 || a.installNeed.NeedInstall {
+		t.Fatalf("修复流程: calls=%d need=%+v", calls, a.installNeed)
+	}
+}

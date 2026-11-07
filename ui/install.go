@@ -16,9 +16,11 @@ func (a *root) installModal(c *ui.Context) {
 	ui.Modal(c, &a.installOpen, func() {
 		title := "安装到应用列表"
 		action := "安装"
-		if a.installNeed.Upgrade {
-			title = "升级应用"
-			action = "升级"
+		switch {
+		case a.installNeed.Upgrade:
+			title, action = "升级应用", "升级"
+		case a.installNeed.Repair:
+			title, action = "修复应用菜单", "修复"
 		}
 		ui.Text(c, title).Bold()
 		ui.Text(c, fmt.Sprintf("当前版本 %s，将复制到下面的位置并添加应用菜单项。", a.installNeed.Running)).

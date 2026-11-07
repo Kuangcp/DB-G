@@ -618,8 +618,11 @@ func (a *root) view(c *ui.Context) {
 					}
 					if a.installNeed.NeedInstall {
 						label := "安装到应用列表"
-						if a.installNeed.Upgrade {
+						switch {
+						case a.installNeed.Upgrade:
 							label = "升级应用（" + a.installNeed.Running + "）"
+						case a.installNeed.Repair:
+							label = "修复应用菜单"
 						}
 						if iconButton(c, iconUpgrade, label, c.Theme().Accent).Clicked() {
 							a.installOpen = true

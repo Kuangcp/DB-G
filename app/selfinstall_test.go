@@ -72,10 +72,10 @@ func TestInstallSelf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(desktop), "Exec=\""+st.BinPath+"\"") || !strings.Contains(string(desktop), "Icon=db-g") {
+	if !strings.Contains(string(desktop), "Exec=\""+st.BinPath+"\"") || !strings.Contains(string(desktop), "Icon="+st.IconPath) {
 		t.Fatalf("desktop: %s", desktop)
 	}
-	if got, err := os.ReadFile(filepath.Join(data, "icons", "hicolor", "256x256", "apps", "db-g.png")); err != nil || string(got) != "PNG" {
+	if got, err := os.ReadFile(filepath.Join(data, "icons", "db-g.png")); err != nil || string(got) != "PNG" {
 		t.Fatalf("图标: %q %v", got, err)
 	}
 	// 再装一次（升级/重装）不能报错。
@@ -86,7 +86,7 @@ func TestInstallSelf(t *testing.T) {
 
 func TestCheckInstallVersionGates(t *testing.T) {
 	cfg, _ := installEnv(t)
-	if _, err := InstallSelf(nil); err != nil {
+	if _, err := InstallSelf([]byte("PNG")); err != nil {
 		t.Fatal(err)
 	}
 	bin := filepath.Join(cfg, "bin", "db-g")
@@ -105,19 +105,33 @@ func TestCheckInstallVersionGates(t *testing.T) {
 	if st := CheckInstall(); !st.NeedInstall || !st.Upgrade {
 		t.Fatalf("新版本应提示升级: %+v", st)
 	}
-	// version 文件丢失：即使同版本也要提示安装。
+	// 图标丢失：同版本也提示修复。
 	buildVersion = "v1.2.3"
+	st := CheckInstall()
+	if err := os.Remove(st.IconPath); err != nil {
+		t.Fatal(err)
+	}
+	if st := CheckInstall(); !st.NeedInstall || !st.Repair || st.Upgrade {
+		t.Fatalf("缺图标应提示修复: %+v", st)
+	}
+	if _, err := InstallSelf([]byte("PNG")); err != nil {
+		t.Fatalf("修复安装: %v", err)
+	}
+	if st := CheckInstall(); st.NeedInstall {
+		t.Fatalf("修复后不应再提示: %+v", st)
+	}
+	// version 文件丢失：即使同版本也要提示安装。
 	if err := os.Remove(filepath.Join(cfg, "version")); err != nil {
 		t.Fatal(err)
 	}
-	if st := CheckInstall(); !st.NeedInstall || st.Upgrade {
+	if st := CheckInstall(); !st.NeedInstall || st.Upgrade || st.Repair {
 		t.Fatalf("缺 version 文件应提示安装: %+v", st)
 	}
 	// bin 丢失：提示安装。
 	if err := os.Remove(bin); err != nil {
 		t.Fatal(err)
 	}
-	if st := CheckInstall(); !st.NeedInstall {
+	if st := CheckInstall(); !st.NeedInstall || st.Repair {
 		t.Fatalf("缺 bin 应提示安装: %+v", st)
 	}
 }
