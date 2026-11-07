@@ -35,7 +35,15 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 	case "exec":
 		a.execPending = true
 	case "save":
-		_ = a.flushActive()
+		a.pollExternalFiles(true)
+		if a.externalBlocked() {
+			return
+		}
+		if err := a.flushActive(); err != nil {
+			a.externalFlushFailed(err)
+			return
+		}
+		a.externalAfterSave(a.activeConsole)
 	case "format":
 		a.formatActive()
 	case "copyCell":

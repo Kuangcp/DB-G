@@ -133,6 +133,13 @@ Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` o
       corner radius, UI font size, applied instantly and saved to `~/.config/db-g/theme.json`; theme files can be
       exported/imported (with app/version validation, invalid fields ignored individually); the Appearance section
       in Settings previews changes live
+- [x] External SQL files: drop a `.sql` file, pick a data source, and it opens as a temporary console
+      (the same path is reused and the file is never copied); edits are debounce-saved back to the original file.
+      Disk changes are checked every second, on window focus, and before execute/save — a clean buffer reloads
+      automatically, while local edits pause autosave and show a banner with
+      "Reload / Keep local / Save as…", and execute/save ask first. Writes verify the on-disk content and never
+      overwrite an external edit; a missing file is not recreated silently (offer recreate/save-as) and is removed
+      from the workspace at startup; deleting the console only unbinds it and keeps the user's file
 - [x] Linux self-install/upgrade (release builds only): when `~/.config/db-g/bin/db-g` or `version` is missing,
       or the running version is newer, an install/upgrade icon appears next to Settings in the top bar;
       confirming atomically copies the current executable to `bin/db-g`, writes `version`

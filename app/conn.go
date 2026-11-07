@@ -50,6 +50,7 @@ type ConsoleRecord struct {
 	ConnectionID string `json:"connectionID"`
 	Name         string `json:"name"`
 	FilePath     string `json:"filePath"`
+	External     bool   `json:"external,omitempty"` // 绑定用户磁盘上的 .sql（FilePath 是外部绝对路径）
 	SortOrder    int    `json:"sortOrder"`
 	CreatedAt    int64  `json:"createdAt"`
 	UpdatedAt    int64  `json:"updatedAt"`
@@ -816,6 +817,100 @@ func (s *ConnStore) CreateConsole(connID, name string) (ConsoleRecord, error) {
 		return ConsoleRecord{}, err
 	}
 	return rec, nil
+}
+
+// CreateExternalConsole 把一个外部 .sql 绑定成控制台（FilePath 指向用户文件，不复制）。
+func (s *ConnStore) CreateExternalConsole(connID, name, path string) (ConsoleRecord, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = filepath.Base(path)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	found := false
+	for _, p := range s.conns {
+		if p.ID == connID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ConsoleRecord{}, fmt.Errorf("连接不存在: %s", connID)
+	}
+	id, err := genID()
+	if err != nil {
+		return ConsoleRecord{}, err
+	}
+	order := 0
+	for _, c := range s.consoles {
+		if c.ConnectionID == connID && c.SortOrder >= order {
+			order = c.SortOrder + 1
+		}
+	}
+	now := time.Now().UnixMilli()
+	rec := ConsoleRecord{
+		ID:           id,
+		ConnectionID: connID,
+		Name:         name,
+		FilePath:     path,
+		External:     true,
+		SortOrder:    order,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	s.consoles = append(s.consoles, rec)
+	if err := s.save(); err != nil {
+		s.consoles = s.consoles[:len(s.consoles)-1]
+		return ConsoleRecord{}, err
+	}
+	return rec, nil
+}
+
+// GetConsoleByFilePath 按外部文件路径查找已绑定的控制台（调用方负责规范化路径）。
+func (s *ConnStore) GetConsoleByFilePath(path string) (ConsoleRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, c := range s.consoles {
+		if c.External && c.FilePath == path {
+			return c, true
+		}
+	}
+	return ConsoleRecord{}, false
+}
+
+// RebindConsoleFile 把外部控制台改绑到新路径（另存为），不删除旧文件。
+func (s *ConnStore) RebindConsoleFile(id, path, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx := s.consoleIndexLocked(id)
+	if idx < 0 {
+		return fmt.Errorf("控制台不存在: %s", id)
+	}
+	if name == "" {
+		name = filepath.Base(path)
+	}
+	return s.mutateConsoleLocked(idx, func(c *ConsoleRecord) {
+		c.FilePath = path
+		c.External = true
+		c.Name = name
+		c.UpdatedAt = time.Now().UnixMilli()
+	})
+}
+
+// CloseConsoleEverywhere 只把控制台移出所有工作区，保留元数据与正文（外部文件绝不删除）。
+func (s *ConnStore) CloseConsoleEverywhere(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.consoleIndexLocked(id) < 0 {
+		return fmt.Errorf("控制台不存在: %s", id)
+	}
+	prev := s.snapshot()
+	s.stripConsoleRefs(map[string]bool{id: true})
+	if err := s.save(); err != nil {
+		s.restore(prev)
+		return err
+	}
+	return nil
 }
 
 // RenameConsole 改名；空名称回退「控制台 N」之外的默认值（保留旧名）。

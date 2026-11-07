@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -28,6 +29,7 @@ type ConsoleManager struct {
 	caretTimer        map[string]*time.Timer
 	src               map[string]func() string // consoleID → 惰性正文来源（活动控制台）
 	ver               map[string]uint64        // consoleID → 已见过的正文版本
+	paused            map[string]bool          // consoleID → 暂停写盘（外部文件冲突/缺失）
 }
 
 // NewConsoleManager 创建管理器；sink 的生产实现是 ConsoleFiles。
@@ -45,6 +47,7 @@ func NewConsoleManager(store *ConnStore, sink TextSink) *ConsoleManager {
 		caretTimer: map[string]*time.Timer{},
 		src:        map[string]func() string{},
 		ver:        map[string]uint64{},
+		paused:     map[string]bool{},
 	}
 }
 
@@ -151,6 +154,43 @@ func (m *ConsoleManager) TouchVersion(id string, ver uint64) {
 	m.saveTimers[id] = time.AfterFunc(delay, func() { _ = m.Flush(id) })
 }
 
+// ErrExternalChanged 表示外部文件在内存缓冲之外被修改，写入会覆盖别人的改动。
+var ErrExternalChanged = errors.New("外部文件已被修改")
+
+// externalSink 是 ConsoleFiles 的可选能力：区分外部文件控制台。
+type externalSink interface{ External(id string) bool }
+
+// SetSavePaused 暂停/恢复自动写盘：外部文件被改或丢失时暂停，避免覆盖/重建。
+// 暂停期间 Flush 保持脏标记并返回 nil（数据留在内存与编辑器里）。
+func (m *ConsoleManager) SetSavePaused(id string, paused bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if paused {
+		m.paused[id] = true
+		m.stopSaveTimerLocked(id)
+		return
+	}
+	delete(m.paused, id)
+}
+
+// SetExternalText 用磁盘内容重置内存缓冲（外部文件干净时自动重载）。
+func (m *ConsoleManager) SetExternalText(id, text string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stopSaveTimerLocked(id)
+	m.cache[id] = text
+	m.lastSaved[id] = text
+	delete(m.dirty, id)
+}
+
+// isExternal 报告控制台是否绑定外部文件（需要写前一致性校验）。
+func (m *ConsoleManager) isExternal(id string) bool {
+	if s, ok := m.sink.(externalSink); ok {
+		return s.External(id)
+	}
+	return false
+}
+
 // Dirty 报告是否有未写盘的改动。
 func (m *ConsoleManager) Dirty(id string) bool {
 	m.mu.Lock()
@@ -159,8 +199,18 @@ func (m *ConsoleManager) Dirty(id string) bool {
 }
 
 // Flush 立即把该控制台的正文写盘；成功后清脏并记录 UpdatedAt。失败保留脏标记。
-func (m *ConsoleManager) Flush(id string) error {
+func (m *ConsoleManager) Flush(id string) error { return m.flush(id, false) }
+
+// FlushForce 跳过外部文件一致性校验（用户明确选择「保留本地」时用）。
+func (m *ConsoleManager) FlushForce(id string) error { return m.flush(id, true) }
+
+func (m *ConsoleManager) flush(id string, force bool) error {
 	m.mu.Lock()
+	if m.paused[id] {
+		m.stopSaveTimerLocked(id)
+		m.mu.Unlock()
+		return nil
+	}
 	if !m.dirty[id] {
 		m.mu.Unlock()
 		return nil
@@ -180,6 +230,14 @@ func (m *ConsoleManager) Flush(id string) error {
 		delete(m.dirty, id)
 		m.mu.Unlock()
 		return nil
+	}
+	if !force && m.isExternal(id) && saved != text {
+		// 外部文件：写前确认磁盘仍是上次见到的那版，避免覆盖外部编辑。
+		disk, err := m.sink.Read(id)
+		if err != nil || disk != saved {
+			m.mu.Unlock()
+			return ErrExternalChanged
+		}
 	}
 	m.mu.Unlock()
 

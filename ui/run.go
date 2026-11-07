@@ -223,6 +223,10 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 }
 
 func (a *root) runSQL() {
+	a.pollExternalFiles(true)
+	if a.externalBlocked() {
+		return
+	}
 	text := a.code.Text()
 	ranges := a.execRanges(text)
 	if len(ranges) == 0 {
@@ -232,6 +236,7 @@ func (a *root) runSQL() {
 	app.LogInfo("exec", "start", "conn", a.activeConnName(), "console", a.activeConsole, "sql", text)
 	if a.activeConsole != "" {
 		if err := a.flushActive(); err != nil {
+			a.externalFlushFailed(err)
 			return
 		}
 		if err := a.ensureConsoleConn(); err != nil {

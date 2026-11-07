@@ -236,6 +236,12 @@ func (a *root) closeConsole(id string) {
 	if m == nil {
 		return
 	}
+	if a.externalHasLocalChanges(id) {
+		a.pendingActivate = id
+		a.extResolveOpen = true
+		a.extMsg = "该文件有未解决的外部修改，请先处理"
+		return
+	}
 	wasActive := a.activeConsole == id
 	if err := m.CloseConsole(id); err != nil {
 		a.consoleErr = "关闭控制台失败: " + err.Error()
@@ -330,7 +336,11 @@ func (a *root) tabModal(c *ui.Context) {
 			})
 		case "delete":
 			ui.Text(c, "删除控制台「"+a.modalText+"」？").Bold()
-			ui.Text(c, "将同时删除它的 .sql 文件，不可撤销").TextColor(c.Theme().TextMuted)
+			hint := "将同时删除它的 .sql 文件，不可撤销"
+			if rec, ok := a.store.GetConsole(a.modalTarget); ok && rec.External {
+				hint = "只解除绑定，磁盘上的原始 .sql 文件会保留"
+			}
+			ui.Text(c, hint).TextColor(c.Theme().TextMuted)
 			a.modalButtons(c, func() {
 				wasActive := a.activeConsole == a.modalTarget
 				if err := m.DeleteConsole(a.modalTarget); err != nil {
@@ -341,6 +351,7 @@ func (a *root) tabModal(c *ui.Context) {
 				app.LogInfo("console", "delete", "id", a.modalTarget)
 				delete(a.consoles, a.modalTarget)
 				delete(a.lastVer, a.modalTarget)
+				a.removeExternalState(a.modalTarget)
 				a.dropStmtRunsOf([]string{a.modalTarget})
 				a.code.Drop(a.modalTarget)
 				a.modalKind = ""

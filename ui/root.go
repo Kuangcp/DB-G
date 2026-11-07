@@ -93,6 +93,13 @@ type root struct {
 	installNote string                                  // 安装成功的一行提示
 	installFn   func([]byte) (app.InstallStatus, error) // 默认 app.InstallSelf（测试可注入）
 
+	extFiles       map[string]*extFile // consoleID → 外部 .sql 的磁盘一致性状态
+	extPollAt      time.Time
+	extPickOpen    bool
+	extPickPaths   []string
+	extResolveOpen bool
+	extMsg         string
+
 	mgr                 *app.ConsoleManager
 	catalog             *catalogCache
 	sessions            map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
@@ -198,6 +205,7 @@ func newRoot(text string) *root {
 		sessionErr:       map[string]string{},
 		consoles:         map[string]*app.Console{},
 		lastVer:          map[string]uint64{},
+		extFiles:         map[string]*extFile{},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.resView = newResultView()
@@ -229,7 +237,8 @@ func newRootWithStore(storePath string) *root {
 	r.store = app.LoadStore(storePath)
 	r.metaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
-	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
+	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir(), Store: r.store})
+	r.pruneMissingExternal()
 	r.restoreSession()
 	r.selfInstall = app.ReleaseBuild() && runtime.GOOS == "linux"
 	if r.selfInstall {
@@ -400,6 +409,9 @@ func (a *root) activateConsole(id string) bool {
 	if !ok {
 		return false
 	}
+	if rec.External {
+		a.ensureExternal(rec.ID)
+	}
 	// 目标控制台：同样以磁盘为准（它上次离开时已落盘）。
 	m.DetachTextSource(rec.ID)
 	a.saveStmtRuns(prev)
@@ -467,6 +479,11 @@ func (a *root) flushActive() error {
 	s, e := a.code.CaretRunes()
 	m.SetCaret(a.activeConsole, s, e)
 	m.FlushCarets()
+	if _, st, ok := a.activeExternal(); ok && (st.conflict || st.missing) {
+		// 外部文件冲突/缺失：把编辑器正文存回内存缓存，切标签不丢内容。
+		m.SetText(a.activeConsole, a.code.Text())
+		return nil
+	}
 	if err := m.Flush(a.activeConsole); err != nil {
 		a.consoleErr = err.Error()
 		app.LogWarn("console", "flush failed", "console", a.activeConsole, "err", err.Error())
@@ -505,6 +522,18 @@ func (a *root) syncActiveBuffer() {
 // Attach 在窗口创建后接通主线程回投与原生窗口句柄。
 func (a *root) Attach(win *mygo.Window) {
 	a.win = win
+	win.OnFileDrop(func(e *mygo.FileDropEvent) { a.handleDroppedFiles(e.Paths) })
+	win.OnFocus(func() { a.pollExternalFiles(true) })
+	win.OnClose(func(e *mygo.CloseEvent) {
+		// 外部文件有未解决冲突/缺失且本地有改动时，先让用户选择，别默默丢内容。
+		if id := a.firstBlockedExternal(); id != "" {
+			e.PreventDefault()
+			a.pendingActivate = id
+			a.extResolveOpen = true
+			return
+		}
+		a.FlushAll()
+	})
 	a.con.SetPublisher(func(f func()) { win.Update(f) })
 	for _, c := range a.consoles {
 		c.SetPublisher(func(f func()) { win.Update(f) })
@@ -540,6 +569,7 @@ func (a *root) view(c *ui.Context) {
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
 		a.maybeOpenSettings()
 		a.syncActiveBuffer()
+		a.pollExternalFiles(false)
 		if a.pendingClose != "" {
 			id := a.pendingClose
 			a.pendingClose = ""
@@ -584,6 +614,8 @@ func (a *root) view(c *ui.Context) {
 		a.editCellModal(c)
 		a.previewModal(c)
 		a.installModal(c)
+		a.externalPickerModal(c)
+		a.externalResolveModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
@@ -604,6 +636,11 @@ func (a *root) view(c *ui.Context) {
 					if a.consoleErr != "" {
 						if ui.Button(c, a.consoleErr).TextColor(c.Theme().Danger).SingleLine().Clicked() {
 							a.consoleErr = ""
+						}
+					}
+					if a.extMsg != "" {
+						if ui.Button(c, a.extMsg).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Clicked() {
+							a.extMsg = ""
 						}
 					}
 					ui.Spacer(c)
@@ -650,6 +687,7 @@ func (a *root) view(c *ui.Context) {
 
 				// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
 				editor := func() {
+					a.externalBanner(c)
 					a.code.View(c).Label("编辑器")
 					if a.execPending {
 						a.execPending = false

@@ -46,6 +46,13 @@ func (c *codeEditor) SetActive(consoleID, text string) {
 	c.active = consoleID
 }
 
+// Reload 用磁盘内容替换某个（非活动）控制台的缓冲；活动控制台由 SetActive 处理。
+func (c *codeEditor) Reload(consoleID, text string) {
+	if buf, ok := c.buffers[consoleID]; ok && buf.String() != text {
+		buf.Reset(text)
+	}
+}
+
 // Clear 进入「无激活控制台」空态（保留各控制台的 Buffer）。
 func (c *codeEditor) Clear() {
 	c.state.Buffer = myeditor.NewBuffer("")
