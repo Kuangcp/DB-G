@@ -9,6 +9,30 @@
 
 ![](/docs/snapshots/Snipaste_2026-11-07_12-55-39.webp)
 
+## 为什么选 DB-G
+
+**一个可执行文件，四个数据源，键盘上一路到底。**
+
+DB-G 是本地优先的桌面数据库客户端：不装运行时、不连云端、不收集数据。下载后双击就是一个完整的 SQL 工作台，连接、查询、改数据、导出全部在本机完成。
+
+- **开箱即用**：Windows / Linux 各一个静态二进制，无 Java、无 Electron、无 WebView 运行时；界面原生绘制，冷启动即用。
+- **一个窗口四类库**：SQLite、MySQL、PostgreSQL、ClickHouse 共用对象树、补全、结果表格与导出流程，不必在几个客户端之间切换。
+- **为键盘设计**：`Ctrl+Enter` 执行、`Ctrl+Tab` 切最近控制台、`Ctrl+Q` 看 DDL、`Ctrl+F` 查找，快捷键全部可改绑。
+- **大库不卡**：对象按页加载 + 24 小时磁盘缓存，几万个对象也只查当前需要的那一页。
+- **结果能干活**：结果钉住对比、单元格编辑单事务提交、JSON 树查看、CSV / JSON / SQL INSERT 导出。
+- **数据留在本机**：连接密码 AES-256-GCM 本机加密，日志自动脱敏，无遥测、无账号。
+
+## 下载与运行
+
+Release 页面提供两个静态可执行文件（GitHub / Gitee 均可）：
+
+| 平台 | 文件 | 运行要求 |
+|---|---|---|
+| Windows x64 | `db-g-v1.0.0-windows-amd64.exe` | Windows 10 / 11；双击即可，无需 WebView2 |
+| Linux x64 | `db-g-v1.0.0-linux-amd64` | GTK 3（Arch `gtk3`、Debian/Ubuntu `libgtk-3-0`、Fedora `gtk3`）；`chmod +x` 后运行 |
+
+配置、日志与控制台文件默认落在 `~/.config/db-g/`（Windows 为 `%AppData%\db-g\`）。
+
 ## 功能清单
 
 - [x] 编辑器：mygo `ui/editor`（SQL 高亮、行号、查找替换 Ctrl+F、折叠、多光标、撤销；
@@ -101,6 +125,8 @@ CGO_ENABLED=0 $GO run .     # 交互窗口（本机 cgo 链接有 .sframe 环境
 CGO_ENABLED=0 $GO test -p 1 ./... # 全量（含编辑器与结果网格基准；-p 1 避免并行包争 CPU 导致基准超限）
 CGO_ENABLED=0 $GO test ./ui -run 'TestEditor.*Perf' -v   # 只跑编辑器性能基准
 $GO tool mygo vet .         # UI 生命周期检查
+
+make release                # 生成 dist/ 下 Windows / Linux 发布二进制（版本号取自 git tag）
 ```
 
 顶栏「设置」打开独立设置窗口（单例）：编辑器信息（行数/字节/版本）与 3k/12k/100k
