@@ -1,20 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <!-- db-g 应用图标：白色圆角底 + 细边，字母 G 用品牌渐变（蓝→青→靛，左上到右下）。
-       位图由 `go run ./tools/genicon` 用同一几何生成：assets/icon-{256,512}.png -->
+  <!-- db-g 应用图标：浅色圆角底 + 紫→蓝描边 G。
+       assets/icon-{256,512}.png 由 `go run ./tools/genicon` 用同一几何生成。 -->
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2F6FE4"/>
-      <stop offset="50%" stop-color="#22B8E6"/>
-      <stop offset="100%" stop-color="#6C63FF"/>
+    <linearGradient id="iconGradient" gradientUnits="userSpaceOnUse" x1="136" y1="136" x2="374.52" y2="376">
+      <stop offset="0%" stop-color="#7C4DFF"/>
+      <stop offset="55%" stop-color="#6A7BFF"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
     </linearGradient>
-    <mask id="letter">
-      <path fill="#fff" fill-rule="evenodd"
-            d="M256 102a154 154 0 1 1 0 308a154 154 0 1 1 0-308
-               M256 161a95 95 0 1 0 0 190a95 95 0 1 0 0-190"/>
-      <rect x="308" y="174" width="200" height="164" fill="#000"/>
-      <rect x="242" y="230" width="148" height="52" fill="#fff"/>
-    </mask>
   </defs>
-  <rect width="512" height="512" rx="102" fill="#FFFFFF" stroke="#C8D6EC" stroke-width="8"/>
-  <rect width="512" height="512" rx="102" fill="url(#g)" mask="url(#letter)"/>
+  <rect width="512" height="512" rx="112" fill="#FBFBFF"/>
+  <rect x="1" y="1" width="510" height="510" rx="111" fill="none" stroke="#E9E7FA" stroke-width="2"/>
+  <path d="M350.56 182.12A120 120 0 1 0 374.52 274.77L300 274.77" fill="none" stroke="url(#iconGradient)" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
