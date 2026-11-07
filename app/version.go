@@ -5,9 +5,17 @@ import (
 	"strings"
 )
 
-// Version 返回构建版本：有正式 tag 就是 vX.Y.Z-<短哈希>，否则 dev-<短哈希>，
-// 工作区有未提交改动时再带 +dirty。取不到 VCS 信息就退回 "dev"。
+// buildVersion 由发布构建用 -ldflags "-X db-g/app.buildVersion=v1.0.0" 注入；
+// 为空的开发构建回退到 VCS 信息。
+var buildVersion string
+
+// Version 返回构建版本：注入过就是注入值，否则有正式 tag 是
+// vX.Y.Z-<短哈希>、没有就是 dev-<短哈希>，工作区有未提交改动时再带 +dirty。
+// 取不到 VCS 信息就退回 "dev"。
 func Version() string {
+	if buildVersion != "" {
+		return buildVersion
+	}
 	const fallback = "dev"
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
