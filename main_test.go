@@ -9,7 +9,7 @@ import (
 	"db-g/engine"
 )
 
-// TestAppIconPixels 验证自绘图标真的画出来了：品牌蓝底 + 白色 G（环与横杠），中心是镂空。
+// TestAppIconPixels 验证图标真的画出来了：浅色圆角底 + 紫→蓝渐变的描边 G，中心镂空。
 func TestAppIconPixels(t *testing.T) {
 	img, err := png.Decode(bytes.NewReader(appIconPNG))
 	if err != nil {
@@ -23,30 +23,32 @@ func TestAppIconPixels(t *testing.T) {
 		r, g, bl, a := img.At(x, y).RGBA()
 		return uint8(r >> 8), uint8(g >> 8), uint8(bl >> 8), uint8(a >> 8)
 	}
-	// 圆角外是透明的，取上边缘内侧验证白色底。
-	r, g, bl, a := at(128, 20)
-	if a < 200 || r < 240 || g < 240 || bl < 240 {
-		t.Fatalf("background must be white, got %d,%d,%d a=%d", r, g, bl, a)
+	// 圆角外透明，上边缘内侧是浅色底（#FBFBFF）。
+	if _, _, _, a := at(0, 0); a > 60 {
+		t.Fatalf("corner must be transparent, got a=%d", a)
 	}
-	// 字母 G 用品牌渐变：上环偏蓝、下环偏靛，二者不同且都不是白色。
-	tr, tg, tb, _ := at(128, 70)
-	br, bg2, bb, _ := at(128, 186)
-	if tr > 140 || tb < 170 {
-		t.Fatalf("top of G must be blue-ish, got %d,%d,%d", tr, tg, tb)
+	if r, g, bl, a := at(128, 20); a < 200 || r < 245 || g < 245 || bl < 250 {
+		t.Fatalf("background must be light, got %d,%d,%d a=%d", r, g, bl, a)
 	}
-	if br > 160 || bb < 200 {
-		t.Fatalf("bottom of G must be indigo-ish, got %d,%d,%d", br, bg2, bb)
+	// 渐变方向：上环偏紫、下环偏蓝青、横杠偏蓝，且不是纯色。
+	tr, tg, tb, _ := at(128, 68)
+	br, bg2, bb, _ := at(128, 188)
+	mr, mg, mb, _ := at(170, 137)
+	if tr < 90 || tr > 140 || tg > 130 || tb < 245 {
+		t.Fatalf("top of G must be purple, got %d,%d,%d", tr, tg, tb)
+	}
+	if br > 110 || bg2 < 125 || bg2 > 185 || bb < 240 {
+		t.Fatalf("bottom of G must be blue-cyan, got %d,%d,%d", br, bg2, bb)
+	}
+	if mr < 55 || mr > 120 || mg < 115 || mg > 180 || mb < 240 {
+		t.Fatalf("G bar must be blue, got %d,%d,%d", mr, mg, mb)
 	}
 	if tr == br && tg == bg2 && tb == bb {
 		t.Fatal("G must be a gradient, not a flat color")
 	}
-	// 环内是白底
-	if r, g, bl, _ := at(128, 100); r < 240 || g < 240 || bl < 240 {
-		t.Fatalf("hole must be white, got %d,%d,%d", r, g, bl)
-	}
-	// 横杠是渐变颜色（非白）
-	if r, g, bl, _ := at(170, 128); r > 220 && g > 220 && bl > 220 {
-		t.Fatalf("G bar must be colored, got %d,%d,%d", r, g, bl)
+	// 环内是浅色底
+	if r, g, bl, _ := at(128, 100); r < 245 || g < 245 || bl < 250 {
+		t.Fatalf("hole must be light, got %d,%d,%d", r, g, bl)
 	}
 	if _, err := os.Stat("assets/icon.svg"); err != nil {
 		t.Fatalf("svg source missing: %v", err)
