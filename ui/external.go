@@ -225,6 +225,10 @@ func (a *root) handleDroppedFiles(paths []string) {
 		a.activateExternalRecord(rec)
 	}
 	if len(pending) > 0 {
+		// 文件管理器拖入后窗口可能不在最前：先把主窗口带到前台，方便直接选数据源。
+		if a.win != nil {
+			a.win.Focus()
+		}
 		a.extPickPaths = pending
 		a.extPickOpen = true
 	}
