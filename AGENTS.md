@@ -230,7 +230,7 @@ tt.Texts() / tt.Clipboard() / tt.Image()      // 文案表 / 剪贴板 / 像素
 ## 日志与脱敏
 
 - 用 `app.LogInfo/LogWarn/LogError(tag, msg, "k", v, …)`，tag 已有：`startup` `conn` `exec`
-  `console` `catalog` `export` `import` `write` `ddl` `panic`；新增行为先想"出事怎么查"。
+  `console` `catalog` `export` `import` `write` `ddl` `install` `panic`；新增行为先想"出事怎么查"。
 - **密码与 DSN 必须脱敏**：`app.RedactDSN()`；日志里永远不出现 `Password`。
 - 日志写入失败不能影响调用方（日志不能把应用搞崩）。
 

@@ -34,6 +34,7 @@ func main() {
 	app.LogInfo("startup", "db-g start", "config", app.DefaultStorePath(), "log_dir", app.DefaultLogDir())
 
 	r := ui.NewRoot()
+	r.SetAppIconPNG(appIconPNG)
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:   "db-g",

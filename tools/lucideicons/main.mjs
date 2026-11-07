@@ -31,6 +31,7 @@ const icons = {
   iconPin: "pin",
   iconCheck: "check",
   iconDownload: "download",
+  iconUpgrade: "circle-arrow-up",
   iconSquarePen: "square-pen",
   iconPlus: "plus",
   iconMinus: "minus",

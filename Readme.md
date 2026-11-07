@@ -117,6 +117,11 @@ Release 页面提供两个独立可执行文件（GitHub / Gitee 均可）：
 - [x] 外观：跟随系统 / 浅色 / 深色；强调色（默认/预设/自定义 hex）、间距密度、
       圆角、界面字号，修改即时生效并存 `~/.config/db-g/theme.json`；支持主题文件
       导出/导入（带 app/version 校验，非法字段逐项忽略）；设置窗口「外观」分区实时预览
+- [x] Linux 自举安装/升级（仅发布构建）：`~/.config/db-g/bin/db-g` 或 `version` 不存在、
+      或当前运行版本更新时，顶栏设置图标右侧出现安装/升级图标；确认后把当前程序原子复制到
+      `bin/db-g`，写入 `version`（`build=10000` 数值 + 展示版本），并生成
+      `~/.local/share/applications/db-g.desktop` 与 hicolor 图标，之后可从应用菜单启动；
+      路径遵循 `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
 - [x] 设置窗口：左右布局（外观 / 编辑器 / 快捷键 / 连接档案 / 日志 / 开发），左下角版本号；
       编辑器字号（8–24）与字体族可调、带实时预览，存 `~/.config/db-g/editor.json`
 - [ ] M7：编辑器格式化（补全已完成：关键字/表/列）

@@ -133,6 +133,12 @@ Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` o
       corner radius, UI font size, applied instantly and saved to `~/.config/db-g/theme.json`; theme files can be
       exported/imported (with app/version validation, invalid fields ignored individually); the Appearance section
       in Settings previews changes live
+- [x] Linux self-install/upgrade (release builds only): when `~/.config/db-g/bin/db-g` or `version` is missing,
+      or the running version is newer, an install/upgrade icon appears next to Settings in the top bar;
+      confirming atomically copies the current executable to `bin/db-g`, writes `version`
+      (`build=10000` plus the display version), and creates
+      `~/.local/share/applications/db-g.desktop` and a hicolor icon, so the app appears in the application menu;
+      paths honor `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
 - [x] Settings window: left/right layout (Appearance / Editor / Shortcuts / Connection profiles / Logs / Developer),
       version in the bottom-left corner; editor font size (8–24) and font family are adjustable with a live
       preview and saved to `~/.config/db-g/editor.json`

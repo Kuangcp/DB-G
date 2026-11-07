@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
@@ -82,6 +83,15 @@ type root struct {
 	treeGroupStale   map[string]bool // 过期缓存的分组；展开时替换首页
 	treeGen          uint64          // 重载/删除时递增，丢弃旧的异步结果
 	execPending      bool
+
+	appIconPNG  []byte                                  // 窗口图标；自举安装时写入图标目录
+	selfInstall bool                                    // 发布构建才启用（app.ReleaseBuild）
+	installNeed app.InstallStatus                       // 安装/升级状态；NeedInstall 决定顶栏图标
+	installOpen bool                                    // 安装确认弹窗
+	installBusy bool                                    // 安装进行中
+	installErr  string                                  // 安装失败原因
+	installNote string                                  // 安装成功的一行提示
+	installFn   func([]byte) (app.InstallStatus, error) // 默认 app.InstallSelf（测试可注入）
 
 	mgr                 *app.ConsoleManager
 	catalog             *catalogCache
@@ -221,6 +231,10 @@ func newRootWithStore(storePath string) *root {
 	r.history = app.OpenHistory(app.DefaultHistoryPath())
 	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir()})
 	r.restoreSession()
+	r.selfInstall = app.ReleaseBuild() && runtime.GOOS == "linux"
+	if r.selfInstall {
+		r.installNeed = app.CheckInstall()
+	}
 	ws, _ := r.mgr.ActiveWorkspace()
 	app.LogInfo("startup", "session restored", "consoles", len(r.mgr.Open()), "workspace", ws.Name, "conn_warning", r.store.Warning())
 	return r
@@ -569,6 +583,7 @@ func (a *root) view(c *ui.Context) {
 		a.ddlPanel(c)
 		a.editCellModal(c)
 		a.previewModal(c)
+		a.installModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
@@ -600,6 +615,19 @@ func (a *root) view(c *ui.Context) {
 					}
 					if iconButton(c, iconSettings, "设置", ui.Transparent).Clicked() {
 						a.requestSettings()
+					}
+					if a.installNeed.NeedInstall {
+						label := "安装到应用列表"
+						if a.installNeed.Upgrade {
+							label = "升级应用（" + a.installNeed.Running + "）"
+						}
+						if iconButton(c, iconUpgrade, label, c.Theme().Accent).Clicked() {
+							a.installOpen = true
+							a.installErr = ""
+						}
+					}
+					if a.installNote != "" {
+						ui.Text(c, a.installNote).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 					}
 				}).Label("操作")
 
