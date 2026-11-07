@@ -35,8 +35,3 @@
     - Windows
         - Inno Setup
 
-加个逻辑如果是linux 并且 ~/.config/db-g/bin/db-g 文件不存在 就在主窗口右上角设置icon的右边 加一个升级的icon 点击就弹窗提示是否安装到应用列表 ，然后确认的话就把当前二进制文件 复制到 ~/.config/db-g/bin/db-g 并且将当前软件的版本写入到~/.config/db-g/version（用于判断 当前运行的 是更新的版本 才展示安装icon了，当然version文件不存在也展示安装icon），并且生成合适的 desktop 到 ~/.local/share/applications 图标到 ~/.local/share/icons 下。 这样就能自动的将软件安装了。 version文件是一个ini格式文件 存俩字段纯数值的版本号（1.0.0 转换成 10000 ， 1.1.1 则是10101 2.5.8 则是 20508），展示的版本号
-
-
-
-
