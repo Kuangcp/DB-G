@@ -2,6 +2,10 @@
   <img src="assets/icon-256.png" width="128" alt="DB-G 图标">
 </p>
 
+<p align="center">
+  <a href="Readme.md">简体中文</a> · <a href="README.en.md">English</a>
+</p>
+
 # DB-G
 
 对标 [db-k](https://github.com/Kuangcp/DB-K) 的数据库客户端（Go + mygo）。
@@ -15,7 +19,7 @@
 
 DB-G 是本地优先的桌面数据库客户端：不装运行时、不连云端、不收集数据。下载后双击就是一个完整的 SQL 工作台，连接、查询、改数据、导出全部在本机完成。
 
-- **开箱即用**：Windows / Linux 各一个静态二进制，无 Java、无 Electron、无 WebView 运行时；界面原生绘制，冷启动即用。
+- **开箱即用**：Windows / Linux 各一个独立可执行文件，无 Java、无 Electron、无 WebView 运行时；界面原生绘制，冷启动即用。
 - **一个窗口四类库**：SQLite、MySQL、PostgreSQL、ClickHouse 共用对象树、补全、结果表格与导出流程，不必在几个客户端之间切换。
 - **为键盘设计**：`Ctrl+Enter` 执行、`Ctrl+Tab` 切最近控制台、`Ctrl+Q` 看 DDL、`Ctrl+F` 查找，快捷键全部可改绑。
 - **大库不卡**：对象按页加载 + 24 小时磁盘缓存，几万个对象也只查当前需要的那一页。
@@ -24,7 +28,7 @@ DB-G 是本地优先的桌面数据库客户端：不装运行时、不连云端
 
 ## 下载与运行
 
-Release 页面提供两个静态可执行文件（GitHub / Gitee 均可）：
+Release 页面提供两个独立可执行文件（GitHub / Gitee 均可）：
 
 | 平台 | 文件 | 运行要求 |
 |---|---|---|
