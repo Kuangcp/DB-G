@@ -236,8 +236,13 @@ func newRootWithStore(storePath string) *root {
 	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
 	r.store = app.LoadStore(storePath)
 	r.metaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
-	r.history = app.OpenHistory(app.DefaultHistoryPath())
-	r.mgr = app.NewConsoleManager(r.store, app.ConsoleFiles{Dir: r.store.ConsolesDir(), Store: r.store})
+	r.history = app.OpenHistory(app.DefaultHistoryDir())
+	if err := r.history.MigrateLegacy(filepath.Join(filepath.Dir(storePath), "history.jsonl")); err != nil {
+		app.LogWarn("history", "legacy migration failed", "err", err.Error())
+	}
+	files := app.ConsoleFiles{Dir: r.store.ConsolesDir(), Store: r.store}
+	files.Migrate()
+	r.mgr = app.NewConsoleManager(r.store, files)
 	r.pruneMissingExternal()
 	r.restoreSession()
 	r.selfInstall = app.ReleaseBuild() && runtime.GOOS == "linux"
@@ -274,25 +279,19 @@ func (a *root) FlushAll() {
 // consoleMgr 懒初始化控制台管理器；没有连接库（无持久化）时返回 nil。
 func (a *root) consoleMgr() *app.ConsoleManager {
 	if a.mgr == nil && a.store != nil {
-		a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir()})
+		a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
 	}
 	return a.mgr
 }
 
 // execDoneLogger 返回一次执行结束的日志回调（连接名在执行时读取，避免陈旧）。
 func (a *root) execDoneLogger(consoleID string) func(*engine.QueryResult, string, time.Duration) {
-	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
-		// 只带 consoleID：连接名在 exec/start（UI 线程）里已记过，这里不跨线程读 root 字段。
-		kv := []any{"console", consoleID, "dur_ms", dur.Milliseconds()}
-		if errMsg != "" {
-			app.LogError("exec", "failed", append(kv, "err", errMsg)...)
+	return func(_ *engine.QueryResult, errMsg string, dur time.Duration) {
+		// 成功不落日志（语句已在 exec/start 记过）；失败只补错误与耗时。
+		if errMsg == "" {
 			return
 		}
-		rows, affected, truncated := 0, int64(0), false
-		if res != nil {
-			rows, affected, truncated = len(res.Rows), res.Affected, res.Truncated
-		}
-		app.LogInfo("exec", "done", append(kv, "rows", rows, "affected", affected, "truncated", truncated)...)
+		app.LogError("exec", "failed", "console", consoleID, "dur_ms", dur.Milliseconds(), "err", errMsg)
 	}
 }
 

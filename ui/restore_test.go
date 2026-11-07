@@ -20,7 +20,7 @@ func TestRestoreWorkspaceAndConsole(t *testing.T) {
 		t.Fatal(err)
 	}
 	prof := s.List()[0]
-	m := app.NewConsoleManager(s, app.ConsoleFiles{Dir: s.ConsolesDir()})
+	m := app.NewConsoleManager(s, app.ConsoleFiles{Dir: s.ConsolesDir(), Store: s})
 	rec, err := m.Create(prof.ID, "上次的")
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestFlushAllWritesDirtyConsoles(t *testing.T) {
 	a.setActiveText("SELECT 77")
 	a.syncActiveBuffer()
 	a.FlushAll()
-	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir()}.Read(rec.ID)
+	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store}.Read(rec.ID)
 	if err != nil || text != "SELECT 77" {
 		t.Fatalf("flush all: %q %v", text, err)
 	}

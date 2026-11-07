@@ -99,7 +99,7 @@ func TestCtrlQFromEditorCaret(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 激活控制台绑定到该连接（只连库、不选中任何树节点）。
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir()})
+	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
 	rec, err := a.mgr.Create(prof.ID, "t")
 	if err != nil {
 		t.Fatal(err)

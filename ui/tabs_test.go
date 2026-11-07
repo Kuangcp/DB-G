@@ -288,7 +288,7 @@ func TestCtrlSSavesActiveConsole(t *testing.T) {
 	tt.Frame() // 帧首同步正文版本
 	tt.Key(ui.Ctrl, ui.KeyS)
 	tt.Frame()
-	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir()}.Read(rec.ID)
+	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store}.Read(rec.ID)
 	if err != nil || text != "SELECT 'saved'" {
 		t.Fatalf("Ctrl+S must flush the console: %q %v", text, err)
 	}

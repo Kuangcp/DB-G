@@ -36,12 +36,45 @@ func (f ConsoleFiles) record(id string) (ConsoleRecord, bool) {
 	return f.Store.GetConsole(id)
 }
 
-// Path 返回控制台正文文件路径；外部控制台是用户文件本身。
+// Path 返回控制台正文文件路径：外部控制台是用户文件本身；
+// 内部控制台用 <connectionID>-<consoleID>.sql，便于从文件名看出归属数据源。
 func (f ConsoleFiles) Path(id string) string {
-	if rec, ok := f.record(id); ok && rec.External {
-		return rec.FilePath
+	if rec, ok := f.record(id); ok {
+		if rec.External {
+			return rec.FilePath
+		}
+		if rec.ConnectionID != "" {
+			return filepath.Join(f.Dir, rec.ConnectionID+"-"+id+".sql")
+		}
 	}
 	return filepath.Join(f.Dir, id+".sql")
+}
+
+// Migrate 把旧命名 <id>.sql 迁移成 <connectionID>-<id>.sql；两边都在时以新文件为准。
+func (f ConsoleFiles) Migrate() {
+	if f.Store == nil {
+		return
+	}
+	for _, p := range f.Store.List() {
+		for _, rec := range f.Store.ListConsoles(p.ID) {
+			if rec.External {
+				continue
+			}
+			old := filepath.Join(f.Dir, rec.ID+".sql")
+			newPath := f.Path(rec.ID)
+			if old == newPath {
+				continue
+			}
+			if !fileExists(old) || fileExists(newPath) {
+				continue
+			}
+			if err := os.Rename(old, newPath); err != nil {
+				LogWarn("console", "migrate file failed", "from", old, "to", newPath, "err", err.Error())
+				continue
+			}
+			LogInfo("console", "migrated file", "from", old, "to", newPath)
+		}
+	}
 }
 
 // Read 读取正文；内部文件不存在（首次/被外部删除）返回空串。

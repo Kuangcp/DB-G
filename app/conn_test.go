@@ -220,7 +220,7 @@ func TestConsolesRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rec.Name != "查询" || rec.ConnectionID != p.ID || rec.FilePath != filepath.Join(s.ConsolesDir(), rec.ID+".sql") {
+	if rec.Name != "查询" || rec.ConnectionID != p.ID || rec.FilePath != filepath.Join(s.ConsolesDir(), p.ID+"-"+rec.ID+".sql") {
 		t.Fatalf("bad record: %+v", rec)
 	}
 	again := LoadStore(s.path)

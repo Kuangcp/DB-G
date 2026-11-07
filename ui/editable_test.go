@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -24,7 +23,7 @@ func runEditQuery(t *testing.T, a *root, sql string) *ui.Tester {
 
 func TestEditPlanGating(t *testing.T) {
 	a := openForSelection(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
+	a.history = app.OpenHistory(t.TempDir())
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
 	if a.editPlan == nil {
 		t.Fatalf("single table with pk must be editable: %q", a.readonlyReason)
@@ -51,7 +50,7 @@ func TestEditPlanGating(t *testing.T) {
 
 func TestEditCellCommitThroughUI(t *testing.T) {
 	a := openForSelection(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
+	a.history = app.OpenHistory(t.TempDir())
 	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +78,7 @@ func TestEditCellCommitThroughUI(t *testing.T) {
 
 func TestEditInsertAndDeleteThroughUI(t *testing.T) {
 	a := openForSelection(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
+	a.history = app.OpenHistory(t.TempDir())
 	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +102,7 @@ func TestEditInsertAndDeleteThroughUI(t *testing.T) {
 
 func TestEditCommitFailureKeepsOverlay(t *testing.T) {
 	a := openForSelection(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
+	a.history = app.OpenHistory(t.TempDir())
 	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice'),(2,'bob')"); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +126,7 @@ func TestEditCommitFailureKeepsOverlay(t *testing.T) {
 
 func TestCommitThroughPreviewModal(t *testing.T) {
 	a := openForSelection(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
+	a.history = app.OpenHistory(t.TempDir())
 	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice')"); err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +154,7 @@ func TestCommitThroughPreviewModal(t *testing.T) {
 
 func TestReadonlyReasonShownInToolbar(t *testing.T) {
 	a := openForSelection(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "h.jsonl"))
+	a.history = app.OpenHistory(t.TempDir())
 	if _, err := a.testSession(t).RunStatement(t.Context(), "CREATE TABLE other2 (id INTEGER PRIMARY KEY)"); err != nil {
 		t.Fatal(err)
 	}

@@ -112,9 +112,9 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 内容 | 位置 | 说明 |
 |---|---|---|
 | 连接档案 / 工作区 / 控制台元数据 / 活动项 | `connections.json` | `ConnStore`；密码 **AES-256-GCM** 加密（密钥 `secret.key`，0600），启动时把存量明文自动加密回写 |
-| 控制台正文 | `consoles/<id>.sql` | 一个控制台一个文件；切标签/执行前/退出前落盘，平时防抖 |
+| 控制台正文 | `consoles/<connectionID>-<consoleID>.sql` | 一个控制台一个文件；切标签/执行前/退出前落盘，平时防抖；启动时把旧 `<id>.sql` 迁移成新名字 |
 | 数据源元数据缓存 | `meta/<connID>.json` | `app.MetaCache`；schema/计数/已加载对象页，24h TTL，指纹不含密码/名称；删除连接/改目标地址/重载时清理 |
-| SQL 历史 | `history.jsonl` | 5MB 轮转 |
+| SQL 历史 | `history/<connectionID>.jsonl` | 每个数据源一个文件；到 6000 条惰性裁剪到 5000 条，面板只展示最近 100 条 |
 | 日志 | `logs/YYYY-MM/YYYY-MM-DD_N.log` | 纯文本（时间/级别/标签/消息/kv），一次启动一个文件，0600 |
 | 编辑器显示设置（字号/字体族） | `editor.json` | `app.EditorPrefs`，改动即时生效并落盘 |
 | 外观设置（模式/强调色/密度/圆角/字号） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好 |

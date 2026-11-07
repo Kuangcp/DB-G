@@ -67,7 +67,7 @@ func TestSettingsPresetWritesActiveConsole(t *testing.T) {
 	if got := a.activeText(); got != want {
 		t.Fatalf("preset must fill the editor: got %d runes, want %d", len([]rune(got)), len([]rune(want)))
 	}
-	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir()}.Read(rec.ID)
+	text, err := app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store}.Read(rec.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

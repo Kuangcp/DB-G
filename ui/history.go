@@ -10,21 +10,35 @@ import (
 	"db-g/app"
 )
 
-// historyPanel 渲染 SQL 历史面板：最近 200 条，可插入光标或复制。
+// historyPanel 渲染 SQL 历史面板：当前数据源最近 100 条，可插入光标或复制。
+// 完整记录在面板标题显示的 <connectionID>.jsonl 里。
 func (a *root) historyPanel(c *ui.Context) {
 	if !a.historyOpen {
 		return
 	}
+	connID := a.activeConnID()
 	entries := []app.HistoryEntry(nil)
 	path := ""
-	if a.history != nil {
-		entries = a.history.List(200)
-		path = a.history.Path()
+	if a.history != nil && connID != "" {
+		entries = a.history.List(connID, 100)
+		path = a.history.Path(connID)
 	}
 	ui.Modal(c, &a.historyOpen, func() {
-		ui.Text(c, fmt.Sprintf("SQL 历史（%d 条 · %s）", len(entries), path)).Bold().SingleLine()
-		if len(entries) == 0 {
-			ui.Text(c, "还没有执行记录").TextColor(c.Theme().TextMuted)
+		title := "SQL 历史"
+		if connID != "" {
+			title = fmt.Sprintf("SQL 历史 · %s（最近 %d 条）", a.activeConnName(), len(entries))
+		}
+		ui.Text(c, title).Bold().SingleLine()
+		if connID == "" {
+			ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
+		} else {
+			ui.Text(c, path).FontSize(11).TextColor(c.Theme().TextMuted).
+				SingleLine().Tooltip("完整历史（最多保留 5000 条）在这个文件里")
+			ui.Text(c, "面板只展示最近 100 条；全部记录直接打开上面的文件查看").
+				FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+		}
+		if len(entries) == 0 && connID != "" {
+			ui.Text(c, "这个数据源还没有执行记录").TextColor(c.Theme().TextMuted)
 		}
 		ui.Scroll(c).Height(360).Children(func() {
 			for _, e := range entries {

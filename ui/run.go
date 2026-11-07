@@ -233,7 +233,6 @@ func (a *root) runSQL() {
 		return
 	}
 	// 有激活控制台时：先落盘，并确保连着它的数据源；没有控制台时沿用临时缓冲执行（不落盘）。
-	app.LogInfo("exec", "start", "conn", a.activeConnName(), "console", a.activeConsole, "sql", text)
 	if a.activeConsole != "" {
 		if err := a.flushActive(); err != nil {
 			a.externalFlushFailed(err)
@@ -263,6 +262,16 @@ func (a *root) execRanges(text string) []app.SQLStatement {
 		return []app.SQLStatement{st}
 	}
 	return nil
+}
+
+// truncateLogSQL 把日志里的 SQL 压到 200 个字符以内，截断时补 "..." 以示省略。
+func truncateLogSQL(sql string) string {
+	sql = strings.TrimSpace(sql)
+	r := []rune(sql)
+	if len(r) <= 200 {
+		return sql
+	}
+	return string(r[:200]) + "..."
 }
 
 // textSlice 安全截取 [start,end)：偏移可能来自已被编辑的正文，越界时返回空串。
@@ -314,6 +323,7 @@ func (a *root) startStmt(i int) {
 	a.stmtRuns[i].started = true
 	a.activeStmt = i
 	sql := a.stmtRuns[i].sql
+	app.LogInfo("exec", "start", "conn", a.activeConnName(), "console", a.activeConsole, "sql", truncateLogSQL(sql))
 	a.lastExecSQL = sql
 	rt := a.runtimeFor(a.stmtRuns[i].runtimeID)
 	rt.SetOnDone(a.stmtDone(i))

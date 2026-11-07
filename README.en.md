@@ -72,7 +72,7 @@ Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` o
       support object DDL viewing; PostgreSQL / MySQL / ClickHouse support multiple schemas;
       PostgreSQL supports writes, ClickHouse is read-only
 - [x] Consoles + workspaces: multiple named consoles per data source, each backed by
-      `~/.config/db-g/consoles/<id>.sql`; tab bar / workspace switching, debounced auto-save,
+      `~/.config/db-g/consoles/<connectionID>-<consoleID>.sql`; tab bar / workspace switching, debounced auto-save,
       Ctrl+S to save immediately, restore workspaces with console text and cursor after restart.
       **Closing a tab (×) only removes it from the current workspace, the file stays**; the right-click
       "Delete…" item removes the metadata and .sql. The sidebar lists every console of each data source
@@ -96,7 +96,8 @@ Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` o
       **Pin results**: the pin button keeps a query result as the leftmost result tab (query results only,
       up to 10); pinned tabs stay on the left across new runs while new results append to the right; each console
       keeps its own pins, which are in-memory and disappear on restart;
-      **SQL history** (`history.jsonl`, 5MB rotation, panel can insert at the cursor / copy);
+      **SQL history** (one `history/<connectionID>.jsonl` per data source, capped at 5000 entries with a lazy
+      6000→5000 trim; the panel shows the latest 100 with insert/copy, the full file is linked in its title);
       **object tree**: double-click to preview data, right-click for DDL (read-only SQL editor: conservative
       formatting + syntax highlighting + copy the mouse selection; `Ctrl+Q` also opens it for the selected object);
       **conservative SQL formatting** (only whitespace and keyword case, undoable)
@@ -122,7 +123,7 @@ Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` o
       sidebar status dots: grey = not connected, green = connected, red = open failed (hover for the reason).
 - [x] Logging/diagnostics (P0): `~/.config/db-g/logs/YYYY-MM/YYYY-MM-DD_N.log`
       (plain text: time, level, tag, message, key=value; one file per launch, `0600`);
-      records startup / connect / execute (duration, rows, full SQL) / console / completion load failures / panic
+      records startup / connect / execute (SQL truncated to 200 characters, no results) / console / completion load failures / panic
       stacks; Settings can open the log directory. DSNs and password fields are redacted automatically.
 - [x] Shortcuts: one action table with rebinding (`keymap.json`; click "Record" in Settings);
       `Ctrl+Enter` run, `Ctrl+S` save, `Ctrl+C` copy (text in the editor, cell in the result grid),

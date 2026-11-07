@@ -806,7 +806,7 @@ func (s *ConnStore) CreateConsole(connID, name string) (ConsoleRecord, error) {
 		ID:           id,
 		ConnectionID: connID,
 		Name:         name,
-		FilePath:     filepath.Join(s.ConsolesDir(), id+".sql"),
+		FilePath:     filepath.Join(s.ConsolesDir(), connID+"-"+id+".sql"),
 		SortOrder:    order,
 		CreatedAt:    now,
 		UpdatedAt:    now,

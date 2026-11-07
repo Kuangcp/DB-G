@@ -75,8 +75,23 @@ func TestExecLogsSQLAndDuration(t *testing.T) {
 	if !strings.Contains(logs, `[exec]`) || !strings.Contains(logs, "SELECT 1 AS x") {
 		t.Fatalf("exec log missing sql/tag: %s", logs)
 	}
-	if !strings.Contains(logs, "dur_ms") {
-		t.Fatalf("exec log missing duration: %s", logs)
+	// 成功执行不再打印结果统计（rows/affected/truncated）。
+	for _, bad := range []string{"rows=", "affected=", "truncated="} {
+		if strings.Contains(logs, bad) {
+			t.Fatalf("exec log must not contain query results (%s): %s", bad, logs)
+		}
+	}
+}
+
+func TestTruncateLogSQL(t *testing.T) {
+	short := "SELECT 1"
+	if got := truncateLogSQL(short); got != short {
+		t.Fatalf("short sql changed: %q", got)
+	}
+	long := strings.Repeat("字", 250)
+	got := truncateLogSQL(long)
+	if !strings.HasSuffix(got, "...") || len([]rune(strings.TrimSuffix(got, "..."))) != 200 {
+		t.Fatalf("truncate: %d runes, suffix ok=%v", len([]rune(got)), strings.HasSuffix(got, "..."))
 	}
 }
 

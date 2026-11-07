@@ -152,3 +152,40 @@ func TestExternalFlushRefusesOverwrite(t *testing.T) {
 		t.Fatalf("force flush: %q", data)
 	}
 }
+
+// 旧命名 <id>.sql 启动时迁移为 <connectionID>-<id>.sql。
+func TestConsoleFilesMigrateOldNames(t *testing.T) {
+	dir := t.TempDir()
+	store := LoadStore(filepath.Join(dir, "connections.json"))
+	db := filepath.Join(dir, "x.db")
+	if err := os.WriteFile(db, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Add(ConnProfile{Name: "p", Kind: "sqlite", Path: db}); err != nil {
+		t.Fatal(err)
+	}
+	p := store.List()[0]
+	rec, err := store.CreateConsole(p.ID, "c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := ConsoleFiles{Dir: store.ConsolesDir(), Store: store}
+	want := filepath.Join(store.ConsolesDir(), p.ID+"-"+rec.ID+".sql")
+	if got := files.Path(rec.ID); got != want {
+		t.Fatalf("path: %q, want %q", got, want)
+	}
+	old := filepath.Join(store.ConsolesDir(), rec.ID+".sql")
+	if err := os.MkdirAll(store.ConsolesDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(old, []byte("SELECT old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files.Migrate()
+	if _, err := os.Stat(old); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("旧文件应被改名: %v", err)
+	}
+	if data, err := os.ReadFile(want); err != nil || string(data) != "SELECT old" {
+		t.Fatalf("迁移内容: %q %v", data, err)
+	}
+}

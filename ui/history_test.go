@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,16 +11,16 @@ import (
 
 func TestExecRecordsHistory(t *testing.T) {
 	a := openForSelection(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "history.jsonl"))
+	a.history = app.OpenHistory(t.TempDir())
 	a.setActiveText("SELECT 1 AS x")
 	a.setSelection(0, len([]rune("SELECT 1 AS x")))
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
 	a.runSQL()
 	pollResult(t, a, tt)
-	deadline := len(a.history.List(1))
+	deadline := len(a.history.List(a.activeConnID(), 1))
 	_ = deadline
-	list := a.history.List(10)
+	list := a.history.List(a.activeConnID(), 10)
 	if len(list) != 1 {
 		t.Fatalf("history entries: %d", len(list))
 	}
@@ -31,13 +30,12 @@ func TestExecRecordsHistory(t *testing.T) {
 }
 
 func TestHistoryPanelInsertAtCursor(t *testing.T) {
-	a := newConsoleRoot(t)
-	a.history = app.OpenHistory(filepath.Join(t.TempDir(), "history.jsonl"))
-	if err := a.history.Add(app.HistoryEntry{SQL: "SELECT 42 AS answer", OK: true}); err != nil {
+	a, tt := focusEditor(t, "")
+	a.history = app.OpenHistory(t.TempDir())
+	if err := a.history.Add(app.HistoryEntry{ConnID: a.activeConnID(), SQL: "SELECT 42 AS answer", OK: true}); err != nil {
 		t.Fatal(err)
 	}
 	a.historyOpen = true
-	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
 	if !tt.HasText("SQL 历史") {
 		t.Fatalf("panel missing: %q", tt.Texts())

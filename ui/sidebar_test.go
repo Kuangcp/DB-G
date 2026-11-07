@@ -599,7 +599,7 @@ func TestRemoveConnDeletesConsoleFiles(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
 	rec, _ := a.consoleMgr().Create(prof.ID, "c")
-	files := app.ConsoleFiles{Dir: a.store.ConsolesDir()}
+	files := app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store}
 	if err := files.Write(rec.ID, "SELECT 1"); err != nil {
 		t.Fatal(err)
 	}
@@ -652,7 +652,7 @@ func TestSidebarDeleteConsoleFlow(t *testing.T) {
 	prof := seedConsoleConn(t, a, "本地")
 	m := a.consoleMgr()
 	rec, _ := m.Create(prof.ID, "要删的")
-	files := app.ConsoleFiles{Dir: a.store.ConsolesDir()}
+	files := app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store}
 	if err := files.Write(rec.ID, "SELECT 1"); err != nil {
 		t.Fatal(err)
 	}
