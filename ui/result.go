@@ -734,8 +734,44 @@ func (a *root) pinnedResultRow(c *ui.Context, p pinnedEntry) {
 		ui.Textf(c, " — %d 行受影响", p.result.Affected).TextColor(t.TextMuted).FontSize(12)
 		return
 	}
-	a.resultTable(c, p.result)
+	// 钉住的表格使用独立 LocalListState，避免与当前活跃表的 &a.resultState 冲突导致
+	// mygo panic "a ListState shown by two Lists"。钉住结果是只读的，不需要选区/编辑交互。
+	localState := ui.ListState{}
+	a.renderStaticResultTable(c, p.result, &localState)
 }
+
+// renderStaticResultTable 渲染只读结果表：构建列定义后用本地 LocalListState 展示。
+// 不绑定任何交互（Selection/CellMenu/editPlan），纯展示用途。
+func (a *root) renderStaticResultTable(c *ui.Context, r *engine.QueryResult, st *ui.ListState) {
+	widths := a.columnWidths(r)
+	cols := make([]ui.TableColumn, 0, len(r.Columns)+1)
+	cols = append(cols, ui.TableColumn{Title: "#", ID: "#", Width: rowHeaderWidth, Fixed: true, Align: ui.End})
+	for i, name := range r.Columns {
+		cols = append(cols, ui.TableColumn{
+			Title:    name,
+			ID:       name,
+			Width:    widths[i],
+			MinWidth: minColumnWidth,
+			MaxWidth: maxColumnWidth,
+		})
+	}
+	numRows := len(r.Rows) + 1 // +1 保留空行位置
+	ui.Table(c, st, cols, numRows, func(row, col int) {
+		if row < 0 || row >= len(r.Rows) {
+			return
+		}
+		if col == 0 {
+			ui.Text(c, strconv.Itoa(row+1)).TextColor(c.Theme().TextMuted).SingleLine()
+			return
+		}
+		dataCol := col - 1
+		if dataCol >= len(r.Rows[row]) {
+			return
+		}
+		ui.Text(c, cellText(r.Rows[row][dataCol])).SingleLine()
+	}).Grow(1)
+}
+
 
 func cellText(v any) string {
 	switch t := v.(type) {
