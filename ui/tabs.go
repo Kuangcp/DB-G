@@ -264,6 +264,8 @@ func (a *root) afterActiveRemoved() {
 
 // clearEditorConsole 进入「无激活控制台」空态。
 func (a *root) clearEditorConsole() {
+	a.saveStmtRuns(a.activeConsole)
+	a.stmtRuns, a.activeStmt = nil, 0
 	a.activeConsole = ""
 	a.code.Clear()
 	a.lastCaret = [2]int{}
@@ -339,6 +341,7 @@ func (a *root) tabModal(c *ui.Context) {
 				app.LogInfo("console", "delete", "id", a.modalTarget)
 				delete(a.consoles, a.modalTarget)
 				delete(a.lastVer, a.modalTarget)
+				a.dropStmtRunsOf([]string{a.modalTarget})
 				a.code.Drop(a.modalTarget)
 				a.modalKind = ""
 				if wasActive {

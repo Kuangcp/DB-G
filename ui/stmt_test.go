@@ -59,7 +59,7 @@ func TestMultiStatementTabsAndSequentialRun(t *testing.T) {
 			t.Fatalf("statement %d result: %+v", i+1, rt.Result())
 		}
 	}
-	if !tt.HasText("语句 1 · 成功") || !tt.HasText("语句 2 · 成功") {
+	if !tt.HasText("结果 1 · 成功") || !tt.HasText("结果 2 · 成功") {
 		t.Fatalf("result tabs missing: %q", tt.Texts())
 	}
 }
@@ -80,7 +80,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	if a.stmtRuns[1].started || a.stmtRuns[2].started {
 		t.Fatal("statements after a failure must not run")
 	}
-	if !tt.HasText("语句 2 · 未执行") {
+	if !tt.HasText("结果 2 · 未执行") {
 		t.Fatalf("skipped tab missing: %q", tt.Texts())
 	}
 }

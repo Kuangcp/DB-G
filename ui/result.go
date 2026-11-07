@@ -112,11 +112,9 @@ func blockCSV(r *engine.QueryResult, rows, cols []int, header bool) string {
 
 func (a *root) resultPane(c *ui.Context) {
 	ui.Column(c).Fill().Gap(6).Children(func() {
-		if len(a.stmtRuns) > 1 {
+		// 多语句或存在钉住结果时显示结果 tab：pinned 在左，新结果在右。
+		if len(a.stmtRuns) > 1 || a.hasPinned() {
 			a.stmtTabs(c)
-		}
-		for _, p := range a.pinnedResults {
-			a.pinnedResultRow(c, p)
 		}
 		switch {
 		case a.currentRuntime().Running():
@@ -162,31 +160,54 @@ const (
 	cellPad        = 24  // 单元格左右内边距
 )
 
-// stmtTabs 是多语句执行的结果 Tab（语句 N · 状态）；点击切换展示。
+// stmtTabs 是结果区的 Tab 条（结果 N · 状态）：pinned 固定在最左，新执行追加到右侧。
+// 点击切换当前展示的结果；钉住的结果带图钉标记（对照 db-k 的 ResultChip）。
 func (a *root) stmtTabs(c *ui.Context) {
-	ui.Row(c).Gap(6).Children(func() {
-		for i, run := range a.stmtRuns {
-			rt := a.runtimeFor(run.runtimeID)
-			label := fmt.Sprintf("语句 %d", i+1)
-			switch {
-			case !run.started:
-				label += " · 未执行"
-			case rt.Running():
-				label += " · 执行中"
-			case rt.Err() != "":
-				label += " · 失败"
-			default:
-				label += " · 成功"
+	t := c.Theme()
+	ui.ScrollHorizontal(c).Children(func() {
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+			for i := range a.stmtRuns {
+				run := a.stmtRuns[i]
+				rt := a.runtimeFor(run.runtimeID)
+				active := i == a.activeStmt
+				label := fmt.Sprintf("结果 %d", run.tabNo)
+				suffix := " · 成功"
+				switch {
+				case !run.started:
+					suffix = " · 未执行"
+				case rt.Running():
+					suffix = " · 执行中"
+				case rt.Err() != "":
+					suffix = " · 失败"
+				}
+				btn := ui.ButtonBase(c).Label(label+suffix).Gap(4).
+					Padding(2, 7).Radius(t.Space(1.25))
+				if active {
+					btn.Background(t.Accent.Alpha(0.14))
+				} else if btn.Hovered() {
+					btn.Background(t.SurfaceHover)
+				}
+				btn.Children(func() {
+					if run.pinned {
+						ui.Icon(c, iconPin).FontSize(12).TextColor(t.Accent)
+					}
+					txt := ui.Text(c, label).FontSize(12)
+					switch {
+					case active:
+						txt.Bold().TextColor(t.Accent)
+					case rt.Err() != "":
+						txt.TextColor(t.Danger)
+					default:
+						txt.TextColor(t.TextMuted)
+					}
+					ui.Text(c, suffix).FontSize(11).TextColor(t.TextMuted)
+				})
+				if btn.Clicked() {
+					a.activeStmt = i
+					a.refreshStmtBackgrounds()
+				}
 			}
-			btn := ui.Button(c, label)
-			if i == a.activeStmt {
-				btn.Bold()
-			}
-			if btn.Clicked() {
-				a.activeStmt = i
-				a.refreshStmtBackgrounds()
-			}
-		}
+		})
 	})
 }
 
@@ -708,70 +729,19 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	}
 }
 
-// pinButton 显示钉住按钮。
+// pinButton 显示钉住按钮：当前结果已钉住时图标上强调色，再点一次取消。
 func (a *root) pinButton(c *ui.Context) {
-	if iconButton(c, iconPin, "钉住结果", ui.Transparent).Clicked() {
+	pinned := len(a.stmtRuns) > 0 && a.activeStmt < len(a.stmtRuns) && a.stmtRuns[a.activeStmt].pinned
+	label := "钉住结果"
+	col := ui.Transparent
+	if pinned {
+		label = "取消钉住"
+		col = c.Theme().Accent
+	}
+	if iconButton(c, iconPin, label, col).Clicked() {
 		a.togglePin()
 	}
 }
-
-// pinnedResultRow 渲染一个钉住的结果：显示 SQL 文本和结果表，带取消钉住按钮。
-func (a *root) pinnedResultRow(c *ui.Context, p pinnedEntry) {
-	t := c.Theme()
-	// SQL 来源提示行
-	ui.Row(c).Gap(4).AlignItems(ui.Center).Padding(2, 4).Background(t.SurfaceHover).Radius(t.Space(1)).Children(func() {
-		ui.Text(c, cutRunes(p.sql, 200)).FontSize(11.5).TextColor(t.TextMuted).FillWidth().SingleLine()
-		if iconButtonPlain(c, iconPin, "取消钉住", t.Accent).Clicked() {
-			for i, q := range a.pinnedResults {
-				if q.runtimeID == p.runtimeID {
-					a.pinnedResults = append(a.pinnedResults[:i], a.pinnedResults[i+1:]...)
-					break
-				}
-			}
-		}
-	})
-	if !p.result.IsQuery {
-		ui.Textf(c, " — %d 行受影响", p.result.Affected).TextColor(t.TextMuted).FontSize(12)
-		return
-	}
-	// 钉住的表格使用独立 LocalListState，避免与当前活跃表的 &a.resultState 冲突导致
-	// mygo panic "a ListState shown by two Lists"。钉住结果是只读的，不需要选区/编辑交互。
-	localState := ui.ListState{}
-	a.renderStaticResultTable(c, p.result, &localState)
-}
-
-// renderStaticResultTable 渲染只读结果表：构建列定义后用本地 LocalListState 展示。
-// 不绑定任何交互（Selection/CellMenu/editPlan），纯展示用途。
-func (a *root) renderStaticResultTable(c *ui.Context, r *engine.QueryResult, st *ui.ListState) {
-	widths := a.columnWidths(r)
-	cols := make([]ui.TableColumn, 0, len(r.Columns)+1)
-	cols = append(cols, ui.TableColumn{Title: "#", ID: "#", Width: rowHeaderWidth, Fixed: true, Align: ui.End})
-	for i, name := range r.Columns {
-		cols = append(cols, ui.TableColumn{
-			Title:    name,
-			ID:       name,
-			Width:    widths[i],
-			MinWidth: minColumnWidth,
-			MaxWidth: maxColumnWidth,
-		})
-	}
-	numRows := len(r.Rows) + 1 // +1 保留空行位置
-	ui.Table(c, st, cols, numRows, func(row, col int) {
-		if row < 0 || row >= len(r.Rows) {
-			return
-		}
-		if col == 0 {
-			ui.Text(c, strconv.Itoa(row+1)).TextColor(c.Theme().TextMuted).SingleLine()
-			return
-		}
-		dataCol := col - 1
-		if dataCol >= len(r.Rows[row]) {
-			return
-		}
-		ui.Text(c, cellText(r.Rows[row][dataCol])).SingleLine()
-	}).Grow(1)
-}
-
 
 func cellText(v any) string {
 	switch t := v.(type) {

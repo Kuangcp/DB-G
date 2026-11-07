@@ -97,8 +97,9 @@ type root struct {
 	pendingSwitchWS     string
 	lastVer             map[string]uint64
 	lastCaret           [2]int
-	stmtRuns            []stmtRun     // 本次执行的语句（多语句时结果区按它分 Tab）
-	pinnedResults       []pinnedEntry // 钉住的结果（runtimeID 唯一键，不随新查询清空）
+	stmtRuns            []stmtRun              // 当前控制台的结果 tab：pinned 固定在最左，新执行追加到右侧
+	nextTabNo           int                    // 结果编号分配器（结果 N：pin/重排都不改名）
+	runsByConsole       map[string]consoleRuns // consoleID → 该控制台最近一次的结果 tab（对照 db-k 的 runSlots）
 	activeStmt          int
 	lastExecSQL         string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
 	resView             *resultView
@@ -317,6 +318,16 @@ func (a *root) currentRuntime() *app.Console {
 	return a.runtimeFor(a.activeConsole)
 }
 
+// hasPinned 报告本次执行里是否有钉住的结果 tab。
+func (a *root) hasPinned() bool {
+	for _, run := range a.stmtRuns {
+		if run.pinned {
+			return true
+		}
+	}
+	return false
+}
+
 // refreshStmtBackgrounds 按语句范围与状态刷新编辑器的行底色（当前/成功/失败）。
 func (a *root) refreshStmtBackgrounds() {
 	st := a.code.state
@@ -327,7 +338,8 @@ func (a *root) refreshStmtBackgrounds() {
 	buf := st.Buffer
 	out := make([]myeditor.LineBackground, 0, len(a.stmtRuns))
 	for i, run := range a.stmtRuns {
-		if !run.started {
+		// 钉住的结果来自旧正文，行号已经失效，不画 gutter 底色。
+		if run.pinned || !run.started {
 			continue
 		}
 		first := buf.Pos(run.stmt.Start).Line
@@ -370,7 +382,8 @@ func (a *root) activateConsole(id string) bool {
 	}
 	// 目标控制台：同样以磁盘为准（它上次离开时已落盘）。
 	m.DetachTextSource(rec.ID)
-	a.stmtRuns, a.activeStmt = nil, 0
+	a.saveStmtRuns(prev)
+	a.loadStmtRuns(rec.ID)
 	text, _ := m.Text(rec.ID)
 	a.code.SetActive(rec.ID, text)
 	start, end := m.Caret(rec.ID)

@@ -28,6 +28,7 @@ const icons = {
   iconCopy: "copy",
   iconEye: "eye",
   iconChevronDown: "chevron-down",
+  iconPin: "pin",
   iconSquarePen: "square-pen",
   iconPlus: "plus",
   iconMinus: "minus",
