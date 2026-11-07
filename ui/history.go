@@ -63,7 +63,7 @@ func (a *root) historyRow(c *ui.Context, e app.HistoryEntry) {
 	if r := []rune(summary); len(r) > 80 {
 		summary = string(r[:80]) + "…"
 	}
-	ui.Row(c).Gap(8).Children(func() {
+	ui.Row(c).Gap(8).PaddingEnd(8).Children(func() {
 		ui.Text(c, status).FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Text(c, when).FontSize(12).TextColor(c.Theme().TextMuted)
 		if e.ConnName != "" {
