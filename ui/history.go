@@ -71,11 +71,11 @@ func (a *root) historyRow(c *ui.Context, e app.HistoryEntry) {
 		}
 		ui.Text(c, fmt.Sprintf("%dms", e.DurMS)).FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Text(c, summary).FontSize(12).SingleLine().Grow(1)
-		if ui.Button(c, "插入").Clicked() {
+		if iconButtonPlain(c, iconInsert, "插入到光标", ui.Transparent).Clicked() {
 			a.code.Insert(e.SQL)
 			a.historyOpen = false
 		}
-		if ui.Button(c, "复制").Clicked() {
+		if iconButtonPlain(c, iconCopy, "复制 SQL", ui.Transparent).Clicked() {
 			c.WriteClipboard(e.SQL)
 		}
 	})

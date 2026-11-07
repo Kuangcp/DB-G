@@ -40,7 +40,7 @@ func TestHistoryPanelInsertAtCursor(t *testing.T) {
 	if !tt.HasText("SQL 历史") {
 		t.Fatalf("panel missing: %q", tt.Texts())
 	}
-	if err := tt.Click("插入"); err != nil {
+	if err := tt.Click("插入到光标"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

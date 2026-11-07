@@ -32,6 +32,7 @@ const icons = {
   iconCheck: "check",
   iconDownload: "download",
   iconUpgrade: "circle-arrow-up",
+  iconInsert: "text-cursor-input",
   iconSquarePen: "square-pen",
   iconPlus: "plus",
   iconMinus: "minus",
