@@ -25,3 +25,18 @@
 • 项目引入了 24h TTL 的本地 JSON 缓存来加速对象树展开。
 • 缺陷：24h 的过期时间对于频繁变更结构（如正在进行发布、加字段、建索引）的开发环境来说太长了。虽然提供了“手动重载”，但如果用户依赖自动补全（补全缓存 TTL 5分钟），而表结构已经发生变化，会导致生成的 SQL 频繁报错。元数据缺少一种轻量级的“检测变更（如检测 PostgreSQL 的系统表修改时间）”的主动感知机制。
 
+- 升级检测
+    - 检测Github的 https://github.com/Kuangcp/DB-G release吧。如果有新发布的release 就下载下来（本地version文件对比）
+
+- 打包
+    - Linux 自动生成 desktop 到 ~/.local/share/applications 图标到 ~/.local/share/icons 下。
+        - AppImage 可以通过 AppImageLauncher 完成
+        - fpm (Effing Package Management) 手动制作 deb rpm
+    - Windows
+        - Inno Setup
+
+加个逻辑如果是linux 并且 ~/.config/db-g/bin/db-g 文件不存在 就在主窗口右上角设置icon的右边 加一个升级的icon 点击就弹窗提示是否安装到应用列表 ，然后确认的话就把当前二进制文件 复制到 ~/.config/db-g/bin/db-g 并且将当前软件的版本写入到~/.config/db-g/version（用于判断 当前运行的 是更新的版本 才展示安装icon了，当然version文件不存在也展示安装icon），并且生成合适的 desktop 到 ~/.local/share/applications 图标到 ~/.local/share/icons 下。 这样就能自动的将软件安装了。 version文件是一个ini格式文件 存俩字段纯数值的版本号（1.0.0 转换成 10000 ， 1.1.1 则是10101 2.5.8 则是 20508），展示的版本号
+
+
+
+
