@@ -134,7 +134,10 @@ func TestCommitThroughPreviewModal(t *testing.T) {
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
 	tt.Frame()
 	a.setCellEdit(0, 1, "alice3")
-	a.commitEdits()
+	tt.Frame()
+	if err := tt.Click("提交 (1)"); err != nil {
+		t.Fatal(err)
+	}
 	tt.Frame()
 	if !a.previewOpen || !tt.HasText("提交 1 条改动") {
 		t.Fatalf("preview missing: %q", tt.Texts())

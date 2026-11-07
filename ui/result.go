@@ -171,16 +171,16 @@ func (a *root) stmtTabs(c *ui.Context) {
 				rt := a.runtimeFor(run.runtimeID)
 				active := i == a.activeStmt
 				label := fmt.Sprintf("结果 %d", run.tabNo)
-				suffix := " · 成功"
+				state := "成功"
 				switch {
 				case !run.started:
-					suffix = " · 未执行"
+					state = "未执行"
 				case rt.Running():
-					suffix = " · 执行中"
+					state = "执行中"
 				case rt.Err() != "":
-					suffix = " · 失败"
+					state = "失败"
 				}
-				btn := ui.ButtonBase(c).Label(label+suffix).Gap(4).
+				btn := ui.ButtonBase(c).Label(label+" · "+state).Gap(4).
 					Padding(2, 7).Radius(t.Space(1.25))
 				if active {
 					btn.Background(t.Accent.Alpha(0.14))
@@ -200,7 +200,18 @@ func (a *root) stmtTabs(c *ui.Context) {
 					default:
 						txt.TextColor(t.TextMuted)
 					}
-					ui.Text(c, suffix).FontSize(11).TextColor(t.TextMuted)
+					// 结束时用状态点代替文案：绿=成功，红=失败；未执行/执行中仍显示文字。
+					switch state {
+					case "未执行", "执行中":
+						ui.Text(c, "· "+state).FontSize(11).TextColor(t.TextMuted)
+					case "失败":
+						dot := ui.Text(c, "●").FontSize(10).TextColor(t.Danger)
+						if err := rt.Err(); err != "" {
+							dot.Tooltip(err)
+						}
+					default:
+						ui.Text(c, "●").FontSize(10).TextColor(t.Success)
+					}
 				})
 				if btn.Clicked() {
 					a.activeStmt = i
@@ -531,8 +542,9 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			}
 			a.editToolbar(c, r)
 		}).Label("结果操作")
+		ui.Divider(c)
 		a.pinButton(c)
-		ui.MenuButton(c, "导出…", func(m *ui.Menu) {
+		iconButtonPlain(c, iconDownload, "导出…", ui.Transparent).Menu(func(m *ui.Menu) {
 			if m.Item("当前结果 CSV").Chosen() {
 				a.pickExport("csv", false)
 			}
@@ -559,7 +571,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if n := len(a.resView.filters); n > 0 {
 			ui.Text(c, fmt.Sprintf("筛选 %d 列", n)).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
-		ui.Text(c, "右键表头排序/筛选；右键单元格/选区复制与导出").FontSize(12).TextColor(c.Theme().TextMuted)
+		//ui.Text(c, "右键表头排序/筛选；右键单元格/选区复制与导出").FontSize(12).TextColor(c.Theme().TextMuted)
 	})
 
 	a.resultState.HeaderMenu = func(m *ui.Menu, col int) {
@@ -738,7 +750,7 @@ func (a *root) pinButton(c *ui.Context) {
 		label = "取消钉住"
 		col = c.Theme().Accent
 	}
-	if iconButton(c, iconPin, label, col).Clicked() {
+	if iconButtonPlain(c, iconPin, label, col).Clicked() {
 		a.togglePin()
 	}
 }

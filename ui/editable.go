@@ -355,7 +355,11 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 		if n > 0 {
 			label = fmt.Sprintf("提交 (%d)", n)
 		}
-		if ui.PrimaryButton(c, label).Disabled(n == 0 || a.editBusy).Clicked() {
+		col := ui.Transparent
+		if n > 0 && !a.editBusy {
+			col = c.Theme().Accent
+		}
+		if iconButton(c, iconCheck, label, col).Disabled(n == 0 || a.editBusy).Clicked() {
 			a.commitEdits()
 		}
 	} else if a.readonlyReason != "" {

@@ -38,7 +38,8 @@ func TestMultiStatementTabsAndSequentialRun(t *testing.T) {
 	a := openForSelection(t)
 	a.setActiveText("SELECT 1 AS a; SELECT 2 AS b")
 	a.setSelection(0, len([]rune("SELECT 1 AS a; SELECT 2 AS b")))
-	tt := ui.NewTester(rootView(a), 1400, 800)
+	var th *ui.Theme
+	tt := ui.NewTester(func(c *ui.Context) { th = c.Theme(); rootView(a)(c) }, 1400, 800)
 	tt.Frame()
 	a.runSQL()
 	waitStmts(t, a, tt, 2)
@@ -59,8 +60,15 @@ func TestMultiStatementTabsAndSequentialRun(t *testing.T) {
 			t.Fatalf("statement %d result: %+v", i+1, rt.Result())
 		}
 	}
-	if !tt.HasText("结果 1 · 成功") || !tt.HasText("结果 2 · 成功") {
-		t.Fatalf("result tabs missing: %q", tt.Texts())
+	img := tt.Image()
+	for _, name := range []string{"结果 1 · 成功", "结果 2 · 成功"} {
+		r, ok := tt.Find(name)
+		if !ok {
+			t.Fatalf("result tab %q missing: %q", name, tt.Texts())
+		}
+		if !rectHasColor(img, r, th.Success) {
+			t.Fatalf("tab %q must show a green status dot", name)
+		}
 	}
 }
 
@@ -68,7 +76,8 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	a := openForSelection(t)
 	a.setActiveText("SELECT * FROM nope; SELECT 2 AS b; SELECT 3 AS c")
 	a.setSelection(0, len([]rune("SELECT * FROM nope; SELECT 2 AS b; SELECT 3 AS c")))
-	tt := ui.NewTester(rootView(a), 1400, 800)
+	var th *ui.Theme
+	tt := ui.NewTester(func(c *ui.Context) { th = c.Theme(); rootView(a)(c) }, 1400, 800)
 	tt.Frame()
 	a.runSQL()
 	waitStmts(t, a, tt, 1) // 第一条失败即停，只需等它结束
@@ -82,6 +91,11 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	}
 	if !tt.HasText("结果 2 · 未执行") {
 		t.Fatalf("skipped tab missing: %q", tt.Texts())
+	}
+	if r, ok := tt.Find("结果 1 · 失败"); !ok {
+		t.Fatalf("failed tab missing: %q", tt.Texts())
+	} else if !rectHasColor(tt.Image(), r, th.Danger) {
+		t.Fatal("failed tab must show a red status dot")
 	}
 }
 

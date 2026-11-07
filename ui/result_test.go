@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -240,6 +241,23 @@ func TestResultCopyRowInsertViaMenu(t *testing.T) {
 	got := tt.Clipboard()
 	if !strings.HasPrefix(got, `INSERT INTO "users" (`) || !strings.Contains(got, "'alice'") {
 		t.Fatalf("clipboard: %q", got)
+	}
+}
+
+func TestExportIconOpensMenu(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(resultWith([]string{"id"}, []any{int64(1)}), "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	r, ok := tt.Find("导出…")
+	if !ok {
+		t.Fatal("export icon button not found")
+	}
+	tt.Press(r.X+r.W/2, r.Y+r.H/2)
+	items := tt.Menu()
+	tt.Release(r.X+r.W/2, r.Y+r.H/2)
+	if !slices.Contains(items, "当前结果 CSV") || !slices.Contains(items, "全量 CSV（流式，重新执行查询）") {
+		t.Fatalf("export menu: %q", items)
 	}
 }
 
