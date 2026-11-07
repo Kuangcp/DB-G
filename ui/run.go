@@ -68,6 +68,18 @@ func (a *root) removeConn(id string) {
 			}
 		}
 	}
+	// 清理属于已删除连接的钉住结果。
+	pinnedMap := map[string]bool{}
+	for _, rec := range recs {
+		pinnedMap[rec.ID] = true
+	}
+	var cleaned []pinnedEntry
+	for _, p := range a.pinnedResults {
+		if !pinnedMap[p.runtimeID] && !pinnedMap[strings.TrimSuffix(p.runtimeID, "|pin")] {
+			cleaned = append(cleaned, p)
+		}
+	}
+	a.pinnedResults = cleaned
 }
 
 // stmtRun 是一次执行里的一条语句：范围、运行时 id、是否已开始。
@@ -75,6 +87,45 @@ type stmtRun struct {
 	stmt      app.SQLStatement
 	runtimeID string
 	started   bool
+}
+
+// pinnedEntry 是钉住的一个查询结果：保留供对比，不受新查询影响。
+type pinnedEntry struct {
+	runtimeID string // 唯一键（来自本次执行）
+	sql       string // 触发该结果的 SQL 文本
+	result    *engine.QueryResult
+}
+
+func (a *root) togglePin() {
+	rtID := a.currentRuntimeID()
+	r := a.runtimeFor(rtID)
+	if r == nil || r.Result() == nil {
+		return
+	}
+	result := r.Result()
+	sql := a.code.Text()
+	for i, p := range a.pinnedResults {
+		if p.runtimeID == rtID {
+			a.pinnedResults = append(a.pinnedResults[:i], a.pinnedResults[i+1:]...)
+			return
+		}
+	}
+	cp := *result
+	cp.Rows = copyRows(result.Rows)
+	a.pinnedResults = append(a.pinnedResults, pinnedEntry{
+		runtimeID: rtID,
+		sql:       sql,
+		result:    &cp,
+	})
+}
+
+func copyRows(rows [][]any) [][]any {
+	out := make([][]any, len(rows))
+	for i, row := range rows {
+		out[i] = make([]any, len(row))
+		copy(out[i], row)
+	}
+	return out
 }
 
 func (a *root) runSQL() {

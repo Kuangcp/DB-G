@@ -115,6 +115,9 @@ func (a *root) resultPane(c *ui.Context) {
 		if len(a.stmtRuns) > 1 {
 			a.stmtTabs(c)
 		}
+		for _, p := range a.pinnedResults {
+			a.pinnedResultRow(c, p)
+		}
 		switch {
 		case a.currentRuntime().Running():
 			ui.Row(c).Gap(8).Children(func() {
@@ -499,20 +502,15 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	insertRows := len(editSet.Inserts)
 	totalRows := len(displayRows) + insertRows
 
-	// 顶部操作条：复制/查看/取更多/编辑/导出。工具条里的按钮悬停前没有面孔。
+	// 顶部操作条：钉住/取更多/编辑。工具条里的按钮悬停前没有面孔。
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Toolbar(c, func() {
-			if iconButton(c, iconCopy, "复制选区或当前单元格 (Ctrl+C)", ui.Transparent).Clicked() {
-				a.copyCurrentCell(c, r)
-			}
-			if iconButton(c, iconEye, "查看完整内容", ui.Transparent).Clicked() {
-				a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
-			}
 			if iconButton(c, iconChevronDown, "取更多行", ui.Transparent).Disabled(!a.canFetchMore()).Clicked() {
 				a.fetchMore()
 			}
 			a.editToolbar(c, r)
 		}).Label("结果操作")
+		a.pinButton(c)
 		ui.MenuButton(c, "导出…", func(m *ui.Menu) {
 			if m.Item("当前结果 CSV").Chosen() {
 				a.pickExport("csv", false)
@@ -708,6 +706,35 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	if tbl.Submitted() {
 		a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
 	}
+}
+
+// pinButton 显示钉住按钮。
+func (a *root) pinButton(c *ui.Context) {
+	if iconButton(c, iconPin, "钉住结果", ui.Transparent).Clicked() {
+		a.togglePin()
+	}
+}
+
+// pinnedResultRow 渲染一个钉住的结果：显示 SQL 文本和结果表，带取消钉住按钮。
+func (a *root) pinnedResultRow(c *ui.Context, p pinnedEntry) {
+	t := c.Theme()
+	// SQL 来源提示行
+	ui.Row(c).Gap(4).AlignItems(ui.Center).Padding(2, 4).Background(t.SurfaceHover).Radius(t.Space(1)).Children(func() {
+		ui.Text(c, cutRunes(p.sql, 200)).FontSize(11.5).TextColor(t.TextMuted).FillWidth().SingleLine()
+		if iconButtonPlain(c, iconPin, "取消钉住", t.Accent).Clicked() {
+			for i, q := range a.pinnedResults {
+				if q.runtimeID == p.runtimeID {
+					a.pinnedResults = append(a.pinnedResults[:i], a.pinnedResults[i+1:]...)
+					break
+				}
+			}
+		}
+	})
+	if !p.result.IsQuery {
+		ui.Textf(c, " — %d 行受影响", p.result.Affected).TextColor(t.TextMuted).FontSize(12)
+		return
+	}
+	a.resultTable(c, p.result)
 }
 
 func cellText(v any) string {

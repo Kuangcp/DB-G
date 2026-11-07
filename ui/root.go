@@ -97,7 +97,8 @@ type root struct {
 	pendingSwitchWS     string
 	lastVer             map[string]uint64
 	lastCaret           [2]int
-	stmtRuns            []stmtRun // 本次执行的语句（多语句时结果区按它分 Tab）
+	stmtRuns            []stmtRun     // 本次执行的语句（多语句时结果区按它分 Tab）
+	pinnedResults       []pinnedEntry // 钉住的结果（runtimeID 唯一键，不随新查询清空）
 	activeStmt          int
 	lastExecSQL         string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
 	resView             *resultView
@@ -589,7 +590,6 @@ func (a *root) view(c *ui.Context) {
 					if iconButton(c, iconFormat, "格式化 SQL", ui.Transparent).Clicked() {
 						a.formatActive()
 					}
-					ui.Text(c, "Ctrl+F / Ctrl+Space").FontSize(12).TextColor(c.Theme().TextMuted)
 				}).Label("编辑器工具")
 
 				// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
