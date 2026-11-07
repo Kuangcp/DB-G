@@ -11,7 +11,7 @@
 对标 [db-k](https://github.com/Kuangcp/DB-K) 的数据库客户端（Go + mygo）。
 **已完成与后续规划见 [`Roadmap.md`](Roadmap.md)**
 
-![](/docs/snapshots/Snipaste_2026-11-07_12-55-39.webp)
+![](/docs/snapshots/Snipaste_2026-11-07_18-05-53.webp)
 
 ## 为什么选 DB-G
 

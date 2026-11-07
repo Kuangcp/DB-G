@@ -11,7 +11,7 @@
 A database client built with Go + [mygo](https://github.com/egoist/mygo), modeled after [db-k](https://github.com/Kuangcp/DB-K).
 **See [`Roadmap.md`](Roadmap.md) for what is done and what comes next.**
 
-![](/docs/snapshots/Snipaste_2026-11-07_12-55-39.webp)
+![](/docs/snapshots/Snipaste_2026-11-07_18-05-53.webp)
 
 ## Why DB-G
 
