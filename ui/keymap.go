@@ -60,6 +60,8 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Alt, ui.KeyD}}},
 	{ID: "viewDDL", Label: "查看所选对象的 DDL", Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyQ}}},
+	{ID: "completion", Label: "SQL 补全", Scope: scopeEditor,
+		Def: []chord{{ui.Ctrl, ui.KeySpace}}},
 }
 
 // applies 报告该动作在「编辑器是否聚焦」时是否生效。

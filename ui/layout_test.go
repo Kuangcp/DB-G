@@ -59,7 +59,7 @@ func TestAltDTogglesResults(t *testing.T) {
 	if !a.resultsHidden || tt.HasText("alice") {
 		t.Fatalf("Alt+D should hide the results: hidden=%v", a.resultsHidden)
 	}
-	if !tt.HasText("Ctrl+F / Ctrl+Space") {
+	if !tt.HasText("编辑器工具") {
 		t.Fatal("editor tools should stay")
 	}
 	tt.Key(ui.Alt, ui.KeyD)

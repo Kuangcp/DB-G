@@ -53,6 +53,10 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		if a.hasSelObj {
 			a.showDDL(a.selConn, a.selObj)
 		}
+	case "completion":
+		if a.code != nil {
+			a.code.state.ShowCompletions(-1, a.completionItemsAt(a.code.state.Cursor()))
+		}
 	}
 }
 
