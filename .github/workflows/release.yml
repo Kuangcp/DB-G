@@ -1,12 +1,16 @@
 # Builds, signs and publishes DB-G releases from tags.
 #
-#   git tag v1.0.1
-#   git push origin v1.0.1
+#   git tag v1.0.2
+#   git push origin v1.0.2
 #
 # The tag supplies the version; mygo.json is rewritten in the checkout only.
 # Every release needs a "## <version>" section in CHANGELOG.md, which the
 # update manifests carry as release notes. MYGO_UPDATER_PRIVATE_KEY signs
 # the update archives; installed apps verify them with updates.publicKey.
+#
+# Each platform builds in its own job and uploads a workflow artifact. A
+# single publish job then uploads every asset to the draft release, so the
+# two builds never race on the same asset names (install scripts, checksums).
 name: Release
 
 on:
@@ -55,7 +59,7 @@ jobs:
           fi
 
   build:
-    name: Build and upload (${{ matrix.target }})
+    name: Build (${{ matrix.target }})
     needs: draft-release
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -87,19 +91,18 @@ jobs:
           mv mygo.json.tmp mygo.json
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
           echo "MYGO_LDFLAGS=-X db-g/app.buildVersion=$version -X db-g/app.releaseBuild=1 -X db-g/app.updateBuild=1" >> "$GITHUB_ENV"
-      - name: Build, sign and upload
+      - name: Build and sign
         env:
           CGO_ENABLED: "0"
-          GH_TOKEN: ${{ github.token }}
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
-        run: go tool mygo build -platform "${{ matrix.target }}" -upload
+        run: go tool mygo build -platform "${{ matrix.target }}"
       - name: Verify the artifacts and the signed update manifest
         shell: bash
         run: |
           set -eu
           dir="dist/${{ matrix.dir }}"
-          manifest="$dir/update-${{ matrix.target }}.json"
-          archive="$dir/db-g-${RELEASE_VERSION}-${{ matrix.target }}.tar.gz"
+          manifest="$dir/update-${{ matrix.dir }}.json"
+          archive="$dir/db-g-${RELEASE_VERSION}-${{ matrix.dir }}.tar.gz"
           test -f "$manifest" || {
             echo "ERROR: missing $manifest — MYGO_UPDATER_PRIVATE_KEY is missing or does not match updates.publicKey"
             exit 1
@@ -109,18 +112,63 @@ jobs:
             '.version == $version and (.url | contains("/" + $tag + "/"))' \
             "$manifest" > /dev/null
           if [ "${{ matrix.target }}" = "linux/amd64" ]; then
+            test -f "$dir/db-g_${RELEASE_VERSION}_amd64.deb"
+            test -f "$dir/install.sh"
             got=$("$dir/db-g" -version)
             echo "$got"
             test "$got" = "db-g $RELEASE_VERSION"
+          else
+            test -n "$(find "$dir" -maxdepth 1 -name 'db-g-setup-*.exe' -print -quit)"
+            test -f "$dir/install.ps1"
           fi
+      - name: Upload the build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-g-${{ matrix.dir }}
+          path: |
+            dist/${{ matrix.dir }}
+            dist/SHA256SUMS
 
   publish:
-    name: Verify the assets and publish the release
+    name: Upload the assets and publish the release
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Check the assets and manifests
+      - name: Download both build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Verify the assets and manifests
+        shell: bash
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          for dir in linux-amd64 windows-amd64; do
+            manifest="artifacts/db-g-$dir/$dir/update-$dir.json"
+            test -f "$manifest"
+            jq -e --arg version "$version" --arg tag "$GITHUB_REF_NAME" \
+              '.version == $version and (.url | contains("/" + $tag + "/"))' \
+              "$manifest" > /dev/null
+          done
+          cat artifacts/db-g-*/SHA256SUMS | sort -u > artifacts/SHA256SUMS
+      - name: Upload the assets to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -eu
+          files=()
+          while IFS= read -r -d '' f; do
+            case "$(basename "$f")" in
+              db-g|db-g.exe) ;;
+              *.tar.gz|*.deb|db-g-setup-*.exe|install.sh|install.ps1|update-*.json|PKGBUILD)
+                files+=("$f") ;;
+            esac
+          done < <(find artifacts/db-g-* -type f -print0)
+          files+=(artifacts/SHA256SUMS)
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+      - name: Check the release assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -137,6 +185,7 @@ jobs:
             "install.sh"
             "install.ps1"
             "SHA256SUMS"
+            "PKGBUILD"
           )
           assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
           for name in "${expected[@]}"; do
@@ -146,12 +195,6 @@ jobs:
               exit 1
             fi
           done
-          mkdir -p "$RUNNER_TEMP/manifests"
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'update-*.json' --dir "$RUNNER_TEMP/manifests"
-          jq -e --arg version "$version" --arg tag "$GITHUB_REF_NAME" \
-            '.version == $version and (.url | contains("/" + $tag + "/"))' \
-            "$RUNNER_TEMP"/manifests/update-*.json
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
