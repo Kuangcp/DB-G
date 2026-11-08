@@ -5,12 +5,13 @@
 
 ## 自动补全
 - Ai设计接入 ： 架构初期就将 AI 补全（Copilot-like context）、执行计划可视化分析、本地聊天流（Chat-to-SQL） 作为一等公民（First-class citizen）来设计
-    - 草稿设计在 AiContext.md
+    - 草稿设计在 docs/design/AiContext.md
 
 
 # 查询结果
 - 添加一行  需要修复和重新设计
 - ClickHouse 作为一个大宽表分析型数据库，用户最核心的诉求通常不是 DDL 查看或简单的只读，而是大数据量的高效流式导出（TSV/Parquet）、复杂的聚合查询可视化（执行计划/火焰图分析）。
+- Explain 的各数据源的渲染支持
 
 # 左侧树区域
 
@@ -34,3 +35,6 @@
     - Windows
         - Inno Setup
 
+- 开发时所有数据与正式版隔离 可以通过现在 make release 时候的标记来做区分 release的数据放在 ~/.config/db-g/， 没release标记时，数据放在 ~/.config/db-g.dev/
+- 拖入csv 作为数据源，使用内置的duckdb 转接进行写SQL做数据分析
+- 参考 https://github.com/LoTwT/lucia 打通ci自动发布流程。 GitHub 发布与签名自动更新
