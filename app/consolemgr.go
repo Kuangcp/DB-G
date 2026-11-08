@@ -244,6 +244,9 @@ func (m *ConsoleManager) flush(id string, force bool) error {
 	if err := m.sink.Write(id, text); err != nil {
 		return err
 	}
+	// 先把 UpdatedAt 落库，再清脏：Dirty=false 必须意味着正文和元数据都已写完，
+	// 否则测试/退出路径会在后台写盘尚未结束时继续清理目录。
+	m.store.TouchConsole(id, time.Now().UnixMilli())
 
 	m.mu.Lock()
 	m.lastSaved[id] = text
@@ -251,7 +254,6 @@ func (m *ConsoleManager) flush(id string, force bool) error {
 		delete(m.dirty, id)
 	}
 	m.mu.Unlock()
-	m.store.TouchConsole(id, time.Now().UnixMilli())
 	return nil
 }
 
