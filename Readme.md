@@ -7,6 +7,7 @@
 </p>
 
 # DB-G
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/db-g)
 
 对标 [db-k](https://github.com/Kuangcp/DB-K) 的数据库客户端（Go + mygo）。
 **已完成与后续规划见 [`Roadmap.md`](Roadmap.md)**
