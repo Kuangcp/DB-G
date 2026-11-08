@@ -46,9 +46,9 @@ type root struct {
 	connFormFolder   string             // 连接所属文件夹；空 = 根级
 	chords           map[string][]chord // 动作 → 键位（见 keymap.go）
 	keymapPath       string             // keymap.json 的位置（空 = 不读盘，测试用）
-	editorPrefs      app.EditorPrefs    // 编辑器字号/字体族
-	editorPrefsPath  string             // editor.json 的位置（空 = 不落盘）
-	editorPrefsWarn  string
+	fontPrefs        app.FontPrefs      // 编辑区/结果区/功能界面字体
+	fontPrefsPath    string             // fonts.json 的位置（空 = 不落盘）
+	fontPrefsWarn    string
 	themePrefs       app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
 	themePath        string         // theme.json 的位置（空 = 不落盘）
 	themeWarn        string
@@ -198,7 +198,7 @@ func newRoot(text string) *root {
 		treeGroupStale:   map[string]bool{},
 		connFormKind:     "sqlite",
 		chords:           defaultChords(),
-		editorPrefs:      app.DefaultEditorPrefs(),
+		fontPrefs:        app.DefaultFontPrefs(),
 		themePrefs:       app.DefaultThemePrefs(),
 		sessions:         map[string]engine.Session{},
 		sessionUse:       map[string]uint64{},
@@ -214,7 +214,7 @@ func newRoot(text string) *root {
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
 	a.applyEditorBindings()
-	a.applyEditorPrefs()
+	a.applyFontPrefs()
 	return a
 }
 
@@ -229,9 +229,9 @@ func newRootWithStore(storePath string) *root {
 	r.keymapPath = app.DefaultKeymapPath()
 	r.keymapWarn = r.loadKeymap()
 	r.applyEditorBindings()
-	r.editorPrefsPath = app.DefaultEditorPrefsPath()
-	r.editorPrefs, r.editorPrefsWarn = app.LoadEditorPrefs(r.editorPrefsPath)
-	r.applyEditorPrefs()
+	r.fontPrefsPath = app.DefaultFontPrefsPath()
+	r.fontPrefs, r.fontPrefsWarn = app.LoadFontPrefs(r.fontPrefsPath)
+	r.applyFontPrefs()
 	r.themePath = app.DefaultThemePrefsPath()
 	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
 	r.store = app.LoadStore(storePath)

@@ -167,21 +167,21 @@ func TestSettingsSectionsSwitch(t *testing.T) {
 	if tt.HasText("字号") {
 		t.Fatalf("日志分区不该显示编辑器的字号: %q", tt.Texts())
 	}
-	// 再切回编辑器
-	if err := tt.Click("编辑器"); err != nil {
+	// 再切回字体
+	if err := tt.Click("字体"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if !tt.HasText("字号") {
-		t.Fatalf("编辑器分区内容缺失: %q", tt.Texts())
+		t.Fatalf("字体分区内容缺失: %q", tt.Texts())
 	}
 }
 
 // 字号改大后立刻应用到编辑器，并落盘。
 func TestEditorFontSizeAppliesAndSaves(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.editorPrefsPath = filepath.Join(t.TempDir(), "editor.json")
-	tt := openSettingsSection(t, a, "编辑器")
+	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	tt := openSettingsSection(t, a, "字体")
 	if got := a.code.state.Font.Size; got != 13 {
 		t.Fatalf("默认字号 %v", got)
 	}
@@ -192,11 +192,11 @@ func TestEditorFontSizeAppliesAndSaves(t *testing.T) {
 	if got := a.code.state.Font.Size; got != 14 {
 		t.Fatalf("点 + 之后编辑器字号应为 14，实际 %v", got)
 	}
-	prefs, warn := app.LoadEditorPrefs(a.editorPrefsPath)
+	prefs, warn := app.LoadFontPrefs(a.fontPrefsPath)
 	if warn != "" {
 		t.Fatal(warn)
 	}
-	if prefs.FontSize != 14 {
+	if prefs.Editor.Size != 14 {
 		t.Fatalf("没落盘: %+v", prefs)
 	}
 	// 恢复默认
@@ -212,15 +212,43 @@ func TestEditorFontSizeAppliesAndSaves(t *testing.T) {
 // 字体族写进去就会落到编辑器和预览上。
 func TestEditorFontFamilyApplies(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.editorPrefsPath = filepath.Join(t.TempDir(), "editor.json")
-	_ = openSettingsSection(t, a, "编辑器")
-	a.editorPrefs.FontFamily = "JetBrains Mono"
-	a.applyEditorPrefs()
+	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	_ = openSettingsSection(t, a, "字体")
+	a.fontPrefs.Editor.Family = "JetBrains Mono"
+	a.applyFontPrefs()
 	if got := a.code.state.Font.Family; got != "JetBrains Mono" {
 		t.Fatalf("字体族没应用: %q", got)
 	}
-	prefs, _ := app.LoadEditorPrefs(a.editorPrefsPath)
-	if prefs.FontFamily != "JetBrains Mono" {
+	prefs, _ := app.LoadFontPrefs(a.fontPrefsPath)
+	if prefs.Editor.Family != "JetBrains Mono" {
+		t.Fatalf("没落盘: %+v", prefs)
+	}
+}
+
+// 三个区域各有字体控件，功能界面字体落到主题上。
+func TestFontSectionCoversThreeAreas(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	tt := openSettingsSection(t, a, "字体")
+	for _, want := range []string{"编辑区", "结果区", "功能界面", "预览"} {
+		if !tt.HasText(want) {
+			t.Fatalf("字体分区缺少 %q: %q", want, tt.Texts())
+		}
+	}
+	a.fontPrefs.UI = "Noto Sans CJK SC"
+	a.applyFontPrefs()
+	var got string
+	tt = ui.NewTester(func(c *ui.Context) {
+		a.applyTheme(c)
+		got = c.Theme().Font
+		ui.Text(c, "x")
+	}, 400, 200)
+	tt.Frame()
+	if got != "Noto Sans CJK SC" {
+		t.Fatalf("功能界面字体没进入主题: %q", got)
+	}
+	prefs, _ := app.LoadFontPrefs(a.fontPrefsPath)
+	if prefs.UI != "Noto Sans CJK SC" {
 		t.Fatalf("没落盘: %+v", prefs)
 	}
 }

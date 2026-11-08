@@ -20,7 +20,7 @@ type settingsSection struct {
 func (a *root) settingsSections() []settingsSection {
 	return []settingsSection{
 		{"外观", a.appearanceSection},
-		{"编辑器", a.editorSection},
+		{"字体", a.fontSection},
 		{"快捷键", a.keymapSection},
 		{"连接档案", a.profilesSection},
 		{"日志", a.logSection},
@@ -57,45 +57,102 @@ func (a *root) settingsView(c *ui.Context) {
 	})
 }
 
-// editorSection 是编辑器显示设置：字号、字体族，带实时预览。
-func (a *root) editorSection(c *ui.Context) {
-	ui.Text(c, "编辑器").Bold()
-	ui.Text(c, "字号").FontSize(12).TextColor(c.Theme().TextMuted)
+// fontSection 是全局字体设置：编辑区、结果区、功能界面各一套。
+func (a *root) fontSection(c *ui.Context) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.NumberInput(c, &a.editorPrefs.FontSize, app.MinFontSize, app.MaxFontSize, 1).
-			Label("字号").Width(90).Changed() {
-			a.applyEditorPrefs()
-		}
-		ui.Text(c, fmt.Sprintf("%.0f pt", a.editorPrefs.FontSize)).FontSize(12).
-			TextColor(c.Theme().TextMuted)
+		ui.Text(c, "字体").Bold()
 		ui.Spacer(c)
 		if ui.Button(c, "恢复默认").Clicked() {
-			a.editorPrefs = app.DefaultEditorPrefs()
-			a.applyEditorPrefs()
+			a.fontPrefs = app.DefaultFontPrefs()
+			a.applyFontPrefs()
+			p := a.themePrefs
+			p.FontSize = app.DefaultThemeFontSize
+			a.setThemePrefs(p)
 		}
 	})
+	ui.Text(c, "三类区域各用一套字体；修改即时生效并保存到 fonts.json。").FontSize(12).
+		TextColor(c.Theme().TextMuted)
 
+	ui.Text(c, "编辑区").Bold()
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		if ui.NumberInput(c, &a.fontPrefs.Editor.Size, app.MinFontSize, app.MaxFontSize, 1).
+			Label("编辑区字号").Width(90).Changed() {
+			a.applyFontPrefs()
+		}
+		ui.Text(c, fmt.Sprintf("%.0f pt", a.fontPrefs.Editor.Size)).FontSize(12).
+			TextColor(c.Theme().TextMuted)
+	})
 	ui.Text(c, "字体族（留空 = 系统等宽）").FontSize(12).TextColor(c.Theme().TextMuted)
-	if ui.TextInput(c, &a.editorPrefs.FontFamily).
+	if ui.TextInput(c, &a.fontPrefs.Editor.Family).
 		Placeholder("例如 JetBrains Mono / Sarasa Mono SC").Changed() {
-		a.applyEditorPrefs()
+		a.applyFontPrefs()
 	}
+	fontPreview(c, "SELECT id, name FROM users WHERE id = 1; -- 预览 Preview", a.fontPrefs.Editor, true)
 
-	// 预览：用当前字体渲染一段 SQL。
+	ui.Divider(c)
+
+	ui.Text(c, "结果区").Bold()
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		if ui.NumberInput(c, &a.fontPrefs.Result.Size, 0, app.MaxFontSize, 1).
+			Label("结果区字号").Width(90).Changed() {
+			a.applyFontPrefs()
+		}
+		ui.Text(c, fmt.Sprintf("%.0f pt", a.fontPrefs.Result.Size)).FontSize(12).
+			TextColor(c.Theme().TextMuted)
+		ui.Text(c, "0 = 跟随界面字号").FontSize(11).TextColor(c.Theme().TextMuted)
+	})
+	ui.Text(c, "字体族（留空 = 跟随功能界面）").FontSize(12).TextColor(c.Theme().TextMuted)
+	if ui.TextInput(c, &a.fontPrefs.Result.Family).
+		Placeholder("例如 JetBrains Mono / monospace").Changed() {
+		a.applyFontPrefs()
+	}
+	fontPreview(c, "id\tname\n1\talice\n2\tNULL", a.fontPrefs.Result, false)
+
+	ui.Divider(c)
+
+	ui.Text(c, "功能界面").Bold()
+	ui.Text(c, "设置、控制台名、菜单、按钮等编辑区与结果区以外的文字。").FontSize(12).
+		TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		size := float64(a.themePrefs.FontSize)
+		if ui.NumberInput(c, &size, app.DefaultThemeFontSize, app.MaxThemeFontSize, 1).
+			Label("界面字号").Width(90).Changed() {
+			p := a.themePrefs
+			p.FontSize = int(size)
+			a.setThemePrefs(p)
+		}
+		ui.Text(c, "0 = 跟随主题").FontSize(11).TextColor(c.Theme().TextMuted)
+	})
+	ui.Text(c, "字体族（留空 = 系统 UI 字体）").FontSize(12).TextColor(c.Theme().TextMuted)
+	if ui.TextInput(c, &a.fontPrefs.UI).
+		Placeholder("例如 Noto Sans CJK SC").Changed() {
+		a.applyFontPrefs()
+	}
+	ui.Box(c).FillWidth().Padding(10).Radius(c.Theme().Radius).
+		Background(c.Theme().Surface).Border(1, c.Theme().Border).Children(func() {
+		ui.Text(c, "设置 · 控制台名 · 菜单 · 按钮").SingleLine()
+	})
+
+	if a.fontPrefsWarn != "" {
+		ui.Text(c, a.fontPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
+	}
+}
+
+// fontPreview 用给定字体设置渲染一行预览。
+func fontPreview(c *ui.Context, sample string, spec app.FontSpec, monoFallback bool) {
 	ui.Text(c, "预览").FontSize(12).TextColor(c.Theme().TextMuted)
-	preview := "SELECT id, name FROM users WHERE id = 1; -- 预览 Preview"
 	ui.Box(c).FillWidth().Padding(10).Radius(6).
 		Background(c.Theme().Surface).Border(1, c.Theme().Border).Children(func() {
-		txt := ui.Text(c, preview).FontSize(a.code.state.Font.Size)
-		if fam := a.editorPrefs.FontFamily; fam != "" {
+		txt := ui.Text(c, sample)
+		if fam := strings.TrimSpace(spec.Family); fam != "" {
 			txt.Font(fam)
-		} else {
+		} else if monoFallback {
 			txt.Font("monospace")
 		}
+		if spec.Size > 0 {
+			txt.FontSize(float32(spec.Size))
+		}
 	})
-	if a.editorPrefsWarn != "" {
-		ui.Text(c, a.editorPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
-	}
 }
 
 // logSection 显示日志目录与打开入口。
@@ -149,19 +206,33 @@ func (a *root) devSection(c *ui.Context) {
 	}
 }
 
-// applyEditorPrefs 把设置应用到编辑器并落盘。
-func (a *root) applyEditorPrefs() {
+// applyFontPrefs 把编辑区字体应用到编辑器，并把全部字体设置落盘。
+// 结果区/功能界面的字体由各自的渲染路径读取，不需要缓存副本。
+func (a *root) applyFontPrefs() {
 	a.code.state.Font = ui.Font{
-		Family: a.editorPrefs.FontFamily,
-		Size:   float32(a.editorPrefs.FontSize),
+		Family: strings.TrimSpace(a.fontPrefs.Editor.Family),
+		Size:   float32(a.fontPrefs.Editor.Size),
 	}
-	if a.editorPrefsPath == "" {
+	if a.fontPrefsPath == "" {
 		return
 	}
-	if err := app.SaveEditorPrefs(a.editorPrefsPath, a.editorPrefs); err != nil {
-		a.editorPrefsWarn = "保存编辑器设置失败: " + err.Error()
+	if err := app.SaveFontPrefs(a.fontPrefsPath, a.fontPrefs); err != nil {
+		a.fontPrefsWarn = "保存字体设置失败: " + err.Error()
+	} else {
+		a.fontPrefsWarn = ""
 	}
 	a.updateSettingsWindow()
+}
+
+// withResultFont 给结果区的元素套上结果区字体；字号 0 时保留继承的字号。
+func (a *root) withResultFont(el ui.Element) ui.Element {
+	if fam := strings.TrimSpace(a.fontPrefs.Result.Family); fam != "" {
+		el = el.Font(fam)
+	}
+	if a.fontPrefs.Result.Size > 0 {
+		el = el.FontSize(float32(a.fontPrefs.Result.Size))
+	}
+	return el
 }
 
 // applyEditorPreset 把 n 行的演示 SQL 写进当前激活控制台并立即落盘（spike 回归用）。
@@ -371,15 +442,6 @@ func (a *root) appearanceSection(c *ui.Context) {
 			prefs.Radius = int(radius)
 			a.setThemePrefs(prefs)
 		}
-		ui.Text(c, "界面字号").FontSize(12).TextColor(c.Theme().TextMuted)
-		size := float64(prefs.FontSize)
-		// 0 = 跟随主题（含桌面缩放），在输入框里显示 0。
-		if ui.NumberInput(c, &size, app.DefaultThemeFontSize, app.MaxThemeFontSize, 1).
-			Label("界面字号").Width(90).Changed() {
-			prefs.FontSize = int(size)
-			a.setThemePrefs(prefs)
-		}
-		ui.Text(c, "0 = 跟随主题").FontSize(11).TextColor(c.Theme().TextMuted)
 	})
 
 	// 预览：直接使用当前主题（改动已经是全局的）。

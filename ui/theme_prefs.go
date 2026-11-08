@@ -11,10 +11,21 @@ import (
 )
 
 // applyTheme 在帧首应用外观设置；跟随系统且无覆盖时不调 SetTheme。
+// 功能界面字体单独于 theme.json，设置后强制 SetTheme（只改字体，不动桌面主题）。
 func (a *root) applyTheme(c *ui.Context) {
 	r := resolveTheme(c.Theme(), a.themePrefs, c.Preferences())
+	t := r.Theme
+	if fam := strings.TrimSpace(a.fontPrefs.UI); fam != "" {
+		if !r.Apply {
+			cp := *t
+			t = &cp
+		}
+		t.Font = fam
+		c.SetTheme(t)
+		return
+	}
 	if r.Apply {
-		c.SetTheme(r.Theme)
+		c.SetTheme(t)
 	}
 }
 

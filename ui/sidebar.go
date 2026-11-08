@@ -630,6 +630,7 @@ func (a *root) connModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.connFormOpen, func() {
+		radius := c.Theme().Space(2)
 		title := "新建连接"
 		if a.connFormID != "" {
 			title = "编辑连接"
@@ -646,7 +647,7 @@ func (a *root) connModal(c *ui.Context) {
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
 			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
 				ui.Text(c, kindLabel(a.connFormKind)+" 连接").Bold()
-				ui.TextInput(c, &a.connFormName).Placeholder("名称").AutoFocus()
+				ui.TextInput(c, &a.connFormName).Placeholder("名称").Radius(radius).AutoFocus()
 				if a.store != nil && len(a.store.Folders()) > 0 {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, "位置").FontSize(12).TextColor(c.Theme().TextMuted)
@@ -655,37 +656,37 @@ func (a *root) connModal(c *ui.Context) {
 					})
 				}
 				if a.connFormKind != "sqlite" {
-					ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）")
+					ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）").Radius(radius)
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormHost).Placeholder("主机").Fill()
-						ui.TextInput(c, &a.connFormPort).Placeholder("端口")
+						ui.TextInput(c, &a.connFormHost).Placeholder("主机").Radius(radius).Fill()
+						ui.TextInput(c, &a.connFormPort).Placeholder("端口").Radius(radius)
 					})
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormUser).Placeholder("用户").Fill()
-						ui.TextInput(c, &a.connFormPass).Placeholder("密码").Password()
+						ui.TextInput(c, &a.connFormUser).Placeholder("用户").Radius(radius).Fill()
+						ui.TextInput(c, &a.connFormPass).Placeholder("密码").Radius(radius).Password()
 					})
 					if a.connFormKind == "clickhouse" {
 						// 协议决定 DSN 的 scheme，也决定默认端口：native 9000、
 						// HTTP 8123、HTTPS 8443。填错端口会握手失败。
 						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 							ui.Text(c, "协议").FontSize(12).TextColor(c.Theme().TextMuted)
-							if ui.Segmented(c, &a.connProto, "Native", "HTTP", "HTTPS").Changed() {
+							if ui.Segmented(c, &a.connProto, "Native", "HTTP", "HTTPS").Radius(radius).Changed() {
 								a.applyConnProto()
 							}
 							ui.Spacer(c)
 						})
 					}
-					ui.TextInput(c, &a.connFormParams).Placeholder(paramsPlaceholder(a.connFormKind))
+					ui.TextInput(c, &a.connFormParams).Placeholder(paramsPlaceholder(a.connFormKind)).Radius(radius)
 				} else {
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Fill()
-						if ui.Button(c, "浏览…").Clicked() {
+						ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Radius(radius).Fill()
+						if ui.Button(c, "浏览…").Radius(radius).Clicked() {
 							a.browsePath()
 						}
 					})
 				}
 				ui.TextInput(c, &a.connFormTimeout).
-					Placeholder("查询超时（秒，空或 0 = 默认 30）")
+					Placeholder("查询超时（秒，空或 0 = 默认 30）").Radius(radius)
 
 				if a.connFormErr != "" {
 					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
@@ -702,24 +703,24 @@ func (a *root) connModal(c *ui.Context) {
 				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					if a.connTestBusy {
-						if ui.Button(c, "取消测试").Clicked() {
+						if ui.Button(c, "取消测试").Radius(radius).Clicked() {
 							a.cancelConnTest()
 						}
 						ui.Spacer(c)
 						return
 					}
-					if ui.Button(c, "测试连接").Clicked() {
+					if ui.Button(c, "测试连接").Radius(radius).Clicked() {
 						a.testConnForm()
 					}
-					if ui.Button(c, "复制").Tooltip("把连接信息按 key: value 复制到剪贴板（含明文密码）").
+					if ui.Button(c, "复制").Radius(radius).Tooltip("把连接信息按 key: value 复制到剪贴板（含明文密码）").
 						Clicked() {
 						a.copyConnForm(c)
 					}
 					ui.Spacer(c)
-					if ui.Button(c, "取消").Clicked() {
+					if ui.Button(c, "取消").Radius(radius).Clicked() {
 						a.connFormOpen = false
 					}
-					if ui.PrimaryButton(c, "保存").Clicked() {
+					if ui.PrimaryButton(c, "保存").Radius(radius).Clicked() {
 						a.saveConnForm()
 					}
 				})
@@ -1131,7 +1132,7 @@ func (a *root) folderLabel(id string) string {
 func (a *root) folderSelect(c *ui.Context) {
 	t := c.Theme()
 	sel := ui.SelectBase(c, &a.connFormFolder)
-	sel.Trigger.Gap(6).Padding(6, 10).Radius(t.Space(1)).Border(1, t.Border).
+	sel.Trigger.Gap(6).Padding(6, 10).Radius(t.Space(2)).Border(1, t.Border).
 		Children(func() {
 			ui.Text(c, a.folderLabel(a.connFormFolder)).SingleLine()
 			ui.Icon(c, iconChevronDown).FontSize(14).TextColor(t.TextMuted)

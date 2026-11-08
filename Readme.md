@@ -131,8 +131,9 @@ Release 页面提供两个独立可执行文件（GitHub / Gitee 均可）：
       `~/.local/share/applications/db-g.desktop` 与 `~/.local/share/icons/db-g.png`
       （desktop 的 Icon 用绝对路径，不依赖图标缓存），之后可从应用菜单启动；
       路径遵循 `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
-- [x] 设置窗口：左右布局（外观 / 编辑器 / 快捷键 / 连接档案 / 日志 / 开发），左下角版本号；
-      编辑器字号（8–24）与字体族可调、带实时预览，存 `~/.config/db-g/editor.json`
+- [x] 设置窗口：左右布局（外观 / 字体 / 快捷键 / 连接档案 / 日志 / 开发），左下角版本号；
+      编辑区、结果区、功能界面三套字体（字体族 + 字号，功能界面字号跟随外观），带实时预览，
+      存 `~/.config/db-g/fonts.json`（旧 `editor.json` 自动迁移）
 - [ ] M7：编辑器格式化（补全已完成：关键字/表/列）
 
 ## 构建与测试

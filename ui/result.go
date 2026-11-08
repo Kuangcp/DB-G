@@ -127,7 +127,7 @@ func (a *root) resultPane(c *ui.Context) {
 			})
 		case a.currentRuntime().Err() != "":
 			ui.Text(c, "执行失败").Bold()
-			ui.Text(c, a.currentRuntime().Err()).TextColor(c.Theme().Danger).Font("monospace")
+			a.withResultFont(ui.Text(c, a.currentRuntime().Err()).TextColor(c.Theme().Danger).Font("monospace"))
 		case a.currentRuntime().Result() != nil:
 			r := a.currentRuntime().Result()
 			if !r.IsQuery {
@@ -405,7 +405,7 @@ func (a *root) cellViewer(c *ui.Context) {
 				a.jsonTree(c, "$", a.cellViewJSON, 0, &nodes)
 				return
 			}
-			ui.Text(c, a.cellViewText).Font("monospace").FontSize(12)
+			a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12))
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, "复制原文").Tooltip("复制完整原文（未折叠的 JSON 文本）").Clicked() {
@@ -495,7 +495,7 @@ func (a *root) jsonEntry(c *ui.Context, path, key string, v any, depth int, node
 		ui.Box(c).Width(12)
 		ui.Text(c, key+":").FontSize(12.5).TextColor(t.TextMuted)
 		text, col := jsonLeafText(v, t)
-		ui.Text(c, text).FontSize(12.5).Font("monospace").TextColor(col).SingleLine()
+		a.withResultFont(ui.Text(c, text).FontSize(12.5).Font("monospace").TextColor(col).SingleLine())
 	})
 }
 
@@ -692,7 +692,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		}
 	}
 
-	tbl := ui.Table(c, &a.resultState, cols, totalRows, func(row, col int) {
+	tbl := a.withResultFont(ui.Table(c, &a.resultState, cols, totalRows, func(row, col int) {
 		if row < 0 {
 			return
 		}
@@ -735,7 +735,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if _, dirty := editSet.Cells[app.CellKey{Row: ri, Col: col - 1}]; dirty {
 			txt.TextColor(c.Theme().Accent).Bold()
 		}
-	}).Grow(1)
+	})).Grow(1)
 	if tbl.Submitted() {
 		a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
 	}

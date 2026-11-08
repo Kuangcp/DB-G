@@ -149,9 +149,9 @@ Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` o
       `~/.local/share/applications/db-g.desktop` and `~/.local/share/icons/db-g.png`
       (the desktop entry uses the icon's absolute path, so no icon-cache refresh is needed);
       paths honor `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
-- [x] Settings window: left/right layout (Appearance / Editor / Shortcuts / Connection profiles / Logs / Developer),
-      version in the bottom-left corner; editor font size (8–24) and font family are adjustable with a live
-      preview and saved to `~/.config/db-g/editor.json`
+- [x] Settings window: left/right layout (Appearance / Fonts / Shortcuts / Connection profiles / Logs / Developer),
+      version in the bottom-left corner; separate fonts (family and size) for the editor, the result area, and
+      the rest of the UI, with live previews, saved to `~/.config/db-g/fonts.json` (old `editor.json` migrates)
 - [ ] M7: editor formatting (completion is done: keywords/tables/columns)
 
 ## Build and test
