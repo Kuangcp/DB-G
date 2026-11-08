@@ -90,12 +90,13 @@ func (a *root) pickImportProfiles() {
 
 // profilesSection 渲染设置窗口里的连接档案导入/导出。
 func (a *root) profilesSection(c *ui.Context) {
+	cr := controlRadius(c)
 	ui.Text(c, "连接档案").FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(6).Children(func() {
-		if ui.Button(c, "导出连接（不含密码）").Clicked() {
+		if ui.Button(c, "导出连接（不含密码）").Radius(cr).Clicked() {
 			a.pickExportProfiles()
 		}
-		if ui.Button(c, "导入连接…").Clicked() {
+		if ui.Button(c, "导入连接…").Radius(cr).Clicked() {
 			a.pickImportProfiles()
 		}
 	})

@@ -630,7 +630,7 @@ func (a *root) connModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.connFormOpen, func() {
-		radius := c.Theme().Space(2)
+		radius := controlRadius(c)
 		title := "新建连接"
 		if a.connFormID != "" {
 			title = "编辑连接"
