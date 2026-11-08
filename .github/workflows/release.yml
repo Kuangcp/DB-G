@@ -1,0 +1,162 @@
+# Builds, signs and publishes DB-G releases from tags.
+#
+#   git tag v1.0.1
+#   git push origin v1.0.1
+#
+# The tag supplies the version; mygo.json is rewritten in the checkout only.
+# Every release needs a "## <version>" section in CHANGELOG.md, which the
+# update manifests carry as release notes. MYGO_UPDATER_PRIVATE_KEY signs
+# the update archives; installed apps verify them with updates.publicKey.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # the draft release, uploads, and publishing
+
+jobs:
+  draft-release:
+    name: Validate the tag and create the draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate the tag, changelog and update configuration
+        shell: bash
+        run: |
+          set -eu
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: tag $tag must look like v<major>.<minor>.<patch>"
+            exit 1
+          fi
+          esc=$(printf '%s' "$version" | sed 's/\./\\./g')
+          if ! grep -Eq "^## ${esc}( |\]|$)" CHANGELOG.md; then
+            echo "ERROR: CHANGELOG.md has no \"## $version\" section"
+            exit 1
+          fi
+          if [ "$(jq -r '.updates.publicKey // empty' mygo.json)" = "" ] ||
+             [ "$(jq -r '.updates.github // empty' mygo.json)" != "Kuangcp/DB-G" ]; then
+            echo "ERROR: mygo.json must carry updates.publicKey and updates.github (\"Kuangcp/DB-G\")"
+            exit 1
+          fi
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "DB-G ${GITHUB_REF_NAME#v}" --generate-notes
+          fi
+
+  build:
+    name: Build and upload (${{ matrix.target }})
+    needs: draft-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux/amd64
+            dir: linux-amd64
+          - target: windows/amd64
+            dir: windows-amd64
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install NSIS for the Windows installer
+        if: matrix.target == 'windows/amd64'
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      - name: Set the release version and build identity
+        shell: bash
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          jq --arg version "$version" '.version = $version' mygo.json > mygo.json.tmp
+          mv mygo.json.tmp mygo.json
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "MYGO_LDFLAGS=-X db-g/app.buildVersion=$version -X db-g/app.releaseBuild=1 -X db-g/app.updateBuild=1" >> "$GITHUB_ENV"
+      - name: Build, sign and upload
+        env:
+          CGO_ENABLED: "0"
+          GH_TOKEN: ${{ github.token }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+        run: go tool mygo build -platform "${{ matrix.target }}" -upload
+      - name: Verify the artifacts and the signed update manifest
+        shell: bash
+        run: |
+          set -eu
+          dir="dist/${{ matrix.dir }}"
+          manifest="$dir/update-${{ matrix.target }}.json"
+          archive="$dir/db-g-${RELEASE_VERSION}-${{ matrix.target }}.tar.gz"
+          test -f "$manifest" || {
+            echo "ERROR: missing $manifest — MYGO_UPDATER_PRIVATE_KEY is missing or does not match updates.publicKey"
+            exit 1
+          }
+          test -f "$archive" || { echo "ERROR: missing $archive"; exit 1; }
+          jq -e --arg version "$RELEASE_VERSION" --arg tag "$GITHUB_REF_NAME" \
+            '.version == $version and (.url | contains("/" + $tag + "/"))' \
+            "$manifest" > /dev/null
+          if [ "${{ matrix.target }}" = "linux/amd64" ]; then
+            got=$("$dir/db-g" -version)
+            echo "$got"
+            test "$got" = "db-g $RELEASE_VERSION"
+          fi
+
+  publish:
+    name: Verify the assets and publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check the assets and manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          expected=(
+            "db-g-${version}-linux-amd64.tar.gz"
+            "db-g-${version}-windows-amd64.tar.gz"
+            "db-g_${version}_amd64.deb"
+            "db-g-setup-${version}-amd64.exe"
+            "update-linux-amd64.json"
+            "update-windows-amd64.json"
+            "install.sh"
+            "install.ps1"
+            "SHA256SUMS"
+          )
+          assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          for name in "${expected[@]}"; do
+            if ! printf '%s\n' "$assets" | grep -Fxq "$name"; then
+              echo "ERROR: the draft release is missing $name"
+              printf '%s\n' "$assets"
+              exit 1
+            fi
+          done
+          mkdir -p "$RUNNER_TEMP/manifests"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'update-*.json' --dir "$RUNNER_TEMP/manifests"
+          jq -e --arg version "$version" --arg tag "$GITHUB_REF_NAME" \
+            '.version == $version and (.url | contains("/" + $tag + "/"))' \
+            "$RUNNER_TEMP"/manifests/update-*.json
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --draft=false --prerelease=false --latest=true \
+            --title "DB-G ${GITHUB_REF_NAME#v}"

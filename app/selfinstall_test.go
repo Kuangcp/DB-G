@@ -46,6 +46,19 @@ func installEnv(t *testing.T) (cfg, data string) {
 	return filepath.Join(root, "config", "db-g"), filepath.Join(root, "data")
 }
 
+func TestUpdateBuildMarker(t *testing.T) {
+	old := updateBuild
+	t.Cleanup(func() { updateBuild = old })
+	updateBuild = ""
+	if UpdateBuild() {
+		t.Fatal("dev build must not report signed updates")
+	}
+	updateBuild = "1"
+	if !UpdateBuild() {
+		t.Fatal("release build with update feed must report signed updates")
+	}
+}
+
 func TestInstallSelf(t *testing.T) {
 	cfg, data := installEnv(t)
 	st := CheckInstall()

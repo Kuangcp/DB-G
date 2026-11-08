@@ -245,7 +245,7 @@ func newRootWithStore(storePath string) *root {
 	r.mgr = app.NewConsoleManager(r.store, files)
 	r.pruneMissingExternal()
 	r.restoreSession()
-	r.selfInstall = app.ReleaseBuild() && runtime.GOOS == "linux"
+	r.selfInstall = app.ReleaseBuild() && !app.UpdateBuild() && runtime.GOOS == "linux"
 	if r.selfInstall {
 		r.installNeed = app.CheckInstall()
 	}

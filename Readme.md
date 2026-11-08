@@ -29,12 +29,12 @@ DB-G 是本地优先的桌面数据库客户端：不装运行时、不连云端
 
 ## 下载与运行
 
-Release 页面提供两个独立可执行文件（GitHub / Gitee 均可）：
+Release 页面提供安装包（GitHub / Gitee 均可）：
 
 | 平台 | 文件 | 运行要求 |
 |---|---|---|
-| Windows x64 | `db-g-v1.0.0-windows-amd64.exe` | Windows 10 / 11；双击即可，无需 WebView2 |
-| Linux x64 | `db-g-v1.0.0-linux-amd64` | GTK 3（Arch `gtk3`、Debian/Ubuntu `libgtk-3-0`、Fedora `gtk3`）；`chmod +x` 后运行 |
+| Windows x64 | `db-g-setup-<版本>-amd64.exe` | Windows 10 / 11；每用户安装，支持签名自动更新 |
+| Linux x64 | `db-g-<版本>-linux-amd64.tar.gz`（含 `install.sh`）或 `db-g_<版本>_amd64.deb` | GTK 3（Arch `gtk3`、Debian/Ubuntu `libgtk-3-0`、Fedora `gtk3`）；归档解压后运行 `sh install.sh` 安装到用户目录 |
 
 配置、日志与控制台文件默认落在 `~/.config/db-g/`（Windows 为 `%AppData%\db-g\`）；
 开发构建（`make run` / `make install`，没有 `releaseBuild` 标记）使用独立的 `~/.config/db-g.dev/`。
@@ -132,6 +132,8 @@ Release 页面提供两个独立可执行文件（GitHub / Gitee 均可）：
       `~/.local/share/applications/db-g.desktop` 与 `~/.local/share/icons/db-g.png`
       （desktop 的 Icon 用绝对路径，不依赖图标缓存），之后可从应用菜单启动；
       路径遵循 `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
+- [x] 发布与自动更新：推送 `v*` 标签后 GitHub Actions 并行构建 Linux/Windows、签名更新归档并发布
+      Release；应用内置 mygo 原生更新窗口，自动检查、下载、校验签名并在下次启动生效
 - [x] 设置窗口：左右布局（外观 / 字体 / 快捷键 / 连接档案 / 日志 / 开发），左下角版本号；
       编辑区、结果区、功能界面三套字体（字体族 + 字号，功能界面字号跟随外观），带实时预览，
       存 `~/.config/db-g/fonts.json`（旧 `editor.json` 自动迁移）

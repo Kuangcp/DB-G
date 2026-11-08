@@ -26,8 +26,10 @@ make vet      # go vet + go tool mygo vet .（UI 生命周期检查，无输出�
 CGO_ENABLED=0 go test ./ui -run 'TestEditor.*Perf' -v   # 只跑编辑器性能基准
 ```
 
-**打包：不做。** `go build` 出来的静态二进制就是分发包，不做 AppImage / Deb / 安装器 / 自动更新
-（roadmap v2 的决策表已拍板）。不要把打包流程写进 Makefile 或 CI。
+**发布构建用 mygo。** 本地开发仍是 `make run` / `go build`；正式发布由 `.github/workflows/release.yml`
+在标签 `v*` 时调用 `go tool mygo build -upload`，产出 Linux/Windows 安装包与签名更新清单，
+上传到 GitHub Release。`mygo.json` 管构建元数据与更新公钥，`docs/release.md` 管密钥与发布步骤。
+不要在 workflow 里另造一套打包/签名流程。
 
 ## 分层（import 方向是硬约束）
 

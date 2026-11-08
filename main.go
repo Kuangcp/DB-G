@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/egoist/mygo"
+	updaterNative "github.com/egoist/mygo/plugins/updater/native"
 	mygoUI "github.com/egoist/mygo/ui"
 
 	"db-g/app"
@@ -31,6 +32,8 @@ func main() {
 		log.Printf("日志初始化失败: %v", err)
 	}
 	defer app.CloseLogs()
+	// 原生更新窗口，不依赖 WebView；开发构建会自动报告更新不可用。
+	mygo.Use(updaterNative.Plugin)
 	app.LogInfo("startup", "db-g start", "config", app.DefaultStorePath(), "log_dir", app.DefaultLogDir())
 
 	r := ui.NewRoot()

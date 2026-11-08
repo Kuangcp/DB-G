@@ -11,6 +11,7 @@ import (
 )
 
 func TestResultGridFrameBudget(t *testing.T) {
+	skipPerf(t)
 	const (
 		rows = 100_000
 		cols = 50

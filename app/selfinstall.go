@@ -14,8 +14,15 @@ import (
 // 只有正式分发包才启用自举安装/升级；go run 与测试默认关闭，避免开发期动用户目录。
 var releaseBuild string
 
+// updateBuild 表示构建里已嵌入 mygo 签名更新源；此时由 mygo Updater 接管升级，
+// 不再显示旧的「安装到 ~/.config/db-g/bin」提示。
+var updateBuild string
+
 // ReleaseBuild 报告当前二进制是否是发布构建（启用自举安装/升级）。
 func ReleaseBuild() bool { return releaseBuild == "1" }
+
+// UpdateBuild 报告当前二进制是否带签名自动更新。
+func UpdateBuild() bool { return updateBuild == "1" }
 
 // ParseBuildNumber 把 "1.2.3" / "v1.2.3" 转换成数值 10203。
 // minor 与 patch 必须在 0..99 内，否则会产生编码碰撞（1.0.100 与 1.1.0 都是 10100）。

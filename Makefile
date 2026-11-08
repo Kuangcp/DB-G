@@ -16,11 +16,10 @@ run:
 build:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)"
 
-# Release 附件：Windows / Linux 各一个静态可执行文件
+# 发布产物：安装包 + 签名更新清单（需要 MYGO_UPDATER_PRIVATE_KEY）
 release:
-	mkdir -p dist
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o dist/db-g-$(VERSION)-linux-amd64 .
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS) -H=windowsgui" -o dist/db-g-$(VERSION)-windows-amd64.exe .
+	CGO_ENABLED=0 MYGO_LDFLAGS="-X db-g/app.buildVersion=$(VERSION) -X db-g/app.releaseBuild=1 -X db-g/app.updateBuild=1" \
+		go tool mygo build -platform linux/amd64,windows/amd64
 
 releaseLocalLinux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o ~/.config/db-g/bin/db-g .

@@ -35,6 +35,4 @@
     - Windows
         - Inno Setup
 
-- 开发时所有数据与正式版隔离 可以通过现在 make release 时候的标记来做区分 release的数据放在 ~/.config/db-g/， 没release标记时，数据放在 ~/.config/db-g.dev/
 - 拖入csv 作为数据源，使用内置的duckdb 转接进行写SQL做数据分析
-- 参考 https://github.com/LoTwT/lucia 打通ci自动发布流程。 GitHub 发布与签名自动更新

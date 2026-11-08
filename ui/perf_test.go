@@ -58,7 +58,15 @@ func sampleFrames(n int, step func()) []time.Duration {
 	return out
 }
 
+func skipPerf(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("性能基准在 CI 的 -short 模式跳过")
+	}
+}
+
 func TestEditorTypingPerf(t *testing.T) {
+	skipPerf(t)
 	for _, size := range perfSizes {
 		c, tt := newPerfEditor(t, size, 0)
 		_ = c
@@ -75,6 +83,7 @@ func TestEditorTypingPerf(t *testing.T) {
 }
 
 func TestEditorScrollPerf(t *testing.T) {
+	skipPerf(t)
 	for _, size := range perfSizes {
 		_, tt := newPerfEditor(t, size, 0)
 		samples := sampleFrames(20, func() {
@@ -90,6 +99,7 @@ func TestEditorScrollPerf(t *testing.T) {
 }
 
 func TestEditorFirstFramePerf(t *testing.T) {
+	skipPerf(t)
 	for _, size := range perfSizes {
 		c := newCodeEditor("")
 		c.SetActive("perf", buildSQL(size))
@@ -107,6 +117,7 @@ func TestEditorFirstFramePerf(t *testing.T) {
 }
 
 func TestEditorTypingWithCompletionsOpen(t *testing.T) {
+	skipPerf(t)
 	for _, size := range perfSizes {
 		_, tt := newPerfEditor(t, size, 2_000)
 		samples := sampleFrames(20, func() {
@@ -123,6 +134,7 @@ func TestEditorTypingWithCompletionsOpen(t *testing.T) {
 
 // TestEditorSteadyFramePerf 测预热后的空帧：首帧的一次性成本不算进手感预算。
 func TestEditorSteadyFramePerf(t *testing.T) {
+	skipPerf(t)
 	for _, size := range perfSizes {
 		_, tt := newPerfEditor(t, size, 0)
 		for range 5 { // 预热：消化一次性的行索引/高亮状态

@@ -29,12 +29,12 @@ DB-G is a local-first desktop database client: no runtime to install, no cloud, 
 
 ## Download and run
 
-Releases provide two standalone executables (GitHub / Gitee):
+Releases provide installers (GitHub / Gitee):
 
 | Platform | File | Requirements |
 |---|---|---|
-| Windows x64 | `db-g-v1.0.0-windows-amd64.exe` | Windows 10 / 11; double-click, no WebView2 needed |
-| Linux x64 | `db-g-v1.0.0-linux-amd64` | GTK 3 (Arch `gtk3`, Debian/Ubuntu `libgtk-3-0`, Fedora `gtk3`); run after `chmod +x` |
+| Windows x64 | `db-g-setup-<version>-amd64.exe` | Windows 10 / 11; per-user install with signed auto-updates |
+| Linux x64 | `db-g-<version>-linux-amd64.tar.gz` (with `install.sh`) or `db-g_<version>_amd64.deb` | GTK 3 (Arch `gtk3`, Debian/Ubuntu `libgtk-3-0`, Fedora `gtk3`); unpack the archive and run `sh install.sh` to install per user |
 
 Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` on Windows);
 development builds (`make run` / `make install`, without the `releaseBuild` marker) use `~/.config/db-g.dev/`.
@@ -150,6 +150,9 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       `~/.local/share/applications/db-g.desktop` and `~/.local/share/icons/db-g.png`
       (the desktop entry uses the icon's absolute path, so no icon-cache refresh is needed);
       paths honor `XDG_CONFIG_HOME` / `XDG_DATA_HOME`
+- [x] Releases and auto-updates: pushing a `v*` tag builds Linux/Windows in GitHub Actions, signs update
+      archives and publishes a Release; the app ships mygo's native update window, checks automatically,
+      verifies signatures, and applies the update on next launch
 - [x] Settings window: left/right layout (Appearance / Fonts / Shortcuts / Connection profiles / Logs / Developer),
       version in the bottom-left corner; separate fonts (family and size) for the editor, the result area, and
       the rest of the UI, with live previews, saved to `~/.config/db-g/fonts.json` (old `editor.json` migrates)
