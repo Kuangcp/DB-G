@@ -36,7 +36,8 @@ Release 页面提供两个独立可执行文件（GitHub / Gitee 均可）：
 | Windows x64 | `db-g-v1.0.0-windows-amd64.exe` | Windows 10 / 11；双击即可，无需 WebView2 |
 | Linux x64 | `db-g-v1.0.0-linux-amd64` | GTK 3（Arch `gtk3`、Debian/Ubuntu `libgtk-3-0`、Fedora `gtk3`）；`chmod +x` 后运行 |
 
-配置、日志与控制台文件默认落在 `~/.config/db-g/`（Windows 为 `%AppData%\db-g\`）。
+配置、日志与控制台文件默认落在 `~/.config/db-g/`（Windows 为 `%AppData%\db-g\`）；
+开发构建（`make run` / `make install`，没有 `releaseBuild` 标记）使用独立的 `~/.config/db-g.dev/`。
 
 ## 功能清单
 

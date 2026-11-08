@@ -48,16 +48,12 @@ func DefaultThemePrefs() ThemePrefs {
 
 // DefaultThemePrefsPath 返回外观设置路径（与连接库同目录）。
 func DefaultThemePrefsPath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "theme.json"
-	}
-	return filepath.Join(dir, "db-g", "theme.json")
+	return filepath.Join(AppConfigDir(), "theme.json")
 }
 
 // ThemePrefsPath 返回给定配置根目录下的外观设置路径。
 func ThemePrefsPath(configDir string) string {
-	return filepath.Join(configDir, "db-g", "theme.json")
+	return filepath.Join(configDir, ConfigDirName(), "theme.json")
 }
 
 var accentHexPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

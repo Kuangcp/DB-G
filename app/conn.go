@@ -93,13 +93,9 @@ type ConnStore struct {
 	warning           string
 }
 
-// DefaultStorePath 返回用户配置目录下的连接库路径。
+// DefaultStorePath 返回用户配置目录下的连接库路径（release: db-g，开发: db-g.dev）。
 func DefaultStorePath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "connections.json"
-	}
-	return filepath.Join(dir, "db-g", "connections.json")
+	return filepath.Join(AppConfigDir(), "connections.json")
 }
 
 // LoadStore 读取持久化文件；缺失为空表，损坏改名为 .bak 后空表并记警告（改名失败则警告仅记损坏）。

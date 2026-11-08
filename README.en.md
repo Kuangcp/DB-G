@@ -36,7 +36,8 @@ Releases provide two standalone executables (GitHub / Gitee):
 | Windows x64 | `db-g-v1.0.0-windows-amd64.exe` | Windows 10 / 11; double-click, no WebView2 needed |
 | Linux x64 | `db-g-v1.0.0-linux-amd64` | GTK 3 (Arch `gtk3`, Debian/Ubuntu `libgtk-3-0`, Fedora `gtk3`); run after `chmod +x` |
 
-Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` on Windows).
+Configuration, logs, and consoles live in `~/.config/db-g/` (`%AppData%\db-g\` on Windows);
+development builds (`make run` / `make install`, without the `releaseBuild` marker) use `~/.config/db-g.dev/`.
 
 ## Features
 

@@ -8,11 +8,7 @@ import (
 
 // DefaultKeymapPath 返回快捷键配置路径（与连接库同目录）。
 func DefaultKeymapPath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "keymap.json"
-	}
-	return filepath.Join(dir, "db-g", "keymap.json")
+	return filepath.Join(AppConfigDir(), "keymap.json")
 }
 
 // keymapFile 是 keymap.json 的结构：action → 键位串（逗号分隔多个，

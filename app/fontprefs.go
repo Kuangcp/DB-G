@@ -35,11 +35,7 @@ const (
 
 // DefaultFontPrefsPath 返回字体设置路径（与连接库同目录）。
 func DefaultFontPrefsPath() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "fonts.json"
-	}
-	return filepath.Join(dir, "db-g", "fonts.json")
+	return filepath.Join(AppConfigDir(), "fonts.json")
 }
 
 // NormalizeFontPrefs 把越界字号回退到默认值，并去掉字体族首尾空白。

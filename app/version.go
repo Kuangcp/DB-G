@@ -5,21 +5,20 @@ import (
 	"strings"
 )
 
-// buildVersion 由发布构建用 -ldflags "-X db-g/app.buildVersion=v1.0.0" 注入；
-// 为空的开发构建回退到 VCS 信息。
+// buildVersion 由构建用 -ldflags "-X db-g/app.buildVersion=$(git describe ...)" 注入，
+// 开发构建（make run）也会注入；为空时才回退到二进制里的 VCS 信息。
 var buildVersion string
 
-// Version 返回构建版本：注入过就是注入值，否则有正式 tag 是
-// vX.Y.Z-<短哈希>、没有就是 dev-<短哈希>，工作区有未提交改动时再带 +dirty。
-// 取不到 VCS 信息就退回 "dev"。
+// Version 返回构建版本，格式与安装后的 version 文件一致：
+// 1.0.0-4-g7e186e8（去除 git describe 的 v 前缀；工作区有改动时带 -dirty）。
+// 取不到构建信息就退回 "dev"。
 func Version() string {
-	if buildVersion != "" {
-		return buildVersion
+	if v := normalizeVersion(buildVersion); v != "" {
+		return v
 	}
-	const fallback = "dev"
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return fallback
+		return "dev"
 	}
 	var rev string
 	modified := false
@@ -33,24 +32,29 @@ func Version() string {
 			modified = s.Value == "true"
 		}
 	}
-	ver := strings.TrimPrefix(info.Main.Version, "v")
-	// 伪版本（v0.0.0-2026…-abc）没有意义，只留短哈希。
-	if ver == "(devel)" || ver == "" || strings.HasPrefix(ver, "0.0.0-") {
+	ver := normalizeVersion(info.Main.Version)
+	// 本地 go build 的伪版本（v1.0.1-0.2026…-hash）不是发布 tag，忽略。
+	if ver == "(devel)" || strings.Contains(ver, "-0.20") {
 		ver = ""
 	}
 	var out string
 	switch {
 	case ver != "" && rev != "":
-		out = "v" + ver + "-" + rev
+		out = ver + "-" + rev
 	case rev != "":
 		out = "dev-" + rev
 	case ver != "":
-		out = "v" + ver
+		out = ver
 	default:
-		return fallback
+		return "dev"
 	}
 	if modified {
-		out += "+dirty"
+		out += "-dirty"
 	}
 	return out
+}
+
+// normalizeVersion 去掉首尾空白与 git describe 常见的 v 前缀。
+func normalizeVersion(v string) string {
+	return strings.TrimPrefix(strings.TrimSpace(v), "v")
 }

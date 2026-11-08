@@ -226,7 +226,7 @@ func installConfigDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "db-g"), nil
+	return filepath.Join(dir, releaseConfigDirName), nil
 }
 
 // installDataHome 返回 XDG 数据目录：优先 XDG_DATA_HOME，否则 ~/.local/share。

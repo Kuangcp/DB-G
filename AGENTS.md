@@ -107,7 +107,9 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 
 ## 持久化分层（新增要落盘的状态先看这里）
 
-位置一律在 `os.UserConfigDir()/db-g/`（`app.DefaultStorePath()` 等给出）：
+位置一律在 `os.UserConfigDir()/<db-g|db-g.dev>/`（`app.AppConfigDir()`/`DefaultStorePath()` 给出）：
+发布构建（`make build`/`make release`，带 `releaseBuild=1`）用 `db-g/`，开发构建（`make run`/`make install`）
+用 `db-g.dev/`，避免开发时动到用户真实数据。
 
 | 内容 | 位置 | 说明 |
 |---|---|---|
@@ -139,7 +141,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
   `NoCommand` 让编辑器别吞键。`scopeNoEditor` 的动作不碰编辑器绑定。
 - 改键：`setChords/resetChords` 会**存盘 + 重建编辑器绑定**；同作用域撞键时自动把
   原来的动作解绑（`breakConflicts`）。设置窗口「快捷键」一节点「录制」后按新组合即可。
-- 持久化：`<config>/db-g/keymap.json`，只存与默认值不同的动作（`app/keymap.go`）。
+- 持久化：`<config>/<db-g|db-g.dev>/keymap.json`，只存与默认值不同的动作（`app/keymap.go`）。
   测试要改键就把 `a.keymapPath` 指到 `t.TempDir()`，**不要写用户的真实配置**。
 
 ## 设置窗口（★ 必读）
