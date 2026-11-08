@@ -9,7 +9,7 @@ import (
 	"db-g/engine"
 )
 
-func TestPreviewObjectCreatesConsoleAndRuns(t *testing.T) {
+func TestPreviewObjectCreatesConsoleWithoutRunning(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
 	if err := a.openConn(prof); err != nil {
@@ -21,22 +21,108 @@ func TestPreviewObjectCreatesConsoleAndRuns(t *testing.T) {
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	a.previewObject(prof, engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
-	tt.Frame()
-	tt.Frame()
-	if got := a.activeText(); !strings.HasPrefix(got, `SELECT * FROM "users" LIMIT 200`) {
+	for range 3 {
+		tt.Frame()
+	}
+	want := `SELECT * FROM "users" LIMIT 200;`
+	if got := a.activeText(); got != want {
 		t.Fatalf("preview sql: %q", got)
 	}
-	deadline := 0
-	for deadline < 200 {
-		tt.Frame()
-		if r := a.currentRuntime().Result(); r != nil {
-			break
-		}
-		deadline++
+	if r := a.currentRuntime().Result(); r != nil {
+		t.Fatalf("预览只插入 SQL，不能自动执行: %+v", r)
 	}
-	r := a.currentRuntime().Result()
-	if r == nil || len(r.Rows) != 1 {
-		t.Fatalf("preview result: %+v", r)
+}
+
+// 已有控制台时不再新建：追加到第一个控制台保存的光标处，并跳过去。
+func TestPreviewObjectReusesFirstConsole(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	other := seedConsoleConn(t, a, "另一个")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	m := a.consoleMgr()
+	rec, err := m.Create(prof.ID, "我的")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const before = "SELECT 1;"
+	m.SetText(rec.ID, before)
+	if err := m.Flush(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	m.SetCaret(rec.ID, len([]rune(before)), len([]rune(before)))
+
+	// 当前激活的是另一个数据源的控制台：仍要回到本数据源的第一个控制台。
+	otherRec, err := m.Create(other.ID, "别处")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(otherRec.ID) {
+		t.Fatal("activate other console")
+	}
+
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	a.previewObject(prof, engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
+	tt.Frame()
+	tt.Frame()
+
+	if got, want := len(m.ConsolesOf(prof.ID)), 1; got != want {
+		t.Fatalf("复用控制台时不该新建: %d", got)
+	}
+	if a.activeConsole != rec.ID {
+		t.Fatalf("应跳到本数据源的控制台: %q", a.activeConsole)
+	}
+	want := before + "\n" + `SELECT * FROM "users" LIMIT 200;`
+	if got := a.activeText(); got != want {
+		t.Fatalf("追加位置不对:\n got %q\nwant %q", got, want)
+	}
+}
+
+// 当前激活的就是本数据源的控制台：直接在它的光标处追加，不切换。
+func TestPreviewObjectAppendsToActiveConsole(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	m := a.consoleMgr()
+	rec, err := m.Create(prof.ID, "我的")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate console")
+	}
+	const before = "SELECT 1;\nSELECT 2;"
+	a.setActiveText(before)
+	a.setSelection(len([]rune("SELECT 1;")), len([]rune("SELECT 1;")))
+	if err := a.flushActive(); err != nil {
+		t.Fatal(err)
+	}
+
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	a.previewObject(prof, engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
+	tt.Frame()
+	tt.Frame()
+
+	if got, want := len(m.ConsolesOf(prof.ID)), 1; got != want {
+		t.Fatalf("激活控制台时不该新建: %d", got)
+	}
+	if a.activeConsole != rec.ID {
+		t.Fatalf("不该切走: %q", a.activeConsole)
+	}
+	sql := `SELECT * FROM "users" LIMIT 200;`
+	want := "SELECT 1;\n" + sql + "\nSELECT 2;"
+	if got := a.activeText(); got != want {
+		t.Fatalf("追加位置不对:\n got %q\nwant %q", got, want)
+	}
+	// 光标要停在新追加的 SQL 上，紧接着的执行才会命中它。
+	start, _ := a.code.CaretRunes()
+	if got := string([]rune(a.activeText())[:start]); !strings.HasSuffix(got, sql) {
+		t.Fatalf("插入后光标不在新 SQL 末尾: %q", got)
 	}
 }
 

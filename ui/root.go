@@ -128,7 +128,7 @@ type root struct {
 	filterCol           int
 	filterText          string
 	history             *app.History
-	pendingText         string // 激活控制台后要写入的正文（对象预览用）
+	pendingAppend       string // 激活控制台后，在其光标处追加的正文（对象预览用）
 	pendingExec         bool   // 写入正文后是否立即执行
 	editKey             string
 	editPlan            *app.EditPlan
@@ -463,6 +463,30 @@ func (a *root) setActiveText(text string) { a.code.SetText(text) }
 // activeText 返回当前正文。
 func (a *root) activeText() string { return a.code.Text() }
 
+// insertSQLAtCaret 在当前光标处插入一条 SQL，必要时补换行，避免和已有语句粘连。
+func (a *root) insertSQLAtCaret(sql string) {
+	runes := []rune(a.code.Text())
+	start, _ := a.code.CaretRunes()
+	if start < 0 || start > len(runes) {
+		start = len(runes)
+	}
+	insert := sql
+	if start > 0 && runes[start-1] != '\n' {
+		insert = "\n" + insert
+	}
+	if start < len(runes) && runes[start] != '\n' {
+		insert += "\n"
+	}
+	a.setSelection(start, start)
+	a.code.Insert(insert)
+	// 光标停在这条 SQL 的末尾，紧接着的执行才会命中它而不是后面的语句。
+	end := start + len([]rune(insert))
+	if insert[len(insert)-1] == '\n' {
+		end--
+	}
+	a.setSelection(end, end)
+}
+
 // setSelection 用 rune 偏移设置选区（测试用；编辑器内部是字节）。
 func (a *root) setSelection(startRune, endRune int) { a.code.SetSelection(startRune, endRune) }
 
@@ -592,11 +616,10 @@ func (a *root) view(c *ui.Context) {
 			a.pendingActivate = ""
 			a.activateConsole(id)
 		}
-		if a.pendingText != "" {
-			text := a.pendingText
-			a.pendingText = ""
-			a.setActiveText(text)
-			a.setSelection(0, 0)
+		if a.pendingAppend != "" {
+			sql := a.pendingAppend
+			a.pendingAppend = ""
+			a.insertSQLAtCaret(sql)
 		}
 		if a.pendingExec {
 			a.pendingExec = false

@@ -100,7 +100,7 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       keeps its own pins, which are in-memory and disappear on restart;
       **SQL history** (one `history/<connectionID>.jsonl` per data source, capped at 5000 entries with a lazy
       6000→5000 trim; the panel shows the latest 100 with insert/copy, the full file is linked in its title);
-      **object tree**: double-click to preview data, right-click for DDL (read-only SQL editor: conservative
+      **object tree**: double-click inserts a preview SQL statement (reuses an existing console for that data source and appends a semicolon-terminated `SELECT ... LIMIT 200`; creates one only when none exists; never runs it automatically), right-click for DDL (read-only SQL editor: conservative
       formatting + syntax highlighting + copy the mouse selection; `Ctrl+Q` also opens it for the selected object);
       **conservative SQL formatting** (only whitespace and keyword case, undoable)
 - [x] M3 (partial): multi-statement execution + SQL history (statement progress/gutter state done, history panel done)

@@ -580,7 +580,14 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 	}
 }
 
-// previewObject 在新控制台里预览对象数据（SELECT * … LIMIT 200）并立即执行。
+// previewObject 双击对象预览数据：优先复用该数据源已有的控制台，
+// 没有控制台时才新建，避免堆出大量只有一句 SQL 的标签。
+//
+//   - 当前激活的就是该数据源的控制台：直接在它的光标处追加；
+//   - 该数据源已有控制台：追加到第一个控制台保存的光标处并跳过去；
+//   - 一个都没有：新建控制台。
+//
+// 只插入 SQL，不自动执行。
 func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 	m := a.consoleMgr()
 	if m == nil {
@@ -592,14 +599,24 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 			return
 		}
 	}
+	sql := "SELECT * FROM " + qualifiedName(p.Kind, o) + " LIMIT 200;"
+	if recs := m.ConsolesOf(p.ID); len(recs) > 0 {
+		target := recs[0]
+		// 当前激活的控制台已经属于这个数据源时，优先留在原地。
+		if cur, ok := a.store.GetConsole(a.activeConsole); ok && cur.ConnectionID == p.ID {
+			target = cur
+		}
+		a.pendingActivate = target.ID
+		a.pendingAppend = sql
+		return
+	}
 	rec, err := m.Create(p.ID, "预览 "+o.Name)
 	if err != nil {
 		a.consoleErr = "新建预览控制台失败: " + err.Error()
 		return
 	}
 	a.pendingActivate = rec.ID
-	a.pendingText = "SELECT * FROM " + qualifiedName(p.Kind, o) + " LIMIT 200"
-	a.pendingExec = true
+	a.pendingAppend = sql
 }
 
 // showDDL 取对象的 DDL 并弹窗（headless 同步，有窗口时后台 + Update）。
