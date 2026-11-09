@@ -25,7 +25,7 @@ func main() {
 	showVersion := flag.Bool("version", false, "打印版本号后退出")
 	flag.Parse()
 	if *showVersion {
-		fmt.Println("db-g", app.Version())
+		fmt.Println(app.DisplayName, app.Version())
 		return
 	}
 	if err := app.InitLogs(app.DefaultLogDir()); err != nil {
@@ -40,7 +40,7 @@ func main() {
 	r.SetAppIconPNG(appIconPNG)
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:   "db-g",
+			Title:   app.DisplayName,
 			Width:   1280,
 			Height:  800,
 			Content: mygoUI.View(r.View),

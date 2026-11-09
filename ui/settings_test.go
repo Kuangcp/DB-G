@@ -113,7 +113,7 @@ func TestSettingsButtonOpensSingletonWindow(t *testing.T) {
 	if len(created) != 1 {
 		t.Fatalf("设置 must open exactly one window: %d", len(created))
 	}
-	if created[0].options.Title != "设置 — db-g" {
+	if created[0].options.Title != "设置 — "+app.DisplayName {
 		t.Fatalf("window options: %+v", created[0].options)
 	}
 	// 再点一次：聚焦已有窗口，不新建

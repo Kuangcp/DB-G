@@ -277,7 +277,7 @@ func (a *root) openSettings() {
 		open = a.newSettingsWindow
 	}
 	a.settingsWin = open(mygo.WindowOptions{
-		Title:   "设置 — db-g",
+		Title:   "设置 — " + app.DisplayName,
 		Width:   720,
 		Height:  520,
 		Content: ui.View(a.settingsView),

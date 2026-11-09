@@ -9,6 +9,9 @@ import (
 // 开发构建（make run）也会注入；为空时才回退到二进制里的 VCS 信息。
 var buildVersion string
 
+// DisplayName 是界面与窗口标题里展示的应用名；可执行文件名/配置目录仍是 db-g。
+const DisplayName = "DB-G"
+
 // Version 返回构建版本，格式与安装后的 version 文件一致：
 // 1.0.0-4-g7e186e8（去除 git describe 的 v 前缀；工作区有改动时带 -dirty）。
 // 取不到构建信息就退回 "dev"。
