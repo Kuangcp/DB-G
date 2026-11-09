@@ -86,3 +86,16 @@ func TestFormatCellValueJSON(t *testing.T) {
 		t.Fatalf("plain: %q %v", text, isJSON)
 	}
 }
+
+func TestInsertSQLKeepsJSONStructure(t *testing.T) {
+	payload := `{"path":"C:\\tmp","quote":"say \"hi\"","name":"O'Reilly"}`
+	got := insertSQL("mysql", "meeting_case3", []string{"payload"}, []any{payload})
+	if !strings.Contains(got, `C:\\\\tmp`) || !strings.Contains(got, `say \\"hi\\"`) ||
+		!strings.Contains(got, `O''Reilly`) {
+		t.Fatalf("mysql JSON escaping: %s", got)
+	}
+	got = insertSQL("postgres", "meeting_case3", []string{"payload"}, []any{payload})
+	if !strings.Contains(got, `C:\\tmp`) || !strings.Contains(got, `say \"hi\"`) {
+		t.Fatalf("postgres JSON escaping: %s", got)
+	}
+}
