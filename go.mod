@@ -7,7 +7,7 @@ require (
 	// client_protocol_version；ClickHouse 22.3 等老服务器会分别报 UNKNOWN_FUNCTION /
 	// UNKNOWN_SETTING。固定在 v2.36.0（旧 HTTP 实现只查 version()）。
 	github.com/ClickHouse/clickhouse-go/v2 v2.36.0
-	github.com/egoist/mygo v0.8.1
+	github.com/egoist/mygo v0.8.3
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/jackc/pgx/v5 v5.12.0
 	golang.org/x/image v0.46.0
