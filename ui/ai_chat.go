@@ -171,24 +171,41 @@ func (a *root) startAIRequest(display string, msgs []ai.Message) error {
 	a.aiChat.cancel = cancel
 	a.aiChat.streaming = true
 	a.aiChat.started = time.Now()
-	ch, err := provider.Stream(ctx, ai.Request{
+	a.aiChat.scroll.Y = math.MaxFloat32
+	req := ai.Request{
 		Model:       model,
 		Messages:    msgs,
 		Temperature: 0.2,
 		MaxTokens:   1200,
-	})
-	if err != nil {
-		a.aiChat.streaming = false
-		a.aiChat.cancel = nil
-		cancel()
-		a.aiChat.err = err.Error()
-		app.LogWarn("ai", "stream failed", "model", model, "err", err.Error())
-		a.applyAIEvent(seq, ai.Event{Kind: ai.EventError, Err: err})
-		return err
 	}
-	app.LogInfo("ai", "chat request", "model", model, "messages", len(msgs))
-	a.consumeAI(seq, ch)
-	a.aiChat.scroll.Y = math.MaxFloat32
+	if a.win == nil {
+		ch, err := provider.Stream(ctx, req)
+		if err != nil {
+			a.aiChat.streaming = false
+			a.aiChat.cancel = nil
+			cancel()
+			a.aiChat.err = err.Error()
+			app.LogWarn("ai", "stream failed", "model", model, "err", err.Error())
+			a.applyAIEvent(seq, ai.Event{Kind: ai.EventError, Err: err})
+			return err
+		}
+		app.LogInfo("ai", "chat request", "model", model, "messages", len(msgs))
+		a.consumeAI(seq, ch)
+		return nil
+	}
+	win := a.win
+	go func() {
+		ch, err := provider.Stream(ctx, req)
+		if err != nil {
+			if ctx.Err() == nil {
+				app.LogWarn("ai", "stream failed", "model", model, "err", err.Error())
+				win.Update(func() { a.applyAIEvent(seq, ai.Event{Kind: ai.EventError, Err: err}) })
+			}
+			return
+		}
+		app.LogInfo("ai", "chat request", "model", model, "messages", len(msgs))
+		a.consumeAI(seq, ch)
+	}()
 	return nil
 }
 

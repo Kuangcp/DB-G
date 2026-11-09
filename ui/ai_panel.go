@@ -160,7 +160,10 @@ func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 func (a *root) currentAIConversationTitle() string {
 	for _, conv := range a.aiChat.store.Conversations {
 		if conv.ID == a.aiChat.convID {
-			return conv.Title
+			if conv.Title != "" {
+				return conv.Title
+			}
+			return app.AIConversationTitle(conv.Messages)
 		}
 	}
 	return ""
@@ -172,7 +175,7 @@ func (a *root) aiHistoryList(c *ui.Context) {
 	t := c.Theme()
 	convs := append([]app.AIConversation(nil), st.store.Conversations...)
 	sort.SliceStable(convs, func(i, j int) bool { return convs[i].UpdatedAt > convs[j].UpdatedAt })
-	ui.Scroll(c).Height(160).Children(func() {
+	ui.Scroll(c).FillWidth().Height(160).Children(func() {
 		ui.Column(c).FillWidth().Gap(1).Children(func() {
 			ui.Text(c, "会话历史").FontSize(11).Bold().TextColor(t.TextMuted)
 			if len(convs) == 0 {
@@ -181,6 +184,9 @@ func (a *root) aiHistoryList(c *ui.Context) {
 			}
 			for _, conv := range convs {
 				title := conv.Title
+				if title == "" {
+					title = app.AIConversationTitle(conv.Messages)
+				}
 				if title == "" {
 					title = "新会话"
 				}

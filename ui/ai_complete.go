@@ -50,19 +50,11 @@ func (a *root) requestAICompletion() {
 	msgs := ai.BuildCompletionMessages(a.aiSnapshot(), text[:offset], text[offset:])
 	ctx, cancel := context.WithCancel(context.Background())
 	st.cancel = cancel
-	ch, err := provider.Stream(ctx, ai.Request{
+	req := ai.Request{
 		Model:       a.aiPrefs.Model,
 		Messages:    msgs,
 		Temperature: 0,
 		MaxTokens:   160,
-	})
-	if err != nil {
-		st.loading = false
-		st.cancel = nil
-		cancel()
-		a.consoleErr = err.Error()
-		app.LogWarn("ai", "completion failed", "err", err.Error())
-		return
 	}
 	consume := func(text string, err error) {
 		if seq != a.aiCompletion.seq {
@@ -81,7 +73,7 @@ func (a *root) requestAICompletion() {
 		a.aiCompletion.suggestion = got
 		a.showAICompletion(seq)
 	}
-	read := func() {
+	read := func(ch <-chan ai.Event) (string, error) {
 		var b strings.Builder
 		var streamErr error
 		for ev := range ch {
@@ -92,27 +84,36 @@ func (a *root) requestAICompletion() {
 				streamErr = ev.Err
 			}
 		}
-		consume(b.String(), streamErr)
+		return b.String(), streamErr
 	}
 	if a.win == nil {
-		read()
+		ch, err := provider.Stream(ctx, req)
+		if err != nil {
+			st.loading = false
+			st.cancel = nil
+			cancel()
+			a.consoleErr = err.Error()
+			app.LogWarn("ai", "completion failed", "err", err.Error())
+			return
+		}
+		text, err := read(ch)
+		consume(text, err)
 		return
 	}
 	win := a.win
 	go func() {
-		var b strings.Builder
-		var streamErr error
-		for ev := range ch {
-			switch ev.Kind {
-			case ai.EventText:
-				b.WriteString(ev.Text)
-			case ai.EventError:
-				streamErr = ev.Err
+		ch, err := provider.Stream(ctx, req)
+		if err != nil {
+			if ctx.Err() == nil {
+				app.LogWarn("ai", "completion failed", "err", err.Error())
+				win.Update(func() { consume("", err) })
 			}
+			return
 		}
-		text := b.String()
-		win.Update(func() { consume(text, streamErr) })
+		text, err := read(ch)
+		win.Update(func() { consume(text, err) })
 	}()
+
 }
 
 // showAICompletion 在编辑器里弹出 AI 候选；光标/版本变了就丢弃。

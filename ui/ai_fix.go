@@ -51,22 +51,13 @@ func (a *root) fixErrorSQL() {
 	a.aiFix.seq++
 	seq := a.aiFix.seq
 	a.aiFix.cancel = cancel
-	ch, err := provider.Stream(ctx, ai.Request{
+	req := ai.Request{
 		Model:       a.aiPrefs.Model,
 		Messages:    msgs,
 		Temperature: 0,
 		MaxTokens:   1200,
-	})
-	if err != nil {
-		a.aiFix.loading = false
-		a.aiFix.err = err.Error()
-		a.aiFix.cancel = nil
-		cancel()
-		app.LogWarn("ai", "fix stream failed", "err", err.Error())
-		return
 	}
-	app.LogInfo("ai", "fix request", "model", a.aiPrefs.Model, "sql_len", len(sql))
-	consume := func() {
+	read := func(ch <-chan ai.Event) (string, error) {
 		var b strings.Builder
 		var streamErr error
 		for ev := range ch {
@@ -77,27 +68,37 @@ func (a *root) fixErrorSQL() {
 				streamErr = ev.Err
 			}
 		}
-		a.finishAIFix(seq, b.String(), streamErr)
+		return b.String(), streamErr
 	}
 	if a.win == nil {
-		consume()
+		ch, err := provider.Stream(ctx, req)
+		if err != nil {
+			a.aiFix.loading = false
+			a.aiFix.err = err.Error()
+			a.aiFix.cancel = nil
+			cancel()
+			app.LogWarn("ai", "fix stream failed", "err", err.Error())
+			return
+		}
+		text, err := read(ch)
+		a.finishAIFix(seq, text, err)
 		return
 	}
 	win := a.win
 	go func() {
-		var b strings.Builder
-		var streamErr error
-		for ev := range ch {
-			switch ev.Kind {
-			case ai.EventText:
-				b.WriteString(ev.Text)
-			case ai.EventError:
-				streamErr = ev.Err
+		ch, err := provider.Stream(ctx, req)
+		if err != nil {
+			if ctx.Err() == nil {
+				app.LogWarn("ai", "fix stream failed", "err", err.Error())
+				win.Update(func() { a.finishAIFix(seq, "", err) })
 			}
+			return
 		}
-		text := b.String()
-		win.Update(func() { a.finishAIFix(seq, text, streamErr) })
+		app.LogInfo("ai", "fix request", "model", a.aiPrefs.Model, "sql_len", len(sql))
+		text, err := read(ch)
+		win.Update(func() { a.finishAIFix(seq, text, err) })
 	}()
+
 }
 
 // finishAIFix 在主线程落定模型结果。
