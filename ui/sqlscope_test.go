@@ -233,3 +233,11 @@ func TestTokenizeSQLUnclosedQuoteDoesNotPanic(t *testing.T) {
 		_ = relationPositionAt(s, len(s))
 	}
 }
+
+func TestStmtScopeAtWhitespaceOnlyDoesNotPanic(t *testing.T) {
+	for _, text := range []string{"    ", "\n\t ", "select 1;    "} {
+		for _, offset := range []int{0, 1, len(text)} {
+			_ = stmtScopeAt(text, offset)
+		}
+	}
+}

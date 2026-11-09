@@ -138,6 +138,9 @@ func stmtScopeAtOffset(text string, offset int) (string, int) {
 func trimScope(scope string, offset int) (string, int) {
 	left := len(scope) - len(strings.TrimLeft(scope, " \t\r\n"))
 	right := len(scope) - len(strings.TrimRight(scope, " \t\r\n"))
+	if left+right >= len(scope) {
+		return "", 0
+	}
 	trimmed := scope[left : len(scope)-right]
 	offset -= left
 	if offset < 0 {
