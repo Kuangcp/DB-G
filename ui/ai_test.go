@@ -184,3 +184,26 @@ func TestAIChatPersistsPerWorkspace(t *testing.T) {
 		t.Fatalf("reloaded messages: %+v", a.aiChat.messages)
 	}
 }
+
+func TestAIPanelWidthSurvivesHideShow(t *testing.T) {
+	a := newConsoleRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	a.aiChat.open = true
+	tt.Frame()
+	first, ok := tt.Find("AI 面板")
+	if !ok || first.W < 200 {
+		t.Fatalf("AI panel width: %v ok=%v", first.W, ok)
+	}
+	a.aiChat.open = false
+	tt.Frame()
+	a.aiChat.open = true
+	tt.Frame()
+	second, ok := tt.Find("AI 面板")
+	if !ok || second.W < 200 {
+		t.Fatalf("AI panel reopened width: %v ok=%v", second.W, ok)
+	}
+	if d := first.W - second.W; d < -2 || d > 2 {
+		t.Fatalf("AI panel width changed: %v -> %v", first.W, second.W)
+	}
+}

@@ -27,7 +27,7 @@ type aiChatMessage struct {
 // aiChatState 是右侧 AI 面板的瞬态状态。
 type aiChatState struct {
 	open       bool
-	width      float32
+	split      float32 // 主区域占左右分屏的百分比；剩余给 AI 面板
 	input      string
 	messages   []aiChatMessage
 	streaming  bool

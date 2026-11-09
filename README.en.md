@@ -121,7 +121,7 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
 - [x] Inline AI completion: press `Alt+\` or click "AI completion" in the editor toolbar to request a suggestion
       from the current statement/cursor context; it appears first in the completion menu with Detail "AI" and is
       inserted only with Tab; stale suggestions are dropped when the cursor or document version changes
-- [x] AI assistant (phase 1): a collapsible right panel for Chat-to-SQL, using local Ollama by default or any
+- [x] AI assistant (phase 1): a collapsible, resizable right panel for Chat-to-SQL, using local Ollama by default or any
       OpenAI-compatible service; only schema + the current SQL are sent by default, with sample rows, history
       and error logs behind separate switches; the exact context can be previewed before sending; replies stream,
       and generated SQL is inserted only when the user clicks "Insert SQL"; Settings → AI configures the base URL,

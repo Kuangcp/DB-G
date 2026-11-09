@@ -13,11 +13,8 @@ import (
 // aiPanel 是右侧 AI 助手面板。
 func (a *root) aiPanel(c *ui.Context) {
 	st := &a.aiChat
-	if st.width < 300 {
-		st.width = 380
-	}
 	t := c.Theme()
-	ui.Column(c).Width(st.width).FillHeight().Background(t.Surface).Padding(8).Gap(6).Children(func() {
+	ui.Column(c).Fill().Background(t.Surface).Padding(8).Gap(6).Label("AI 面板").Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 			iconChild(c, iconSparkles, t.Accent)
 			ui.Text(c, "AI 助手").Bold()
