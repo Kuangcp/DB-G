@@ -63,6 +63,7 @@ type root struct {
 	vault            *app.Vault
 	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
 	aiChat           aiChatState
+	aiFix            aiFixState
 	plan             planState
 	settingsSection  int    // 设置窗口选中的分区
 	captureAction    string // 设置窗口正在录制键位的动作
@@ -658,6 +659,7 @@ func (a *root) view(c *ui.Context) {
 		a.externalPickerModal(c)
 		a.externalResolveModal(c)
 		a.aiContextModal(c)
+		a.aiFixModal(c)
 		a.planConfirmModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {

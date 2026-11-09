@@ -261,3 +261,10 @@ func BuildPlanMessages(snapshot ContextSnapshot, planText string, analyze bool) 
 	msgs[1].Content += "\n\n# 执行计划（" + mode + "）\n```\n" + planText + "\n```\n"
 	return msgs
 }
+
+// BuildFixMessages 组装一次 SQL 错误修复请求。
+func BuildFixMessages(snapshot ContextSnapshot, sql, errText string) []Message {
+	msgs := BuildMessages(snapshot, "请修复下面这条执行失败的 SQL，保持原有业务语义，只做必要的语法/字段修正。")
+	msgs[1].Content += "\n\n# 失败 SQL\n```sql\n" + sql + "\n```\n\n# 驱动错误\n```\n" + errText + "\n```\n"
+	return msgs
+}

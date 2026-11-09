@@ -130,7 +130,13 @@ func (a *root) resultPane(c *ui.Context) {
 				}
 			})
 		case a.currentRuntime().Err() != "":
-			ui.Text(c, "执行失败").Bold()
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, "执行失败").Bold()
+				ui.Spacer(c)
+				if ui.Button(c, "AI 修复").Clicked() {
+					a.fixErrorSQL()
+				}
+			})
 			a.withResultFont(ui.Text(c, a.currentRuntime().Err()).TextColor(c.Theme().Danger).Font("monospace"))
 		case a.currentRuntime().Result() != nil:
 			r := a.currentRuntime().Result()

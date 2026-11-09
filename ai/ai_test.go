@@ -134,3 +134,17 @@ func TestExtractSQL(t *testing.T) {
 		t.Fatal("no code block must return false")
 	}
 }
+
+func TestBuildFixMessages(t *testing.T) {
+	snapshot := ContextSnapshot{Connection: ConnInfo{Kind: "postgres"}}
+	msgs := BuildFixMessages(snapshot, "select * from user", "column \"user\" does not exist")
+	if len(msgs) != 2 {
+		t.Fatalf("messages: %+v", msgs)
+	}
+	body := msgs[1].Content
+	for _, want := range []string{"select * from user", "does not exist", "PostgreSQL"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("fix context missing %q:\n%s", want, body)
+		}
+	}
+}

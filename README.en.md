@@ -128,6 +128,9 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       `EXPLAIN QUERY PLAN`, PostgreSQL JSON, MySQL JSON/TREE and ClickHouse JSON, falling back to the raw result
       when parsing fails; ANALYZE asks every time and is limited to SELECT/WITH; the plan tree can be sent to AI
       for diagnosis
+- [x] SQL error fix: "AI fix" on a failed execution sends the failed SQL, driver error and involved table schemas;
+      the suggestion is shown as a diff and only applied to the editor after "Apply fix" or "Apply and run"; a reply
+      without a SQL code block is reported as an error
 - [x] Security and polish (P4): connection passwords **encrypted with AES-256-GCM on this machine**
       (key `<config>/db-g/secret.key`, 0600; existing plaintext is encrypted and written back on load; if a changed
       key cannot decrypt, the app warns and asks you to re-enter); connection profile **export/import**

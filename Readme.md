@@ -113,6 +113,8 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       节点按代价着色并显示 rows/actual；支持 SQLite `EXPLAIN QUERY PLAN`、PostgreSQL JSON、
       MySQL JSON/TREE、ClickHouse JSON，解析失败回退原始结果；ANALYZE 每次确认且只允许
       SELECT/WITH；可一键把计划树交给 AI 做诊断
+- [x] SQL 错误修复：执行失败横幅点「AI 修复」，把失败 SQL、驱动错误和涉及表结构发给模型；
+      结果用 diff 预览，用户点「应用修复」或「应用并执行」才改编辑器；模型没返回 SQL 代码块时明确报错
 - [x] 安全与收尾（P4）：连接密码 **AES-256-GCM 本机加密**（密钥 `<config>/db-g/secret.key`，
       0600；存量明文加载时自动加密回写，密钥变更导致解不开时给出警告并要求重填）；
       连接档案**导出/导入**（默认不含密码；导入去重、id 冲突重映射；设置窗口操作）；

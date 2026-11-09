@@ -14,9 +14,8 @@
     - 相关代码：`ui/sqlscope.go` 的 `stmtScopeAtOffset` / `statementBounds` /
       `softStatementEnd` / `relationPositionAt`；测试 `TestStmtScopeAtSoftBoundaryGuards`、
       `TestCompletionRelationPositionWithPreviousStatement`。
-- AI 助手后续阶段（Chat-to-SQL、EXPLAIN 可视化 + AI 诊断已完成，设计与计划见
+- AI 助手后续阶段（Chat-to-SQL、EXPLAIN 可视化 + AI 诊断、SQL 错误修复已完成，设计与计划见
   `docs/superpowers/specs/2026-11-09-ai-context-design.md`、`docs/superpowers/plans/2026-11-09-ai-context.md`）：
-    - SQL 错误一键修复（diff 预览，用户确认后应用）
     - 高危 SQL 拦截（确定性规则默认提醒，连接级硬阻断）
     - 编辑器内联 AI 补全
     - 向量/embedding 检索（当前仅词法 + 外键扩展）
