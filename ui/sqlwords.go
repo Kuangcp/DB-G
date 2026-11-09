@@ -11,7 +11,7 @@ import (
 // SQL 词表：关键字/类型/常量抄自 mygo ui/editor 的 SQL 词法表，函数为常用补充。
 // 每个词同时给出大写与小写两种形式（SQL 大小写不敏感，用户两种都可能敲）。
 var (
-	sqlKeywordWords = `select from where and or not insert into values update set delete create table drop alter
+	sqlKeywordWords = `select from where and or not insert into values update set delete create table drop alter truncate merge call use show describe
 		add column index view as on join left right inner outer full cross group by order having limit offset
 		union all distinct case when then else end is null in exists between like primary key foreign references
 		default unique check constraint begin commit rollback transaction if returning with recursive asc desc

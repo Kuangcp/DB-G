@@ -253,6 +253,9 @@ func TestAIChatConversationHistorySwitch(t *testing.T) {
 	if !tt.HasText("会话历史") || !tt.HasText("first question") || !tt.HasText("second question") {
 		t.Fatalf("history list: %q", tt.Texts())
 	}
+	if row, ok := tt.Find("first question"); !ok || row.H < 10 {
+		t.Fatalf("history row must render text, not a thin strip: %+v ok=%v", row, ok)
+	}
 	a.aiChat.showHistory = false
 
 	a.selectAIConversation(firstID, true)

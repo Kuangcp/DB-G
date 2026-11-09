@@ -4,7 +4,6 @@ import (
 	"math"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -191,17 +190,18 @@ func (a *root) aiHistoryList(c *ui.Context) {
 					title = "新会话"
 				}
 				label := title
-				if conv.UpdatedAt > 0 {
-					label += "  ·  " + time.UnixMilli(conv.UpdatedAt).Format("01-02 15:04")
-				}
-				btn := ui.ButtonBase(c).Label(label).Justify(ui.Start).Padding(3, 6).Radius(t.Space(1)).
-					FontSize(11.5)
+				btn := ui.ButtonBase(c).Label(label).Justify(ui.Start).Padding(3, 6).Radius(t.Space(1))
 				if conv.ID == st.convID {
 					btn.Background(t.Accent.Alpha(0.12))
-					btn.Bold()
 				} else if btn.Hovered() {
 					btn.Background(t.SurfaceHover)
 				}
+				btn.Children(func() {
+					txt := ui.Text(c, label).FontSize(11.5).SingleLine()
+					if conv.ID == st.convID {
+						txt.Bold().TextColor(t.Accent)
+					}
+				})
 				if btn.Clicked() {
 					a.stopAI()
 					a.selectAIConversation(conv.ID, true)
