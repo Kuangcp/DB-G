@@ -43,14 +43,18 @@ type root struct {
 	connFormPass     string
 	connFormDB       string
 	connFormParams   string
-	connFormTimeout  string             // 查询超时（秒，空 = 默认 30）
-	connFormGuard    bool               // 高危 SQL 硬阻断
-	connProto        int                // ClickHouse 协议：0 native / 1 http / 2 https
-	connFormFolder   string             // 连接所属文件夹；空 = 根级
-	chords           map[string][]chord // 动作 → 键位（见 keymap.go）
-	keymapPath       string             // keymap.json 的位置（空 = 不读盘，测试用）
-	fontPrefs        app.FontPrefs      // 编辑区/结果区/功能界面字体
-	fontPrefsPath    string             // fonts.json 的位置（空 = 不落盘）
+	connFormTimeout  string // 查询超时（秒，空 = 默认 30）
+	connFormGuard    bool   // 高危 SQL 硬阻断
+	connProto        int    // ClickHouse 协议：0 native / 1 http / 2 https
+	connFormFolder   string // 连接所属文件夹；空 = 根级
+	connFormTags     [app.MaxConnTags]connTagDraft
+	serverInfo       map[string]engine.ServerInfo // connID → 数据库名/版本
+	serverInfoErr    map[string]string            // connID → 版本查询失败原因
+	serverInfoSeq    map[string]uint64            // connID → 异步查询轮次（旧结果作废）
+	chords           map[string][]chord           // 动作 → 键位（见 keymap.go）
+	keymapPath       string                       // keymap.json 的位置（空 = 不读盘，测试用）
+	fontPrefs        app.FontPrefs                // 编辑区/结果区/功能界面字体
+	fontPrefsPath    string                       // fonts.json 的位置（空 = 不落盘）
 	fontPrefsWarn    string
 	themePrefs       app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
 	themePath        string         // theme.json 的位置（空 = 不落盘）
@@ -218,6 +222,9 @@ func newRoot(text string) *root {
 		sessions:         map[string]engine.Session{},
 		sessionUse:       map[string]uint64{},
 		sessionErr:       map[string]string{},
+		serverInfo:       map[string]engine.ServerInfo{},
+		serverInfoErr:    map[string]string{},
+		serverInfoSeq:    map[string]uint64{},
 		consoles:         map[string]*app.Console{},
 		lastVer:          map[string]uint64{},
 		extFiles:         map[string]*extFile{},

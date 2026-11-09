@@ -100,9 +100,22 @@ func (s *session) Close() error {
 	return s.db.Close()
 }
 
-// Caps：只读数据源（无事务/无 DDL）。
 func (s *session) Caps() engine.Capabilities {
 	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapExplain
+}
+
+// ServerInfo 返回当前库名与 ClickHouse 版本。
+func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return engine.ServerInfo{}, errors.New("clickhouse: session not open")
+	}
+	var version, database string
+	if err := s.db.QueryRowContext(ctx, "SELECT version(), currentDatabase()").Scan(&version, &database); err != nil {
+		return engine.ServerInfo{}, err
+	}
+	return engine.ServerInfo{Database: database, Version: version}, nil
 }
 
 func (s *session) Cancel() bool {

@@ -36,6 +36,41 @@ type ConnProfile struct {
 	QueryTimeout int `json:"queryTimeout,omitempty"`
 	// GuardBlock 为 true 时，高危 SQL 规则命中直接阻断执行；默认只提醒。
 	GuardBlock bool `json:"guardBlock,omitempty"`
+	// Tags 是数据源标签（最多 MaxConnTags 个），用于结果区底栏标记。
+	Tags []ConnTag `json:"tags,omitempty"`
+}
+
+// MaxConnTags 是一个数据源最多能拥有的标签数。
+const MaxConnTags = 3
+
+// DefaultConnTagColor 是未指定颜色的标签使用的调色板键。
+const DefaultConnTagColor = "blue"
+
+// ConnTag 是数据源上的一个彩色标签；Color 是 UI 调色板键（见 ui/tags.go）。
+type ConnTag struct {
+	Label string `json:"label"`
+	Color string `json:"color,omitempty"`
+}
+
+// NormalizeTags 去掉空标签、修剪首尾空白、补默认颜色，并截断到 MaxConnTags。
+// 导入/落盘路径都走它，避免旧档案里的脏标签让保存失败。
+func NormalizeTags(tags []ConnTag) []ConnTag {
+	out := make([]ConnTag, 0, len(tags))
+	for _, tag := range tags {
+		label := strings.TrimSpace(tag.Label)
+		if label == "" {
+			continue
+		}
+		color := strings.TrimSpace(tag.Color)
+		if color == "" {
+			color = DefaultConnTagColor
+		}
+		out = append(out, ConnTag{Label: label, Color: color})
+		if len(out) == MaxConnTags {
+			break
+		}
+	}
+	return out
 }
 
 // ConnFolder 是侧栏连接列表里的一个文件夹；ParentID 为空表示根级。
@@ -126,6 +161,9 @@ func LoadStore(path string) *ConnStore {
 		return s
 	}
 	s.conns = file.Conns
+	for i := range s.conns {
+		s.conns[i].Tags = NormalizeTags(s.conns[i].Tags)
+	}
 	s.folders = file.Folders
 	s.activeID = file.ActiveID
 	s.consoles = file.Consoles
@@ -363,6 +401,7 @@ func (s *ConnStore) folderNameTakenLocked(parentID, name, skipID string) bool {
 
 // Add 校验并新增连接；ID 为空时自动生成。
 func (s *ConnStore) Add(p ConnProfile) error {
+	p.Tags = NormalizeTags(p.Tags)
 	if err := validateProfile(p); err != nil {
 		return err
 	}
@@ -394,6 +433,7 @@ func (s *ConnStore) Add(p ConnProfile) error {
 
 // Update 按 ID 更新连接（校验同 Add）；换了文件夹时移到该文件夹末尾。
 func (s *ConnStore) Update(p ConnProfile) error {
+	p.Tags = NormalizeTags(p.Tags)
 	if err := validateProfile(p); err != nil {
 		return err
 	}

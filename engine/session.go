@@ -29,6 +29,18 @@ type Session interface {
 	Caps() Capabilities
 }
 
+// ServerInfo 是已连接数据源的运行时信息（结果区底栏展示用）。
+type ServerInfo struct {
+	Database string // 当前数据库/文件
+	Version  string // 数据源版本
+}
+
+// ServerInfoer 是可选能力接口：返回当前数据库名与服务器版本。
+// 打开连接后 UI 异步查询一次，失败只把版本留空，不影响会话。
+type ServerInfoer interface {
+	ServerInfo(ctx context.Context) (ServerInfo, error)
+}
+
 // Column 是一个表的列元数据（列目录用）。
 type Column struct {
 	Name       string

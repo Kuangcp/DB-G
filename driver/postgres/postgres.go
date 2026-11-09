@@ -83,6 +83,21 @@ func (s *session) Caps() engine.Capabilities {
 	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL | engine.CapExplain
 }
 
+// ServerInfo 返回当前库名与 PostgreSQL 版本（server_version 是短版本号）。
+func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return engine.ServerInfo{}, errors.New("postgres: session not open")
+	}
+	var version, database string
+	if err := s.db.QueryRowContext(ctx,
+		"SELECT current_setting('server_version'), current_database()").Scan(&version, &database); err != nil {
+		return engine.ServerInfo{}, err
+	}
+	return engine.ServerInfo{Database: database, Version: version}, nil
+}
+
 func (s *session) Cancel() bool {
 	c := s.curCancel.Load()
 	if c == nil {

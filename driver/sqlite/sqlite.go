@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -64,6 +65,24 @@ func (s *session) Close() error {
 
 func (s *session) Caps() engine.Capabilities {
 	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult | engine.CapExplain
+}
+
+// ServerInfo 返回数据库文件名与 SQLite 版本。
+func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return engine.ServerInfo{}, errors.New("sqlite: session not open")
+	}
+	var version string
+	if err := s.db.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&version); err != nil {
+		return engine.ServerInfo{}, err
+	}
+	name := "内存"
+	if s.path != ":memory:" {
+		name = filepath.Base(s.path)
+	}
+	return engine.ServerInfo{Database: name, Version: version}, nil
 }
 
 func (s *session) Cancel() bool {

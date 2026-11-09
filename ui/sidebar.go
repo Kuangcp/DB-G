@@ -499,6 +499,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 			a.connFormGuard = p.GuardBlock
 			a.connProto = connProtoIndex(p.Protocol)
 			a.connFormFolder = p.FolderID
+			a.setConnTagForm(p.Tags)
 			a.resetConnTest()
 		}
 	})
@@ -554,6 +555,7 @@ func (a *root) duplicateConn(p app.ConnProfile) {
 		Params:       p.Params,
 		FolderID:     p.FolderID,
 		QueryTimeout: p.QueryTimeout,
+		Tags:         p.Tags,
 	}
 	if err := a.store.Add(cloned); err != nil {
 		a.connErr = "复制失败：" + err.Error()
@@ -622,7 +624,7 @@ func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
 // 连接弹窗的固定尺寸：切换数据源时表单行数不同，面板却不变，窗口不会一弹一弹。
 const (
 	connFormWidth  = 640
-	connFormHeight = 520
+	connFormHeight = 660
 )
 
 func (a *root) connModal(c *ui.Context) {
@@ -688,6 +690,21 @@ func (a *root) connModal(c *ui.Context) {
 				}
 				ui.TextInput(c, &a.connFormTimeout).
 					Placeholder("查询超时（秒，空或 0 = 默认 30）").Radius(radius)
+				ui.Text(c, "标签（最多 3 个）").FontSize(12).TextColor(c.Theme().TextMuted)
+				for i := range a.connFormTags {
+					tag := &a.connFormTags[i]
+					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+						swatch := ui.Button(c, "●").FontSize(13).TextColor(tagColor(tag.color)).
+							Radius(radius).Padding(2, 8)
+						swatch.Tooltip("标签颜色：" + tagColorLabel(tag.color) + "（点击切换）")
+						if swatch.Clicked() {
+							tag.color = nextTagColor(tag.color)
+						}
+						ui.TextInput(c, &tag.label).
+							Placeholder(fmt.Sprintf("标签 %d（可选）", i+1)).
+							Radius(radius).Fill()
+					})
+				}
 				ui.Checkbox(c, &a.connFormGuard, "高危 SQL 直接阻断（默认只提醒）")
 
 				if a.connFormErr != "" {
@@ -827,6 +844,7 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 	}
 	p.QueryTimeout = sec
 	p.GuardBlock = a.connFormGuard
+	p.Tags = a.connTagFormList()
 	if a.connFormKind == "sqlite" {
 		return p, nil
 	}
@@ -989,6 +1007,7 @@ func (a *root) openNewConnForm(folderID string) {
 	a.connFormParams, a.connFormTimeout, a.connProto = "", "", 0
 	a.connFormGuard = false
 	a.connFormFolder = folderID
+	a.resetConnTagForm()
 	a.resetConnTest()
 }
 
