@@ -131,6 +131,9 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
 - [x] SQL error fix: "AI fix" on a failed execution sends the failed SQL, driver error and involved table schemas;
       the suggestion is shown as a diff and only applied to the editor after "Apply fix" or "Apply and run"; a reply
       without a SQL code block is reported as an error
+- [x] Destructive SQL guard: local deterministic rules flag UPDATE/DELETE without WHERE, tautological
+      conditions, and DROP/TRUNCATE; a dialog warns by default, and a connection profile can enable "block
+      destructive SQL"; AI is never in the allow/deny path
 - [x] Security and polish (P4): connection passwords **encrypted with AES-256-GCM on this machine**
       (key `<config>/db-g/secret.key`, 0600; existing plaintext is encrypted and written back on load; if a changed
       key cannot decrypt, the app warns and asks you to re-enter); connection profile **export/import**

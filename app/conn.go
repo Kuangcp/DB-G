@@ -34,6 +34,8 @@ type ConnProfile struct {
 	FolderID string `json:"folderID,omitempty"`
 	// QueryTimeout 是单条语句的查询超时（秒）；0 = 默认 30 秒。
 	QueryTimeout int `json:"queryTimeout,omitempty"`
+	// GuardBlock 为 true 时，高危 SQL 规则命中直接阻断执行；默认只提醒。
+	GuardBlock bool `json:"guardBlock,omitempty"`
 }
 
 // ConnFolder 是侧栏连接列表里的一个文件夹；ParentID 为空表示根级。

@@ -496,6 +496,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 			if p.QueryTimeout > 0 {
 				a.connFormTimeout = strconv.Itoa(p.QueryTimeout)
 			}
+			a.connFormGuard = p.GuardBlock
 			a.connProto = connProtoIndex(p.Protocol)
 			a.connFormFolder = p.FolderID
 			a.resetConnTest()
@@ -687,6 +688,7 @@ func (a *root) connModal(c *ui.Context) {
 				}
 				ui.TextInput(c, &a.connFormTimeout).
 					Placeholder("查询超时（秒，空或 0 = 默认 30）").Radius(radius)
+				ui.Checkbox(c, &a.connFormGuard, "高危 SQL 直接阻断（默认只提醒）")
 
 				if a.connFormErr != "" {
 					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
@@ -824,6 +826,7 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 		sec = n
 	}
 	p.QueryTimeout = sec
+	p.GuardBlock = a.connFormGuard
 	if a.connFormKind == "sqlite" {
 		return p, nil
 	}
@@ -984,6 +987,7 @@ func (a *root) openNewConnForm(folderID string) {
 	a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
 	a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
 	a.connFormParams, a.connFormTimeout, a.connProto = "", "", 0
+	a.connFormGuard = false
 	a.connFormFolder = folderID
 	a.resetConnTest()
 }

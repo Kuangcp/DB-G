@@ -233,6 +233,32 @@ func (a *root) runSQL() {
 	if len(ranges) == 0 {
 		return
 	}
+	var risks []app.SQLRisk
+	for _, st := range ranges {
+		risks = append(risks, app.CheckSQLRisks(textSlice(text, st.Start, st.End))...)
+	}
+	if len(risks) > 0 {
+		blocked := false
+		if p, ok := a.store.Get(a.activeConnID()); ok {
+			blocked = p.GuardBlock
+		}
+		a.guardOpen, a.guardBlocked, a.guardRisks = true, blocked, risks
+		if blocked {
+			a.consoleErr = "已阻断高危 SQL：" + risks[0].Message
+			app.LogWarn("exec", "risky sql blocked", "rule", risks[0].Rule)
+		}
+		return
+	}
+	a.runSQLNow()
+}
+
+// runSQLNow 执行已经通过高危检查的语句。
+func (a *root) runSQLNow() {
+	text := a.code.Text()
+	ranges := a.execRanges(text)
+	if len(ranges) == 0 {
+		return
+	}
 	// 有激活控制台时：先落盘，并确保连着它的数据源；没有控制台时沿用临时缓冲执行（不落盘）。
 	if a.activeConsole != "" {
 		if err := a.flushActive(); err != nil {

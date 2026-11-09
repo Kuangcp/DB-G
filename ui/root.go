@@ -44,6 +44,7 @@ type root struct {
 	connFormDB       string
 	connFormParams   string
 	connFormTimeout  string             // 查询超时（秒，空 = 默认 30）
+	connFormGuard    bool               // 高危 SQL 硬阻断
 	connProto        int                // ClickHouse 协议：0 native / 1 http / 2 https
 	connFormFolder   string             // 连接所属文件夹；空 = 根级
 	chords           map[string][]chord // 动作 → 键位（见 keymap.go）
@@ -65,6 +66,9 @@ type root struct {
 	aiChat           aiChatState
 	aiFix            aiFixState
 	plan             planState
+	guardOpen        bool
+	guardBlocked     bool
+	guardRisks       []app.SQLRisk
 	settingsSection  int    // 设置窗口选中的分区
 	captureAction    string // 设置窗口正在录制键位的动作
 	keymapWarn       string // 键位文件读写问题的提示
@@ -661,6 +665,7 @@ func (a *root) view(c *ui.Context) {
 		a.aiContextModal(c)
 		a.aiFixModal(c)
 		a.planConfirmModal(c)
+		a.guardModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
