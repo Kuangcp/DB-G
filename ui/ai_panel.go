@@ -2,12 +2,15 @@ package ui
 
 import (
 	"math"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
 	"db-g/ai"
+	"db-g/app"
 )
 
 // aiPanel 是右侧 AI 助手面板。
@@ -17,11 +20,18 @@ func (a *root) aiPanel(c *ui.Context) {
 	ui.Column(c).Fill().Background(t.Surface).Padding(8).Gap(6).Label("AI 面板").Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 			iconChild(c, iconSparkles, t.Accent)
-			ui.Text(c, "AI 助手").Bold()
+			title := a.currentAIConversationTitle()
+			if title == "" {
+				title = "AI 助手"
+			}
+			ui.Text(c, title).Bold().SingleLine()
 			if a.aiPrefs.Model != "" {
 				ui.Text(c, a.aiPrefs.Model).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			}
 			ui.Spacer(c)
+			if iconButtonPlain(c, iconHistory, "会话历史", t.TextMuted).Clicked() {
+				st.showHistory = !st.showHistory
+			}
 			if iconButtonPlain(c, iconPlus, "新会话", t.TextMuted).Clicked() {
 				a.resetAIChat()
 			}
@@ -29,6 +39,9 @@ func (a *root) aiPanel(c *ui.Context) {
 				st.open = false
 			}
 		})
+		if st.showHistory {
+			a.aiHistoryList(c)
+		}
 		if a.aiWarn != "" {
 			ui.Text(c, a.aiWarn).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.aiWarn)
 		}
@@ -140,5 +153,55 @@ func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 				})
 			}
 		}
+	})
+}
+
+// currentAIConversationTitle 返回当前会话的标题（空 = 新会话）。
+func (a *root) currentAIConversationTitle() string {
+	for _, conv := range a.aiChat.store.Conversations {
+		if conv.ID == a.aiChat.convID {
+			return conv.Title
+		}
+	}
+	return ""
+}
+
+// aiHistoryList 是面板内的会话历史列表，按最近使用排序。
+func (a *root) aiHistoryList(c *ui.Context) {
+	st := &a.aiChat
+	t := c.Theme()
+	convs := append([]app.AIConversation(nil), st.store.Conversations...)
+	sort.SliceStable(convs, func(i, j int) bool { return convs[i].UpdatedAt > convs[j].UpdatedAt })
+	ui.Scroll(c).Height(160).Children(func() {
+		ui.Column(c).FillWidth().Gap(1).Children(func() {
+			ui.Text(c, "会话历史").FontSize(11).Bold().TextColor(t.TextMuted)
+			if len(convs) == 0 {
+				ui.Text(c, "还没有历史会话").FontSize(11).TextColor(t.TextMuted)
+				return
+			}
+			for _, conv := range convs {
+				title := conv.Title
+				if title == "" {
+					title = "新会话"
+				}
+				label := title
+				if conv.UpdatedAt > 0 {
+					label += "  ·  " + time.UnixMilli(conv.UpdatedAt).Format("01-02 15:04")
+				}
+				btn := ui.ButtonBase(c).Label(label).Justify(ui.Start).Padding(3, 6).Radius(t.Space(1)).
+					FontSize(11.5)
+				if conv.ID == st.convID {
+					btn.Background(t.Accent.Alpha(0.12))
+					btn.Bold()
+				} else if btn.Hovered() {
+					btn.Background(t.SurfaceHover)
+				}
+				if btn.Clicked() {
+					a.stopAI()
+					a.selectAIConversation(conv.ID, true)
+					st.showHistory = false
+				}
+			}
+		})
 	})
 }

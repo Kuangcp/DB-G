@@ -26,21 +26,24 @@ type aiChatMessage struct {
 
 // aiChatState 是右侧 AI 面板的瞬态状态。
 type aiChatState struct {
-	open       bool
-	split      float32 // 主区域占左右分屏的百分比；剩余给 AI 面板
-	input      string
-	messages   []aiChatMessage
-	streaming  bool
-	cancel     context.CancelFunc
-	seq        uint64
-	err        string
-	lastCtx    string
-	lastPrompt string
-	ctxOpen    bool
-	usage      ai.Usage
-	started    time.Time
-	md         markdown.Options
-	scroll     ui.ScrollState
+	open        bool
+	split       float32 // 主区域占左右分屏的百分比；剩余给 AI 面板
+	input       string
+	messages    []aiChatMessage
+	streaming   bool
+	cancel      context.CancelFunc
+	seq         uint64
+	err         string
+	lastCtx     string
+	lastPrompt  string
+	ctxOpen     bool
+	usage       ai.Usage
+	started     time.Time
+	md          markdown.Options
+	scroll      ui.ScrollState
+	store       app.AIConversationStore
+	convID      string
+	showHistory bool
 }
 
 // aiProviderFor 返回当前配置对应的 Provider；测试可注入。
@@ -140,6 +143,9 @@ func (a *root) sendAI() {
 func (a *root) startAIRequest(display string, msgs []ai.Message) error {
 	if a.aiChat.streaming {
 		return errors.New("正在生成，请先停止")
+	}
+	if a.aiChat.convID == "" {
+		a.newAIConversation()
 	}
 	provider, err := a.aiProviderFor()
 	if err != nil {
@@ -286,15 +292,10 @@ func (a *root) stopAI() {
 	a.saveAIChat()
 }
 
-// resetAIChat 开始新会话。
+// resetAIChat 新建一段会话。
 func (a *root) resetAIChat() {
-	a.stopAI()
-	a.aiChat.messages = nil
-	a.aiChat.err = ""
-	a.aiChat.lastCtx = ""
-	a.aiChat.usage = ai.Usage{}
-	a.aiChat.scroll.Y = 0
-	a.saveAIChat()
+	a.aiChat.showHistory = false
+	a.newAIConversation()
 }
 
 // insertAISQL 把消息里第一个 SQL 代码块插入编辑器。
@@ -325,32 +326,107 @@ func (a *root) aiChatFile() string {
 
 // loadAIChat 读取当前工作区会话（打开面板时调用）。
 func (a *root) loadAIChat() {
-	conv, warn := app.LoadAIConversation(a.aiChatFile())
+	store, warn := app.LoadAIConversations(a.aiChatFile())
 	if warn != "" {
 		a.aiWarn = warn
 	}
+	a.aiChat.store = store
+	id := store.ActiveID
+	if id == "" && len(store.Conversations) > 0 {
+		id = store.Conversations[0].ID
+	}
+	if id == "" {
+		a.aiChat.convID = ""
+		a.newAIConversation()
+		return
+	}
+	a.selectAIConversation(id, false)
+}
+
+// selectAIConversation 切换当前会话；saveCurrent 先把当前消息写回 store。
+func (a *root) selectAIConversation(id string, saveCurrent bool) {
+	a.stopAI()
+	if saveCurrent {
+		a.syncAIChat()
+	}
+	var conv *app.AIConversation
+	for i := range a.aiChat.store.Conversations {
+		if a.aiChat.store.Conversations[i].ID == id {
+			conv = &a.aiChat.store.Conversations[i]
+			break
+		}
+	}
+	if conv == nil {
+		return
+	}
+	a.aiChat.convID = id
 	a.aiChat.messages = a.aiChat.messages[:0]
 	for _, m := range conv.Messages {
 		a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{
 			role: m.Role, text: m.Text, done: m.Done, err: m.Err,
 		})
 	}
+	a.aiChat.store.ActiveID = id
 	a.aiChat.scroll.Y = math.MaxFloat32
+	a.saveAIChat()
 }
 
-// saveAIChat 保存当前工作区会话。
-func (a *root) saveAIChat() {
-	path := a.aiChatFile()
-	if path == "" {
+// newAIConversation 新建会话并切换过去。
+func (a *root) newAIConversation() {
+	a.stopAI()
+	a.syncAIChat()
+	now := time.Now().UnixMilli()
+	conv := app.AIConversation{ID: app.NewAIConversationID(), CreatedAt: now, UpdatedAt: now}
+	a.aiChat.store.Conversations = append(a.aiChat.store.Conversations, conv)
+	a.aiChat.store.ActiveID = conv.ID
+	a.aiChat.convID = conv.ID
+	a.aiChat.messages = nil
+	a.aiChat.err = ""
+	a.aiChat.lastCtx = ""
+	a.aiChat.usage = ai.Usage{}
+	a.aiChat.scroll.Y = 0
+	a.saveAIChat()
+}
+
+// syncAIChat 把当前消息写回内存 store，并更新标题/时间。
+func (a *root) syncAIChat() {
+	if a.aiChat.convID == "" {
 		return
 	}
-	conv := app.AIConversation{Version: 1}
+	idx := -1
+	for i := range a.aiChat.store.Conversations {
+		if a.aiChat.store.Conversations[i].ID == a.aiChat.convID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return
+	}
+	conv := &a.aiChat.store.Conversations[idx]
+	conv.Messages = conv.Messages[:0]
 	for _, m := range a.aiChat.messages {
 		conv.Messages = append(conv.Messages, app.AIMessageRecord{
 			Role: m.role, Text: m.text, Done: m.done, Err: m.err,
 		})
 	}
-	if err := app.SaveAIConversation(path, conv); err != nil {
+	if conv.Title == "" || conv.Title == "新会话" {
+		if title := app.AIConversationTitle(conv.Messages); title != "" {
+			conv.Title = title
+		}
+	}
+	conv.UpdatedAt = time.Now().UnixMilli()
+	a.aiChat.store.ActiveID = conv.ID
+}
+
+// saveAIChat 保存当前工作区全部会话。
+func (a *root) saveAIChat() {
+	path := a.aiChatFile()
+	if path == "" {
+		return
+	}
+	a.syncAIChat()
+	if err := app.SaveAIConversations(path, a.aiChat.store); err != nil {
 		a.aiWarn = "保存 AI 会话失败：" + err.Error()
 	}
 }

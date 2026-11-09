@@ -52,24 +52,47 @@ func TestLoadAIPrefsDefaultsAndRoundTrip(t *testing.T) {
 	}
 }
 
-func TestAIConversationRoundTrip(t *testing.T) {
+func TestAIConversationStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := AIConversationPath(dir, "ws-1")
-	conv := AIConversation{Messages: []AIMessageRecord{
-		{Role: "user", Text: "hi", Done: true},
-		{Role: "assistant", Text: "```sql\nSELECT 1;\n```", Done: true},
-	}}
-	if err := SaveAIConversation(path, conv); err != nil {
+	store := AIConversationStore{
+		ActiveID: "second",
+		Conversations: []AIConversation{
+			{ID: "first", Messages: []AIMessageRecord{{Role: "user", Text: "第一条", Done: true}}},
+			{ID: "second", Messages: []AIMessageRecord{
+				{Role: "user", Text: "hi", Done: true},
+				{Role: "assistant", Text: "SELECT 1;", Done: true},
+			}},
+		},
+	}
+	if err := SaveAIConversations(path, store); err != nil {
 		t.Fatal(err)
 	}
-	got, warn := LoadAIConversation(path)
+	got, warn := LoadAIConversations(path)
 	if warn != "" {
 		t.Fatal(warn)
 	}
-	if len(got.Messages) != 2 || got.Messages[1].Text != "```sql\nSELECT 1;\n```" {
-		t.Fatalf("conversation: %+v", got)
+	if got.Version != 2 || got.ActiveID != "second" || len(got.Conversations) != 2 {
+		t.Fatalf("store: %+v", got)
 	}
-	if got.Version != 1 {
-		t.Fatalf("version: %d", got.Version)
+	if got.Conversations[0].Title != "第一条" {
+		t.Fatalf("title: %q", got.Conversations[0].Title)
+	}
+}
+
+func TestLoadAIConversationsMigratesLegacy(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "legacy.json")
+	legacy := `{"version":1,"messages":[{"role":"user","text":"old chat","done":true}]}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warn := LoadAIConversations(path)
+	if warn != "" {
+		t.Fatal(warn)
+	}
+	if len(got.Conversations) != 1 || got.Conversations[0].ID != "default" ||
+		got.Conversations[0].Title != "old chat" {
+		t.Fatalf("migrated: %+v", got)
 	}
 }

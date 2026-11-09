@@ -207,3 +207,61 @@ func TestAIPanelWidthSurvivesHideShow(t *testing.T) {
 		t.Fatalf("AI panel width changed: %v -> %v", first.W, second.W)
 	}
 }
+
+func TestAIChatConversationHistorySwitch(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.aiPrefsPath = filepath.Join(t.TempDir(), "ai.json")
+	prof := seedConsoleConn(t, a, "本地")
+	rec, err := a.consoleMgr().Create(prof.ID, "AI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.setActiveText("select 1")
+	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+		{Kind: ai.EventText, Text: "ok"},
+		{Kind: ai.EventDone},
+	}}
+	a.aiPrefs.Model = "fake"
+	a.aiChat.open = true
+	a.loadAIChat()
+
+	a.aiChat.input = "first question"
+	a.sendAI()
+	firstID := a.aiChat.convID
+	if firstID == "" || len(a.aiChat.messages) != 2 {
+		t.Fatalf("first conversation: id=%q messages=%+v", firstID, a.aiChat.messages)
+	}
+
+	a.resetAIChat()
+	secondID := a.aiChat.convID
+	if secondID == "" || secondID == firstID || len(a.aiChat.messages) != 0 {
+		t.Fatalf("new conversation: id=%q messages=%+v", secondID, a.aiChat.messages)
+	}
+	a.aiChat.input = "second question"
+	a.sendAI()
+	if len(a.aiChat.store.Conversations) != 2 {
+		t.Fatalf("store conversations: %+v", a.aiChat.store.Conversations)
+	}
+	a.aiChat.showHistory = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if !tt.HasText("会话历史") || !tt.HasText("first question") || !tt.HasText("second question") {
+		t.Fatalf("history list: %q", tt.Texts())
+	}
+	a.aiChat.showHistory = false
+
+	a.selectAIConversation(firstID, true)
+	if len(a.aiChat.messages) != 2 || a.aiChat.messages[0].text != "first question" {
+		t.Fatalf("switched messages: %+v", a.aiChat.messages)
+	}
+	store, warn := app.LoadAIConversations(a.aiChatFile())
+	if warn != "" {
+		t.Fatal(warn)
+	}
+	if store.ActiveID != firstID || len(store.Conversations) != 2 {
+		t.Fatalf("saved store: %+v", store)
+	}
+}

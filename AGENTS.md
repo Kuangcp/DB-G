@@ -127,7 +127,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 外观设置（模式/强调色/密度/圆角/字号） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
-| AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存消息；只存文本，不存上下文快照/样本行 |
+| AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
 
 判断口诀：**删掉实体要不要一起消失、要不要按它查询？** 要 → `connections.json` 的结构化字段；
