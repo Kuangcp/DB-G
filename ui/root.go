@@ -656,13 +656,12 @@ func (a *root) view(c *ui.Context) {
 				// 顶栏：连接状态 + 操作。工具条里的按钮悬停前没有面孔。
 				ui.Toolbar(c, func() {
 					connID := a.activeConnID()
-					if connID != "" {
-						a.connDot(c, connID)
-						if name := a.activeConnName(); name != "" {
-							ui.Text(c, name).Bold()
+					if connID != "" && a.store != nil {
+						if p, ok := a.store.Get(connID); ok {
+							a.topBarConn(c, p)
 						}
-						a.schemaPicker(c)
 					}
+					a.schemaPicker(c)
 					if a.connErr != "" {
 						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
 					}

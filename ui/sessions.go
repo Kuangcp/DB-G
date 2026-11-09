@@ -236,3 +236,75 @@ func (a *root) connDot(c *ui.Context, connID string) {
 		dot.Tooltip(msg)
 	}
 }
+
+// topBarConn 是顶栏数据源名 + 状态点：双击在连接/断开之间切换。
+// 断开只关会话并保留已加载的树（下次展开时按 stale 重拉首页）。
+func (a *root) topBarConn(c *ui.Context, p app.ConnProfile) {
+	t := c.Theme()
+	row := ui.ButtonBase(c).Label("数据源 "+p.Name).Gap(4).AlignItems(ui.Center).
+		Padding(t.Space(0.5), t.Space(0.75)).Radius(t.Space(1)).
+		Tooltip("双击连接 / 断开数据源")
+	if row.Hovered() {
+		row.Background(t.SurfaceHover)
+	}
+	row.Children(func() {
+		a.connDot(c, p.ID)
+		name := ui.Text(c, p.Name).Bold().SingleLine()
+		if !a.connected(p.ID) {
+			name.TextColor(t.TextMuted)
+		}
+	})
+	if row.DoubleClicked() {
+		if a.connected(p.ID) {
+			a.disconnectConn(p)
+		} else {
+			a.expandConnAndTree(p)
+		}
+	}
+}
+
+// disconnectConn 断开用户当前数据源：关会话、失效补全缓存，并把树分组标成过期，
+// 重连后展开分组会重新拉第一页/计数；已加载的对象先留着，侧栏不会突然空掉。
+func (a *root) disconnectConn(p app.ConnProfile) {
+	if !a.connected(p.ID) {
+		return
+	}
+	if sess := a.sessionFor(p.ID); sess != nil {
+		sess.Cancel()
+	}
+	a.closeSession(p.ID, "user disconnect")
+	delete(a.sessionErr, p.ID)
+	a.connErr = ""
+	if a.catalog != nil {
+		a.catalog.invalidate(p.ID)
+	}
+	a.markConnTreeStale(p.ID)
+	app.LogInfo("conn", "disconnect", "id", p.ID, "name", p.Name)
+}
+
+// markConnTreeStale 让某连接已加载的树分组在下次展开时替换首页，并丢掉计数。
+func (a *root) markConnTreeStale(connID string) {
+	if a.treeGroupStale == nil {
+		a.treeGroupStale = map[string]bool{}
+	}
+	for base, byKind := range a.treeData {
+		if !connBaseMatch(connID, base) {
+			continue
+		}
+		for kind := range byKind {
+			key := objectGroupKey(base, kind)
+			delete(a.treePageStarted, key)
+			a.treeGroupStale[key] = true
+		}
+	}
+	for base := range a.treeCounts {
+		if connBaseMatch(connID, base) {
+			delete(a.treeCounts, base)
+		}
+	}
+	for key := range a.treeLoading {
+		if connBaseMatch(connID, key) {
+			delete(a.treeLoading, key)
+		}
+	}
+}
