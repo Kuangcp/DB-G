@@ -38,12 +38,16 @@ func main() {
 
 	r := ui.NewRoot()
 	r.SetAppIconPNG(appIconPNG)
+	themePrefs, _ := app.LoadThemePrefs(app.DefaultThemePrefsPath())
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:   app.DisplayName,
-			Width:   1280,
-			Height:  800,
-			Content: mygoUI.View(r.View),
+			Title:           app.DisplayName,
+			Width:           1280,
+			Height:          800,
+			Content:         mygoUI.View(r.View),
+			Frameless:       true,
+			CornerRadius:    themePrefs.Radius + 4,
+			BackgroundColor: "light-dark(#f9f9f9, #000000)",
 		})
 		if err := win.SetIcon(appIconPNG); err != nil {
 			app.LogWarn("startup", "set window icon failed", "err", err.Error())

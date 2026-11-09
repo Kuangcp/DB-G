@@ -28,8 +28,8 @@ func newTabRoot(t *testing.T) (*root, *ui.Tester, ui.Color) {
 	}
 	var accent ui.Color
 	tt := ui.NewTester(func(c *ui.Context) {
-		accent = c.Theme().Accent
 		rootView(a)(c)
+		accent = c.Theme().Accent
 	}, 1200, 700)
 	tt.Frame()
 	return a, tt, accent

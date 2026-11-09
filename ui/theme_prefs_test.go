@@ -7,13 +7,17 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	lobe "db-g/ui/lobe"
 )
 
 func TestResolveThemeSystemNoOverrides(t *testing.T) {
 	base := ui.DarkTheme()
 	got := resolveTheme(base, app.DefaultThemePrefs(), ui.Preferences{})
-	if got.Apply || got.Theme != base {
-		t.Fatalf("system without overrides must hand over to mygo: %+v", got)
+	if got.Theme == base || !got.Theme.Dark {
+		t.Fatalf("system mode must apply the Lobe dark theme: %+v", got)
+	}
+	if got.Theme.Background != lobe.Dark().BgLayout {
+		t.Fatalf("background must come from Lobe tokens: %v", got.Theme.Background)
 	}
 }
 
@@ -22,7 +26,7 @@ func TestResolveThemeSystemWithOverrides(t *testing.T) {
 	p := app.DefaultThemePrefs()
 	p.Accent = "violet"
 	got := resolveTheme(base, p, ui.Preferences{})
-	if !got.Apply || !got.Theme.Dark {
+	if !got.Theme.Dark {
 		t.Fatalf("system with overrides must keep dark: %+v", got)
 	}
 	if got.Theme.Accent != themeAccentPresets["violet"] {
@@ -35,11 +39,11 @@ func TestResolveThemeSystemWithOverrides(t *testing.T) {
 
 func TestResolveThemeExplicitLightDark(t *testing.T) {
 	light := resolveTheme(ui.DarkTheme(), app.ThemePrefs{Mode: "light"}, ui.Preferences{})
-	if !light.Apply || light.Theme.Dark {
+	if light.Theme.Dark {
 		t.Fatal("explicit light mode must be light")
 	}
 	dark := resolveTheme(ui.LightTheme(), app.ThemePrefs{Mode: "dark"}, ui.Preferences{})
-	if !dark.Apply || !dark.Theme.Dark {
+	if !dark.Theme.Dark {
 		t.Fatal("explicit dark mode must be dark")
 	}
 	// 默认强调色：桌面有强调色时用它。
@@ -48,9 +52,9 @@ func TestResolveThemeExplicitLightDark(t *testing.T) {
 	if got.Theme.Accent != desk.Accent {
 		t.Fatalf("desktop accent: %v want %v", got.Theme.Accent, desk.Accent)
 	}
-	// 桌面没有强调色：保留主题自带蓝色。
+	// 桌面没有强调色：保留 Lobe 主题自带的强调色。
 	got = resolveTheme(ui.LightTheme(), app.ThemePrefs{Mode: "dark"}, ui.Preferences{})
-	if got.Theme.Accent != ui.DarkTheme().Accent {
+	if got.Theme.Accent != lobe.Dark().Theme().Accent {
 		t.Fatalf("theme accent fallback: %v", got.Theme.Accent)
 	}
 }
@@ -84,23 +88,23 @@ func TestResolveThemeDensityRadiusFontSize(t *testing.T) {
 	p.FontSize = 0
 	p.Density = "roomy"
 	got = resolveTheme(ui.LightTheme(), p, ui.Preferences{TextScale: 1.5})
-	want := ui.DarkTheme().FontSize * 1.5
+	want := lobe.Dark().Theme().FontSize * 1.5
 	if got.Theme.FontSize != want || got.Theme.Spacing != 5 {
 		t.Fatalf("scale: font=%v want %v spacing=%v", got.Theme.FontSize, want, got.Theme.Spacing)
 	}
 }
 
 func TestResolveThemeSystemKeepsBaseMetrics(t *testing.T) {
-	base := ui.LightTheme()
 	p := app.DefaultThemePrefs()
-	// 仅调圆角：其他字段保持主题原值。
+	// 仅调圆角：其他字段保持 Lobe 主题原值。
 	p.Radius = 2
-	got := resolveTheme(base, p, ui.Preferences{})
-	if !got.Apply || got.Theme.Radius != 2 {
+	got := resolveTheme(ui.LightTheme(), p, ui.Preferences{})
+	if got.Theme.Radius != 2 {
 		t.Fatalf("radius override: %+v", got)
 	}
-	if got.Theme.Spacing != base.Spacing || got.Theme.FontSize != base.FontSize {
-		t.Fatal("unrelated metrics must keep the theme's")
+	lobeTheme := lobe.Light().Theme()
+	if got.Theme.Spacing != lobeTheme.Spacing || got.Theme.FontSize != lobeTheme.FontSize {
+		t.Fatal("unrelated metrics must keep the Lobe theme's")
 	}
 }
 
@@ -114,13 +118,13 @@ func TestApplyThemeInFrame(t *testing.T) {
 		t.Fatalf("frame should build: %q", tt.Texts())
 	}
 	got := a.resolvedThemeFor(ui.LightTheme(), ui.Preferences{})
-	if !got.Apply || !got.Theme.Dark {
+	if !got.Theme.Dark {
 		t.Fatalf("dark mode must apply: %+v", got)
 	}
 	a.themePrefs = app.DefaultThemePrefs()
 	got = a.resolvedThemeFor(ui.LightTheme(), ui.Preferences{})
-	if got.Apply {
-		t.Fatal("system without overrides must not SetTheme")
+	if got.Theme.Dark {
+		t.Fatalf("system mode must still apply the Lobe theme: %+v", got)
 	}
 }
 

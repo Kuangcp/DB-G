@@ -39,7 +39,7 @@ func TestMultiStatementTabsAndSequentialRun(t *testing.T) {
 	a.setActiveText("SELECT 1 AS a; SELECT 2 AS b")
 	a.setSelection(0, len([]rune("SELECT 1 AS a; SELECT 2 AS b")))
 	var th *ui.Theme
-	tt := ui.NewTester(func(c *ui.Context) { th = c.Theme(); rootView(a)(c) }, 1400, 800)
+	tt := ui.NewTester(func(c *ui.Context) { rootView(a)(c); th = c.Theme() }, 1400, 800)
 	tt.Frame()
 	a.runSQL()
 	waitStmts(t, a, tt, 2)
@@ -77,7 +77,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	a.setActiveText("SELECT * FROM nope; SELECT 2 AS b; SELECT 3 AS c")
 	a.setSelection(0, len([]rune("SELECT * FROM nope; SELECT 2 AS b; SELECT 3 AS c")))
 	var th *ui.Theme
-	tt := ui.NewTester(func(c *ui.Context) { th = c.Theme(); rootView(a)(c) }, 1400, 800)
+	tt := ui.NewTester(func(c *ui.Context) { rootView(a)(c); th = c.Theme() }, 1400, 800)
 	tt.Frame()
 	a.runSQL()
 	waitStmts(t, a, tt, 1) // 第一条失败即停，只需等它结束
