@@ -225,3 +225,11 @@ func TestStmtScopeAtSoftBoundaryGuards(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenizeSQLUnclosedQuoteDoesNotPanic(t *testing.T) {
+	for _, s := range []string{`select "`, "select `", `select "x`} {
+		_ = tokenizeSQL(s)
+		_ = stmtScopeAt(s, len(s))
+		_ = relationPositionAt(s, len(s))
+	}
+}

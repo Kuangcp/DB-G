@@ -110,7 +110,7 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
 - [x] AI 助手（第一阶段）：右侧可折叠、可拖动调整宽度的面板做 Chat-to-SQL，默认本地 Ollama、也可配置
       任意 OpenAI-compatible 服务；默认只发送表结构 + 当前 SQL，样本/历史/错误日志逐项开启；
       发送前可查看完整上下文；流式回复，生成的 SQL 需用户点「插入 SQL」才进入编辑器；
-      设置窗口「AI」分区配置服务地址/模型/API Key（本机加密）；会话按工作区保存，支持多段历史切换与新建
+      设置窗口「AI」分区配置服务地址/模型/API Key（本机加密）；会话按工作区保存，支持多段历史切换与新建；标题默认取首条消息截取，可在设置里开关 AI 生成标题
 - [x] 执行计划：顶栏「执行计划」按当前语句/选区跑 EXPLAIN，结果区展示统一计划树，
       节点按代价着色并显示 rows/actual；支持 SQLite `EXPLAIN QUERY PLAN`、PostgreSQL JSON、
       MySQL JSON/TREE、ClickHouse JSON，解析失败回退原始结果；ANALYZE 每次确认且只允许

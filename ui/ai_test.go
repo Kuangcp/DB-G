@@ -18,11 +18,13 @@ type fakeAIProvider struct {
 	req    ai.Request
 	events []ai.Event
 	err    error
+	calls  int
 }
 
 func (f *fakeAIProvider) Models(context.Context) ([]string, error) { return []string{"fake"}, nil }
 
 func (f *fakeAIProvider) Stream(_ context.Context, req ai.Request) (<-chan ai.Event, error) {
+	f.calls++
 	f.req = req
 	if f.err != nil {
 		return nil, f.err
@@ -263,5 +265,38 @@ func TestAIChatConversationHistorySwitch(t *testing.T) {
 	}
 	if store.ActiveID != firstID || len(store.Conversations) != 2 {
 		t.Fatalf("saved store: %+v", store)
+	}
+}
+
+func TestAITitleGenerationIsOptIn(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	rec, err := a.consoleMgr().Create(prof.ID, "AI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.setActiveText("select 1")
+	p := &fakeAIProvider{events: []ai.Event{
+		{Kind: ai.EventText, Text: "ok"},
+		{Kind: ai.EventDone},
+	}}
+	a.aiTestProvider = p
+	a.aiPrefs.Model = "fake"
+	a.aiChat.open = true
+	a.loadAIChat()
+	a.aiChat.input = "first"
+	a.sendAI()
+	if p.calls != 1 {
+		t.Fatalf("title generation must be off by default: calls=%d", p.calls)
+	}
+	a.aiPrefs.AITitle = true
+	a.resetAIChat()
+	a.aiChat.input = "second"
+	a.sendAI()
+	if p.calls != 3 {
+		t.Fatalf("title generation should add one call: calls=%d", p.calls)
 	}
 }

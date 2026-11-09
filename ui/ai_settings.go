@@ -59,6 +59,9 @@ func (a *root) aiSection(c *ui.Context) {
 	if ui.Checkbox(c, &a.aiPrefs.AllowSampleRows, "允许发送表样本行（第一期尚未采集）").Changed() {
 		a.saveAIPrefs()
 	}
+	if ui.Checkbox(c, &a.aiPrefs.AITitle, "用 AI 生成会话标题（额外一次调用，默认关）").Changed() {
+		a.saveAIPrefs()
+	}
 	if a.aiWarn != "" {
 		ui.Text(c, a.aiWarn).FontSize(11).TextColor(c.Theme().Danger).SingleLine().Tooltip(a.aiWarn)
 	}

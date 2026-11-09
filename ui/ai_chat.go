@@ -165,6 +165,9 @@ func (a *root) startAIRequest(display string, msgs []ai.Message) error {
 		aiChatMessage{role: "assistant"},
 	)
 	a.saveAIChat()
+	if a.aiPrefs.AITitle && len(a.aiChat.messages) == 2 {
+		a.generateAITitle(a.aiChat.convID, display)
+	}
 	a.aiChat.seq++
 	seq := a.aiChat.seq
 	ctx, cancel := context.WithCancel(context.Background())
@@ -446,6 +449,67 @@ func (a *root) saveAIChat() {
 	if err := app.SaveAIConversations(path, a.aiChat.store); err != nil {
 		a.aiWarn = "保存 AI 会话失败：" + err.Error()
 	}
+}
+
+// generateAITitle 在用户显式开启时用模型生成会话标题；失败静默保留消息截取标题。
+func (a *root) generateAITitle(convID, firstMessage string) {
+	if convID == "" {
+		return
+	}
+	provider, err := a.aiProviderFor()
+	if err != nil {
+		return
+	}
+	msgs := []ai.Message{
+		{Role: ai.RoleSystem, Content: "用不超过 12 个汉字概括这段对话的主题，只输出标题本身，不要引号、标点或解释。"},
+		{Role: ai.RoleUser, Content: firstMessage},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	apply := func(title string) {
+		title = strings.TrimSpace(title)
+		title = strings.Trim(title, "\"'“”「」")
+		if runes := []rune(title); len(runes) > 20 {
+			title = string(runes[:20])
+		}
+		if title == "" {
+			return
+		}
+		for i := range a.aiChat.store.Conversations {
+			if a.aiChat.store.Conversations[i].ID == convID {
+				a.aiChat.store.Conversations[i].Title = title
+				a.aiChat.store.Conversations[i].UpdatedAt = time.Now().UnixMilli()
+				break
+			}
+		}
+		a.saveAIChat()
+	}
+	read := func(ch <-chan ai.Event) string {
+		var b strings.Builder
+		for ev := range ch {
+			if ev.Kind == ai.EventText {
+				b.WriteString(ev.Text)
+			}
+		}
+		return b.String()
+	}
+	req := ai.Request{Model: a.aiPrefs.Model, Messages: msgs, Temperature: 0, MaxTokens: 48}
+	if a.win == nil {
+		ch, err := provider.Stream(ctx, req)
+		if err == nil {
+			apply(read(ch))
+		}
+		return
+	}
+	win := a.win
+	go func() {
+		ch, err := provider.Stream(ctx, req)
+		if err != nil {
+			return
+		}
+		title := read(ch)
+		win.Update(func() { apply(title) })
+	}()
 }
 
 // saveAIPrefs 写盘 AI 配置；空路径（测试）不落盘。

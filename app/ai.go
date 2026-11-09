@@ -22,6 +22,8 @@ type AIPrefs struct {
 	AllowSampleRows bool   `json:"allowSampleRows"`
 	AllowHistory    bool   `json:"allowHistory"`
 	AllowErrorLogs  bool   `json:"allowErrorLogs"`
+	// AITitle 为 true 时用模型生成会话标题；默认用首条消息截取。
+	AITitle bool `json:"aiTitle,omitempty"`
 }
 
 // DefaultAIPrefs 返回默认配置：本地 Ollama，不发送样本/历史/错误日志。

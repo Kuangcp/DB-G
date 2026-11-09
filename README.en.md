@@ -125,7 +125,7 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       OpenAI-compatible service; only schema + the current SQL are sent by default, with sample rows, history
       and error logs behind separate switches; the exact context can be previewed before sending; replies stream,
       and generated SQL is inserted only when the user clicks "Insert SQL"; Settings → AI configures the base URL,
-      model and API key (encrypted on this machine); conversations are saved per workspace with a switchable history
+      model and API key (encrypted on this machine); conversations are saved per workspace with a switchable history; titles truncate the first message by default, with optional AI title generation
 - [x] Execution plans: the top-bar "Execution plan" action EXPLAINs the current statement/selection and shows
       a unified plan tree in the result pane, colored by cost with rows/actual timing; supports SQLite
       `EXPLAIN QUERY PLAN`, PostgreSQL JSON, MySQL JSON/TREE and ClickHouse JSON, falling back to the raw result
