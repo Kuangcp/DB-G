@@ -118,6 +118,9 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       no columns when the statement references no table); after FROM/JOIN/UPDATE/INTO the relation-name position
       offers tables/views first; adjacent statements missing a semicolon are separated at line-leading
       `SELECT`/`INSERT` keywords so the next statement's tables do not leak into the current completion
+- [x] Inline AI completion: press `Alt+\` or click "AI completion" in the editor toolbar to request a suggestion
+      from the current statement/cursor context; it appears first in the completion menu with Detail "AI" and is
+      inserted only with Tab; stale suggestions are dropped when the cursor or document version changes
 - [x] AI assistant (phase 1): a collapsible right panel for Chat-to-SQL, using local Ollama by default or any
       OpenAI-compatible service; only schema + the current SQL are sent by default, with sample rows, history
       and error logs behind separate switches; the exact context can be previewed before sending; replies stream,

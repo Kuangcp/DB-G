@@ -105,6 +105,8 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       括号内（sum、avg、coalesce、WHERE (…)）也照常补列**；语句里没有表时不出列）；
       FROM/JOIN/UPDATE/INTO 后正在写表名时优先提示表/视图；相邻语句漏写分号时，
       补全按行首 `SELECT`/`INSERT` 等关键字隔开，不会把下一条语句的表混进当前补全
+- [x] 内联 AI 补全：编辑器里按 `Alt+\` 或点工具条「AI 补全」，按当前语句/光标上下文请求模型；
+      建议作为补全菜单第一项（Detail「AI」），Tab 才插入；光标/正文版本变化后旧建议自动丢弃
 - [x] AI 助手（第一阶段）：右侧可折叠面板做 Chat-to-SQL，默认本地 Ollama、也可配置
       任意 OpenAI-compatible 服务；默认只发送表结构 + 当前 SQL，样本/历史/错误日志逐项开启；
       发送前可查看完整上下文；流式回复，生成的 SQL 需用户点「插入 SQL」才进入编辑器；
@@ -130,7 +132,8 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
 - [x] 快捷键：统一动作表 + 可改键（`keymap.json`，设置窗口里点「录制」改）；
       `Ctrl+Enter` 执行、`Ctrl+S` 保存、`Ctrl+C` 复制（编辑器内为复制文本、结果区为复制单元格）、
       `Ctrl+Y` 复制当前行、`Ctrl+D` 删除当前行/选区、`Ctrl+Shift+F` 格式化、
-      `Ctrl+Tab` 切换最近使用的控制台、`Alt+D` 显隐结果区、`Ctrl+Q` 查看所选对象 DDL
+      `Ctrl+Tab` 切换最近使用的控制台、`Alt+D` 显隐结果区、`Ctrl+Q` 查看所选对象 DDL、
+      `Alt+\` 请求 AI 内联补全
 - [x] 外观：跟随系统 / 浅色 / 深色；强调色（默认/预设/自定义 hex）、间距密度、
       圆角、界面字号，修改即时生效并存 `~/.config/db-g/theme.json`；支持主题文件
       导出/导入（带 app/version 校验，非法字段逐项忽略）；设置窗口「外观」分区实时预览

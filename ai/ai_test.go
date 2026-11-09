@@ -148,3 +148,23 @@ func TestBuildFixMessages(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildCompletionMessages(t *testing.T) {
+	snapshot := ContextSnapshot{
+		Connection: ConnInfo{Kind: "mysql", Database: "shop"},
+		Tables:     []TableContext{{Name: "users", Columns: []ColumnContext{{Name: "id", Type: "bigint"}}}},
+	}
+	msgs := BuildCompletionMessages(snapshot, "select * from us", " where id = 1")
+	if len(msgs) != 2 {
+		t.Fatalf("messages: %+v", msgs)
+	}
+	body := msgs[1].Content
+	for _, want := range []string{"select * from us", "<CURSOR>", "where id = 1", "users"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("completion prompt missing %q:\n%s", want, body)
+		}
+	}
+	if got := ExtractCompletion("```sql\nFROM users\n```"); got != "FROM users" {
+		t.Fatalf("extract completion: %q", got)
+	}
+}

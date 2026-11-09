@@ -65,6 +65,7 @@ type root struct {
 	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
 	aiChat           aiChatState
 	aiFix            aiFixState
+	aiCompletion     aiCompletionState
 	plan             planState
 	guardOpen        bool
 	guardBlocked     bool
@@ -749,6 +750,9 @@ func (a *root) view(c *ui.Context) {
 							}
 							if iconButton(c, iconFormat, "格式化 SQL", ui.Transparent).Clicked() {
 								a.formatActive()
+							}
+							if iconButton(c, iconSparkles, "AI 补全 (Alt+\\)", ui.Transparent).Clicked() {
+								a.requestAICompletion()
 							}
 						}).Label("编辑器工具")
 

@@ -14,10 +14,9 @@
     - 相关代码：`ui/sqlscope.go` 的 `stmtScopeAtOffset` / `statementBounds` /
       `softStatementEnd` / `relationPositionAt`；测试 `TestStmtScopeAtSoftBoundaryGuards`、
       `TestCompletionRelationPositionWithPreviousStatement`。
-- AI 助手后续阶段（Chat-to-SQL、EXPLAIN 可视化 + AI 诊断、SQL 错误修复、高危 SQL 拦截已完成，
-  设计与计划见 `docs/superpowers/specs/2026-11-09-ai-context-design.md`、
+- AI 助手后续阶段（Chat-to-SQL、EXPLAIN 可视化 + AI 诊断、SQL 错误修复、高危 SQL 拦截、
+  内联 AI 补全已完成，设计与计划见 `docs/superpowers/specs/2026-11-09-ai-context-design.md`、
   `docs/superpowers/plans/2026-11-09-ai-context.md`）：
-    - 编辑器内联 AI 补全
     - 向量/embedding 检索（当前仅词法 + 外键扩展）
 
 - Ai设置里 先填地址和key，最后选模型，填完前面俩就可以通过 api协议里的/models 接口获取到模型列表了，下拉选择，如果获取不到就用户手动输入模型名

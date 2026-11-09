@@ -268,3 +268,57 @@ func BuildFixMessages(snapshot ContextSnapshot, sql, errText string) []Message {
 	msgs[1].Content += "\n\n# 失败 SQL\n```sql\n" + sql + "\n```\n\n# 驱动错误\n```\n" + errText + "\n```\n"
 	return msgs
 }
+
+// BuildCompletionMessages 组装一次编辑器内联补全请求。
+// before 是光标前文，after 是光标后文；模型只返回应插入光标处的 SQL 片段。
+func BuildCompletionMessages(snapshot ContextSnapshot, before, after string) []Message {
+	const beforeLimit, afterLimit = 4000, 1200
+	if len(before) > beforeLimit {
+		before = before[len(before)-beforeLimit:]
+	}
+	if len(after) > afterLimit {
+		after = after[:afterLimit]
+	}
+	tables := RankTables(before, snapshot.Tables, snapshot.ActiveSQL, 12)
+	snapshot.Tables = tables
+	system := fmt.Sprintf(`你是 SQL 编辑器补全引擎，当前方言是 %s。
+只返回应插入光标处的 SQL 文本，不要 Markdown、不要代码围栏、不要解释。
+补全会替换光标前正在输入的单词，因此输出要包含该单词的完整拼写。
+不要重复光标之后已经存在的内容；不要编造 schema 里没有的表或列。`, dialectName(snapshot.Connection.Kind))
+	var b strings.Builder
+	b.WriteString("# 连接\n")
+	fmt.Fprintf(&b, "- 类型：%s\n", dialectName(snapshot.Connection.Kind))
+	if snapshot.Connection.Database != "" {
+		fmt.Fprintf(&b, "- 数据库/schema：%s\n", snapshot.Connection.Database)
+	}
+	if len(snapshot.Tables) > 0 {
+		b.WriteString("\n# 相关表\n")
+		for _, t := range snapshot.Tables {
+			fmt.Fprintf(&b, "## %s\n", t.Name)
+			for _, c := range t.Columns {
+				fmt.Fprintf(&b, "- %s %s\n", c.Name, c.Type)
+			}
+		}
+	}
+	b.WriteString("\n# 光标前\n```sql\n")
+	b.WriteString(before)
+	b.WriteString("\n<CURSOR>\n```\n# 光标后\n```sql\n")
+	b.WriteString(after)
+	b.WriteString("\n```\n")
+	return []Message{
+		{Role: RoleSystem, Content: system},
+		{Role: RoleUser, Content: b.String()},
+	}
+}
+
+// ExtractCompletion 去掉补全里的 Markdown 代码围栏与首尾空白。
+func ExtractCompletion(raw string) string {
+	if sql, ok := ExtractSQL(raw); ok {
+		return strings.TrimSpace(sql)
+	}
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(s, "```") && strings.HasSuffix(s, "```") {
+		s = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "```"), "```"))
+	}
+	return strings.TrimSpace(s)
+}

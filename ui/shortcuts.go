@@ -46,6 +46,8 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		a.externalAfterSave(a.activeConsole)
 	case "format":
 		a.formatActive()
+	case "aiComplete":
+		a.requestAICompletion()
 	case "copyCell":
 		a.copyCurrentCell(c, a.currentRuntime().Result())
 	case "nextConsole":
