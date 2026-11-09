@@ -386,3 +386,48 @@ func TestAIChatCtrlEnterSendsFromInput(t *testing.T) {
 		t.Fatalf("Ctrl+Enter should send the AI prompt: %+v", a.aiChat.messages)
 	}
 }
+
+func TestAIChatEnterAddsNewline(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.aiChat.open = true
+	a.aiChat.input = "line one"
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("AI 提问"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if len(a.aiChat.messages) != 0 {
+		t.Fatalf("Enter must not send: %+v", a.aiChat.messages)
+	}
+	if !strings.Contains(a.aiChat.input, "\n") {
+		t.Fatalf("Enter should insert a newline: %q", a.aiChat.input)
+	}
+}
+
+func TestAIChatMessageAlignmentAndCopy(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.aiChat.open = true
+	a.aiChat.messages = []aiChatMessage{
+		{role: "user", text: "hello from me", done: true},
+		{role: "assistant", text: "answer here", done: true},
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	user, okUser := tt.Find("hello from me")
+	aiMsg, okAI := tt.Find("answer here")
+	if !okUser || !okAI {
+		t.Fatalf("messages missing: user=%v ai=%v texts=%q", okUser, okAI, tt.Texts())
+	}
+	if user.X <= aiMsg.X {
+		t.Fatalf("user message should align right: user=%+v ai=%+v", user, aiMsg)
+	}
+	if err := tt.Click("复制"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.Clipboard(); got != "answer here" {
+		t.Fatalf("copy answer: %q", got)
+	}
+}

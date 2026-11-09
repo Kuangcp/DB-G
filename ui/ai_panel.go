@@ -76,11 +76,11 @@ func (a *root) aiPanel(c *ui.Context) {
 		}
 		ui.TextArea(c, &st.input).
 			Lines(1, 6).
-			Placeholder("问点什么。Enter / Ctrl+Enter 发送，Shift+Enter 换行").
+			Placeholder("问点什么。Enter 换行，Ctrl+Enter 发送").
 			Label("AI 提问").
 			Bind(&st.inputRef).
 			OnTextKey(func(k ui.TextKey) bool {
-				if k.Key == ui.KeyEnter && (k.Mods == 0 || k.Mods == ui.Ctrl) {
+				if k.Key == ui.KeyEnter && k.Mods == ui.Ctrl {
 					a.sendAI()
 					return true
 				}
@@ -121,39 +121,41 @@ func (a *root) aiContextModal(c *ui.Context) {
 
 func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 	t := c.Theme()
+	if m.role == "user" {
+		ui.Row(c).FillWidth().Justify(ui.End).Children(func() {
+			ui.Column(c).MaxWidthPercent(82).Padding(5, 10).Radius(t.Space(1.5)).
+				Background(t.Accent.Alpha(0.14)).Children(func() {
+				ui.Text(c, m.text).FontSize(12.5).TextColor(t.Text).Selectable()
+			})
+		})
+		return
+	}
 	ui.Column(c).FillWidth().Gap(3).Children(func() {
-		label := "AI"
-		col := t.TextMuted
-		if m.role == "user" {
-			label = "我"
-			col = t.Accent
-		}
-		ui.Text(c, label).FontSize(10.5).TextColor(col).Bold()
+		ui.Text(c, "AI").FontSize(10.5).TextColor(t.TextMuted).Bold()
 		if m.text != "" {
-			if m.role == "assistant" {
-				if m.done {
-					markdown.View(c, m.text, &a.aiChat.md).FillWidth()
-				} else {
-					markdown.Stream(c, m.text, &a.aiChat.md).FillWidth()
-				}
+			if m.done {
+				markdown.View(c, m.text, &a.aiChat.md).FillWidth()
 			} else {
-				ui.Text(c, m.text).FontSize(12.5)
+				markdown.Stream(c, m.text, &a.aiChat.md).FillWidth()
 			}
 		}
 		if m.err != "" {
 			ui.Text(c, m.err).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(m.err)
 		}
-		if m.done && m.role == "assistant" {
-			if sql, ok := ai.ExtractSQL(m.text); ok {
-				ui.Row(c).Gap(4).Children(func() {
+		if m.done && m.text != "" {
+			ui.Row(c).Gap(4).Children(func() {
+				if ui.Button(c, "复制").Clicked() {
+					c.WriteClipboard(m.text)
+				}
+				if sql, ok := ai.ExtractSQL(m.text); ok {
 					if ui.Button(c, "插入 SQL").Clicked() {
 						a.code.Insert(sql)
 					}
 					if ui.Button(c, "复制 SQL").Clicked() {
 						c.WriteClipboard(sql)
 					}
-				})
-			}
+				}
+			})
 		}
 	})
 }
