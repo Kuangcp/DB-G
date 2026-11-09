@@ -143,8 +143,8 @@ func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 			ui.Text(c, m.err).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(m.err)
 		}
 		if m.done && m.text != "" {
-			ui.Row(c).Gap(4).Children(func() {
-				if ui.Button(c, "复制").Clicked() {
+			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+				if iconButtonPlain(c, iconCopy, "复制", t.TextMuted).Clicked() {
 					c.WriteClipboard(m.text)
 				}
 				if sql, ok := ai.ExtractSQL(m.text); ok {
