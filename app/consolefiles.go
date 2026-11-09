@@ -81,6 +81,10 @@ func (f ConsoleFiles) Migrate() {
 // 外部文件不存在返回 fs.ErrNotExist，让调用方能区分「空文件」与「文件没了」。
 func (f ConsoleFiles) Read(id string) (string, error) {
 	path := f.Path(id)
+	if rec, ok := f.record(id); ok && rec.External {
+		// 外部文件去掉 BOM 再进编辑器；写回时按原格式还原。
+		return ReadExternalSQL(path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -100,21 +104,23 @@ func (f ConsoleFiles) Write(id, text string) error {
 	rec, external := f.record(id)
 	path := f.Path(id)
 	mode := os.FileMode(0o600)
+	data := []byte(text)
 	if external && rec.External {
 		mode = 0o644
 		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
 			mode = info.Mode().Perm()
 		}
+		data = encodeExternal(text, detectExternalFormat(path))
 	} else if err := os.MkdirAll(f.Dir, 0o700); err != nil {
 		return err
 	}
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".db-g-console-*.tmp")
 	if err != nil {
-		return os.WriteFile(path, []byte(text), mode)
+		return os.WriteFile(path, data, mode)
 	}
 	tmpName := tmp.Name()
-	if _, err := tmp.WriteString(text); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(tmpName)
 		return err

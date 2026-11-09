@@ -198,13 +198,9 @@ func (a *root) handleDroppedFiles(paths []string) {
 	var activate []app.ConsoleRecord
 	var pending []string
 	for _, raw := range paths {
-		if !app.IsSQLFile(raw) {
-			a.extMsg = "只支持拖入 .sql 文件：" + filepath.Base(raw)
-			continue
-		}
-		norm, err := app.NormalizeExternalPath(raw)
+		norm, err := app.CheckExternalSQL(raw)
 		if err != nil {
-			a.extMsg = "无法读取路径：" + err.Error()
+			a.extMsg = filepath.Base(raw) + "：" + err.Error()
 			continue
 		}
 		if seen[norm] {
@@ -213,10 +209,6 @@ func (a *root) handleDroppedFiles(paths []string) {
 		seen[norm] = true
 		if rec, ok := a.store.GetConsoleByFilePath(norm); ok {
 			activate = append(activate, rec)
-			continue
-		}
-		if !app.StatExternalSQL(norm).Exists {
-			a.extMsg = "文件不存在：" + norm
 			continue
 		}
 		pending = append(pending, norm)
@@ -232,6 +224,27 @@ func (a *root) handleDroppedFiles(paths []string) {
 		a.extPickPaths = pending
 		a.extPickOpen = true
 	}
+}
+
+// pickOpenSQLFiles 弹文件选择框（顶栏入口），复用拖入流程。
+func (a *root) pickOpenSQLFiles() {
+	win := a.win
+	if win == nil {
+		return
+	}
+	go func() {
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Parent: win,
+			Title:  "打开 SQL 文件",
+			Filters: []mygo.FileFilter{
+				{Name: "SQL", Extensions: []string{"sql"}},
+			},
+		})
+		if err != nil || len(paths) == 0 {
+			return
+		}
+		win.Update(func() { a.handleDroppedFiles(paths) })
+	}()
 }
 
 // addExternalMember 把外部控制台加入当前工作区（不激活）。

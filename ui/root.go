@@ -669,6 +669,9 @@ func (a *root) view(c *ui.Context) {
 					if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
 						a.execPending = true
 					}
+					if iconButton(c, iconFolderOpen, "打开 SQL 文件", ui.Transparent).Clicked() {
+						a.pickOpenSQLFiles()
+					}
 					if iconButton(c, iconHistory, "历史", ui.Transparent).Clicked() {
 						a.historyOpen = true
 					}

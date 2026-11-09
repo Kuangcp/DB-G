@@ -136,8 +136,10 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       corner radius, UI font size, applied instantly and saved to `~/.config/db-g/theme.json`; theme files can be
       exported/imported (with app/version validation, invalid fields ignored individually); the Appearance section
       in Settings previews changes live
-- [x] External SQL files: drop a `.sql` file, pick a data source, and it opens as a temporary console
-      (the same path is reused and the file is never copied); edits are debounce-saved back to the original file.
+- [x] External SQL files: drop a `.sql` file or use “Open SQL file…” in the top bar, pick a data source,
+      and it opens as a temporary console (the same path is reused and the file is never copied);
+      8 MiB limit, non-UTF-8 / NUL-containing / non-`.sql` files are rejected. Edits are debounce-saved back
+      to the original file, preserving its BOM, line-ending style, and permissions.
       Disk changes are checked every second, on window focus, and before execute/save — a clean buffer reloads
       automatically, while local edits pause autosave and show a banner with
       "Reload / Keep local / Save as…", and execute/save ask first. Writes verify the on-disk content and never

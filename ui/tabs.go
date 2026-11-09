@@ -55,9 +55,16 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 		src = p.Name
 	}
 	dirty := m != nil && m.Dirty(rec.ID)
+	warn := false
+	if st, ok := a.extFiles[rec.ID]; ok && (st.conflict || st.missing) {
+		warn = true
+	}
 	label := src
 	if showConsole {
 		label += " / " + rec.Name
+	}
+	if warn {
+		label = "⚠ " + label
 	}
 	if dirty {
 		label = "● " + label
@@ -72,6 +79,10 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 		btn.Background(t.SurfaceHover)
 	}
 	btn.Children(func() {
+		if warn {
+			ui.Text(c, "⚠").FontSize(10).TextColor(t.Danger).
+				Tooltip("外部文件已修改或缺失，自动保存已暂停")
+		}
 		if dirty {
 			ui.Text(c, "●").FontSize(10).TextColor(t.Accent)
 		}

@@ -117,6 +117,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 |---|---|---|
 | 连接档案 / 工作区 / 控制台元数据 / 活动项 | `connections.json` | `ConnStore`；密码 **AES-256-GCM** 加密（密钥 `secret.key`，0600），启动时把存量明文自动加密回写 |
 | 控制台正文 | `consoles/<connectionID>-<consoleID>.sql` | 一个控制台一个文件；切标签/执行前/退出前落盘，平时防抖；启动时把旧 `<id>.sql` 迁移成新名字 |
+| 外部控制台正文 | 用户磁盘上的 `.sql`（`ConsoleRecord.External`） | 只在原文件写回，不复制；删除记录不删文件；写前校验外部修改，保留 BOM/换行/权限 |
 | 数据源元数据缓存 | `meta/<connID>.json` | `app.MetaCache`；schema/计数/已加载对象页，24h TTL，指纹不含密码/名称；删除连接/改目标地址/重载时清理 |
 | SQL 历史 | `history/<connectionID>.jsonl` | 每个数据源一个文件；到 6000 条惰性裁剪到 5000 条，面板只展示最近 100 条 |
 | 日志 | `logs/YYYY-MM/YYYY-MM-DD_N.log` | 纯文本（时间/级别/标签/消息/kv），一次启动一个文件，0600 |
