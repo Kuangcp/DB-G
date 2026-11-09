@@ -20,7 +20,7 @@ func TestCatalogCacheHitAndTTL(t *testing.T) {
 	if c.begin("conn") {
 		t.Fatal("concurrent load must not start twice")
 	}
-	c.finish("conn", []string{"orders"}, []string{"v_orders"})
+	c.finish("conn", []string{"orders"}, []string{"v_orders"}, "")
 	items, ok := c.get("conn")
 	if !ok || len(items) == 0 {
 		t.Fatalf("cache miss after finish: %v", ok)
@@ -49,7 +49,7 @@ func TestCatalogCacheHitAndTTL(t *testing.T) {
 func TestCatalogIsolatesConnections(t *testing.T) {
 	c := newCatalogCache()
 	c.begin("a")
-	c.finish("a", []string{"only_a"}, nil)
+	c.finish("a", []string{"only_a"}, nil, "")
 	if _, ok := c.get("b"); ok {
 		t.Fatal("connections must not share a catalog")
 	}
@@ -82,7 +82,7 @@ func TestCatalogFailureAllowsRetry(t *testing.T) {
 func TestCatalogInvalidate(t *testing.T) {
 	c := newCatalogCache()
 	c.begin("a")
-	c.finish("a", []string{"t"}, nil)
+	c.finish("a", []string{"t"}, nil, "")
 	c.invalidate("a")
 	if _, ok := c.get("a"); ok {
 		t.Fatal("invalidate must drop the entry")
@@ -91,7 +91,7 @@ func TestCatalogInvalidate(t *testing.T) {
 
 func TestBuildCatalogItemsKeepsWordsFirst(t *testing.T) {
 	words := sqlWordItems()
-	items := buildCatalogItems([]string{"orders"}, []string{"v"})
+	items := buildCatalogItems([]string{"orders"}, []string{"v"}, "")
 	if len(items) <= len(words) {
 		t.Fatalf("tables/views missing: %d", len(items))
 	}
@@ -114,7 +114,7 @@ func TestCatalogHasRelationAndColumns(t *testing.T) {
 	clock := time.Unix(2000, 0)
 	c.now = func() time.Time { return clock }
 	c.begin("conn")
-	c.finish("conn", []string{"users"}, []string{"v_users"})
+	c.finish("conn", []string{"users"}, []string{"v_users"}, "")
 	if !c.hasRelation("conn", "users") || !c.hasRelation("conn", "v_users") {
 		t.Fatal("tables and views must be relations")
 	}
@@ -133,7 +133,7 @@ func TestCatalogHasRelationAndColumns(t *testing.T) {
 	c.finishColumns("conn", "users", []engine.Column{
 		{Name: "id", Type: "INTEGER", PrimaryKey: true},
 		{Name: "name", Type: "TEXT", Nullable: true},
-	})
+	}, "")
 	items, ok := c.getColumns("conn", "users")
 	if !ok {
 		t.Fatal("columns must be cached")
@@ -171,7 +171,7 @@ func TestCatalogColumnFailureAllowsRetry(t *testing.T) {
 func TestCatalogInvalidateDropsColumns(t *testing.T) {
 	c := newCatalogCache()
 	c.beginColumns("c", "t")
-	c.finishColumns("c", "t", []engine.Column{{Name: "x"}})
+	c.finishColumns("c", "t", []engine.Column{{Name: "x"}}, "")
 	c.invalidate("c")
 	if _, ok := c.getColumns("c", "t"); ok {
 		t.Fatal("invalidate must drop columns too")
@@ -179,7 +179,7 @@ func TestCatalogInvalidateDropsColumns(t *testing.T) {
 }
 
 func TestBuildColumnItemsColumnsFirst(t *testing.T) {
-	items := buildColumnItems([]engine.Column{{Name: "zz_col", Type: "TEXT"}, {Name: "id", Type: "INTEGER"}})
+	items := buildColumnItems([]engine.Column{{Name: "zz_col", Type: "TEXT"}, {Name: "id", Type: "INTEGER"}}, "")
 	if len(items) < 3 {
 		t.Fatalf("items: %d", len(items))
 	}
@@ -195,7 +195,7 @@ func TestBuildStatementItemsMultiTable(t *testing.T) {
 	items := buildStatementItems([]string{"a", "b"}, [][]engine.Column{
 		{{Name: "id", Type: "INTEGER"}, {Name: "name", Type: "TEXT"}},
 		{{Name: "id", Type: "INTEGER"}, {Name: "bcol", Type: "TEXT"}},
-	})
+	}, "")
 	var name, bcol, ids []string
 	for _, it := range items {
 		switch it.Label {
@@ -222,7 +222,7 @@ func TestBuildStatementItemsMultiTable(t *testing.T) {
 }
 
 func TestBuildStatementItemsSingleTableDetail(t *testing.T) {
-	items := buildStatementItems([]string{"a"}, [][]engine.Column{{{Name: "name", Type: "TEXT"}}})
+	items := buildStatementItems([]string{"a"}, [][]engine.Column{{{Name: "name", Type: "TEXT"}}}, "")
 	if items[0].Label != "name" || items[0].Detail != "TEXT" {
 		t.Fatalf("single table detail must be the type: %+v", items[0])
 	}
@@ -230,7 +230,7 @@ func TestBuildStatementItemsSingleTableDetail(t *testing.T) {
 
 func TestGetColumnsMany(t *testing.T) {
 	c := newCatalogCache()
-	c.finishColumns("c", "a", []engine.Column{{Name: "x"}})
+	c.finishColumns("c", "a", []engine.Column{{Name: "x"}}, "")
 	cols, ok := c.getColumnsMany("c", []string{"a"})
 	if !ok || len(cols) != 1 || cols[0][0].Name != "x" {
 		t.Fatalf("cols=%v ok=%v", cols, ok)

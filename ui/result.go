@@ -251,10 +251,8 @@ func (a *root) rowTable() (string, bool) {
 
 // connKind 返回当前连接的种类（决定引用符），无连接按 sqlite。
 func (a *root) connKind() string {
-	if id := a.activeConnID(); id != "" {
-		if p, ok := a.store.Get(id); ok && p.Kind != "" {
-			return p.Kind
-		}
+	if k := a.connKindOf(a.activeConnID()); k != "" {
+		return k
 	}
 	return "sqlite"
 }

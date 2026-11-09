@@ -110,7 +110,7 @@ func TestOpenConnInvalidatesCatalog(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
 	a.catalog.begin(prof.ID)
-	a.catalog.finish(prof.ID, []string{"stale"}, nil)
+	a.catalog.finish(prof.ID, []string{"stale"}, nil, "")
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}

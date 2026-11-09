@@ -78,8 +78,8 @@ func (c *catalogCache) begin(connID string) bool {
 }
 
 // finish 记录一次成功加载并组装候选。
-func (c *catalogCache) finish(connID string, tables, views []string) {
-	items := buildCatalogItems(tables, views)
+func (c *catalogCache) finish(connID string, tables, views []string, kind string) {
+	items := buildCatalogItems(tables, views, kind)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.inflight, connID)
@@ -171,8 +171,8 @@ func (c *catalogCache) beginColumns(connID, table string) bool {
 }
 
 // finishColumns 记录一次成功的列加载。
-func (c *catalogCache) finishColumns(connID, table string, cols []engine.Column) {
-	items := buildColumnItems(cols)
+func (c *catalogCache) finishColumns(connID, table string, cols []engine.Column, kind string) {
+	items := buildColumnItems(cols, kind)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.colsInflight, connID+"\x00"+table)
@@ -191,8 +191,8 @@ func (c *catalogCache) failColumns(connID, table string) {
 
 // buildColumnItems 组装「该表的列 + 词表」：列在前，因为点号后用户要的是列，
 // 而编辑器弹层只渲染前若干行（词表几百条会把列挤到看不见的地方）。
-func buildColumnItems(cols []engine.Column) []myeditor.Completion {
-	words := sqlWordItems()
+func buildColumnItems(cols []engine.Column, kind string) []myeditor.Completion {
+	words := sqlWordItemsForKind(kind)
 	out := make([]myeditor.Completion, 0, len(words)+len(cols))
 	sorted := slices.Clone(cols)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
@@ -212,8 +212,8 @@ func buildColumnItems(cols []engine.Column) []myeditor.Completion {
 }
 
 // buildCatalogItems 组装候选：词表在前，表（表）与视图（视图）在后；各段去重排序。
-func buildCatalogItems(tables, views []string) []myeditor.Completion {
-	words := sqlWordItems()
+func buildCatalogItems(tables, views []string, kind string) []myeditor.Completion {
+	words := sqlWordItemsForKind(kind)
 	out := make([]myeditor.Completion, 0, len(words)+len(tables)+len(views))
 	out = append(out, words...)
 	add := func(names []string, detail string, kind myeditor.CompletionKind) {
@@ -254,10 +254,10 @@ func (c *catalogCache) getColumnsMany(connID string, tables []string) ([][]engin
 // buildStatementItems 组装「多表列 + 词表」：按 rels 顺序出列（多表时 Detail 为
 // "表 · 类型"，单表时为类型），按 (label, detail) 去重，最后接词表。
 // cols[i] 为 nil 表示该表列尚未加载（跳过）。
-func buildStatementItems(rels []string, cols [][]engine.Column) []myeditor.Completion {
+func buildStatementItems(rels []string, cols [][]engine.Column, kind string) []myeditor.Completion {
 	multi := len(rels) > 1
 	seen := map[string]bool{}
-	words := sqlWordItems()
+	words := sqlWordItemsForKind(kind)
 	out := make([]myeditor.Completion, 0, len(words)+len(rels)*8)
 	add := func(label, detail string, kind myeditor.CompletionKind) {
 		key := label + "\x00" + detail

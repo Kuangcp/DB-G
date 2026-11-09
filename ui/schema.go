@@ -196,12 +196,7 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 	win := a.win
 	go func() {
 		err := run()
-		win.Update(func() {
-			done(err)
-			if err == nil {
-				a.retriggerCompletions()
-			}
-		})
+		win.Update(func() { done(err) })
 	}()
 }
 

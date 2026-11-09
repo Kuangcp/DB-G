@@ -10,9 +10,10 @@ import (
 // codeEditor 包住 ui/editor：每控制台一个 Buffer（切换零拷贝、撤销历史独立），
 // 光标在 rune（持久化语义）与字节（编辑器语义）之间只在激活/读取时换算。
 type codeEditor struct {
-	state   *myeditor.State
-	buffers map[string]*myeditor.Buffer
-	active  string
+	state    *myeditor.State
+	buffers  map[string]*myeditor.Buffer
+	active   string
+	langKind string // 当前 Buffer 用的数据源类型（决定 SQL 方言高亮）
 }
 
 // newCodeEditor 创建编辑器封装；placeholder 在正文为空时显示。
@@ -26,7 +27,20 @@ func newCodeEditor(placeholder string) *codeEditor {
 			},
 			Placeholder: placeholder,
 		},
-		buffers: map[string]*myeditor.Buffer{},
+		buffers:  map[string]*myeditor.Buffer{},
+		langKind: "sqlite",
+	}
+}
+
+// SetLanguageKind 按数据源类型切换 SQL 高亮（MySQL/CK/PG/SQLite 的关键字不同）。
+// 同一类型重复调用不重建高亮器。
+func (c *codeEditor) SetLanguageKind(kind string) {
+	if c.langKind == kind {
+		return
+	}
+	c.langKind = kind
+	if c.state.Buffer != nil {
+		c.state.Buffer.SetLanguage(sqlLanguageForKind(kind))
 	}
 }
 
@@ -36,7 +50,7 @@ func (c *codeEditor) SetActive(consoleID, text string) {
 	switch {
 	case !ok:
 		buf = myeditor.NewBuffer(text)
-		buf.SetLanguage(myeditor.LanguageNamed("SQL"))
+		buf.SetLanguage(sqlLanguageForKind(c.langKind))
 		c.buffers[consoleID] = buf
 	case buf.String() != text:
 		// 只有正文真的不同（外部改动/首次载入）才 Reset；否则保留撤销历史。
@@ -56,6 +70,7 @@ func (c *codeEditor) Reload(consoleID, text string) {
 // Clear 进入「无激活控制台」空态（保留各控制台的 Buffer）。
 func (c *codeEditor) Clear() {
 	c.state.Buffer = myeditor.NewBuffer("")
+	c.state.Buffer.SetLanguage(sqlLanguageForKind(c.langKind))
 	c.active = ""
 }
 

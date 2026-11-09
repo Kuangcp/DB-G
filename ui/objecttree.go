@@ -772,7 +772,7 @@ func isIdentRune(r rune) bool {
 func (a *root) ddlViewState() *myeditor.State {
 	if a.ddlState == nil {
 		buf := myeditor.NewBuffer("")
-		buf.SetLanguage(myeditor.LanguageNamed("SQL"))
+		buf.SetLanguage(sqlLanguageForKind(a.connKind()))
 		a.ddlState = &myeditor.State{
 			Buffer:       buf,
 			ReadOnly:     true,

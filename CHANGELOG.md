@@ -14,6 +14,9 @@
 - MySQL 连接不填默认库时不再报「未选择数据库」：连接后先取库列表并选中默认库，
   对象与列元数据按库加载（对象树仍按库惰性分页）。
 - 对象树的 DDL 按对象所属库/schema 查询，不再用当前库去查其他库的对象。
+- 切换 schema/库不再弹补全浮窗（只在继续输入时按需加载）。
+- 补全与语法高亮按数据源使用方言关键字：MySQL 的 AUTO_INCREMENT / ENGINE、
+  PostgreSQL 的 RETURNING / SERIAL、ClickHouse 的 LowCardinality / DateTime64 等。
 
 ## 1.0.2
 

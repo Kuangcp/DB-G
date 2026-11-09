@@ -739,6 +739,17 @@ func (a *root) connKindRow(c *ui.Context, k connKind) {
 	}
 }
 
+// connKindOf 返回某个连接的数据源类型（未知为空）。
+func (a *root) connKindOf(connID string) string {
+	if a.store == nil || connID == "" {
+		return ""
+	}
+	if p, ok := a.store.Get(connID); ok {
+		return p.Kind
+	}
+	return ""
+}
+
 // connKind 是连接类型导航项。
 type connKind struct{ kind, label string }
 

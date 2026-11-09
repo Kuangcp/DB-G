@@ -567,6 +567,11 @@ func (a *root) Attach(win *mygo.Window) {
 	}
 }
 
+// applyEditorLanguage 让编辑器的 SQL 高亮跟随当前数据源（MySQL 的 AUTO_INCREMENT 等）。
+func (a *root) applyEditorLanguage() {
+	a.code.SetLanguageKind(a.connKind())
+}
+
 // View 是窗口内容入口。
 func (a *root) View(c *ui.Context) {
 	rootView(a)(c)
@@ -596,6 +601,7 @@ func (a *root) view(c *ui.Context) {
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
 		a.maybeOpenSettings()
 		a.syncActiveBuffer()
+		a.applyEditorLanguage()
 		a.pollExternalFiles(false)
 		if a.pendingClose != "" {
 			id := a.pendingClose

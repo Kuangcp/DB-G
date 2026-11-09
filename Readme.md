@@ -102,7 +102,10 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       写操作需要驱动声明 `CapEditableResult` + 实现 `Transactional`（sqlite / mysql 均已实现）
 - [x] 自动补全（A2）：SQL 关键字/函数/类型 + 当前数据源的表/视图；打字自动弹，
       `Ctrl+Space` 显式触发；表/视图目录按连接缓存（TTL 5 分钟，顶栏「设置」里
-      可手动「刷新补全缓存」）；列补全按**光标所在语句/子查询引用的表**提示
+      可手动「刷新补全缓存」）；**关键字/类型/函数随数据源方言**（MySQL 的
+      AUTO_INCREMENT / ENGINE / GROUP_CONCAT，PostgreSQL 的 RETURNING / SERIAL，
+      ClickHouse 的 LowCardinality / DateTime64，SQLite 的 AUTOINCREMENT 等），
+      编辑器语法高亮同步使用同一份方言词表；列补全按**光标所在语句/子查询引用的表**提示
       （FROM · JOIN · UPDATE · INTO，支持多表 JOIN、别名与 CTE 展开；**函数/表达式
       括号内（sum、avg、coalesce、WHERE (…)）也照常补列**；语句里没有表时不出列）；
       FROM/JOIN/UPDATE/INTO 后正在写表名时优先提示表/视图；相邻语句漏写分号时，

@@ -38,13 +38,14 @@ func (a *root) completionItems(connID string) []myeditor.Completion {
 	if items, ok := a.catalog.get(key); ok {
 		return items
 	}
-	return sqlWordItems()
+	return sqlWordItemsForKind(a.connKindOf(connID))
 }
 
 // ensureCatalog 在主线程调用：没有新鲜缓存时发起一次加载。
 // 有窗口时后台取数、完成后回投重弹；headless（测试）同步执行便于断言。
 func (a *root) ensureCatalog(connID string) {
 	key, schema := a.completionScope(connID)
+	kind := a.connKindOf(connID)
 	if !a.catalog.begin(key) {
 		return
 	}
@@ -62,7 +63,7 @@ func (a *root) ensureCatalog(connID string) {
 			app.LogWarn("catalog", "tables load failed", "conn", connID, "schema", schema, "err", err.Error())
 			return
 		}
-		a.catalog.finish(key, tables, views)
+		a.catalog.finish(key, tables, views, kind)
 		app.LogInfo("catalog", "tables loaded", "conn", connID, "schema", schema, "tables", len(tables), "views", len(views), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
@@ -80,6 +81,7 @@ func (a *root) ensureCatalog(connID string) {
 // ensureColumns 在主线程调用：没有新鲜列缓存时发起一次加载（同 ensureCatalog 的线程语义）。
 func (a *root) ensureColumns(connID, table string) {
 	key, schema := a.completionScope(connID)
+	kind := a.connKindOf(connID)
 	if table == "" || !a.catalog.beginColumns(key, table) {
 		return
 	}
@@ -96,7 +98,7 @@ func (a *root) ensureColumns(connID, table string) {
 			app.LogWarn("catalog", "columns load failed", "conn", connID, "schema", schema, "table", table, "err", err.Error())
 			return
 		}
-		a.catalog.finishColumns(key, table, cols)
+		a.catalog.finishColumns(key, table, cols, kind)
 		app.LogInfo("catalog", "columns loaded", "conn", connID, "schema", schema, "table", table, "cols", len(cols), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
@@ -200,7 +202,7 @@ func (a *root) loadCatalog(connID string) (tables, views []string, err error) {
 // 真机上第二轮通常仍是部分结果，等后台加载完成由 retrigger 再补。
 func (a *root) completionItemsAt(offset int) []myeditor.Completion {
 	if a.computingCompletion {
-		return sqlWordItems()
+		return sqlWordItemsForKind(a.connKindOf(a.activeConsoleConnID()))
 	}
 	a.computingCompletion = true
 	defer func() { a.computingCompletion = false }()
@@ -236,6 +238,7 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 	text := a.code.Text()
 	connID := a.activeConsoleConnID()
 	key, _ := a.completionScope(connID)
+	kind := a.connKindOf(connID)
 	scope, scopeOff := stmtScopeAtOffset(text, offset)
 	rels := relationsIn(scope)
 	aliases := aliasMap(rels)
@@ -251,11 +254,11 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 				return cols, false
 			}
 			a.ensureColumns(connID, table)
-			return sqlWordItems(), true
+			return sqlWordItemsForKind(kind), true
 		}
 		if !a.catalogLoaded(connID) {
 			a.ensureCatalog(connID)
-			return sqlWordItems(), true
+			return sqlWordItemsForKind(kind), true
 		}
 	}
 
@@ -267,7 +270,7 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 			return items, false
 		}
 		a.ensureCatalog(connID)
-		return sqlWordItems(), true
+		return sqlWordItemsForKind(kind), true
 	}
 
 	// 2) 语句里引用的表：补它们的列（多表 JOIN 时全部）。
@@ -282,9 +285,9 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 				}
 			}
 			cols, _ = a.catalog.getColumnsMany(key, tables)
-			return buildStatementItems(tables, cols), missing
+			return buildStatementItems(tables, cols, kind), missing
 		}
-		return buildStatementItems(tables, cols), false
+		return buildStatementItems(tables, cols, kind), false
 	}
 
 	// 3) 目录（表/视图 + 词）或纯词表；语句里有表名但目录还没加载时先加载目录。
@@ -292,7 +295,7 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 		return items, false
 	}
 	a.ensureCatalog(connID)
-	return sqlWordItems(), true // 目录加载后重算一轮（headless 同步，真机等回调）
+	return sqlWordItemsForKind(kind), true // 目录加载后重算一轮（headless 同步，真机等回调）
 }
 
 // catalogLoaded 报告该连接当前 schema 的表/视图目录是否已有新鲜缓存。
