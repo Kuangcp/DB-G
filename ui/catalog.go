@@ -98,16 +98,29 @@ func (c *catalogCache) fail(connID string) {
 	delete(c.inflight, connID)
 }
 
-// invalidate 丢弃某连接的缓存（重连、刷新、删连接）。
+// invalidate 丢弃某连接（以及它各 schema）的缓存（重连、刷新、删连接）。
 func (c *catalogCache) invalidate(connID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.entries, connID)
-	delete(c.inflight, connID)
-	delete(c.cols, connID)
-	prefix := connID + "\x00"
+	prefix := connID + "|"
+	for k := range c.entries {
+		if k == connID || strings.HasPrefix(k, prefix) {
+			delete(c.entries, k)
+		}
+	}
+	for k := range c.inflight {
+		if k == connID || strings.HasPrefix(k, prefix) {
+			delete(c.inflight, k)
+		}
+	}
+	for k := range c.cols {
+		if k == connID || strings.HasPrefix(k, prefix) {
+			delete(c.cols, k)
+		}
+	}
+	colPrefix := connID + "\x00"
 	for k := range c.colsInflight {
-		if strings.HasPrefix(k, prefix) {
+		if strings.HasPrefix(k, colPrefix) || strings.HasPrefix(k, prefix) {
 			delete(c.colsInflight, k)
 		}
 	}

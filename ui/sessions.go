@@ -118,6 +118,7 @@ func (a *root) connect(p app.ConnProfile) error {
 	a.sessions[p.ID] = sess
 	a.touchSession(p.ID)
 	delete(a.sessionErr, p.ID)
+	a.initSchemaAfterConnect(p, sess)
 	if a.catalog != nil {
 		a.catalog.invalidate(p.ID) // 重连后目录可能变了
 	}

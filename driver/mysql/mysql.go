@@ -31,6 +31,8 @@ type session struct {
 	db        *sql.DB
 	mu        sync.Mutex
 	curCancel atomic.Pointer[context.CancelFunc]
+	schema    string // 期望的当前库（UseSchema 设置）
+	applied   string // 已应用到连接池的库
 }
 
 func openSession(p engine.Profile) (engine.Session, error) {
@@ -70,6 +72,8 @@ func (s *session) Open(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// USE 只作用于一条连接；限制为 1 条，切换库后连接池里的连接（也只有它）保持一致。
+	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return err
@@ -110,6 +114,9 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 		cancel()
 		s.curCancel.Store(nil)
 	}()
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return nil, err
+	}
 	if isQueryLike(query) {
 		return s.query(ctx, query)
 	}
@@ -203,6 +210,11 @@ func trimStr(s string, max int) string {
 	return s[:max]
 }
 
+// quoteIdent 是 MySQL 的标识符引用（库名/表名）。
+func quoteIdent(name string) string {
+	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+}
+
 func trimBytes(b []byte, max int) []byte {
 	if len(b) <= max {
 		return b
@@ -238,14 +250,68 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
-func (s *session) mysqlSchema(schema string) (string, error) {
-	if schema == "" {
-		schema = s.cfg.DBName
+// applySchemaLocked 把期望的库应用到连接：连接池只有一条连接，USE 之后会一直保留。
+func (s *session) applySchemaLocked(ctx context.Context) error {
+	if s.db == nil || s.schema == "" || s.schema == s.applied {
+		return nil
 	}
-	if schema == "" {
+	if _, err := s.db.ExecContext(ctx, "USE "+quoteIdent(s.schema)); err != nil {
+		return err
+	}
+	s.applied = s.schema
+	return nil
+}
+
+// UseSchema 切换当前库（MySQL 的 USE）；后续语句与元数据查询都以它为准。
+func (s *session) UseSchema(ctx context.Context, schema string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return errors.New("mysql: session not open")
+	}
+	s.schema = schema
+	return s.applySchemaLocked(ctx)
+}
+
+// ActiveSchema 返回当前库；没选库时返回空串（不报错，调用方可以自己选一个）。
+func (s *session) ActiveSchema(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", errors.New("mysql: session not open")
+	}
+	if s.schema != "" {
+		return s.schema, nil
+	}
+	var name sql.NullString
+	if err := s.db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&name); err != nil {
+		return "", err
+	}
+	if !name.Valid {
+		return "", nil
+	}
+	return name.String, nil
+}
+
+// schemaLocked 解析查询要用的库：显式传入优先，其次当前库/连接配置，都没有才报错。
+func (s *session) schemaLocked(ctx context.Context, schema string) (string, error) {
+	if schema != "" {
+		return schema, nil
+	}
+	if s.schema != "" {
+		return s.schema, nil
+	}
+	if s.cfg.DBName == "" {
 		return "", errors.New("mysql: 未选择数据库")
 	}
-	return schema, nil
+	var name sql.NullString
+	if err := s.db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&name); err != nil {
+		return "", err
+	}
+	if !name.Valid || name.String == "" {
+		return "", errors.New("mysql: 未选择数据库")
+	}
+	return name.String, nil
 }
 
 func mysqlObjectQuery(kind engine.ObjectKind) (string, error) {
@@ -268,7 +334,7 @@ func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.O
 	if s.db == nil {
 		return nil, errors.New("mysql: session not open")
 	}
-	schema, err := s.mysqlSchema(schema)
+	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +379,7 @@ func (s *session) ObjectsPage(ctx context.Context, schema string, kind engine.Ob
 	if s.db == nil {
 		return nil, errors.New("mysql: session not open")
 	}
-	schema, err := s.mysqlSchema(schema)
+	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -355,19 +421,31 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 	return s.ObjectsPage(ctx, "", kind, 0, 0)
 }
 
-// Columns 列出一个表的列（information_schema）。
+// Columns 列出一个表的列；没选库时用当前库，当前库也没有就报错。
 func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.columnsLocked(ctx, "", table)
+}
+
+// ColumnsIn 按库列出列：补全和多库对象树走这里，连接没填数据库也能用。
+func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine.Column, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.columnsLocked(ctx, schema, table)
+}
+
+func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	if s.db == nil {
 		return nil, errors.New("mysql: session not open")
 	}
-	if s.cfg.DBName == "" {
-		return nil, errors.New("mysql: 未选择数据库")
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
 	}
 	const q = `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`
-	rows, err := s.db.QueryContext(ctx, q, s.cfg.DBName, table)
+	rows, err := s.db.QueryContext(ctx, q, schema, table)
 	if err != nil {
 		return nil, err
 	}
@@ -399,6 +477,9 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return errors.New("mysql: session not open")
+	}
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return err
 	}
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -440,10 +521,25 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.objectDDLLocked(ctx, "", kind, name)
+}
+
+// ObjectDDLIn 按库取 DDL：对象树跨库时不会被当前库带偏。
+func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.objectDDLLocked(ctx, schema, kind, name)
+}
+
+func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
 	if s.db == nil {
 		return "", errors.New("mysql: session not open")
 	}
-	quoted := "`" + strings.ReplaceAll(name, "`", "``") + "`"
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return "", err
+	}
+	quoted := quoteIdent(schema) + "." + quoteIdent(name)
 	var q string
 	switch kind {
 	case engine.ObjectTable:
@@ -505,6 +601,9 @@ func (s *session) Begin(ctx context.Context) (engine.Tx, error) {
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("mysql: session not open")
+	}
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return nil, err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

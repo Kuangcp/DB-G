@@ -71,6 +71,8 @@ type root struct {
 	treeLoading      map[string]bool
 	treePageStarted  map[string]bool
 	treeSchemas      map[string][]string
+	schemaLoading    map[string]bool   // connID → schema 列表加载中
+	connSchema       map[string]string // connID → 当前 schema/库（空 = 未选）
 	treeErr          map[string]string
 	treeSelected     string
 	objSearch        string          // 对象树搜索词（非空时过滤连接/文件夹/已加载对象）
@@ -189,6 +191,8 @@ func newRoot(text string) *root {
 		treeLoading:      map[string]bool{},
 		treePageStarted:  map[string]bool{},
 		treeSchemas:      map[string][]string{},
+		schemaLoading:    map[string]bool{},
+		connSchema:       map[string]string{},
 		treeErr:          map[string]string{},
 		folderCollapsed:  map[string]bool{},
 		metaCacheTried:   map[string]bool{},
@@ -651,6 +655,7 @@ func (a *root) view(c *ui.Context) {
 						if name := a.activeConnName(); name != "" {
 							ui.Text(c, name).Bold()
 						}
+						a.schemaPicker(c)
 					}
 					if a.connErr != "" {
 						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()

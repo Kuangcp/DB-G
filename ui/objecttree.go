@@ -85,6 +85,8 @@ func (a *root) reloadTree() {
 	a.treeLoading = nil
 	a.treePageStarted = nil
 	a.treeGroupStale = nil
+	a.treeSchemas = map[string][]string{}
+	a.schemaLoading = map[string]bool{}
 	a.metaCacheTried = nil
 	a.metaCacheLoading = nil
 	a.metaCacheStale = nil
@@ -455,18 +457,14 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 		a.treeSchemas = map[string][]string{}
 	}
 	if _, ok := a.treeSchemas[p.ID]; !ok {
+		a.ensureSchemas(p)
+		if a.schemaLoading[p.ID] {
+			ui.Text(c, "加载库…").TextColor(c.Theme().TextMuted)
+			return
+		}
 		if lister == nil {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		schemas, err := lister.Schemas(ctx)
-		cancel()
-		if err != nil {
-			ui.Text(c, err.Error()).TextColor(c.Theme().Danger)
-			return
-		}
-		a.treeSchemas[p.ID] = schemas
-		a.saveMetaCache(p)
 	}
 	ui.Tree(c, func() {
 		for _, schema := range a.treeSchemas[p.ID] {
@@ -476,7 +474,7 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 			key := p.ID + "|" + schema
 			base := objectTreeKey(p.ID, schema)
 			open := a.groupOpen(key+"|schema", false)
-			ui.TreeItem(c, "▣ "+schema, open, func() {
+			item := ui.TreeItem(c, "▣ "+schema, open, func() {
 				a.ensureObjectCounts(p, schema)
 				if err := a.treeErr[base]; err != "" {
 					ui.TreeItem(c, err, nil, nil)
@@ -484,6 +482,9 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 				}
 				a.kindGroups(c, p, schema)
 			})
+			if item.Clicked() {
+				a.setActiveSchema(p, schema)
+			}
 		}
 	})
 }
@@ -629,14 +630,21 @@ func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 	}
 	sess := a.sessionFor(p.ID)
 	load := func() {
-		lister, ok := sess.(engine.ObjectDDLer)
-		if !ok || sess == nil || !sess.Caps().Has(engine.CapObjectDDL) {
+		lister, hasDDL := sess.(engine.ObjectDDLer)
+		scoped, hasScoped := sess.(engine.SchemaObjectDDLer)
+		if sess == nil || !sess.Caps().Has(engine.CapObjectDDL) || (!hasDDL && !hasScoped) {
 			a.setDDLNote(o.Name, "该数据源不支持查看 DDL")
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		ddl, err := lister.ObjectDDL(ctx, o.Kind, o.Name)
+		var ddl string
+		var err error
+		if hasScoped {
+			ddl, err = scoped.ObjectDDLIn(ctx, o.Schema, o.Kind, o.Name)
+		} else {
+			ddl, err = lister.ObjectDDL(ctx, o.Kind, o.Name)
+		}
 		apply := func() {
 			if err != nil {
 				a.setDDLNote(o.Name, "读取 DDL 失败: "+err.Error())
@@ -702,13 +710,14 @@ func (a *root) viewDDLFromEditor() bool {
 	if known := a.knownObjects(p.ID); known != nil && !known[strings.ToLower(word)] {
 		return false
 	}
-	a.showDDL(p, engine.DBObject{Kind: engine.ObjectTable, Name: word})
+	a.showDDL(p, engine.DBObject{Kind: engine.ObjectTable, Name: word, Schema: a.connSchema[p.ID]})
 	return true
 }
 
 // knownObjects 返回该连接已加载的对象名（小写）；树还没加载时返回 nil。
 func (a *root) knownObjects(connID string) map[string]bool {
-	m := a.treeData[objectTreeKey(connID, "")]
+	key, _ := a.completionScope(connID)
+	m := a.treeData[key]
 	if m == nil {
 		return nil
 	}

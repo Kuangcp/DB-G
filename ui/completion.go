@@ -34,7 +34,8 @@ func (a *root) activeConsoleConnID() string {
 
 // completionItems 返回某连接的候选：缓存命中用组装好的，否则只有词表。
 func (a *root) completionItems(connID string) []myeditor.Completion {
-	if items, ok := a.catalog.get(connID); ok {
+	key, _ := a.completionScope(connID)
+	if items, ok := a.catalog.get(key); ok {
 		return items
 	}
 	return sqlWordItems()
@@ -43,25 +44,26 @@ func (a *root) completionItems(connID string) []myeditor.Completion {
 // ensureCatalog 在主线程调用：没有新鲜缓存时发起一次加载。
 // 有窗口时后台取数、完成后回投重弹；headless（测试）同步执行便于断言。
 func (a *root) ensureCatalog(connID string) {
-	if !a.catalog.begin(connID) {
+	key, schema := a.completionScope(connID)
+	if !a.catalog.begin(key) {
 		return
 	}
 	// 在主线程捕获会话，后台协程只用捕获到的接口值（不读会话表，避免数据竞争）。
 	sess := a.sessionFor(connID)
 	if sess == nil {
-		a.catalog.fail(connID)
+		a.catalog.fail(key)
 		return
 	}
 	load := func() {
 		start := time.Now()
-		tables, views, err := objectsOf(sess)
+		tables, views, err := objectsOfIn(sess, schema)
 		if err != nil {
-			a.catalog.fail(connID)
-			app.LogWarn("catalog", "tables load failed", "conn", connID, "err", err.Error())
+			a.catalog.fail(key)
+			app.LogWarn("catalog", "tables load failed", "conn", connID, "schema", schema, "err", err.Error())
 			return
 		}
-		a.catalog.finish(connID, tables, views)
-		app.LogInfo("catalog", "tables loaded", "conn", connID, "tables", len(tables), "views", len(views), "dur_ms", time.Since(start).Milliseconds())
+		a.catalog.finish(key, tables, views)
+		app.LogInfo("catalog", "tables loaded", "conn", connID, "schema", schema, "tables", len(tables), "views", len(views), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
 			win.Update(a.retriggerCompletions)
@@ -77,24 +79,25 @@ func (a *root) ensureCatalog(connID string) {
 
 // ensureColumns 在主线程调用：没有新鲜列缓存时发起一次加载（同 ensureCatalog 的线程语义）。
 func (a *root) ensureColumns(connID, table string) {
-	if table == "" || !a.catalog.beginColumns(connID, table) {
+	key, schema := a.completionScope(connID)
+	if table == "" || !a.catalog.beginColumns(key, table) {
 		return
 	}
 	sess := a.sessionFor(connID)
 	if sess == nil || !sess.Caps().Has(engine.CapColumns) {
-		a.catalog.failColumns(connID, table)
+		a.catalog.failColumns(key, table)
 		return
 	}
 	load := func() {
 		start := time.Now()
-		cols, err := columnsOf(sess, table)
+		cols, err := columnsOf(sess, schema, table)
 		if err != nil {
-			a.catalog.failColumns(connID, table)
-			app.LogWarn("catalog", "columns load failed", "conn", connID, "table", table, "err", err.Error())
+			a.catalog.failColumns(key, table)
+			app.LogWarn("catalog", "columns load failed", "conn", connID, "schema", schema, "table", table, "err", err.Error())
 			return
 		}
-		a.catalog.finishColumns(connID, table, cols)
-		app.LogInfo("catalog", "columns loaded", "conn", connID, "table", table, "cols", len(cols), "dur_ms", time.Since(start).Milliseconds())
+		a.catalog.finishColumns(key, table, cols)
+		app.LogInfo("catalog", "columns loaded", "conn", connID, "schema", schema, "table", table, "cols", len(cols), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
 			win.Update(a.showCompletionsAtCursor)
@@ -109,13 +112,19 @@ func (a *root) ensureColumns(connID, table string) {
 }
 
 // columnsOf 用会话列出某表的列（纯函数，可被后台协程安全调用）。
-func columnsOf(sess engine.Session, table string) ([]engine.Column, error) {
-	lister, ok := sess.(engine.ColumnLister)
-	if !ok || !sess.Caps().Has(engine.CapColumns) {
+func columnsOf(sess engine.Session, schema, table string) ([]engine.Column, error) {
+	if !sess.Caps().Has(engine.CapColumns) {
 		return nil, nil // 能力不足：降级为只有关键字/表
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
 	defer cancel()
+	if lister, ok := sess.(engine.SchemaColumnLister); ok {
+		return lister.ColumnsIn(ctx, schema, table)
+	}
+	lister, ok := sess.(engine.ColumnLister)
+	if !ok {
+		return nil, nil // 能力不足：降级为只有关键字/表
+	}
 	return lister.Columns(ctx, table)
 }
 
@@ -123,8 +132,13 @@ func columnsOf(sess engine.Session, table string) ([]engine.Column, error) {
 // 与 db-k 的元数据策略一致：只取第一页，避免后台构建几万条候选拖慢 UI。
 const catalogObjectLimit = 2000
 
-// objectsOf 用会话枚举表与视图（纯函数，可被后台协程安全调用）。
+// objectsOf 用会话枚举默认 schema 的表与视图（纯函数，可被后台协程安全调用）。
 func objectsOf(sess engine.Session) (tables, views []string, err error) {
+	return objectsOfIn(sess, "")
+}
+
+// objectsOfIn 用会话枚举指定 schema/库的表与视图；schema 为空表示默认 schema。
+func objectsOfIn(sess engine.Session, schema string) (tables, views []string, err error) {
 	lister, ok := sess.(engine.ObjectLister)
 	if !ok || !sess.Caps().Has(engine.CapObjects) {
 		return nil, nil, nil // 能力不足：降级为只有关键字
@@ -132,10 +146,16 @@ func objectsOf(sess engine.Session) (tables, views []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
 	defer cancel()
 	pager, _ := sess.(engine.PagedObjectLister)
+	scoped, multi := sess.(engine.SchemaLister)
 	names := func(kind engine.ObjectKind) ([]string, error) {
 		var objs []engine.DBObject
 		if pager != nil {
-			objs, err = pager.ObjectsPage(ctx, "", kind, 0, catalogObjectLimit)
+			objs, err = pager.ObjectsPage(ctx, schema, kind, 0, catalogObjectLimit)
+		} else if schema != "" && multi {
+			objs, err = scoped.ObjectsIn(ctx, schema, kind)
+			if len(objs) > catalogObjectLimit {
+				objs = objs[:catalogObjectLimit]
+			}
 		} else {
 			objs, err = lister.Objects(ctx, kind)
 			if len(objs) > catalogObjectLimit {
@@ -169,7 +189,8 @@ func (a *root) loadCatalog(connID string) (tables, views []string, err error) {
 	if sess == nil {
 		return nil, nil, errors.New("连接未打开")
 	}
-	return objectsOf(sess)
+	_, schema := a.completionScope(connID)
+	return objectsOfIn(sess, schema)
 }
 
 // completionItemsAt 计算光标 offset 处的候选，并顺手发起缺失的加载。
@@ -214,6 +235,7 @@ func (a *root) requestRetrigger() {
 func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more bool) {
 	text := a.code.Text()
 	connID := a.activeConsoleConnID()
+	key, _ := a.completionScope(connID)
 	scope, scopeOff := stmtScopeAtOffset(text, offset)
 	rels := relationsIn(scope)
 	aliases := aliasMap(rels)
@@ -224,8 +246,8 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 		if t, isAlias := aliases[ident]; isAlias {
 			table = t
 		}
-		if table != "" && a.catalog.hasRelation(connID, table) {
-			if cols, hit := a.catalog.getColumns(connID, table); hit {
+		if table != "" && a.catalog.hasRelation(key, table) {
+			if cols, hit := a.catalog.getColumns(key, table); hit {
 				return cols, false
 			}
 			a.ensureColumns(connID, table)
@@ -241,7 +263,7 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 	// 即使上一条语句没写分号、后续 SELECT 被并进同一作用域，也只按表名补全。
 	// 放在点号之后：`表名.` 仍然优先补列（与既有行为一致）。
 	if relationPositionAt(scope, scopeOff) {
-		if items, ok := a.catalog.get(connID); ok {
+		if items, ok := a.catalog.get(key); ok {
 			return items, false
 		}
 		a.ensureCatalog(connID)
@@ -250,7 +272,7 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 
 	// 2) 语句里引用的表：补它们的列（多表 JOIN 时全部）。
 	if tables := a.knownRelations(connID, rels); len(tables) > 0 {
-		cols, all := a.catalog.getColumnsMany(connID, tables)
+		cols, all := a.catalog.getColumnsMany(key, tables)
 		if !all {
 			missing := false
 			for i, t := range tables {
@@ -259,28 +281,30 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 					a.ensureColumns(connID, t)
 				}
 			}
-			cols, _ = a.catalog.getColumnsMany(connID, tables)
+			cols, _ = a.catalog.getColumnsMany(key, tables)
 			return buildStatementItems(tables, cols), missing
 		}
 		return buildStatementItems(tables, cols), false
 	}
 
 	// 3) 目录（表/视图 + 词）或纯词表；语句里有表名但目录还没加载时先加载目录。
-	if items, ok := a.catalog.get(connID); ok {
+	if items, ok := a.catalog.get(key); ok {
 		return items, false
 	}
 	a.ensureCatalog(connID)
 	return sqlWordItems(), true // 目录加载后重算一轮（headless 同步，真机等回调）
 }
 
-// catalogLoaded 报告该连接的表/视图目录是否已有新鲜缓存。
+// catalogLoaded 报告该连接当前 schema 的表/视图目录是否已有新鲜缓存。
 func (a *root) catalogLoaded(connID string) bool {
-	_, ok := a.catalog.get(connID)
+	key, _ := a.completionScope(connID)
+	_, ok := a.catalog.get(key)
 	return ok
 }
 
 // knownRelations 过滤出目录里认识的关系（大小写不敏感），去重保序，最多 8 张。
 func (a *root) knownRelations(connID string, rels []relationRef) []string {
+	scopeKey, _ := a.completionScope(connID)
 	out := make([]string, 0, len(rels))
 	seen := map[string]bool{}
 	for _, r := range rels {
@@ -288,7 +312,7 @@ func (a *root) knownRelations(connID string, rels []relationRef) []string {
 			continue
 		}
 		key := strings.ToLower(r.Table)
-		if seen[key] || !a.catalog.hasRelation(connID, r.Table) {
+		if seen[key] || !a.catalog.hasRelation(scopeKey, r.Table) {
 			continue
 		}
 		seen[key] = true

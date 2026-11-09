@@ -32,6 +32,8 @@ type session struct {
 	db        *sql.DB
 	mu        sync.Mutex
 	curCancel atomic.Pointer[context.CancelFunc]
+	schema    string // 期望的当前库（UseSchema 设置）
+	applied   string // 已应用到连接池的库
 }
 
 // schemeFor 把连接协议换成 DSN 的 scheme：clickhouse-go 靠它决定走 native 还是
@@ -84,7 +86,8 @@ func (s *session) Open(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	db.SetMaxOpenConns(2)
+	// USE 只作用于一条连接；限制为 1 条，切换库后连接池保持一致。
+	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return fmt.Errorf("clickhouse: %w", err)
@@ -126,6 +129,9 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 		cancel()
 		s.curCancel.Store(nil)
 	}()
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		if res, eerr := s.db.ExecContext(ctx, query); eerr == nil {
@@ -227,6 +233,64 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
+// applySchemaLocked 把期望的库应用到连接（连接池只有一条连接）。
+func (s *session) applySchemaLocked(ctx context.Context) error {
+	if s.db == nil || s.schema == "" || s.schema == s.applied {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, "USE "+quoteIdent(s.schema)); err != nil {
+		return err
+	}
+	s.applied = s.schema
+	return nil
+}
+
+// UseSchema 切换当前库。
+func (s *session) UseSchema(ctx context.Context, schema string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return errors.New("clickhouse: session not open")
+	}
+	s.schema = schema
+	return s.applySchemaLocked(ctx)
+}
+
+// ActiveSchema 返回当前库；没有时返回空串。
+func (s *session) ActiveSchema(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", errors.New("clickhouse: session not open")
+	}
+	if s.schema != "" {
+		return s.schema, nil
+	}
+	return s.currentDatabaseLocked(ctx)
+}
+
+func (s *session) currentDatabaseLocked(ctx context.Context) (string, error) {
+	var name sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT currentDatabase()`).Scan(&name); err != nil {
+		return "", err
+	}
+	if !name.Valid {
+		return "", nil
+	}
+	return name.String, nil
+}
+
+// schemaLocked 解析要用的库：显式传入优先，其次当前库/连接默认库。
+func (s *session) schemaLocked(ctx context.Context, database string) (string, error) {
+	if database != "" {
+		return database, nil
+	}
+	if s.schema != "" {
+		return s.schema, nil
+	}
+	return s.currentDatabaseLocked(ctx)
+}
+
 // clickhouseObjectClause 返回某类对象的 engine 过滤条件。
 func clickhouseObjectClause(kind engine.ObjectKind) (string, error) {
 	switch kind {
@@ -247,6 +311,10 @@ func (s *session) ObjectCounts(ctx context.Context, database string) (map[engine
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("clickhouse: session not open")
+	}
+	database, err := s.schemaLocked(ctx, database)
+	if err != nil {
+		return nil, err
 	}
 	q := `SELECT countIf(engine NOT IN ('View','MaterializedView')),
 	             countIf(engine IN ('View','MaterializedView'))
@@ -282,6 +350,10 @@ func (s *session) ObjectsPage(ctx context.Context, database string, kind engine.
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("clickhouse: session not open")
+	}
+	database, err = s.schemaLocked(ctx, database)
+	if err != nil {
+		return nil, err
 	}
 	q := `SELECT name FROM system.tables WHERE is_temporary = 0 AND ` + clause
 	var args []any
@@ -324,13 +396,32 @@ func (s *session) ObjectsIn(ctx context.Context, database string, kind engine.Ob
 func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.objectDDLLocked(ctx, "", kind, name)
+}
+
+// ObjectDDLIn 按库取 DDL。
+func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.objectDDLLocked(ctx, schema, kind, name)
+}
+
+func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
 	if s.db == nil {
 		return "", errors.New("clickhouse: session not open")
 	}
 	if kind != engine.ObjectTable && kind != engine.ObjectView {
 		return "", errors.New("clickhouse: 该对象不支持查看 DDL")
 	}
-	q := "SHOW CREATE TABLE " + quoteIdent(name)
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return "", err
+	}
+	qualified := quoteIdent(name)
+	if schema != "" {
+		qualified = quoteIdent(schema) + "." + qualified
+	}
+	q := "SHOW CREATE TABLE " + qualified
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return "", err
@@ -373,11 +464,26 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.columnsLocked(ctx, "", table)
+}
+
+// ColumnsIn 按库列出列；多库补全走这里。
+func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine.Column, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.columnsLocked(ctx, schema, table)
+}
+
+func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	if s.db == nil {
 		return nil, errors.New("clickhouse: session not open")
 	}
-	const q = `SELECT name, type FROM system.columns WHERE database = currentDatabase() AND table = ? ORDER BY position`
-	rows, err := s.db.QueryContext(ctx, q, table)
+	database, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
+	}
+	const q = `SELECT name, type FROM system.columns WHERE database = ? AND table = ? ORDER BY position`
+	rows, err := s.db.QueryContext(ctx, q, database, table)
 	if err != nil {
 		return nil, err
 	}
@@ -398,6 +504,9 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return errors.New("clickhouse: session not open")
+	}
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return err
 	}
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {

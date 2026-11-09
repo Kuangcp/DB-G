@@ -71,11 +71,12 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		table = name
 	}
 	connID := a.activeConsoleConnID()
-	cols, all := a.catalog.getColumnsMany(connID, []string{table})
+	scopeKey, _ := a.completionScope(connID)
+	cols, all := a.catalog.getColumnsMany(scopeKey, []string{table})
 	if !all {
 		a.ensureColumns(connID, table)
 		// headless（无窗口）下加载是同步的，这里再读一次即可立刻判定。
-		cols, all = a.catalog.getColumnsMany(connID, []string{table})
+		cols, all = a.catalog.getColumnsMany(scopeKey, []string{table})
 		if !all {
 			a.readonlyReason = "正在加载列信息，稍后再试"
 			a.editKey = "" // 列加载完成后重算

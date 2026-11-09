@@ -30,6 +30,8 @@ type session struct {
 	db        *sql.DB
 	mu        sync.Mutex
 	curCancel atomic.Pointer[context.CancelFunc]
+	schema    string // 期望的 search_path 首项（UseSchema 设置）
+	applied   string // 已应用到连接池的 schema
 }
 
 func openSession(p engine.Profile) (engine.Session, error) {
@@ -63,7 +65,8 @@ func (s *session) Open(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	db.SetMaxOpenConns(4)
+	// SET search_path 只作用于一条连接；限制为 1 条，切换 schema 后连接池保持一致。
+	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return fmt.Errorf("postgres: %w", err)
@@ -104,6 +107,9 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 		cancel()
 		s.curCancel.Store(nil)
 	}()
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		// 非查询语句（INSERT/UPDATE/DDL）走 Exec。
@@ -209,6 +215,67 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	return out, rows.Err()
 }
 
+// applySchemaLocked 把期望的 schema 设为 search_path 首项（连接池只有一条连接）。
+func (s *session) applySchemaLocked(ctx context.Context) error {
+	if s.db == nil || s.schema == "" || s.schema == s.applied {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, "SET search_path TO "+quoteIdent(s.schema)); err != nil {
+		return err
+	}
+	s.applied = s.schema
+	return nil
+}
+
+// UseSchema 切换当前 schema（SET search_path）；未限定 schema 的表名随之解析。
+func (s *session) UseSchema(ctx context.Context, schema string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return errors.New("postgres: session not open")
+	}
+	s.schema = schema
+	return s.applySchemaLocked(ctx)
+}
+
+// ActiveSchema 返回当前 search_path 的 schema；没有时返回空串。
+func (s *session) ActiveSchema(ctx context.Context) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return "", errors.New("postgres: session not open")
+	}
+	if s.schema != "" {
+		return s.schema, nil
+	}
+	var name sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&name); err != nil {
+		return "", err
+	}
+	if !name.Valid {
+		return "", nil
+	}
+	return name.String, nil
+}
+
+// schemaLocked 解析要用的 schema：显式传入优先，其次 UseSchema 设置，最后 current_schema()。
+func (s *session) schemaLocked(ctx context.Context, schema string) (string, error) {
+	if schema != "" {
+		return schema, nil
+	}
+	if s.schema != "" {
+		return s.schema, nil
+	}
+	var name sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&name); err != nil {
+		return "", err
+	}
+	if !name.Valid {
+		return "", nil
+	}
+	return name.String, nil
+}
+
 func pgObjectQuery(kind engine.ObjectKind) (string, error) {
 	switch kind {
 	case engine.ObjectTable:
@@ -229,12 +296,9 @@ func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.O
 	if s.db == nil {
 		return nil, errors.New("postgres: session not open")
 	}
-	if schema == "" {
-		var err error
-		schema, err = s.currentSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
 	}
 	out := map[engine.ObjectKind]int{}
 	rows, err := s.db.QueryContext(ctx,
@@ -277,12 +341,9 @@ func (s *session) ObjectsPage(ctx context.Context, schema string, kind engine.Ob
 	if s.db == nil {
 		return nil, errors.New("postgres: session not open")
 	}
-	if schema == "" {
-		var err error
-		schema, err = s.currentSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
 	}
 	q, err := pgObjectQuery(kind)
 	if err != nil {
@@ -328,19 +389,36 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 }
 
 func (s *session) currentSchema(ctx context.Context) (string, error) {
-	var schema string
+	var schema sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schema)
-	return schema, err
+	if err != nil {
+		return "", err
+	}
+	if !schema.Valid {
+		return "", errors.New("postgres: 未选择 schema")
+	}
+	return schema.String, nil
 }
 
 // ObjectDDL 尽力拼出建表语句（列/类型/非空/默认/主键）；视图用 pg_get_viewdef。
 func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.objectDDLLocked(ctx, "", kind, name)
+}
+
+// ObjectDDLIn 按 schema 取 DDL：对象树跨 schema 时不会拿当前 schema 去查。
+func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.objectDDLLocked(ctx, schema, kind, name)
+}
+
+func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
 	if s.db == nil {
 		return "", errors.New("postgres: session not open")
 	}
-	schema, err := s.currentSchema(ctx)
+	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
 		return "", err
 	}
@@ -428,8 +506,23 @@ func quoteIdent(s string) string {
 func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.columnsLocked(ctx, "", table)
+}
+
+// ColumnsIn 按 schema 列出列；多 schema 补全走这里。
+func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine.Column, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.columnsLocked(ctx, schema, table)
+}
+
+func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	if s.db == nil {
 		return nil, errors.New("postgres: session not open")
+	}
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
 	}
 	const q = `
 SELECT c.column_name, c.data_type, c.is_nullable,
@@ -440,14 +533,14 @@ SELECT c.column_name, c.data_type, c.is_nullable,
           AND k.table_schema = tc.table_schema
           AND k.table_name = tc.table_name
          WHERE tc.constraint_type = 'PRIMARY KEY'
-           AND tc.table_schema = current_schema()
+           AND tc.table_schema = $1
            AND tc.table_name = c.table_name
            AND k.column_name = c.column_name
        )
 FROM information_schema.columns c
-WHERE c.table_schema = current_schema() AND c.table_name = $1
+WHERE c.table_schema = $1 AND c.table_name = $2
 ORDER BY c.ordinal_position`
-	rows, err := s.db.QueryContext(ctx, q, table)
+	rows, err := s.db.QueryContext(ctx, q, schema, table)
 	if err != nil {
 		return nil, err
 	}
@@ -469,6 +562,9 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return errors.New("postgres: session not open")
+	}
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return err
 	}
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -522,6 +618,9 @@ func (s *session) Begin(ctx context.Context) (engine.Tx, error) {
 	defer s.mu.Unlock()
 	if s.db == nil {
 		return nil, errors.New("postgres: session not open")
+	}
+	if err := s.applySchemaLocked(ctx); err != nil {
+		return nil, err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

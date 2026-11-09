@@ -293,6 +293,8 @@ func (a *root) forgetConnMeta(connID string) {
 	delete(a.metaCacheLoading, connID)
 	delete(a.metaCacheStale, connID)
 	delete(a.treeSchemas, connID)
+	delete(a.connSchema, connID)
+	delete(a.schemaLoading, connID)
 	for base := range a.treeData {
 		if connBaseMatch(connID, base) {
 			delete(a.treeData, base)

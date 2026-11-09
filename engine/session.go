@@ -43,6 +43,19 @@ type ColumnLister interface {
 	Columns(ctx context.Context, table string) ([]Column, error)
 }
 
+// SchemaColumnLister 是可选能力接口：按 schema/库 + 表名列出列。
+// 多 schema 数据源必须实现它，否则未选默认库时无法取列（MySQL 的 "未选择数据库"）。
+type SchemaColumnLister interface {
+	ColumnsIn(ctx context.Context, schema, table string) ([]Column, error)
+}
+
+// SchemaSwitcher 是可选能力接口：切换会话的当前 schema/库。
+// MySQL 用 USE <库>，PostgreSQL 用 SET search_path，ClickHouse 用 USE <库>。
+type SchemaSwitcher interface {
+	UseSchema(ctx context.Context, schema string) error
+	ActiveSchema(ctx context.Context) (string, error)
+}
+
 // Tx 是一次显式事务：Exec 返回影响行数，Commit/Rollback 结束事务。
 type Tx interface {
 	Exec(ctx context.Context, query string, args ...any) (int64, error)
@@ -58,6 +71,12 @@ type Transactional interface {
 // ObjectDDLer 是可选能力接口：返回对象的 DDL（建表/建视图语句）。
 type ObjectDDLer interface {
 	ObjectDDL(ctx context.Context, kind ObjectKind, name string) (string, error)
+}
+
+// SchemaObjectDDLer 是可选能力接口：按对象所在 schema/库取 DDL。
+// 多 schema 数据源用它，避免把其他库的对象拿到当前库去查。
+type SchemaObjectDDLer interface {
+	ObjectDDLIn(ctx context.Context, schema string, kind ObjectKind, name string) (string, error)
 }
 
 // RowStreamer 是可选能力接口：把查询结果逐行流式交给调用方（全量导出用）。

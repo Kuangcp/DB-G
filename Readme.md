@@ -65,7 +65,9 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       超时后主动取消驱动的语句并在结果区显示「查询超时（Ns），已取消」
 - [x] 数据源：SQLite / MySQL / **PostgreSQL**（pgx）/ **ClickHouse**（只读优先）
       —— 连接、执行、对象树、列目录（含主键）、补全、导出；四个驱动都实现了对象
-      DDL 查看；PostgreSQL / MySQL / ClickHouse 支持多 schema 切换；
+      DDL 查看；PostgreSQL / MySQL / ClickHouse 支持顶栏切换 schema/库（MySQL/CK 显示库名，
+      PG 显示「库.schema」），切换后补全、DDL、裸表名查询都跟随当前 schema；
+      MySQL 连接不填默认库时也能按库惰性加载对象与列目录；
       PostgreSQL 支持写操作，ClickHouse 只读
 - [x] 控制台 + 工作区：一个数据源多个命名控制台，每个绑定
       `~/.config/db-g/consoles/<connectionID>-<consoleID>.sql`；标签条/工作区切换、防抖自动落盘、
