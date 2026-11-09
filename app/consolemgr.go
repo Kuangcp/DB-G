@@ -30,6 +30,7 @@ type ConsoleManager struct {
 	src               map[string]func() string // consoleID → 惰性正文来源（活动控制台）
 	ver               map[string]uint64        // consoleID → 已见过的正文版本
 	paused            map[string]bool          // consoleID → 暂停写盘（外部文件冲突/缺失）
+	writing           map[string]bool          // consoleID → 正在写盘（轮询跳过，避免把自己的写当成外部修改）
 }
 
 // NewConsoleManager 创建管理器；sink 的生产实现是 ConsoleFiles。
@@ -48,6 +49,7 @@ func NewConsoleManager(store *ConnStore, sink TextSink) *ConsoleManager {
 		src:        map[string]func() string{},
 		ver:        map[string]uint64{},
 		paused:     map[string]bool{},
+		writing:    map[string]bool{},
 	}
 }
 
@@ -198,6 +200,22 @@ func (m *ConsoleManager) Dirty(id string) bool {
 	return m.dirty[id]
 }
 
+// LastSaved 返回最近一次成功写盘的内容；第二次返回 false 表示还没写盘记录。
+// 外部文件轮询用它识别「磁盘上的这版就是我刚写下去的」。
+func (m *ConsoleManager) LastSaved(id string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	text, ok := m.lastSaved[id]
+	return text, ok
+}
+
+// Writing 报告该控制台是否正在写盘。
+func (m *ConsoleManager) Writing(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.writing[id]
+}
+
 // Flush 立即把该控制台的正文写盘；成功后清脏并记录 UpdatedAt。失败保留脏标记。
 func (m *ConsoleManager) Flush(id string) error { return m.flush(id, false) }
 
@@ -215,9 +233,16 @@ func (m *ConsoleManager) flush(id string, force bool) error {
 		m.mu.Unlock()
 		return nil
 	}
-	src, text := m.src[id], m.cache[id]
+	src, text, ver := m.src[id], m.cache[id], m.ver[id]
 	m.stopSaveTimerLocked(id)
+	m.writing[id] = true
 	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		delete(m.writing, id)
+		m.mu.Unlock()
+	}()
 
 	if src != nil {
 		text = src()
@@ -227,7 +252,9 @@ func (m *ConsoleManager) flush(id string, force bool) error {
 	saved, known := m.lastSaved[id]
 	if known && saved == text {
 		// 内容与上次落盘一致（例如撤销回原文）：不必重写。
-		delete(m.dirty, id)
+		if m.flushUnchangedLocked(id, text, ver, src != nil) {
+			delete(m.dirty, id)
+		}
 		m.mu.Unlock()
 		return nil
 	}
@@ -250,11 +277,22 @@ func (m *ConsoleManager) flush(id string, force bool) error {
 
 	m.mu.Lock()
 	m.lastSaved[id] = text
-	if src != nil || m.cache[id] == text {
+	// 写盘期间编辑器可能又改了：只有版本/缓存仍与本次写入一致才算干净，
+	// 否则保留脏标记，等下一次防抖继续写。
+	if m.flushUnchangedLocked(id, text, ver, src != nil) {
 		delete(m.dirty, id)
 	}
 	m.mu.Unlock()
 	return nil
+}
+
+// flushUnchangedLocked 报告本次写盘后没有新的编辑落在同一控制台上。
+// 调用方必须持有 m.mu。
+func (m *ConsoleManager) flushUnchangedLocked(id, text string, ver uint64, sourced bool) bool {
+	if sourced {
+		return m.ver[id] == ver
+	}
+	return m.cache[id] == text
 }
 
 // FlushAll 写盘所有脏控制台（退出/Ctrl+S 前用）。

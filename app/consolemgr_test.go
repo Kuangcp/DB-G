@@ -348,6 +348,69 @@ func TestCreateWorkspaceFlushesActiveConsole(t *testing.T) {
 	}
 }
 
+// blockingSink 让 Write 阻塞，模拟写盘期间编辑器继续输入。
+type blockingSink struct {
+	*fakeSink
+	once    sync.Once
+	started chan struct{}
+	release chan struct{}
+}
+
+func (b *blockingSink) Write(id, text string) error {
+	b.once.Do(func() { close(b.started) })
+	<-b.release
+	return b.fakeSink.Write(id, text)
+}
+
+func TestFlushKeepsDirtyWhenEditRacesWrite(t *testing.T) {
+	sink := &blockingSink{fakeSink: newFakeSink(), started: make(chan struct{}), release: make(chan struct{})}
+	_, _, rec, m := newMgr(t, sink)
+	m.SaveDelay = time.Hour
+
+	var mu sync.Mutex
+	text := "v1"
+	m.SetTextSource(rec.ID, func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return text
+	})
+	m.TouchVersion(rec.ID, 1)
+
+	done := make(chan error, 1)
+	go func() { done <- m.Flush(rec.ID) }()
+	<-sink.started
+
+	mu.Lock()
+	text = "v2"
+	mu.Unlock()
+	m.TouchVersion(rec.ID, 2)
+	if !m.Writing(rec.ID) {
+		t.Fatal("写盘期间应报告 Writing")
+	}
+	close(sink.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if m.Writing(rec.ID) {
+		t.Fatal("写盘结束应清除 Writing")
+	}
+	if !m.Dirty(rec.ID) {
+		t.Fatal("写盘期间的新编辑必须保留脏标记")
+	}
+	if got, _ := m.LastSaved(rec.ID); got != "v1" {
+		t.Fatalf("本次写盘内容: %q", got)
+	}
+	if err := m.Flush(rec.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := sink.text(rec.ID); got != "v2" {
+		t.Fatalf("后续写盘应追上最新编辑: %q", got)
+	}
+	if m.Dirty(rec.ID) {
+		t.Fatal("追上后应清脏")
+	}
+}
+
 func TestLazyTextSourceFlush(t *testing.T) {
 	sink := newFakeSink()
 	_, _, rec, m := newMgr(t, sink)

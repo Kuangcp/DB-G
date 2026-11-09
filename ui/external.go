@@ -100,6 +100,10 @@ func (a *root) ensureExternal(id string) {
 	if m == nil {
 		return
 	}
+	if m.Writing(id) {
+		// 自己正在写盘：等写完再判断，避免把临时文件/rename 过程当成外部修改。
+		return
+	}
 	st := a.externalState(id)
 	st.path = rec.FilePath
 	fs := app.StatExternalSQL(rec.FilePath)
@@ -131,8 +135,16 @@ func (a *root) ensureExternal(id string) {
 	if st.lastDisk == text {
 		return
 	}
+	if saved, ok := m.LastSaved(id); ok && saved == text {
+		// 磁盘上的这版就是应用刚自动保存下去的：更新基线，不算外部修改。
+		// 必须比对 lastSaved 而不是 localText——用户可能已经在保存之后又改了正文。
+		st.lastDisk = text
+		st.conflict = false
+		m.SetSavePaused(id, false)
+		return
+	}
 	if a.localText(id) == text {
-		// 自己（自动保存）刚写回：更新基线，不算冲突。
+		// 编辑器正文已与磁盘一致（手动保存/外部恰好改成同一内容）：只对齐基线。
 		st.lastDisk = text
 		st.conflict = false
 		m.SetSavePaused(id, false)

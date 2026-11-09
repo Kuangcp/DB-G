@@ -65,6 +65,36 @@ func TestExternalCleanChangeReloads(t *testing.T) {
 	}
 }
 
+func TestExternalAutosaveThenEditNoConflict(t *testing.T) {
+	a, _, path := externalRoot(t, "SELECT 1\n")
+	id := a.activeConsole
+	a.setActiveText("SELECT 2\n")
+	a.syncActiveBuffer()
+	// 模拟防抖自动保存（不经过 externalAfterSave）：磁盘已是 SELECT 2。
+	if err := a.consoleMgr().Flush(id); err != nil {
+		t.Fatal(err)
+	}
+	// 保存之后用户继续输入；此时磁盘仍是上一版，不能误判成外部修改。
+	a.setActiveText("SELECT 3\n")
+	a.syncActiveBuffer()
+	a.pollExternalFiles(true)
+	if _, st, _ := a.activeExternal(); st.conflict || st.missing {
+		t.Fatalf("自己的自动保存不应被判成外部修改: %+v", st)
+	}
+	if got := a.code.Text(); got != "SELECT 3\n" {
+		t.Fatalf("本地继续编辑的内容不能丢: %q", got)
+	}
+	if data, _ := os.ReadFile(path); string(data) != "SELECT 2\n" {
+		t.Fatalf("轮询不应写盘: %q", data)
+	}
+	if err := a.flushActive(); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != "SELECT 3\n" {
+		t.Fatalf("后续保存应写回最新内容: %q", data)
+	}
+}
+
 func recID(a *root) string { return a.activeConsole }
 
 func TestExternalConflictAndResolve(t *testing.T) {
