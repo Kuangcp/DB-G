@@ -80,7 +80,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL | engine.CapExplain
 }
 
 func (s *session) Cancel() bool {
@@ -90,6 +90,19 @@ func (s *session) Cancel() bool {
 	}
 	(*c)()
 	return true
+}
+
+// Explain 返回 PostgreSQL 的 JSON 执行计划；ANALYZE 会真实执行查询。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	sql := "EXPLAIN (FORMAT JSON"
+	if opts.Analyze {
+		sql += ", ANALYZE"
+		if opts.Buffers {
+			sql += ", BUFFERS"
+		}
+	}
+	sql += ") " + query
+	return s.RunStatement(ctx, sql)
 }
 
 func (s *session) RunStatement(parent context.Context, query string) (*engine.QueryResult, error) {

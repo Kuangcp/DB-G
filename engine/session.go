@@ -60,6 +60,18 @@ type ObjectDDLer interface {
 	ObjectDDL(ctx context.Context, kind ObjectKind, name string) (string, error)
 }
 
+// ExplainOptions 控制执行计划的生成方式。
+type ExplainOptions struct {
+	Analyze bool // 真实执行查询并收集实际耗时/行数（只允许 SELECT）
+	Buffers bool // PostgreSQL：ANALYZE 时附带 buffer 统计
+}
+
+// PlanExplainer 是可选能力接口：返回数据源原生的 EXPLAIN 结果。
+// 结果由 ai/plan 按 kind 解析成统一计划树；解析失败时 UI 回退显示原始结果。
+type PlanExplainer interface {
+	Explain(ctx context.Context, sql string, opts ExplainOptions) (*QueryResult, error)
+}
+
 // RowStreamer 是可选能力接口：把查询结果逐行流式交给调用方（全量导出用）。
 // onColumns 在开始前给出列名；onRow 每行调用一次，返回错误即中止。
 type RowStreamer interface {

@@ -86,7 +86,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult | engine.CapExplain
 }
 
 func (s *session) Cancel() bool {
@@ -96,6 +96,14 @@ func (s *session) Cancel() bool {
 	}
 	(*c)()
 	return true
+}
+
+// Explain 返回 MySQL 的 JSON 计划；ANALYZE 走 EXPLAIN ANALYZE（TREE 输出）。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	if opts.Analyze {
+		return s.RunStatement(ctx, "EXPLAIN ANALYZE "+query)
+	}
+	return s.RunStatement(ctx, "EXPLAIN FORMAT=JSON "+query)
 }
 
 func (s *session) RunStatement(parent context.Context, query string) (*engine.QueryResult, error) {

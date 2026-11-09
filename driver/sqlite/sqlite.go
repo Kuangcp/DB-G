@@ -63,7 +63,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult | engine.CapExplain
 }
 
 func (s *session) Cancel() bool {
@@ -113,6 +113,14 @@ func isQueryLike(q string) bool {
 		return true
 	}
 	return false
+}
+
+// Explain 返回 SQLite 的 EXPLAIN QUERY PLAN；SQLite 没有 EXPLAIN ANALYZE。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	if opts.Analyze {
+		return nil, errors.New("sqlite 不支持 EXPLAIN ANALYZE")
+	}
+	return s.RunStatement(ctx, "EXPLAIN QUERY PLAN "+query)
 }
 
 func (s *session) query(ctx context.Context, query string) (*engine.QueryResult, error) {

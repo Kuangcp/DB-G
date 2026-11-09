@@ -63,6 +63,7 @@ type root struct {
 	vault            *app.Vault
 	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
 	aiChat           aiChatState
+	plan             planState
 	settingsSection  int    // 设置窗口选中的分区
 	captureAction    string // 设置窗口正在录制键位的动作
 	keymapWarn       string // 键位文件读写问题的提示
@@ -415,6 +416,7 @@ func (a *root) activateConsole(id string) bool {
 	if id == a.activeConsole {
 		return true
 	}
+	a.plan.open = false
 	prev := a.activeConsole
 	if err := a.flushActive(); err != nil {
 		return false // 落盘失败不切换，避免丢编辑
@@ -656,6 +658,7 @@ func (a *root) view(c *ui.Context) {
 		a.externalPickerModal(c)
 		a.externalResolveModal(c)
 		a.aiContextModal(c)
+		a.planConfirmModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
@@ -688,6 +691,9 @@ func (a *root) view(c *ui.Context) {
 							ui.Spacer(c)
 							if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
 								a.execPending = true
+							}
+							if iconButton(c, iconPlan, "执行计划", ui.Transparent).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+								a.runExplain(false)
 							}
 							if iconButton(c, iconFolderOpen, "打开 SQL 文件", ui.Transparent).Clicked() {
 								a.pickOpenSQLFiles()

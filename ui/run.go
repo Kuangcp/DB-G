@@ -223,6 +223,7 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 }
 
 func (a *root) runSQL() {
+	a.plan.open = false
 	a.pollExternalFiles(true)
 	if a.externalBlocked() {
 		return

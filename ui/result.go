@@ -111,6 +111,10 @@ func blockCSV(r *engine.QueryResult, rows, cols []int, header bool) string {
 }
 
 func (a *root) resultPane(c *ui.Context) {
+	if a.plan.open {
+		a.planPane(c)
+		return
+	}
 	ui.Column(c).Fill().Gap(6).Children(func() {
 		// 多语句或存在钉住结果时显示结果 tab：pinned 在左，新结果在右。
 		if len(a.stmtRuns) > 1 || a.hasPinned() {

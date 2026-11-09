@@ -123,6 +123,11 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       and error logs behind separate switches; the exact context can be previewed before sending; replies stream,
       and generated SQL is inserted only when the user clicks "Insert SQL"; Settings → AI configures the base URL,
       model and API key (encrypted on this machine); conversations are saved per workspace
+- [x] Execution plans: the top-bar "Execution plan" action EXPLAINs the current statement/selection and shows
+      a unified plan tree in the result pane, colored by cost with rows/actual timing; supports SQLite
+      `EXPLAIN QUERY PLAN`, PostgreSQL JSON, MySQL JSON/TREE and ClickHouse JSON, falling back to the raw result
+      when parsing fails; ANALYZE asks every time and is limited to SELECT/WITH; the plan tree can be sent to AI
+      for diagnosis
 - [x] Security and polish (P4): connection passwords **encrypted with AES-256-GCM on this machine**
       (key `<config>/db-g/secret.key`, 0600; existing plaintext is encrypted and written back on load; if a changed
       key cannot decrypt, the app warns and asks you to re-enter); connection profile **export/import**

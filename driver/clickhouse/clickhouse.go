@@ -102,7 +102,7 @@ func (s *session) Close() error {
 
 // Caps：只读数据源（无事务/无 DDL）。
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapExplain
 }
 
 func (s *session) Cancel() bool {
@@ -112,6 +112,14 @@ func (s *session) Cancel() bool {
 	}
 	(*c)()
 	return true
+}
+
+// Explain 返回 ClickHouse 的 JSON 计划；暂不执行 EXPLAIN ANALYZE。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	if opts.Analyze {
+		return nil, errors.New("clickhouse 暂不支持 EXPLAIN ANALYZE")
+	}
+	return s.RunStatement(ctx, "EXPLAIN json=1 "+query)
 }
 
 func (s *session) RunStatement(parent context.Context, query string) (*engine.QueryResult, error) {

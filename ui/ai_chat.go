@@ -122,30 +122,40 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 // sendAI 发送当前输入；服务端错误只写面板，不影响查询。
 func (a *root) sendAI() {
 	q := strings.TrimSpace(a.aiChat.input)
-	if q == "" || a.aiChat.streaming {
-		return
-	}
-	provider, err := a.aiProviderFor()
-	if err != nil {
-		a.aiChat.err = err.Error()
+	if q == "" {
 		return
 	}
 	snap := a.aiSnapshot()
 	msgs := ai.BuildMessages(snap, q)
+	tables, cols, rows := snap.Summary()
+	a.aiChat.lastCtx = fmt.Sprintf("上下文：%d 张表 / %d 列 / %d 行样本", tables, cols, rows)
+	if err := a.startAIRequest(q, msgs); err != nil {
+		a.aiChat.err = err.Error()
+		return
+	}
+	a.aiChat.input = ""
+}
+
+// startAIRequest 追加一轮消息并发起流式请求。
+func (a *root) startAIRequest(display string, msgs []ai.Message) error {
+	if a.aiChat.streaming {
+		return errors.New("正在生成，请先停止")
+	}
+	provider, err := a.aiProviderFor()
+	if err != nil {
+		return err
+	}
 	model := a.aiPrefs.Model
 	if model == "" {
 		model = "local"
 	}
-	tables, cols, rows := snap.Summary()
-	a.aiChat.lastCtx = fmt.Sprintf("上下文：%d 张表 / %d 列 / %d 行样本", tables, cols, rows)
 	if len(msgs) > 1 {
 		a.aiChat.lastPrompt = msgs[0].Content + "\n\n---\n\n" + msgs[1].Content
 	}
-	a.aiChat.input = ""
 	a.aiChat.err = ""
 	a.aiChat.usage = ai.Usage{}
 	a.aiChat.messages = append(a.aiChat.messages,
-		aiChatMessage{role: "user", text: q, done: true},
+		aiChatMessage{role: "user", text: display, done: true},
 		aiChatMessage{role: "assistant"},
 	)
 	a.saveAIChat()
@@ -168,11 +178,12 @@ func (a *root) sendAI() {
 		a.aiChat.err = err.Error()
 		app.LogWarn("ai", "stream failed", "model", model, "err", err.Error())
 		a.applyAIEvent(seq, ai.Event{Kind: ai.EventError, Err: err})
-		return
+		return err
 	}
-	app.LogInfo("ai", "chat request", "model", model, "messages", len(msgs), "tables", tables)
+	app.LogInfo("ai", "chat request", "model", model, "messages", len(msgs))
 	a.consumeAI(seq, ch)
 	a.aiChat.scroll.Y = math.MaxFloat32
+	return nil
 }
 
 // consumeAI 消费事件流；真机把增量合并后回主线程，headless 同步应用。

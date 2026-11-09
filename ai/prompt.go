@@ -246,3 +246,18 @@ func ExtractSQL(markdown string) (string, bool) {
 		markdown = body[end+3:]
 	}
 }
+
+// BuildPlanMessages 组装一次执行计划诊断请求。
+func BuildPlanMessages(snapshot ContextSnapshot, planText string, analyze bool) []Message {
+	question := "请分析这个执行计划：指出最慢/代价最高的节点、可能缺失的索引或写法问题，并给出可执行的优化建议。"
+	if !analyze {
+		question += " 这是普通 EXPLAIN，没有真实耗时数据。"
+	}
+	mode := "EXPLAIN"
+	if analyze {
+		mode = "EXPLAIN ANALYZE"
+	}
+	msgs := BuildMessages(snapshot, question)
+	msgs[1].Content += "\n\n# 执行计划（" + mode + "）\n```\n" + planText + "\n```\n"
+	return msgs
+}
