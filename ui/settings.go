@@ -21,6 +21,7 @@ func (a *root) settingsSections() []settingsSection {
 	return []settingsSection{
 		{"外观", a.appearanceSection},
 		{"字体", a.fontSection},
+		{"AI", a.aiSection},
 		{"快捷键", a.keymapSection},
 		{"连接档案", a.profilesSection},
 		{"日志", a.logSection},

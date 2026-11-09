@@ -14,8 +14,13 @@
     - 相关代码：`ui/sqlscope.go` 的 `stmtScopeAtOffset` / `statementBounds` /
       `softStatementEnd` / `relationPositionAt`；测试 `TestStmtScopeAtSoftBoundaryGuards`、
       `TestCompletionRelationPositionWithPreviousStatement`。
-- Ai设计接入 ： 架构初期就将 AI 补全（Copilot-like context）、执行计划可视化分析、本地聊天流（Chat-to-SQL） 作为一等公民（First-class citizen）来设计
-    - 草稿设计在 docs/design/AiContext.md
+- AI 助手后续阶段（Chat-to-SQL 第一版已完成，设计与计划见
+  `docs/superpowers/specs/2026-11-09-ai-context-design.md`、`docs/superpowers/plans/2026-11-09-ai-context.md`）：
+    - EXPLAIN 可视化 + AI 诊断（四种方言解析、结果区计划 Tab、ANALYZE 每次确认）
+    - SQL 错误一键修复（diff 预览，用户确认后应用）
+    - 高危 SQL 拦截（确定性规则默认提醒，连接级硬阻断）
+    - 编辑器内联 AI 补全
+    - 向量/embedding 检索（当前仅词法 + 外键扩展）
 
 
 # 查询结果

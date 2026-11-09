@@ -42,6 +42,9 @@ const icons = {
   iconFolderPlus: "folder-plus",
   iconExpandAll:   "chevrons-down",
   iconCollapseAll: "chevrons-up",
+  iconSparkles:    "sparkles",
+  iconSend:        "send",
+  iconStop:        "circle-stop",
 };
 
 // loadIcon 读一个图标的 __iconData；别名文件（只有 re-export）跟着跳过去。

@@ -1,3 +1,7 @@
+> 已定稿的技术设计与实施计划：
+> `docs/superpowers/specs/2026-11-09-ai-context-design.md`、
+> `docs/superpowers/plans/2026-11-09-ai-context.md`。本文件保留产品愿景与场景描述。
+
 为了在架构初期就将 AI 补全、执行计划可视化、本地聊天流 作为一等公民（First-class citizen）融入 DB-G，我们必须彻底颠覆传统“输入框 + 结果集”的被动设计，将 AI 视为一个拥有完整上下文感知、具备工具调用能力（Function Calling）的内核协程。
 以下是实现这一愿景的系统级架构设计、AI 的操作边界、以及核心应用场景蓝图：
 

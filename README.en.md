@@ -118,6 +118,11 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       no columns when the statement references no table); after FROM/JOIN/UPDATE/INTO the relation-name position
       offers tables/views first; adjacent statements missing a semicolon are separated at line-leading
       `SELECT`/`INSERT` keywords so the next statement's tables do not leak into the current completion
+- [x] AI assistant (phase 1): a collapsible right panel for Chat-to-SQL, using local Ollama by default or any
+      OpenAI-compatible service; only schema + the current SQL are sent by default, with sample rows, history
+      and error logs behind separate switches; the exact context can be previewed before sending; replies stream,
+      and generated SQL is inserted only when the user clicks "Insert SQL"; Settings → AI configures the base URL,
+      model and API key (encrypted on this machine); conversations are saved per workspace
 - [x] Security and polish (P4): connection passwords **encrypted with AES-256-GCM on this machine**
       (key `<config>/db-g/secret.key`, 0600; existing plaintext is encrypted and written back on load; if a changed
       key cannot decrypt, the app warns and asks you to re-enter); connection profile **export/import**

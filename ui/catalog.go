@@ -131,6 +131,28 @@ func (c *catalogCache) hasRelation(connID, name string) bool {
 	return false
 }
 
+// objects 返回该连接缓存中的表/视图（只读副本）；无新鲜缓存时 ok=false。
+func (c *catalogCache) objects(connID string) (tables, views []string, ok bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.entries[connID]
+	if !ok || c.now().Sub(e.loadedAt) >= c.ttl {
+		return nil, nil, false
+	}
+	return slices.Clone(e.tables), slices.Clone(e.views), true
+}
+
+// columns 返回某表缓存的原始列；无新鲜缓存时 ok=false。
+func (c *catalogCache) columns(connID, table string) ([]engine.Column, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.cols[connID][table]
+	if !ok || c.now().Sub(e.loadedAt) >= c.ttl {
+		return nil, false
+	}
+	return slices.Clone(e.cols), true
+}
+
 // getColumns 返回某表的列候选；无缓存或已过期时 ok 为 false。
 func (c *catalogCache) getColumns(connID, table string) ([]myeditor.Completion, bool) {
 	c.mu.Lock()

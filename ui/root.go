@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -12,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
 
+	"db-g/ai"
 	"db-g/app"
 	"db-g/engine"
 )
@@ -55,6 +57,12 @@ type root struct {
 	themeSaveSeq     atomic.Uint64
 	themeHex         string // 外观分区里自定义强调色的输入框
 	themeHexErr      string
+	aiPrefs          app.AIPrefs // AI 服务地址/模型/出网开关
+	aiPrefsPath      string      // ai.json 的位置（空 = 不落盘）
+	aiWarn           string
+	vault            *app.Vault
+	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
+	aiChat           aiChatState
 	settingsSection  int    // 设置窗口选中的分区
 	captureAction    string // 设置窗口正在录制键位的动作
 	keymapWarn       string // 键位文件读写问题的提示
@@ -234,6 +242,15 @@ func newRootWithStore(storePath string) *root {
 	r.applyFontPrefs()
 	r.themePath = app.DefaultThemePrefsPath()
 	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
+	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
+	if vault, err := app.LoadVault(storePath); err != nil {
+		r.aiWarn = "AI 密钥不可用：" + err.Error()
+	} else {
+		r.vault = vault
+		prefs, warn := app.LoadAIPrefs(r.aiPrefsPath, vault)
+		r.aiPrefs = prefs
+		r.aiWarn = warn
+	}
 	r.store = app.LoadStore(storePath)
 	r.metaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
 	r.history = app.OpenHistory(app.DefaultHistoryDir())
@@ -638,93 +655,111 @@ func (a *root) view(c *ui.Context) {
 		a.installModal(c)
 		a.externalPickerModal(c)
 		a.externalResolveModal(c)
+		a.aiContextModal(c)
 
 		ui.Split(c, &a.sidebarWidth, func() {
 			a.sidebar(c)
 		}, func() {
-			ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
-				// 顶栏：连接状态 + 操作。工具条里的按钮悬停前没有面孔。
-				ui.Toolbar(c, func() {
-					connID := a.activeConnID()
-					if connID != "" {
-						a.connDot(c, connID)
-						if name := a.activeConnName(); name != "" {
-							ui.Text(c, name).Bold()
-						}
-					}
-					if a.connErr != "" {
-						ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
-					}
-					if a.consoleErr != "" {
-						if ui.Button(c, a.consoleErr).TextColor(c.Theme().Danger).SingleLine().Clicked() {
-							a.consoleErr = ""
-						}
-					}
-					if a.extMsg != "" {
-						if ui.Button(c, a.extMsg).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Clicked() {
-							a.extMsg = ""
-						}
-					}
-					ui.Spacer(c)
-					if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-						a.execPending = true
-					}
-					if iconButton(c, iconFolderOpen, "打开 SQL 文件", ui.Transparent).Clicked() {
-						a.pickOpenSQLFiles()
-					}
-					if iconButton(c, iconHistory, "历史", ui.Transparent).Clicked() {
-						a.historyOpen = true
-					}
-					if iconButton(c, iconSettings, "设置", ui.Transparent).Clicked() {
-						a.requestSettings()
-					}
-					if a.installNeed.NeedInstall {
-						label := "安装到应用列表"
-						switch {
-						case a.installNeed.Upgrade:
-							label = "升级应用（" + a.installNeed.Running + "）"
-						case a.installNeed.Repair:
-							label = "修复应用菜单"
-						}
-						if iconButton(c, iconUpgrade, label, c.Theme().Accent).Clicked() {
-							a.installOpen = true
-							a.installErr = ""
-						}
-					}
-					if a.installNote != "" {
-						ui.Text(c, a.installNote).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
-					}
-				}).Label("操作")
+			ui.Row(c).Fill().Children(func() {
+				ui.Column(c).Grow(1).FillHeight().Children(func() {
+					ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
+						// 顶栏：连接状态 + 操作。工具条里的按钮悬停前没有面孔。
+						ui.Toolbar(c, func() {
+							connID := a.activeConnID()
+							if connID != "" {
+								a.connDot(c, connID)
+								if name := a.activeConnName(); name != "" {
+									ui.Text(c, name).Bold()
+								}
+							}
+							if a.connErr != "" {
+								ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
+							}
+							if a.consoleErr != "" {
+								if ui.Button(c, a.consoleErr).TextColor(c.Theme().Danger).SingleLine().Clicked() {
+									a.consoleErr = ""
+								}
+							}
+							if a.extMsg != "" {
+								if ui.Button(c, a.extMsg).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Clicked() {
+									a.extMsg = ""
+								}
+							}
+							ui.Spacer(c)
+							if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+								a.execPending = true
+							}
+							if iconButton(c, iconFolderOpen, "打开 SQL 文件", ui.Transparent).Clicked() {
+								a.pickOpenSQLFiles()
+							}
+							if iconButton(c, iconHistory, "历史", ui.Transparent).Clicked() {
+								a.historyOpen = true
+							}
+							if iconButton(c, iconSparkles, "AI 助手", ui.Transparent).Clicked() {
+								a.aiChat.open = !a.aiChat.open
+								if a.aiChat.open {
+									a.loadAIChat()
+									a.aiChat.scroll.Y = math.MaxFloat32
+								} else {
+									a.stopAI()
+								}
+							}
+							if iconButton(c, iconSettings, "设置", ui.Transparent).Clicked() {
+								a.requestSettings()
+							}
+							if a.installNeed.NeedInstall {
+								label := "安装到应用列表"
+								switch {
+								case a.installNeed.Upgrade:
+									label = "升级应用（" + a.installNeed.Running + "）"
+								case a.installNeed.Repair:
+									label = "修复应用菜单"
+								}
+								if iconButton(c, iconUpgrade, label, c.Theme().Accent).Clicked() {
+									a.installOpen = true
+									a.installErr = ""
+								}
+							}
+							if a.installNote != "" {
+								ui.Text(c, a.installNote).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+							}
+						}).Label("操作")
 
-				// 标签条 + 工作区切换器
-				a.tabBar(c)
+						// 标签条 + 工作区切换器
+						a.tabBar(c)
 
-				// 工具行：查找（编辑器自带查找栏；性能预设/信息在独立设置窗口里）
-				ui.Toolbar(c, func() {
-					ui.Spacer(c)
-					if iconButton(c, iconSearch, "查找 (Ctrl+F)", ui.Transparent).Clicked() {
-						a.code.Find()
-					}
-					if iconButton(c, iconFormat, "格式化 SQL", ui.Transparent).Clicked() {
-						a.formatActive()
-					}
-				}).Label("编辑器工具")
+						// 工具行：查找（编辑器自带查找栏；性能预设/信息在独立设置窗口里）
+						ui.Toolbar(c, func() {
+							ui.Spacer(c)
+							if iconButton(c, iconSearch, "查找 (Ctrl+F)", ui.Transparent).Clicked() {
+								a.code.Find()
+							}
+							if iconButton(c, iconFormat, "格式化 SQL", ui.Transparent).Clicked() {
+								a.formatActive()
+							}
+						}).Label("编辑器工具")
 
-				// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
-				editor := func() {
-					a.externalBanner(c)
-					a.code.View(c).Label("编辑器")
-					if a.execPending {
-						a.execPending = false
-						a.runSQL()
-					}
-				}
-				if a.resultsHidden {
-					ui.Column(c).Grow(1).Children(editor)
-				} else {
-					ui.SplitVerticalPercent(c, &a.editorPercent, editor, func() {
-						a.resultPane(c)
-					}).Grow(1).SplitReset(65)
+						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
+						editor := func() {
+							a.externalBanner(c)
+							a.code.View(c).Label("编辑器")
+							if a.execPending {
+								a.execPending = false
+								a.runSQL()
+							}
+						}
+						if a.resultsHidden {
+							ui.Column(c).Grow(1).Children(editor)
+						} else {
+							ui.SplitVerticalPercent(c, &a.editorPercent, editor, func() {
+								a.resultPane(c)
+							}).Grow(1).SplitReset(65)
+						}
+					})
+				})
+				if a.aiChat.open {
+					ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
+					a.aiPanel(c)
 				}
 			})
 		}).Fill()
