@@ -4,6 +4,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -168,46 +169,89 @@ func (a *root) currentAIConversationTitle() string {
 	return ""
 }
 
-// aiHistoryList 是面板内的会话历史列表，按最近使用排序。
+// aiHistoryList 是面板内的会话历史列表：按最近消息时间倒排，搜索 + 滚动分页。
 func (a *root) aiHistoryList(c *ui.Context) {
 	st := &a.aiChat
 	t := c.Theme()
 	convs := append([]app.AIConversation(nil), st.store.Conversations...)
-	sort.SliceStable(convs, func(i, j int) bool { return convs[i].UpdatedAt > convs[j].UpdatedAt })
-	ui.Scroll(c).FillWidth().Height(160).Children(func() {
-		ui.Column(c).FillWidth().Gap(1).Children(func() {
-			ui.Text(c, "会话历史").FontSize(11).Bold().TextColor(t.TextMuted)
-			if len(convs) == 0 {
-				ui.Text(c, "还没有历史会话").FontSize(11).TextColor(t.TextMuted)
-				return
+	sort.SliceStable(convs, func(i, j int) bool {
+		if convs[i].UpdatedAt != convs[j].UpdatedAt {
+			return convs[i].UpdatedAt > convs[j].UpdatedAt
+		}
+		if convs[i].CreatedAt != convs[j].CreatedAt {
+			return convs[i].CreatedAt > convs[j].CreatedAt
+		}
+		return convs[i].ID > convs[j].ID
+	})
+	titleOf := func(conv app.AIConversation) string {
+		if conv.Title != "" {
+			return conv.Title
+		}
+		if title := app.AIConversationTitle(conv.Messages); title != "" {
+			return title
+		}
+		return "新会话"
+	}
+	if q := strings.ToLower(strings.TrimSpace(st.historyQuery)); q != "" {
+		filtered := convs[:0]
+		for _, conv := range convs {
+			if strings.Contains(strings.ToLower(titleOf(conv)), q) {
+				filtered = append(filtered, conv)
 			}
-			for _, conv := range convs {
-				title := conv.Title
-				if title == "" {
-					title = app.AIConversationTitle(conv.Messages)
+		}
+		convs = filtered
+	}
+	if st.historyLimit < 20 {
+		st.historyLimit = 20
+	}
+	if st.historyScroll.MaxY > 0 && st.historyScroll.Y >= st.historyScroll.MaxY-24 &&
+		st.historyLimit < len(convs) {
+		st.historyLimit += 20
+	}
+	if st.historyLimit > len(convs) {
+		st.historyLimit = len(convs)
+	}
+	ui.Column(c).FillWidth().Gap(3).Children(func() {
+		ui.Text(c, "会话历史").FontSize(11).Bold().TextColor(t.TextMuted)
+		if ui.TextInput(c, &st.historyQuery).Placeholder("搜索会话").FontSize(11.5).
+			Radius(t.Space(1)).Changed() {
+			st.historyLimit = 20
+			st.historyScroll.Y = 0
+		}
+		ui.Scroll(c).TrackScroll(&st.historyScroll).FillWidth().Height(180).Children(func() {
+			ui.Column(c).FillWidth().Gap(1).Children(func() {
+				if len(convs) == 0 {
+					ui.Text(c, "没有匹配的会话").FontSize(11).TextColor(t.TextMuted)
+					return
 				}
-				if title == "" {
-					title = "新会话"
+				limit := st.historyLimit
+				if limit > len(convs) {
+					limit = len(convs)
 				}
-				label := title
-				btn := ui.ButtonBase(c).Label(label).Justify(ui.Start).Padding(3, 6).Radius(t.Space(1))
-				if conv.ID == st.convID {
-					btn.Background(t.Accent.Alpha(0.12))
-				} else if btn.Hovered() {
-					btn.Background(t.SurfaceHover)
-				}
-				btn.Children(func() {
-					txt := ui.Text(c, label).FontSize(11.5).SingleLine()
+				for _, conv := range convs[:limit] {
+					label := titleOf(conv)
+					btn := ui.ButtonBase(c).Label(label).Justify(ui.Start).Padding(3, 6).Radius(t.Space(1))
 					if conv.ID == st.convID {
-						txt.Bold().TextColor(t.Accent)
+						btn.Background(t.Accent.Alpha(0.12))
+					} else if btn.Hovered() {
+						btn.Background(t.SurfaceHover)
 					}
-				})
-				if btn.Clicked() {
-					a.stopAI()
-					a.selectAIConversation(conv.ID, true)
-					st.showHistory = false
+					btn.Children(func() {
+						txt := ui.Text(c, label).FontSize(11.5).SingleLine()
+						if conv.ID == st.convID {
+							txt.Bold().TextColor(t.Accent)
+						}
+					})
+					if btn.Clicked() {
+						a.stopAI()
+						a.selectAIConversation(conv.ID, true)
+						st.showHistory = false
+					}
 				}
-			}
+				if limit < len(convs) {
+					ui.Text(c, "继续向下滚动加载更多…").FontSize(10.5).TextColor(t.TextMuted)
+				}
+			})
 		})
 	})
 }

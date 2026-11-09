@@ -26,24 +26,27 @@ type aiChatMessage struct {
 
 // aiChatState 是右侧 AI 面板的瞬态状态。
 type aiChatState struct {
-	open        bool
-	split       float32 // 主区域占左右分屏的百分比；剩余给 AI 面板
-	input       string
-	messages    []aiChatMessage
-	streaming   bool
-	cancel      context.CancelFunc
-	seq         uint64
-	err         string
-	lastCtx     string
-	lastPrompt  string
-	ctxOpen     bool
-	usage       ai.Usage
-	started     time.Time
-	md          markdown.Options
-	scroll      ui.ScrollState
-	store       app.AIConversationStore
-	convID      string
-	showHistory bool
+	open          bool
+	split         float32 // 主区域占左右分屏的百分比；剩余给 AI 面板
+	input         string
+	messages      []aiChatMessage
+	streaming     bool
+	cancel        context.CancelFunc
+	seq           uint64
+	err           string
+	lastCtx       string
+	lastPrompt    string
+	ctxOpen       bool
+	usage         ai.Usage
+	started       time.Time
+	md            markdown.Options
+	scroll        ui.ScrollState
+	store         app.AIConversationStore
+	convID        string
+	showHistory   bool
+	historyQuery  string
+	historyLimit  int
+	historyScroll ui.ScrollState
 }
 
 // aiProviderFor 返回当前配置对应的 Provider；测试可注入。
@@ -424,19 +427,38 @@ func (a *root) syncAIChat() {
 		return
 	}
 	conv := &a.aiChat.store.Conversations[idx]
-	conv.Messages = conv.Messages[:0]
+	next := make([]app.AIMessageRecord, 0, len(a.aiChat.messages))
 	for _, m := range a.aiChat.messages {
-		conv.Messages = append(conv.Messages, app.AIMessageRecord{
+		next = append(next, app.AIMessageRecord{
 			Role: m.role, Text: m.text, Done: m.done, Err: m.err,
 		})
 	}
+	changed := !sameAIMessageList(conv.Messages, next)
+	conv.Messages = next
 	if conv.Title == "" || conv.Title == "新会话" {
 		if title := app.AIConversationTitle(conv.Messages); title != "" {
 			conv.Title = title
 		}
 	}
-	conv.UpdatedAt = time.Now().UnixMilli()
+	if changed {
+		conv.UpdatedAt = time.Now().UnixMilli()
+		a.aiChat.historyLimit = 0
+	}
 	a.aiChat.store.ActiveID = conv.ID
+}
+
+// sameAIMessageList 比较两条消息列表，切换会话时避免刷新 UpdatedAt 导致排序跳动。
+func sameAIMessageList(a, b []app.AIMessageRecord) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Role != b[i].Role || a[i].Text != b[i].Text ||
+			a[i].Done != b[i].Done || a[i].Err != b[i].Err {
+			return false
+		}
+	}
+	return true
 }
 
 // saveAIChat 保存当前工作区全部会话。

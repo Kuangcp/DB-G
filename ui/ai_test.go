@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -258,9 +259,18 @@ func TestAIChatConversationHistorySwitch(t *testing.T) {
 	}
 	a.aiChat.showHistory = false
 
+	before := map[string]int64{}
+	for _, conv := range a.aiChat.store.Conversations {
+		before[conv.ID] = conv.UpdatedAt
+	}
 	a.selectAIConversation(firstID, true)
 	if len(a.aiChat.messages) != 2 || a.aiChat.messages[0].text != "first question" {
 		t.Fatalf("switched messages: %+v", a.aiChat.messages)
+	}
+	for _, conv := range a.aiChat.store.Conversations {
+		if conv.UpdatedAt != before[conv.ID] {
+			t.Fatalf("switching must not reorder history: %s %d -> %d", conv.ID, before[conv.ID], conv.UpdatedAt)
+		}
 	}
 	store, warn := app.LoadAIConversations(a.aiChatFile())
 	if warn != "" {
@@ -301,5 +311,43 @@ func TestAITitleGenerationIsOptIn(t *testing.T) {
 	a.sendAI()
 	if p.calls != 3 {
 		t.Fatalf("title generation should add one call: calls=%d", p.calls)
+	}
+}
+
+func TestAIHistorySearchFiltersTitles(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.aiChat.store = app.AIConversationStore{Conversations: []app.AIConversation{
+		{ID: "a", Title: "alpha report", UpdatedAt: 2},
+		{ID: "b", Title: "beta query", UpdatedAt: 1},
+	}}
+	a.aiChat.convID = "b"
+	a.aiChat.open = true
+	a.aiChat.showHistory = true
+	a.aiChat.historyQuery = "beta"
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if !tt.HasText("beta query") || tt.HasText("alpha report") {
+		t.Fatalf("search filter: %q", tt.Texts())
+	}
+}
+
+func TestAIHistoryScrollPagination(t *testing.T) {
+	a := newConsoleRoot(t)
+	for i := 0; i < 30; i++ {
+		a.aiChat.store.Conversations = append(a.aiChat.store.Conversations, app.AIConversation{
+			ID: fmt.Sprintf("c%02d", i), Title: fmt.Sprintf("conv %02d", i), UpdatedAt: int64(100 - i),
+		})
+	}
+	a.aiChat.open = true
+	a.aiChat.showHistory = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if !tt.HasText("继续向下滚动加载更多…") {
+		t.Fatalf("first page should show load-more hint: %q", tt.Texts())
+	}
+	a.aiChat.historyScroll.Y = a.aiChat.historyScroll.MaxY
+	tt.Frame()
+	if a.aiChat.historyLimit != 30 {
+		t.Fatalf("scroll to end should load all remaining rows: limit=%d", a.aiChat.historyLimit)
 	}
 }
