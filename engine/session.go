@@ -29,6 +29,18 @@ type Session interface {
 	Caps() Capabilities
 }
 
+// ServerInfo 是已连接数据源的运行时信息（结果区底栏展示用）。
+type ServerInfo struct {
+	Database string // 当前数据库/文件
+	Version  string // 数据源版本
+}
+
+// ServerInfoer 是可选能力接口：返回当前数据库名与服务器版本。
+// 打开连接后 UI 异步查询一次，失败只把版本留空，不影响会话。
+type ServerInfoer interface {
+	ServerInfo(ctx context.Context) (ServerInfo, error)
+}
+
 // Column 是一个表的列元数据（列目录用）。
 type Column struct {
 	Name       string
@@ -77,6 +89,18 @@ type ObjectDDLer interface {
 // 多 schema 数据源用它，避免把其他库的对象拿到当前库去查。
 type SchemaObjectDDLer interface {
 	ObjectDDLIn(ctx context.Context, schema string, kind ObjectKind, name string) (string, error)
+}
+
+// ExplainOptions 控制执行计划的生成方式。
+type ExplainOptions struct {
+	Analyze bool // 真实执行查询并收集实际耗时/行数（只允许 SELECT）
+	Buffers bool // PostgreSQL：ANALYZE 时附带 buffer 统计
+}
+
+// PlanExplainer 是可选能力接口：返回数据源原生的 EXPLAIN 结果。
+// 结果由 ai/plan 按 kind 解析成统一计划树；解析失败时 UI 回退显示原始结果。
+type PlanExplainer interface {
+	Explain(ctx context.Context, sql string, opts ExplainOptions) (*QueryResult, error)
 }
 
 // RowStreamer 是可选能力接口：把查询结果逐行流式交给调用方（全量导出用）。

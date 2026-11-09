@@ -255,7 +255,7 @@ func (a *root) pickOpenSQLFiles() {
 		if err != nil || len(paths) == 0 {
 			return
 		}
-		win.Update(func() { a.handleDroppedFiles(paths) })
+		a.safeUpdate(win, func() { a.handleDroppedFiles(paths) })
 	}()
 }
 

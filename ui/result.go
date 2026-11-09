@@ -111,43 +111,56 @@ func blockCSV(r *engine.QueryResult, rows, cols []int, header bool) string {
 }
 
 func (a *root) resultPane(c *ui.Context) {
+	if a.plan.open {
+		a.planPane(c)
+		return
+	}
 	ui.Column(c).Fill().Gap(6).Children(func() {
-		// 多语句或存在钉住结果时显示结果 tab：pinned 在左，新结果在右。
-		if len(a.stmtRuns) > 1 || a.hasPinned() {
-			a.stmtTabs(c)
-		}
-		switch {
-		case a.currentRuntime().Running():
-			ui.Row(c).Gap(8).Children(func() {
-				ui.Spinner(c)
-				ui.Text(c, "执行中…")
-				if ui.Button(c, "停止").Clicked() {
-					a.currentRuntime().Cancel()
-				}
-			})
-		case a.currentRuntime().Err() != "":
-			ui.Text(c, "执行失败").Bold()
-			a.withResultFont(ui.Text(c, a.currentRuntime().Err()).TextColor(c.Theme().Danger).Font("monospace"))
-		case a.currentRuntime().Result() != nil:
-			r := a.currentRuntime().Result()
-			if !r.IsQuery {
-				ui.Textf(c, "OK — %d 行受影响", r.Affected)
-				return
+		ui.Column(c).Fill().Gap(6).Children(func() {
+			// 多语句或存在钉住结果时显示结果 tab：pinned 在左，新结果在右。
+			if len(a.stmtRuns) > 1 || a.hasPinned() {
+				a.stmtTabs(c)
 			}
-			if r.Truncated {
-				ui.Badge(c, "结果已截断：超过 500 行或 16MB 字符预算")
-			}
-			a.resultTable(c, r)
-		default:
 			switch {
-			case a.activeSession() == nil:
-				ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
-			case true:
-				ui.Text(c, "Ctrl+Enter 执行光标所在语句（选中则只跑选区）").TextColor(c.Theme().TextMuted)
+			case a.currentRuntime().Running():
+				ui.Row(c).Gap(8).Children(func() {
+					ui.Spinner(c)
+					ui.Text(c, "执行中…")
+					if ui.Button(c, "停止").Clicked() {
+						a.currentRuntime().Cancel()
+					}
+				})
+			case a.currentRuntime().Err() != "":
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, "执行失败").Bold()
+					ui.Spacer(c)
+					if ui.Button(c, "AI 修复").Clicked() {
+						a.fixErrorSQL()
+					}
+				})
+				a.withResultFont(ui.Text(c, a.currentRuntime().Err()).TextColor(c.Theme().Danger).Font("monospace"))
+			case a.currentRuntime().Result() != nil:
+				r := a.currentRuntime().Result()
+				if !r.IsQuery {
+					ui.Textf(c, "OK — %d 行受影响", r.Affected)
+					return
+				}
+				if r.Truncated {
+					ui.Badge(c, "结果已截断：超过 500 行或 16MB 字符预算")
+				}
+				a.resultTable(c, r)
 			default:
-				ui.Text(c, "Ctrl+Enter 执行选中 SQL").TextColor(c.Theme().TextMuted)
+				switch {
+				case a.activeSession() == nil:
+					ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
+				case true:
+					ui.Text(c, "Ctrl+Enter 执行光标所在语句（选中则只跑选区）").TextColor(c.Theme().TextMuted)
+				default:
+					ui.Text(c, "Ctrl+Enter 执行选中 SQL").TextColor(c.Theme().TextMuted)
+				}
 			}
-		}
+		})
+		a.resultFooter(c)
 	})
 }
 
@@ -910,7 +923,7 @@ func (a *root) fetchMore() {
 		}
 		if a.win != nil {
 			win := a.win
-			win.Update(apply)
+			a.safeUpdate(win, apply)
 			return
 		}
 		apply()
@@ -1010,11 +1023,11 @@ func (a *root) pickExport(format string, full bool) {
 		if err != nil || path == "" {
 			return
 		}
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			a.exportStatus = "导出中…"
 		})
 		n, err := a.exportTo(path, format, full)
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.exportStatus = "导出失败: " + err.Error()
 				app.LogError("export", "failed", "path", path, "format", format, "err", err.Error())
@@ -1045,9 +1058,9 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 		if err != nil || path == "" {
 			return
 		}
-		win.Update(func() { a.exportStatus = "导出中…" })
+		a.safeUpdate(win, func() { a.exportStatus = "导出中…" })
 		n, err := a.exportSelectionTo(path, format, rows, cols)
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.exportStatus = "导出失败: " + err.Error()
 				app.LogError("export", "selection failed", "path", path, "format", format, "err", err.Error())

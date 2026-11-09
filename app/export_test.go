@@ -120,3 +120,20 @@ func TestExportStreamWritesAllRows(t *testing.T) {
 		t.Fatalf("perms: %v", info.Mode().Perm())
 	}
 }
+
+func TestSQLStringEscapingKeepsJSON(t *testing.T) {
+	jsonText := `{"name":"O'Reilly","path":"C:\\tmp","quote":"say \"hi\""}`
+	if got, want := QuoteValueFor("mysql", jsonText),
+		`'{"name":"O''Reilly","path":"C:\\\\tmp","quote":"say \\"hi\\""}'`; got != want {
+		t.Fatalf("mysql literal:\n got %s\nwant %s", got, want)
+	}
+	if got, want := QuoteValueFor("sqlite", jsonText),
+		`'{"name":"O''Reilly","path":"C:\\tmp","quote":"say \"hi\""}'`; got != want {
+		t.Fatalf("sqlite literal:\n got %s\nwant %s", got, want)
+	}
+	row := []any{int64(1), jsonText}
+	ins := InsertStatement("mysql", "meeting_case3", []string{"id", "payload"}, row)
+	if !strings.Contains(ins, `C:\\\\tmp`) || !strings.Contains(ins, `say \\"hi\\"`) {
+		t.Fatalf("insert must use mysql escaping: %s", ins)
+	}
+}

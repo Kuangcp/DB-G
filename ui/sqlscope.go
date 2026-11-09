@@ -45,12 +45,10 @@ func tokenizeSQL(s string) []sqlToken {
 			i = skipQuoted(s, i, '\'')
 		case c == '"' || c == '`':
 			end := skipQuoted(s, i, c)
-			inner := s[i+1 : end-1]
-			if end <= i+1 {
-				inner = ""
-			}
-			if inner != "" {
-				out = append(out, sqlToken{kind: 'i', text: inner})
+			if end > i+1 {
+				if inner := s[i+1 : end-1]; inner != "" {
+					out = append(out, sqlToken{kind: 'i', text: inner})
+				}
 			}
 			i = end
 		case c == '[': // MSSQL 风格的引号标识符（顺手支持）
@@ -140,6 +138,9 @@ func stmtScopeAtOffset(text string, offset int) (string, int) {
 func trimScope(scope string, offset int) (string, int) {
 	left := len(scope) - len(strings.TrimLeft(scope, " \t\r\n"))
 	right := len(scope) - len(strings.TrimRight(scope, " \t\r\n"))
+	if left+right >= len(scope) {
+		return "", 0
+	}
 	trimmed := scope[left : len(scope)-right]
 	offset -= left
 	if offset < 0 {

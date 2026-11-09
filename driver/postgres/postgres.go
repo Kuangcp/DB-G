@@ -83,7 +83,22 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL | engine.CapExplain
+}
+
+// ServerInfo 返回当前库名与 PostgreSQL 版本（server_version 是短版本号）。
+func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return engine.ServerInfo{}, errors.New("postgres: session not open")
+	}
+	var version, database string
+	if err := s.db.QueryRowContext(ctx,
+		"SELECT current_setting('server_version'), current_database()").Scan(&version, &database); err != nil {
+		return engine.ServerInfo{}, err
+	}
+	return engine.ServerInfo{Database: database, Version: version}, nil
 }
 
 func (s *session) Cancel() bool {
@@ -93,6 +108,19 @@ func (s *session) Cancel() bool {
 	}
 	(*c)()
 	return true
+}
+
+// Explain 返回 PostgreSQL 的 JSON 执行计划；ANALYZE 会真实执行查询。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	sql := "EXPLAIN (FORMAT JSON"
+	if opts.Analyze {
+		sql += ", ANALYZE"
+		if opts.Buffers {
+			sql += ", BUFFERS"
+		}
+	}
+	sql += ") " + query
+	return s.RunStatement(ctx, sql)
 }
 
 func (s *session) RunStatement(parent context.Context, query string) (*engine.QueryResult, error) {

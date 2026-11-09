@@ -457,3 +457,25 @@ func TestObjectCountsAndPages(t *testing.T) {
 		t.Fatalf("page: %+v", page)
 	}
 }
+
+func TestServerInfo(t *testing.T) {
+	ctx := context.Background()
+	s, err := engine.Open(engine.Profile{Kind: "sqlite", Name: "info", DSN: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Open(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	info, err := s.(engine.ServerInfoer).ServerInfo(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Database != "内存" {
+		t.Fatalf("database = %q", info.Database)
+	}
+	if !strings.HasPrefix(info.Version, "3.") {
+		t.Fatalf("version = %q", info.Version)
+	}
+}

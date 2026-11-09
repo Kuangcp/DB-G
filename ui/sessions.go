@@ -103,6 +103,7 @@ func (a *root) connect(p app.ConnProfile) error {
 		delete(a.sessionErr, p.ID)
 		return nil
 	}
+	a.clearServerInfo(p.ID)
 	app.LogInfo("conn", "open", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path))
 	sess, err := engine.Open(engineProfile(p))
 	if err != nil {
@@ -119,6 +120,7 @@ func (a *root) connect(p app.ConnProfile) error {
 	a.touchSession(p.ID)
 	delete(a.sessionErr, p.ID)
 	a.initSchemaAfterConnect(p, sess)
+	a.loadServerInfo(p.ID, sess)
 	if a.catalog != nil {
 		a.catalog.invalidate(p.ID) // 重连后目录可能变了
 	}
@@ -127,6 +129,67 @@ func (a *root) connect(p app.ConnProfile) error {
 	}
 	a.evictSessions(p.ID)
 	return nil
+}
+
+// loadServerInfo 异步读取数据源版本与当前数据库；不支持该接口的会话直接跳过。
+// headless 测试同步执行，保证断言前结果已经写回；有窗口时用 win.Update 回投。
+func (a *root) loadServerInfo(connID string, sess engine.Session) {
+	si, ok := sess.(engine.ServerInfoer)
+	if !ok {
+		if a.serverInfoErr == nil {
+			a.serverInfoErr = map[string]string{}
+		}
+		a.serverInfoErr[connID] = "该数据源不提供版本信息"
+		return
+	}
+	if a.serverInfoSeq == nil {
+		a.serverInfoSeq = map[string]uint64{}
+	}
+	a.serverInfoSeq[connID]++
+	seq := a.serverInfoSeq[connID]
+	apply := func(info engine.ServerInfo, err error) {
+		if a.serverInfoSeq[connID] != seq {
+			return
+		}
+		if err != nil {
+			if a.serverInfoErr == nil {
+				a.serverInfoErr = map[string]string{}
+			}
+			a.serverInfoErr[connID] = err.Error()
+			return
+		}
+		if a.serverInfo == nil {
+			a.serverInfo = map[string]engine.ServerInfo{}
+		}
+		a.serverInfo[connID] = info
+		delete(a.serverInfoErr, connID)
+	}
+	run := func() (engine.ServerInfo, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
+		defer cancel()
+		return si.ServerInfo(ctx)
+	}
+	if a.win == nil {
+		info, err := run()
+		apply(info, err)
+		return
+	}
+	win := a.win
+	go func() {
+		info, err := run()
+		win.Update(func() { apply(info, err) })
+	}()
+}
+
+// clearServerInfo 丢弃某个数据源的版本信息；会话关闭/重连时调用，
+// 同时递增轮次让还在路上的旧结果作废。
+func (a *root) clearServerInfo(connID string) {
+	if a.serverInfoSeq == nil {
+		a.serverInfoSeq = map[string]uint64{}
+	}
+	a.serverInfoSeq[connID]++
+	delete(a.serverInfo, connID)
+	delete(a.serverInfoErr, connID)
 }
 
 // setSessionErr 记住失败原因，并把它显示给用户看。
@@ -148,6 +211,7 @@ func (a *root) closeSession(connID, reason string) {
 	}
 	delete(a.sessions, connID)
 	delete(a.sessionUse, connID)
+	a.clearServerInfo(connID)
 	app.LogInfo("conn", "close", "id", connID, "reason", reason)
 	if sess != nil {
 		if err := sess.Close(); err != nil {

@@ -84,7 +84,7 @@ func (a *root) testConnForm() {
 	win := a.win
 	go func() {
 		msg, failed := probe()
-		win.Update(func() { done(msg, failed) })
+		a.safeUpdate(win, func() { done(msg, failed) })
 	}()
 }
 

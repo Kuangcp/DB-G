@@ -223,10 +223,37 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 }
 
 func (a *root) runSQL() {
+	a.plan.open = false
 	a.pollExternalFiles(true)
 	if a.externalBlocked() {
 		return
 	}
+	text := a.code.Text()
+	ranges := a.execRanges(text)
+	if len(ranges) == 0 {
+		return
+	}
+	var risks []app.SQLRisk
+	for _, st := range ranges {
+		risks = append(risks, app.CheckSQLRisks(textSlice(text, st.Start, st.End))...)
+	}
+	if len(risks) > 0 {
+		blocked := false
+		if p, ok := a.store.Get(a.activeConnID()); ok {
+			blocked = p.GuardBlock
+		}
+		a.guardOpen, a.guardBlocked, a.guardRisks = true, blocked, risks
+		if blocked {
+			a.consoleErr = "已阻断高危 SQL：" + risks[0].Message
+			app.LogWarn("exec", "risky sql blocked", "rule", risks[0].Rule)
+		}
+		return
+	}
+	a.runSQLNow()
+}
+
+// runSQLNow 执行已经通过高危检查的语句。
+func (a *root) runSQLNow() {
 	text := a.code.Text()
 	ranges := a.execRanges(text)
 	if len(ranges) == 0 {
@@ -371,7 +398,7 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 		rec := func() { a.recordFetchState(rtID, res) }
 		if a.win != nil {
 			win := a.win
-			win.Update(rec)
+			a.safeUpdate(win, rec)
 		} else {
 			rec()
 		}
@@ -391,7 +418,7 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 		}
 		if a.win != nil {
 			win := a.win
-			win.Update(advance)
+			a.safeUpdate(win, advance)
 			return
 		}
 		advance()

@@ -45,7 +45,7 @@ func (a *root) loadMetaCache(p app.ConnProfile) {
 	win := a.win
 	go func() {
 		payload, hit, stale := load()
-		win.Update(func() { apply(payload, hit, stale) })
+		a.safeUpdate(win, func() { apply(payload, hit, stale) })
 	}()
 }
 
@@ -279,7 +279,7 @@ func (a *root) refreshStaleMeta(p app.ConnProfile) {
 	win := a.win
 	go func() {
 		schemas, counts := load()
-		win.Update(func() { done(schemas, counts) })
+		a.safeUpdate(win, func() { done(schemas, counts) })
 	}()
 }
 

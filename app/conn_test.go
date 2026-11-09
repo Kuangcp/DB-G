@@ -727,3 +727,37 @@ func TestStoreQueryTimeoutRoundTrip(t *testing.T) {
 		t.Fatal("query timeout over a day must be rejected")
 	}
 }
+
+func TestStoreNormalizesTags(t *testing.T) {
+	dir := t.TempDir()
+	s := LoadStore(filepath.Join(dir, "connections.json"))
+	db := filepath.Join(dir, "tagged.db")
+	if err := os.WriteFile(db, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := ConnProfile{
+		Name: "带标签", Kind: "sqlite", Path: db,
+		Tags: []ConnTag{
+			{Label: "  生产  ", Color: "red"},
+			{Label: "   "},
+			{Label: "只读", Color: ""},
+			{Label: "第四个"},
+		},
+	}
+	if err := s.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	got := s.List()[0].Tags
+	if len(got) != MaxConnTags {
+		t.Fatalf("tags = %+v, want %d", got, MaxConnTags)
+	}
+	if got[0] != (ConnTag{Label: "生产", Color: "red"}) {
+		t.Fatalf("first tag = %+v", got[0])
+	}
+	if got[1] != (ConnTag{Label: "只读", Color: DefaultConnTagColor}) {
+		t.Fatalf("default color = %+v", got[1])
+	}
+	if got[2] != (ConnTag{Label: "第四个", Color: DefaultConnTagColor}) {
+		t.Fatalf("third tag = %+v", got[2])
+	}
+}

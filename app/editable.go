@@ -141,7 +141,8 @@ func (e *EditSet) Clear() {
 type Op struct {
 	SQL  string
 	Args []any
-	Want int64 // 期望影响行数；0 表示不检查
+	Want int64  // 期望影响行数；0 表示不检查
+	Kind string // 数据源方言，预览内联字面量用
 }
 
 // TxLike 是 ApplyOps 需要的最小事务能力（engine.Tx 满足它）。
@@ -192,6 +193,7 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 			SQL:  fmt.Sprintf("UPDATE %s SET %s WHERE %s", QuoteIdent(plan.Kind, plan.Table), set, where),
 			Args: args,
 			Want: 1,
+			Kind: plan.Kind,
 		})
 	}
 
@@ -219,6 +221,7 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 			SQL:  fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", QuoteIdent(plan.Kind, plan.Table), strings.Join(names, ", "), strings.Join(marks, ", ")),
 			Args: args,
 			Want: 1,
+			Kind: plan.Kind,
 		})
 	}
 
@@ -239,6 +242,7 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 			SQL:  fmt.Sprintf("DELETE FROM %s WHERE %s", QuoteIdent(plan.Kind, plan.Table), where),
 			Args: args,
 			Want: 1,
+			Kind: plan.Kind,
 		})
 	}
 	return ops, nil
@@ -320,12 +324,12 @@ func renderOp(op Op) string {
 	s := op.SQL
 	if strings.Contains(s, "$1") {
 		for i, arg := range op.Args {
-			s = strings.Replace(s, fmt.Sprintf("$%d", i+1), QuoteValue(arg), 1)
+			s = strings.Replace(s, fmt.Sprintf("$%d", i+1), QuoteValueFor(op.Kind, arg), 1)
 		}
 	} else {
 		for _, arg := range op.Args {
 			if j := strings.IndexByte(s, '?'); j >= 0 {
-				s = s[:j] + QuoteValue(arg) + s[j+1:]
+				s = s[:j] + QuoteValueFor(op.Kind, arg) + s[j+1:]
 			}
 		}
 	}

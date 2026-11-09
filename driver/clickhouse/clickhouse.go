@@ -103,9 +103,22 @@ func (s *session) Close() error {
 	return s.db.Close()
 }
 
-// Caps：只读数据源（无事务/无 DDL）。
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapExplain
+}
+
+// ServerInfo 返回当前库名与 ClickHouse 版本。
+func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return engine.ServerInfo{}, errors.New("clickhouse: session not open")
+	}
+	var version, database string
+	if err := s.db.QueryRowContext(ctx, "SELECT version(), currentDatabase()").Scan(&version, &database); err != nil {
+		return engine.ServerInfo{}, err
+	}
+	return engine.ServerInfo{Database: database, Version: version}, nil
 }
 
 func (s *session) Cancel() bool {
@@ -115,6 +128,14 @@ func (s *session) Cancel() bool {
 	}
 	(*c)()
 	return true
+}
+
+// Explain 返回 ClickHouse 的 JSON 计划；暂不执行 EXPLAIN ANALYZE。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	if opts.Analyze {
+		return nil, errors.New("clickhouse 暂不支持 EXPLAIN ANALYZE")
+	}
+	return s.RunStatement(ctx, "EXPLAIN json=1 "+query)
 }
 
 func (s *session) RunStatement(parent context.Context, query string) (*engine.QueryResult, error) {

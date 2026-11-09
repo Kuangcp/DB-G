@@ -42,8 +42,9 @@ main.go ──> ui ──> app ──> engine
 |---|---|---|
 | `engine/` | **协议无关契约**：`Session` / `Capabilities` / `Profile` / `QueryResult` / `Params` | 只用标准库 |
 | `driver/<kind>/` | 各数据源实现（`sqlite` `mysql` `postgres` `clickhouse`），`init()` 里 `engine.Register` | `engine` + 驱动库，**禁止 import app/ui** |
-| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划 | `engine`，**禁止 import ui / mygo** |
-| `ui/` | mygo 视图层（唯一 import mygo 的地方）：`root` 编排一切交互 | `app`、`engine`、`mygo` |
+| `ai/` | **纯叶层**：Provider 接口、go-openai SDK 封装、上下文 DTO、提示词、检索、计划解析 | 标准库 + go-openai，**禁止 import ui/app/engine** |
+| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划 | `engine`、`ai`，**禁止 import ui / mygo** |
+| `ui/` | mygo 视图层（唯一 import mygo 的地方）：`root` 编排一切交互 | `ai`、`app`、`engine`、`mygo` |
 | `tools/` | 生成器（`genicon` 应用图标、`lucideicons` 图标代码），不是运行时代码 | 标准库 / mygo |
 
 `engine` 是纯叶层：新增能力先加常量或可选接口，绝不为某个驱动开洞。
@@ -71,6 +72,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | `CapObjectDDL` | 右键「查看 DDL」 |
 | `CapObjects` / `CapColumns` | 对象树 / 列目录与补全 |
 | `CapSQLCompletion` | 参与 SQL 补全 |
+| `CapExplain` | 「执行计划」/ `PlanExplainer`；解析由 `ai/plan` 负责 |
 
 连接参数：`app.ConnProfile` → `ui.engineProfile()` → `engine.Profile`，**三处打开连接
 （`connect` / 测试连接）都走这个函数**，不要各自拼 `engine.Profile`。
@@ -124,6 +126,8 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 全局字体（编辑区/结果区/功能界面） | `fonts.json` | `app.FontPrefs`，改完即时生效；启动时把旧 `editor.json` 自动迁移过来 |
 | 外观设置（模式/强调色/密度/圆角/字号） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
+| AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
+| AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
 
 判断口诀：**删掉实体要不要一起消失、要不要按它查询？** 要 → `connections.json` 的结构化字段；
@@ -236,7 +240,8 @@ tt.Texts() / tt.Clipboard() / tt.Image()      // 文案表 / 剪贴板 / 像素
 ## 日志与脱敏
 
 - 用 `app.LogInfo/LogWarn/LogError(tag, msg, "k", v, …)`，tag 已有：`startup` `conn` `exec`
-  `console` `catalog` `export` `import` `write` `ddl` `install` `external` `panic`；新增行为先想"出事怎么查"。
+  `console` `catalog` `export` `import` `write` `ddl` `install` `external` `ai` `panic`；新增行为先想"出事怎么查"。
+  `ai` 只记 provider/model/耗时/token，**不记 prompt 正文、API Key、DSN**。
 - **密码与 DSN 必须脱敏**：`app.RedactDSN()`；日志里永远不出现 `Password`。
 - 日志写入失败不能影响调用方（日志不能把应用搞崩）。
 

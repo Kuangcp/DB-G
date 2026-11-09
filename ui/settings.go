@@ -21,6 +21,7 @@ func (a *root) settingsSections() []settingsSection {
 	return []settingsSection{
 		{"外观", a.appearanceSection},
 		{"字体", a.fontSection},
+		{"AI", a.aiSection},
 		{"快捷键", a.keymapSection},
 		{"连接档案", a.profilesSection},
 		{"日志", a.logSection},
@@ -260,7 +261,7 @@ type settingsWin interface {
 func (a *root) requestSettings() {
 	if a.win != nil {
 		win := a.win
-		win.Update(func() { a.openSettings() })
+		a.safeUpdate(win, func() { a.openSettings() })
 		return
 	}
 	a.settingsRequested = true
@@ -280,7 +281,7 @@ func (a *root) openSettings() {
 		Title:   "设置 — " + app.DisplayName,
 		Width:   720,
 		Height:  520,
-		Content: ui.View(a.settingsView),
+		Content: ui.View(func(c *ui.Context) { a.guardView(func() { a.settingsView(c) }) }),
 	})
 }
 
@@ -300,7 +301,7 @@ func (a *root) maybeOpenSettings() {
 func (a *root) newSettingsWindow(opts mygo.WindowOptions) settingsWin {
 	win := mygo.NewWindow(opts)
 	win.OnClose(func(*mygo.CloseEvent) {
-		win.Update(func() { a.settingsWin = nil })
+		a.safeUpdate(win, func() { a.settingsWin = nil })
 	})
 	return win
 }
@@ -308,7 +309,7 @@ func (a *root) newSettingsWindow(opts mygo.WindowOptions) settingsWin {
 // updateSettingsWindow 让设置窗口重画（HUD/策略变化后）。
 func (a *root) updateSettingsWindow() {
 	if w := a.settingsWin; w != nil {
-		w.Update(func() {})
+		a.safeUpdateFunc(w.Update, func() {})
 	}
 }
 
@@ -516,7 +517,7 @@ func (a *root) pickExportTheme() {
 			return
 		}
 		err = a.exportThemeTo(path)
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.themeWarn = "导出主题失败: " + err.Error()
 				return
@@ -538,7 +539,7 @@ func (a *root) pickImportTheme() {
 			return
 		}
 		_, err = a.importThemeFrom(paths[0])
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.themeWarn = "导入主题失败: " + err.Error()
 			}

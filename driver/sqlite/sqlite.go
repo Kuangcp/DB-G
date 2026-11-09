@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -63,7 +64,25 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult | engine.CapExplain
+}
+
+// ServerInfo 返回数据库文件名与 SQLite 版本。
+func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return engine.ServerInfo{}, errors.New("sqlite: session not open")
+	}
+	var version string
+	if err := s.db.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&version); err != nil {
+		return engine.ServerInfo{}, err
+	}
+	name := "内存"
+	if s.path != ":memory:" {
+		name = filepath.Base(s.path)
+	}
+	return engine.ServerInfo{Database: name, Version: version}, nil
 }
 
 func (s *session) Cancel() bool {
@@ -113,6 +132,14 @@ func isQueryLike(q string) bool {
 		return true
 	}
 	return false
+}
+
+// Explain 返回 SQLite 的 EXPLAIN QUERY PLAN；SQLite 没有 EXPLAIN ANALYZE。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	if opts.Analyze {
+		return nil, errors.New("sqlite 不支持 EXPLAIN ANALYZE")
+	}
+	return s.RunStatement(ctx, "EXPLAIN QUERY PLAN "+query)
 }
 
 func (s *session) query(ctx context.Context, query string) (*engine.QueryResult, error) {

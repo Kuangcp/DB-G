@@ -22,16 +22,21 @@ func QuoteIdent(kind, name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
-// QuoteValue 把值渲染成 SQL 字面量；二进制给 NULL（宁可不导出也不拼坏）。
-func QuoteValue(v any) string {
+// QuoteValue 把值渲染成标准 SQL 字面量；没有方言信息时按 SQLite/PostgreSQL 处理。
+func QuoteValue(v any) string { return QuoteValueFor("", v) }
+
+// QuoteValueFor 按数据源方言渲染 SQL 字面量。
+// MySQL/ClickHouse 的字符串支持反斜杠转义，必须把 JSON 里的 \ 和 \" 再转义一层；
+// PostgreSQL/SQLite 默认把反斜杠当普通字符，只能双写单引号。
+func QuoteValueFor(kind string, v any) string {
 	switch t := v.(type) {
 	case nil:
 		return "NULL"
 	case string:
-		return "'" + strings.ReplaceAll(t, "'", "''") + "'"
+		return quoteSQLString(kind, t)
 	case []byte:
 		if utf8.Valid(t) && !hasControl(t) {
-			return QuoteValue(string(t))
+			return QuoteValueFor(kind, string(t))
 		}
 		return "NULL"
 	case bool:
@@ -46,10 +51,30 @@ func QuoteValue(v any) string {
 	case float64:
 		return fmt.Sprintf("%v", t)
 	case time.Time:
-		return QuoteValue(t.Format(time.RFC3339Nano))
+		return quoteSQLString(kind, t.Format(time.RFC3339Nano))
 	default:
-		return QuoteValue(fmt.Sprint(t))
+		return quoteSQLString(kind, fmt.Sprint(t))
 	}
+}
+
+// quoteSQLString 生成字符串字面量。MySQL/ClickHouse 先转义反斜杠与控制字符，
+// 再双写单引号；PostgreSQL/SQLite 只双写单引号，保留 JSON 里的反斜杠。
+func quoteSQLString(kind, s string) string {
+	switch kind {
+	case "mysql", "clickhouse":
+		r := strings.NewReplacer(
+			`\`, `\\`,
+			"\n", `\n`,
+			"\r", `\r`,
+			"\t", `\t`,
+			"\x00", `\0`,
+		)
+		s = r.Replace(s)
+		s = strings.ReplaceAll(s, "'", "''")
+	default:
+		s = strings.ReplaceAll(s, "'", "''")
+	}
+	return "'" + s + "'"
 }
 
 // InsertStatement 生成一条 INSERT。
@@ -59,7 +84,7 @@ func InsertStatement(kind, table string, cols []string, row []any) string {
 	for i, c := range cols {
 		quoted[i] = QuoteIdent(kind, c)
 		if i < len(row) {
-			values[i] = QuoteValue(row[i])
+			values[i] = QuoteValueFor(kind, row[i])
 		} else {
 			values[i] = "NULL"
 		}

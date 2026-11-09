@@ -90,7 +90,22 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult | engine.CapExplain
+}
+
+// ServerInfo 返回当前库名与 MySQL 版本；未选库时 DATABASE() 为 NULL。
+func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db == nil {
+		return engine.ServerInfo{}, errors.New("mysql: session not open")
+	}
+	var version string
+	var database sql.NullString
+	if err := s.db.QueryRowContext(ctx, "SELECT VERSION(), DATABASE()").Scan(&version, &database); err != nil {
+		return engine.ServerInfo{}, err
+	}
+	return engine.ServerInfo{Database: database.String, Version: version}, nil
 }
 
 func (s *session) Cancel() bool {
@@ -100,6 +115,14 @@ func (s *session) Cancel() bool {
 	}
 	(*c)()
 	return true
+}
+
+// Explain 返回 MySQL 的 JSON 计划；ANALYZE 走 EXPLAIN ANALYZE（TREE 输出）。
+func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
+	if opts.Analyze {
+		return s.RunStatement(ctx, "EXPLAIN ANALYZE "+query)
+	}
+	return s.RunStatement(ctx, "EXPLAIN FORMAT=JSON "+query)
 }
 
 func (s *session) RunStatement(parent context.Context, query string) (*engine.QueryResult, error) {

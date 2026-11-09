@@ -118,6 +118,25 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       no columns when the statement references no table); after FROM/JOIN/UPDATE/INTO the relation-name position
       offers tables/views first; adjacent statements missing a semicolon are separated at line-leading
       `SELECT`/`INSERT` keywords so the next statement's tables do not leak into the current completion
+- [x] Inline AI completion: press `Alt+\` or click "AI completion" in the editor toolbar to request a suggestion
+      from the current statement/cursor context; it appears first in the completion menu with Detail "AI" and is
+      inserted only with Tab; stale suggestions are dropped when the cursor or document version changes
+- [x] AI assistant (phase 1): a collapsible, resizable right panel for Chat-to-SQL, using local Ollama by default or any
+      OpenAI-compatible service; only schema + the current SQL are sent by default, with sample rows, history
+      and error logs behind separate switches; the exact context can be previewed before sending; replies stream,
+      and generated SQL is inserted only when the user clicks "Insert SQL"; Settings → AI configures the base URL,
+      model and API key (encrypted on this machine); conversations are saved per workspace with a searchable, paginated history; titles truncate the first message by default, with optional AI title generation
+- [x] Execution plans: the top-bar "Execution plan" action EXPLAINs the current statement/selection and shows
+      a unified plan tree in the result pane, colored by cost with rows/actual timing; supports SQLite
+      `EXPLAIN QUERY PLAN`, PostgreSQL JSON, MySQL JSON/TREE and ClickHouse JSON, falling back to the raw result
+      when parsing fails; ANALYZE asks every time and is limited to SELECT/WITH; the plan tree can be sent to AI
+      for diagnosis
+- [x] SQL error fix: "AI fix" on a failed execution sends the failed SQL, driver error and involved table schemas;
+      the suggestion is shown as a diff and only applied to the editor after "Apply fix" or "Apply and run"; a reply
+      without a SQL code block is reported as an error
+- [x] Destructive SQL guard: local deterministic rules flag UPDATE/DELETE without WHERE, tautological
+      conditions, and DROP/TRUNCATE; a dialog warns by default, and a connection profile can enable "block
+      destructive SQL"; AI is never in the allow/deny path
 - [x] Security and polish (P4): connection passwords **encrypted with AES-256-GCM on this machine**
       (key `<config>/db-g/secret.key`, 0600; existing plaintext is encrypted and written back on load; if a changed
       key cannot decrypt, the app warns and asks you to re-enter); connection profile **export/import**
