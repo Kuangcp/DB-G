@@ -43,11 +43,13 @@ type root struct {
 	connFormPass     string
 	connFormDB       string
 	connFormParams   string
-	connFormTimeout  string // 查询超时（秒，空 = 默认 30）
-	connFormGuard    bool   // 高危 SQL 硬阻断
-	connProto        int    // ClickHouse 协议：0 native / 1 http / 2 https
-	connFormFolder   string // 连接所属文件夹；空 = 根级
-	connFormTags     [app.MaxConnTags]connTagDraft
+	connFormTimeout  string                       // 查询超时（秒，空 = 默认 30）
+	connFormGuard    bool                         // 高危 SQL 硬阻断
+	connProto        int                          // ClickHouse 协议：0 native / 1 http / 2 https
+	connFormFolder   string                       // 连接所属文件夹；空 = 根级
+	connFormTags     []connTagDraft               // 已添加标签（最多 app.MaxConnTags）
+	connFormTagInput string                       // 标签输入框正文
+	connFormTagColor string                       // 下一个新标签使用的调色板键
 	serverInfo       map[string]engine.ServerInfo // connID → 数据库名/版本
 	serverInfoErr    map[string]string            // connID → 版本查询失败原因
 	serverInfoSeq    map[string]uint64            // connID → 异步查询轮次（旧结果作废）
@@ -216,6 +218,7 @@ func newRoot(text string) *root {
 		metaSaveSeq:      map[string]uint64{},
 		treeGroupStale:   map[string]bool{},
 		connFormKind:     "sqlite",
+		connFormTagColor: app.DefaultConnTagColor,
 		chords:           defaultChords(),
 		fontPrefs:        app.DefaultFontPrefs(),
 		themePrefs:       app.DefaultThemePrefs(),

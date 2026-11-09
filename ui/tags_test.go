@@ -52,13 +52,15 @@ func TestConnFormSavesTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("标签（最多 3 个）") {
+	if !tt.HasText("标签") {
 		t.Fatalf("tag editor missing: %q", tt.Texts())
 	}
 	a.connFormName = "带标签的库"
 	a.connFormPath = path
-	a.connFormTags[0] = connTagDraft{label: "  生产  ", color: "red"}
-	a.connFormTags[1] = connTagDraft{label: "只读", color: "violet"}
+	a.connFormTags = []connTagDraft{
+		{label: "  生产  ", color: "red"},
+		{label: "只读", color: "violet"},
+	}
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
@@ -86,11 +88,14 @@ func TestConnFormLoadsTagsForEdit(t *testing.T) {
 	}
 	p = a.store.List()[0]
 	a.setConnTagForm(p.Tags)
-	if got := a.connFormTags[0]; got.label != "生产" || got.color != "red" {
-		t.Fatalf("slot 0 = %+v", got)
+	if len(a.connFormTags) != 2 {
+		t.Fatalf("tags = %+v", a.connFormTags)
 	}
-	if got := a.connFormTags[2]; got.label != "" || got.color != defaultTagColor(2) {
-		t.Fatalf("empty slot = %+v", got)
+	if got := a.connFormTags[0]; got.label != "生产" || got.color != "red" {
+		t.Fatalf("tag 0 = %+v", got)
+	}
+	if a.connFormTagInput != "" || a.connFormTagColor != defaultTagColor(0) {
+		t.Fatalf("input state = %q %q", a.connFormTagInput, a.connFormTagColor)
 	}
 }
 
@@ -109,5 +114,147 @@ func TestNextTagColorCyclesPalette(t *testing.T) {
 	}
 	if tagColorLabel("nope") != tagColorLabel(app.DefaultConnTagColor) {
 		t.Fatal("unknown color must fall back to default")
+	}
+}
+
+func TestAddConnFormTagLimits(t *testing.T) {
+	a := newTestRoot()
+	a.resetConnTagForm()
+	if !a.addConnFormTag("  生产  ", "red") {
+		t.Fatal("first tag must be added")
+	}
+	if a.connFormTags[0].label != "生产" {
+		t.Fatalf("label = %q", a.connFormTags[0].label)
+	}
+	if a.addConnFormTag("生产", "blue") {
+		t.Fatal("duplicate tag must be rejected")
+	}
+	a.addConnFormTag("只读", "")
+	a.addConnFormTag("灰度", "green")
+	if got := a.connFormTags[1].color; got != a.connFormTagColor {
+		t.Fatalf("empty color must use current swatch: %q", got)
+	}
+	if a.addConnFormTag("第四个", "red") {
+		t.Fatal("fourth tag must be rejected")
+	}
+	if len(a.connFormTags) != app.MaxConnTags {
+		t.Fatalf("tags = %+v", a.connFormTags)
+	}
+	a.removeConnFormTag("只读")
+	if len(a.connFormTags) != 2 || a.connFormTags[1].label != "灰度" {
+		t.Fatalf("after remove: %+v", a.connFormTags)
+	}
+}
+
+func TestTagSuggestionsExcludeSelectedAndMatchFuzzy(t *testing.T) {
+	a := newSidebarRoot(t)
+	path := seedConnFile(t)
+	p := app.ConnProfile{
+		Name: "已有标签", Kind: "sqlite", Path: path,
+		Tags: []app.ConnTag{
+			{Label: "生产", Color: "red"},
+			{Label: "灰度", Color: "green"},
+			{Label: "只读", Color: "gray"},
+		},
+	}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	a.resetConnTagForm()
+	a.addConnFormTag("生产", "red")
+	a.connFormTagInput = "灰"
+	got := a.tagSuggestions()
+	if len(got) != 1 || got[0].Label != "灰度" || got[0].Color != "green" {
+		t.Fatalf("fuzzy matches = %+v", got)
+	}
+	a.connFormTagInput = ""
+	if got := a.tagSuggestions(); len(got) != 2 {
+		t.Fatalf("all matches = %+v", got)
+	}
+}
+
+func TestTagInputChoosesExistingSuggestion(t *testing.T) {
+	a := newSidebarRoot(t)
+	path := seedConnFile(t)
+	p := app.ConnProfile{
+		Name: "已有标签", Kind: "sqlite", Path: path,
+		Tags: []app.ConnTag{{Label: "灰度", Color: "green"}},
+	}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 900)
+	tt.Frame()
+	if err := tt.Click("新建连接"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("添加标签"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("灰")
+	tt.Frame()
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if len(a.connFormTags) != 1 {
+		t.Fatalf("tags = %+v", a.connFormTags)
+	}
+	if got := a.connFormTags[0]; got.label != "灰度" || got.color != "green" {
+		t.Fatalf("chosen tag = %+v", got)
+	}
+	if a.connFormTagInput != "" {
+		t.Fatalf("input must clear after choosing: %q", a.connFormTagInput)
+	}
+}
+
+func TestTagChipRemove(t *testing.T) {
+	a := newSidebarRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 900)
+	tt.Frame()
+	if err := tt.Click("新建连接"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("添加标签"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("生产")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if len(a.connFormTags) != 1 {
+		t.Fatalf("tags = %+v", a.connFormTags)
+	}
+	if err := tt.Click("移除标签 生产"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(a.connFormTags) != 0 {
+		t.Fatalf("tag not removed: %+v", a.connFormTags)
+	}
+}
+
+func TestTagInputEnterAddsTag(t *testing.T) {
+	a := newSidebarRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 900)
+	tt.Frame()
+	if err := tt.Click("新建连接"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("添加标签"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("生产")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if len(a.connFormTags) != 1 || a.connFormTags[0].label != "生产" {
+		t.Fatalf("tags = %+v", a.connFormTags)
+	}
+	if a.connFormTagInput != "" {
+		t.Fatalf("input must clear after adding: %q", a.connFormTagInput)
+	}
+	if !tt.HasText("生产") {
+		t.Fatalf("chip missing: %q", tt.Texts())
 	}
 }

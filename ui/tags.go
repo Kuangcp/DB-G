@@ -8,39 +8,110 @@ import (
 	"db-g/app"
 )
 
-// connTagDraft 是连接弹窗里一个标签槽的编辑态。
+// connTagDraft 是连接弹窗里一个已添加标签的编辑态。
 type connTagDraft struct {
 	label string
 	color string
 }
 
-// resetConnTagForm 清空三个标签槽并给每个槽默认颜色。
+// resetConnTagForm 清空标签列表与输入框，颜色回到默认蓝。
 func (a *root) resetConnTagForm() {
-	for i := range a.connFormTags {
-		a.connFormTags[i] = connTagDraft{color: defaultTagColor(i)}
-	}
+	a.connFormTags = nil
+	a.connFormTagInput = ""
+	a.connFormTagColor = defaultTagColor(0)
 }
 
-// setConnTagForm 用档案里的标签填充编辑槽；不足三格的补默认颜色。
+// setConnTagForm 用档案里的标签填充编辑列表。
 func (a *root) setConnTagForm(tags []app.ConnTag) {
 	a.resetConnTagForm()
-	for i, tag := range tags {
-		if i >= len(a.connFormTags) {
-			break
-		}
-		a.connFormTags[i] = connTagDraft{label: tag.Label, color: tag.Color}
+	for _, tag := range app.NormalizeTags(tags) {
+		a.connFormTags = append(a.connFormTags, connTagDraft{label: tag.Label, color: tag.Color})
 	}
 }
 
-// connTagFormList 把编辑槽读成数据层标签，空槽自动丢弃。
+// connTagFormList 把编辑列表读成数据层标签。
 func (a *root) connTagFormList() []app.ConnTag {
 	tags := make([]app.ConnTag, 0, len(a.connFormTags))
 	for _, tag := range a.connFormTags {
-		if label := strings.TrimSpace(tag.label); label != "" {
-			tags = append(tags, app.ConnTag{Label: label, Color: tag.color})
-		}
+		tags = append(tags, app.ConnTag{Label: tag.label, Color: tag.color})
 	}
 	return app.NormalizeTags(tags)
+}
+
+// addConnFormTag 添加一个标签：去空、去重（忽略大小写）、最多 MaxConnTags 个。
+// color 为空时用输入框左侧色点当前的颜色。
+func (a *root) addConnFormTag(label, color string) bool {
+	label = strings.TrimSpace(label)
+	if label == "" || len(a.connFormTags) >= app.MaxConnTags {
+		return false
+	}
+	for _, tag := range a.connFormTags {
+		if strings.EqualFold(tag.label, label) {
+			return false
+		}
+	}
+	if color == "" {
+		color = a.connFormTagColor
+	}
+	a.connFormTags = append(a.connFormTags, connTagDraft{label: label, color: color})
+	a.connFormTagInput = ""
+	return true
+}
+
+// removeConnFormTag 移除已添加的标签（调用方保证 label 来自当前列表）。
+func (a *root) removeConnFormTag(label string) {
+	for i, tag := range a.connFormTags {
+		if strings.EqualFold(tag.label, label) {
+			a.connFormTags = append(a.connFormTags[:i], a.connFormTags[i+1:]...)
+			return
+		}
+	}
+}
+
+// tagColorByLabel 在已有数据源里找同名标签的颜色；找不到返回空串（用当前色点颜色）。
+func (a *root) tagColorByLabel(label string) string {
+	if a.store == nil {
+		return ""
+	}
+	for _, p := range a.store.List() {
+		for _, tag := range p.Tags {
+			if strings.EqualFold(tag.Label, label) {
+				return tag.Color
+			}
+		}
+	}
+	return ""
+}
+
+// tagSuggestions 返回可复用的已有标签：排除当前已选的，按「前缀匹配 → 包含匹配」
+// 排序；查询为空时给全部。同名标签只保留第一次出现的颜色。
+func (a *root) tagSuggestions() []app.ConnTag {
+	if a.store == nil {
+		return nil
+	}
+	selected := make(map[string]bool, len(a.connFormTags))
+	for _, tag := range a.connFormTags {
+		selected[strings.ToLower(tag.label)] = true
+	}
+	query := strings.ToLower(strings.TrimSpace(a.connFormTagInput))
+	seen := map[string]bool{}
+	var starts, contains []app.ConnTag
+	for _, p := range a.store.List() {
+		for _, tag := range p.Tags {
+			key := strings.ToLower(tag.Label)
+			if selected[key] || seen[key] {
+				continue
+			}
+			seen[key] = true
+			switch {
+			case query == "" || strings.HasPrefix(key, query):
+				starts = append(starts, tag)
+			case strings.Contains(key, query):
+				contains = append(contains, tag)
+			}
+		}
+	}
+	return append(starts, contains...)
 }
 
 // tagColorSpec 是标签调色板的一项：Key 落盘，Label 给人看，Color 是实际颜色。
@@ -114,5 +185,21 @@ func tagChip(c *ui.Context, tag app.ConnTag) {
 		Children(func() {
 			ui.Text(c, "●").FontSize(8).TextColor(col)
 			ui.Text(c, tag.Label).FontSize(11).TextColor(t.Text).SingleLine()
+		})
+}
+
+// editTagChip 是连接弹窗里的可删除标签胶囊：右侧 × 移除标签。
+func editTagChip(c *ui.Context, tag connTagDraft, remove func()) {
+	t := c.Theme()
+	col := tagColor(tag.color)
+	ui.Row(c).Gap(3).AlignItems(ui.Center).Shrink(0).
+		Padding(1, 5).Radius(t.Space(1)).
+		Background(col.Alpha(0.14)).
+		Children(func() {
+			ui.Text(c, "●").FontSize(8).TextColor(col)
+			ui.Text(c, tag.label).FontSize(11).TextColor(t.Text).SingleLine()
+			if iconButtonPlain(c, iconClose, "移除标签 "+tag.label, ui.Transparent).Clicked() {
+				remove()
+			}
 		})
 }

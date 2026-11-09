@@ -624,7 +624,7 @@ func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
 // 连接弹窗的固定尺寸：切换数据源时表单行数不同，面板却不变，窗口不会一弹一弹。
 const (
 	connFormWidth  = 640
-	connFormHeight = 660
+	connFormHeight = 600
 )
 
 func (a *root) connModal(c *ui.Context) {
@@ -690,21 +690,60 @@ func (a *root) connModal(c *ui.Context) {
 				}
 				ui.TextInput(c, &a.connFormTimeout).
 					Placeholder("查询超时（秒，空或 0 = 默认 30）").Radius(radius)
-				ui.Text(c, "标签（最多 3 个）").FontSize(12).TextColor(c.Theme().TextMuted)
-				for i := range a.connFormTags {
-					tag := &a.connFormTags[i]
-					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						swatch := ui.Button(c, "●").FontSize(13).TextColor(tagColor(tag.color)).
-							Radius(radius).Padding(2, 8)
-						swatch.Tooltip("标签颜色：" + tagColorLabel(tag.color) + "（点击切换）")
-						if swatch.Clicked() {
-							tag.color = nextTagColor(tag.color)
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					full := len(a.connFormTags) >= app.MaxConnTags
+					ui.Text(c, "标签").FontSize(12).TextColor(c.Theme().TextMuted).
+						Tooltip("最多 3 个标签")
+					swatch := ui.Button(c, "●").FontSize(13).TextColor(tagColor(a.connFormTagColor)).
+						Radius(radius).Padding(2, 8).Disabled(full)
+					swatch.Tooltip("新标签颜色：" + tagColorLabel(a.connFormTagColor) + "（点击切换）")
+					if swatch.Clicked() {
+						a.connFormTagColor = nextTagColor(a.connFormTagColor)
+					}
+					placeholder := "输入标签后 Enter 添加，可搜索已有标签"
+					if full {
+						placeholder = "最多 3 个标签，先移除一个"
+					}
+					cb := ui.ComboboxBase(c, &a.connFormTagInput)
+					cb.Input.Placeholder(placeholder).Radius(radius).Fill().
+						Label("添加标签").AutoComplete(ui.AutoCompleteList).Disabled(full)
+					cb.Popup(func(panel ui.Element) {
+						theme := c.Theme()
+						panel.Padding(4).Radius(radius).Background(theme.Background).Border(1, theme.Border)
+						suggestions := a.tagSuggestions()
+						if len(suggestions) == 0 {
+							ui.Text(c, "没有可用的已有标签").FontSize(11.5).
+								TextColor(theme.TextMuted).Padding(4, 8)
+							return
 						}
-						ui.TextInput(c, &tag.label).
-							Placeholder(fmt.Sprintf("标签 %d（可选）", i+1)).
-							Radius(radius).Fill()
+						for _, tag := range suggestions {
+							item := cb.Item(tag.Label).Padding(3, 8).Radius(radius)
+							if item.Highlighted() {
+								item.Background(theme.Accent.Alpha(0.12))
+							}
+							item.Children(func() {
+								ui.Text(c, "●").FontSize(8).TextColor(tagColor(tag.Color))
+								ui.Text(c, tag.Label).FontSize(12).SingleLine()
+								ui.Spacer(c)
+							})
+						}
 					})
-				}
+					switch chosen, ok := cb.Chosen(); {
+					case ok:
+						a.addConnFormTag(chosen, a.tagColorByLabel(chosen))
+					case cb.Input.Submitted() && !full:
+						a.addConnFormTag(a.connFormTagInput, a.connFormTagColor)
+					}
+					// 删除要等标签都画完再改切片，否则 range 期间缩短会越界。
+					removed := ""
+					for _, tag := range a.connFormTags {
+						tag := tag
+						editTagChip(c, tag, func() { removed = tag.label })
+					}
+					if removed != "" {
+						a.removeConnFormTag(removed)
+					}
+				})
 				ui.Checkbox(c, &a.connFormGuard, "高危 SQL 直接阻断（默认只提醒）")
 
 				if a.connFormErr != "" {
