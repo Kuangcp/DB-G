@@ -116,7 +116,7 @@ jobs:
             test -f "$dir/install.sh"
             got=$("$dir/db-g" -version)
             echo "$got"
-            test "$got" = "db-g $RELEASE_VERSION"
+            test "$got" = "DB-G $RELEASE_VERSION"
           else
             test -n "$(find "$dir" -maxdepth 1 -name 'db-g-setup-*.exe' -print -quit)"
             test -f "$dir/install.ps1"
