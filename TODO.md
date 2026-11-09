@@ -4,6 +4,16 @@
 
 
 ## 自动补全
+- 补全作用域残留：上一条语句漏写分号、光标在下一条语句的 SELECT 列表 / WHERE 等位置时，
+  前一条语句的 FROM 表仍可能进入列补全候选。
+    - 复现：`select * from b\nselect id, na| from med_school`（光标在 `na` 后），
+      候选里可能混入 `b` 的列；当前语句自己的列也可能被前一条语句带偏。
+    - 已做：FROM/JOIN/UPDATE/INTO 的关系名位置优先给表（方案 A）；
+      光标之后的行首 `SELECT`/`INSERT` 等新语句已隔离（方案 B）。
+    - 未做：光标之前缺分号的语句做软切分（方案 C，需处理 UNION / CTE / INSERT…SELECT 误切）。
+    - 相关代码：`ui/sqlscope.go` 的 `stmtScopeAtOffset` / `statementBounds` /
+      `softStatementEnd` / `relationPositionAt`；测试 `TestStmtScopeAtSoftBoundaryGuards`、
+      `TestCompletionRelationPositionWithPreviousStatement`。
 - Ai设计接入 ： 架构初期就将 AI 补全（Copilot-like context）、执行计划可视化分析、本地聊天流（Chat-to-SQL） 作为一等公民（First-class citizen）来设计
     - 草稿设计在 docs/design/AiContext.md
 
@@ -12,6 +22,7 @@
 - 添加一行  需要修复和重新设计
 - ClickHouse 作为一个大宽表分析型数据库，用户最核心的诉求通常不是 DDL 查看或简单的只读，而是大数据量的高效流式导出（TSV/Parquet）、复杂的聚合查询可视化（执行计划/火焰图分析）。
 - Explain 的各数据源的渲染支持
+- 复制出SQL insert 一样有转义的问题，看db-k的修复记录 那边修复过这个问题，就是把json字段内字符串的内容转义处理，保持JSON结构正确，复制出insert，再执行，让数据是一致的。
 
 # 左侧树区域
 

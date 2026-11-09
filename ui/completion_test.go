@@ -373,3 +373,27 @@ func TestStatementColumnsInsideFunction(t *testing.T) {
 		t.Fatalf("subquery in function: %v", texts)
 	}
 }
+
+func TestCompletionRelationPositionWithPreviousStatement(t *testing.T) {
+	a, _ := setupA4(t)
+	// 上一条语句没写分号，作用域里混进了 b；光标在第二条的 FROM 后面。
+	texts := menuAt(t, a, "select * from b\nselect * from m|", "e")
+	if !hasText(texts, "med_school") {
+		t.Fatalf("FROM position must offer tables: %v", texts)
+	}
+	if hasText(texts, "bcol") {
+		t.Fatalf("FROM position must not offer columns of the previous relation: %v", texts)
+	}
+}
+
+func TestCompletionRelationPositionIgnoresFollowingStatement(t *testing.T) {
+	a, _ := setupA4(t)
+	// 后面的 SELECT 没有分号；补全作用域不能把它并进当前语句。
+	texts := menuAt(t, a, "select * from m|\n\nselect * from b;", "e")
+	if !hasText(texts, "med_school") {
+		t.Fatalf("FROM position must offer tables: %v", texts)
+	}
+	if hasText(texts, "bcol") {
+		t.Fatalf("following statement must not leak columns: %v", texts)
+	}
+}

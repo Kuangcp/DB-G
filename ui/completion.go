@@ -214,7 +214,8 @@ func (a *root) requestRetrigger() {
 func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more bool) {
 	text := a.code.Text()
 	connID := a.activeConsoleConnID()
-	rels := relationsIn(stmtScopeAt(text, offset))
+	scope, scopeOff := stmtScopeAtOffset(text, offset)
+	rels := relationsIn(scope)
 	aliases := aliasMap(rels)
 
 	// 1) 点号上下文：`表名.` / `别名.`
@@ -234,6 +235,17 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 			a.ensureCatalog(connID)
 			return sqlWordItems(), true
 		}
+	}
+
+	// 2) 关系名位置（FROM/JOIN 列表、UPDATE 目标、INSERT INTO）：优先给表/视图。
+	// 即使上一条语句没写分号、后续 SELECT 被并进同一作用域，也只按表名补全。
+	// 放在点号之后：`表名.` 仍然优先补列（与既有行为一致）。
+	if relationPositionAt(scope, scopeOff) {
+		if items, ok := a.catalog.get(connID); ok {
+			return items, false
+		}
+		a.ensureCatalog(connID)
+		return sqlWordItems(), true
 	}
 
 	// 2) 语句里引用的表：补它们的列（多表 JOIN 时全部）。

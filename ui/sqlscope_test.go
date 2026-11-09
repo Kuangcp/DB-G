@@ -135,3 +135,93 @@ func TestScopeFunctionParenKeepsStatementRelations(t *testing.T) {
 		t.Fatalf("subquery in function: %v", got)
 	}
 }
+
+func TestRelationPositionAt(t *testing.T) {
+	cases := []struct {
+		sql  string
+		want bool
+	}{
+		{"select * from |", true},
+		{"select * from us|ers", true},
+		{"select * from users |", false},
+		{"select * from users, |", true},
+		{"select * from users u join |", true},
+		{"select * from users u join orders o on |", false},
+		{"update | set", true},
+		{"update users set |", false},
+		{"insert into |", true},
+		{"insert into users (|", false},
+		{"delete from |", true},
+		{"truncate table |", true},
+		{"select | from users", false},
+		{"select * from schema.|", true},
+		{"select a.| from users", false},
+	}
+	for _, c := range cases {
+		at := strings.Index(c.sql, "|")
+		if at < 0 {
+			t.Fatalf("missing marker: %q", c.sql)
+		}
+		text := strings.Replace(c.sql, "|", "", 1)
+		if got := relationPositionAt(text, at); got != c.want {
+			t.Errorf("%q: got %v want %v", c.sql, got, c.want)
+		}
+	}
+}
+
+func TestStmtScopeAtCutsFollowingStatementWithoutSemicolon(t *testing.T) {
+	text := "select * from channel_config_bak0915;\n\nselect * from m\n\nselect * from channel_config_bench;"
+	offset := strings.Index(text, "select * from m") + len("select * from m")
+	got := stmtScopeAt(text, offset)
+	if got != "select * from m" {
+		t.Fatalf("scope must stop at the next line-leading SELECT: %q", got)
+	}
+	if rels := relationsOf(got); strings.Join(rels, ",") != "m" {
+		t.Fatalf("relations: %v", rels)
+	}
+}
+
+func TestStmtScopeAtSoftBoundaryGuards(t *testing.T) {
+	cases := []struct {
+		name   string
+		sql    string
+		offset int
+		want   string
+	}{
+		{
+			name:   "union",
+			sql:    "select a from t\nunion\nselect b from u",
+			offset: strings.Index("select a from t\nunion\nselect b from u", "union"),
+			want:   "select a from t\nunion\nselect b from u",
+		},
+		{
+			name:   "cte main select",
+			sql:    "with x as (select 1)\nselect * from x",
+			offset: strings.Index("with x as (select 1)\nselect * from x", "select * from x"),
+			want:   "with x as (select 1)\nselect * from x",
+		},
+		{
+			name:   "insert select",
+			sql:    "insert into t\nselect * from u",
+			offset: strings.Index("insert into t\nselect * from u", "select * from u"),
+			want:   "insert into t\nselect * from u",
+		},
+		{
+			name:   "create as select",
+			sql:    "create view v as\nselect * from u",
+			offset: strings.Index("create view v as\nselect * from u", "select * from u"),
+			want:   "create view v as\nselect * from u",
+		},
+		{
+			name:   "new create statement",
+			sql:    "select * from t\n\ncreate table x (id int)",
+			offset: strings.Index("select * from t\n\ncreate table x (id int)", "\n\ncreate"),
+			want:   "select * from t",
+		},
+	}
+	for _, c := range cases {
+		if got := stmtScopeAt(c.sql, c.offset); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
+	}
+}

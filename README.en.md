@@ -115,7 +115,9 @@ development builds (`make run` / `make install`, without the `releaseBuild` mark
       "Refresh completion cache" in the top-bar Settings); column completion follows the tables referenced by the
       **statement/subquery under the cursor** (FROM · JOIN · UPDATE · INTO, with multi-table JOINs, aliases and CTE
       expansion; **inside function/expression parentheses (sum, avg, coalesce, WHERE (…)) columns are still offered**;
-      no columns when the statement references no table)
+      no columns when the statement references no table); after FROM/JOIN/UPDATE/INTO the relation-name position
+      offers tables/views first; adjacent statements missing a semicolon are separated at line-leading
+      `SELECT`/`INSERT` keywords so the next statement's tables do not leak into the current completion
 - [x] Security and polish (P4): connection passwords **encrypted with AES-256-GCM on this machine**
       (key `<config>/db-g/secret.key`, 0600; existing plaintext is encrypted and written back on load; if a changed
       key cannot decrypt, the app warns and asks you to re-enter); connection profile **export/import**

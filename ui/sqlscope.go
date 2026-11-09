@@ -105,6 +105,12 @@ const sqlScopeWindow = 64 << 10
 // stmtScopeAt 返回光标所在的作用域文本：最内层包住光标的括号块（子查询），
 // 没有括号时是光标所在的整条语句（按 ; 切，跳过字符串/注释）。offset 为字节偏移。
 func stmtScopeAt(text string, offset int) string {
+	scope, _ := stmtScopeAtOffset(text, offset)
+	return scope
+}
+
+// stmtScopeAtOffset 同 stmtScopeAt，额外返回光标在返回作用域文本里的字节偏移。
+func stmtScopeAtOffset(text string, offset int) (string, int) {
 	if offset < 0 {
 		offset = 0
 	}
@@ -130,13 +136,29 @@ func stmtScopeAt(text string, offset int) string {
 	return scopeInSegment(text, offset)
 }
 
-// scopeInSegment 在给定片段内做语句/括号作用域分析（offset 相对片段起点）。
-//
+// trimScope 去掉作用域两端空白，并把光标偏移同步平移到裁剪后的文本。
+func trimScope(scope string, offset int) (string, int) {
+	left := len(scope) - len(strings.TrimLeft(scope, " \t\r\n"))
+	right := len(scope) - len(strings.TrimRight(scope, " \t\r\n"))
+	trimmed := scope[left : len(scope)-right]
+	offset -= left
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(trimmed) {
+		offset = len(trimmed)
+	}
+	return trimmed, offset
+}
+
+// scopeInSegment 在给定片段内做语句/括号作用域分析（offset 相对片段起点），
+// 返回作用域文本与光标在其中的偏移。
 // 只有**子查询**括号（内容以 SELECT / WITH 开头）才切出独立作用域；函数调用、
 // 表达式分组、IN (…) 列表等括号不改变可见的表，光标在 sum( 里仍按整条语句
 // 解析 FROM/JOIN，从而能补出列名。
-func scopeInSegment(text string, offset int) string {
+func scopeInSegment(text string, offset int) (string, int) {
 	start, end := statementBounds(text, offset)
+	end = softStatementEnd(text, start, offset, end)
 	type span struct{ open, close int }
 	var spans []span // 内层先闭合，先记录
 	var stack []int
@@ -188,7 +210,7 @@ func scopeInSegment(text string, offset int) string {
 	for _, sp := range spans {
 		body := text[sp.open+1 : sp.close]
 		if isSubqueryBody(body) {
-			return strings.TrimSpace(body)
+			return trimScope(body, offset-(sp.open+1))
 		}
 		if sp.close == end {
 			blankAt = append(blankAt, sp.open)
@@ -204,7 +226,7 @@ func scopeInSegment(text string, offset int) string {
 		}
 		scope = string(b)
 	}
-	return strings.TrimSpace(scope)
+	return trimScope(scope, offset-start)
 }
 
 // isSubqueryBody 报告括号内容是否是子查询（首个词是 SELECT / WITH）。
@@ -263,6 +285,229 @@ func statementBounds(text string, offset int) (int, int) {
 		i++
 	}
 	return start, len(text)
+}
+
+// softStatementOpeners 是可以在行首开启一条新语句的关键字。
+var softStatementOpeners = map[string]bool{
+	"SELECT": true, "WITH": true, "INSERT": true, "UPDATE": true, "DELETE": true,
+	"CREATE": true, "ALTER": true, "DROP": true, "REPLACE": true, "TRUNCATE": true,
+	"BEGIN": true, "COMMIT": true, "ROLLBACK": true, "PRAGMA": true, "EXPLAIN": true,
+	"ANALYZE": true, "VACUUM": true, "DESCRIBE": true, "DESC": true, "CALL": true,
+	"GRANT": true, "REVOKE": true, "SHOW": true, "SET": true, "USE": true,
+}
+
+// softPrevGuards 是紧挨着新语句关键字时不能切分的前一个 token：
+// UNION SELECT、INSERT … SELECT（由 first guards 兜）、CREATE VIEW AS SELECT 等。
+var softPrevGuards = map[string]bool{
+	"UNION": true, "INTERSECT": true, "EXCEPT": true, "ALL": true, "AS": true,
+	"ON": true, "USING": true, "SET": true, "VALUES": true, "RETURNING": true,
+	"THEN": true, "ELSE": true, "WHEN": true, "(": true, ",": true,
+}
+
+// softFirstGuards 是整条语句以这些词开头时不做软切分：
+// CTE 主查询、INSERT … SELECT、CREATE … AS SELECT、EXPLAIN SELECT。
+var softFirstGuards = map[string]bool{
+	"WITH": true, "INSERT": true, "REPLACE": true, "CREATE": true, "EXPLAIN": true,
+	"ANALYZE": true, "DESCRIBE": true, "DESC": true,
+}
+
+// softStatementEnd 在硬分号边界 hardEnd 之前，找光标之后行首、顶层的下一条语句起点。
+// 只服务补全作用域：执行切分仍然只认分号。
+func softStatementEnd(text string, start, offset, hardEnd int) int {
+	if offset < start {
+		offset = start
+	}
+	if offset > hardEnd {
+		offset = hardEnd
+	}
+	depth := 0
+	lineStart := true
+	seen := false
+	first, prev := "", ""
+	for i := start; i < hardEnd; {
+		c := text[i]
+		if c == ' ' || c == '\t' || c == '\r' {
+			i++
+			continue
+		}
+		if c == '\n' {
+			lineStart = true
+			i++
+			continue
+		}
+		// 行注释
+		if c == '-' && i+1 < hardEnd && text[i+1] == '-' {
+			for i < hardEnd && text[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		// 块注释：含换行时下一 token 也算行首。
+		if c == '/' && i+1 < hardEnd && text[i+1] == '*' {
+			i += 2
+			newline := false
+			for i < hardEnd && !(text[i] == '*' && i+1 < hardEnd && text[i+1] == '/') {
+				if text[i] == '\n' {
+					newline = true
+				}
+				i++
+			}
+			if i < hardEnd {
+				i += 2
+			}
+			if newline {
+				lineStart = true
+			}
+			continue
+		}
+		// 字符串/引号标识符：整体跳过，不算语句开头。
+		if c == '\'' || c == '"' || c == '`' {
+			i = skipQuoted(text, i, c)
+			seen = true
+			lineStart = false
+			prev = string(c)
+			continue
+		}
+		if isIdentStart(c) {
+			tokStart := i
+			for i < hardEnd && isIdentPart(text[i]) {
+				i++
+			}
+			up := strings.ToUpper(text[tokStart:i])
+			if i >= offset && lineStart && depth == 0 && seen &&
+				softStatementOpeners[up] && !softPrevGuards[prev] && !softFirstGuards[first] {
+				return tokStart
+			}
+			if first == "" {
+				first = up
+			}
+			prev = up
+			seen = true
+			lineStart = false
+			continue
+		}
+		if c >= '0' && c <= '9' {
+			for i < hardEnd && (text[i] >= '0' && text[i] <= '9' || text[i] == '.') {
+				i++
+			}
+			prev = "#"
+			seen = true
+			lineStart = false
+			continue
+		}
+		switch c {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		}
+		prev = string(c)
+		seen = true
+		lineStart = false
+		i++
+	}
+	return hardEnd
+}
+
+// relationPositionAt 报告 scope 的 offset 处是否正在等待表/视图名：
+// FROM/JOIN 列表、UPDATE 目标、INSERT INTO / TABLE 目标。
+// 输入没写分号时多条语句可能被并进同一作用域，这里只用到光标之前的子句状态。
+func relationPositionAt(scope string, offset int) bool {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(scope) {
+		offset = len(scope)
+	}
+	// 正在输入的词还没完成：截到词首，把它当成不存在。
+	word := offset
+	for word > 0 && isIdentPart(scope[word-1]) {
+		word--
+	}
+	toks := tokenizeSQL(scope[:word])
+	const (
+		clauseNone = iota
+		clauseSelect
+		clauseFrom
+		clauseJoin
+		clauseUpdate
+		clauseInto
+		clauseOther
+	)
+	clause := clauseNone
+	expect, after, qualified, derived := false, false, false, false
+	depth := 0
+	for _, tok := range toks {
+		if tok.kind == 'p' {
+			switch tok.text {
+			case "(":
+				if depth == 0 && expect {
+					expect, after, derived = false, false, true
+				}
+				depth++
+			case ")":
+				if depth > 0 {
+					depth--
+					if depth == 0 && derived {
+						after, derived = true, false
+					}
+				}
+			case ",":
+				if depth == 0 && clause == clauseFrom && !expect {
+					expect, after = true, false
+				}
+			case ".":
+				if depth == 0 && after {
+					qualified, after = true, false
+				}
+			}
+			continue
+		}
+		if depth > 0 {
+			continue
+		}
+		up := strings.ToUpper(tok.text)
+		if expect {
+			if up == "ONLY" || up == "LATERAL" {
+				continue
+			}
+			if clauseKeywords[up] {
+				expect, after, clause = false, false, clauseOther
+				continue
+			}
+			expect, after, qualified = false, true, false
+			continue
+		}
+		if qualified {
+			qualified, after = false, true
+			continue
+		}
+		switch up {
+		case "FROM":
+			clause, expect, after = clauseFrom, true, false
+		case "JOIN":
+			clause, expect, after = clauseJoin, true, false
+		case "UPDATE":
+			clause, expect, after = clauseUpdate, true, false
+		case "INTO":
+			clause, expect, after = clauseInto, true, false
+		case "TABLE":
+			clause, expect, after = clauseOther, true, false
+		case "SELECT":
+			clause, expect, after = clauseSelect, false, false
+		case "AS":
+			after = false
+		default:
+			if clauseKeywords[up] {
+				clause, expect, after = clauseOther, false, false
+			} else if after {
+				after = false
+			}
+		}
+	}
+	return expect || qualified
 }
 
 // relationsIn 从作用域文本里提取表：FROM 列表、JOIN、UPDATE、INTO；
