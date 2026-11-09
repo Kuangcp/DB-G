@@ -76,9 +76,11 @@ func (a *root) aiPanel(c *ui.Context) {
 		}
 		ui.TextArea(c, &st.input).
 			Lines(1, 6).
-			Placeholder("问点什么。Enter 发送，Shift+Enter 换行").
+			Placeholder("问点什么。Enter / Ctrl+Enter 发送，Shift+Enter 换行").
+			Label("AI 提问").
+			Bind(&st.inputRef).
 			OnTextKey(func(k ui.TextKey) bool {
-				if k.Key == ui.KeyEnter && k.Mods == 0 {
+				if k.Key == ui.KeyEnter && (k.Mods == 0 || k.Mods == ui.Ctrl) {
 					a.sendAI()
 					return true
 				}

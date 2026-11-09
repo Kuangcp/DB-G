@@ -105,7 +105,7 @@ func (a *root) runExplain(analyze bool) {
 	win := a.win
 	go func() {
 		res, err := run()
-		win.Update(func() { done(res, err) })
+		a.safeUpdate(win, func() { done(res, err) })
 	}()
 }
 

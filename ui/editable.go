@@ -230,7 +230,7 @@ func (a *root) applyConfirmedEdits() {
 	go func() {
 		err := a.applyEditsSync()
 		win := a.win
-		win.Update(func() { done(err) })
+		a.safeUpdate(win, func() { done(err) })
 	}()
 }
 
@@ -251,7 +251,7 @@ func (a *root) refreshResult() {
 		}
 		if a.win != nil {
 			win := a.win
-			win.Update(apply)
+			a.safeUpdate(win, apply)
 			return
 		}
 		apply()

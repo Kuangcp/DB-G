@@ -228,7 +228,7 @@ func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
 	win := a.win
 	go func() {
 		data, err := a.loadAllObjectKinds(sess, schema)
-		win.Update(func() { done(data, err) })
+		a.safeUpdate(win, func() { done(data, err) })
 	}()
 }
 
@@ -289,7 +289,7 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 	win := a.win
 	go func() {
 		counts, err := load()
-		win.Update(func() { done(counts, err) })
+		a.safeUpdate(win, func() { done(counts, err) })
 	}()
 }
 
@@ -398,7 +398,7 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 	win := a.win
 	go func() {
 		objs, err := load()
-		win.Update(func() { done(objs, err) })
+		a.safeUpdate(win, func() { done(objs, err) })
 	}()
 }
 
@@ -647,7 +647,7 @@ func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 		}
 		if a.win != nil {
 			win := a.win
-			win.Update(apply)
+			a.safeUpdate(win, apply)
 			return
 		}
 		apply()

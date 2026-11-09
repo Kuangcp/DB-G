@@ -52,7 +52,7 @@ func (a *root) setThemePrefs(p app.ThemePrefs) {
 	a.updateSettingsWindow()
 	if a.win != nil {
 		win := a.win
-		win.Update(func() {})
+		a.safeUpdate(win, func() {})
 	}
 }
 
@@ -80,7 +80,7 @@ func (a *root) saveThemePrefs() {
 		}
 		if err := app.SaveThemePrefs(path, prefs); err != nil {
 			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
-			win.Update(func() { a.themeWarn = "保存外观设置失败: " + err.Error() })
+			a.safeUpdate(win, func() { a.themeWarn = "保存外观设置失败: " + err.Error() })
 		}
 	}()
 }

@@ -398,7 +398,7 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 		rec := func() { a.recordFetchState(rtID, res) }
 		if a.win != nil {
 			win := a.win
-			win.Update(rec)
+			a.safeUpdate(win, rec)
 		} else {
 			rec()
 		}
@@ -418,7 +418,7 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 		}
 		if a.win != nil {
 			win := a.win
-			win.Update(advance)
+			a.safeUpdate(win, advance)
 			return
 		}
 		advance()

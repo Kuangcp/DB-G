@@ -90,13 +90,13 @@ func (a *root) fixErrorSQL() {
 		if err != nil {
 			if ctx.Err() == nil {
 				app.LogWarn("ai", "fix stream failed", "err", err.Error())
-				win.Update(func() { a.finishAIFix(seq, "", err) })
+				a.safeUpdate(win, func() { a.finishAIFix(seq, "", err) })
 			}
 			return
 		}
 		app.LogInfo("ai", "fix request", "model", a.aiPrefs.Model, "sql_len", len(sql))
 		text, err := read(ch)
-		win.Update(func() { a.finishAIFix(seq, text, err) })
+		a.safeUpdate(win, func() { a.finishAIFix(seq, text, err) })
 	}()
 
 }

@@ -47,6 +47,7 @@ type aiChatState struct {
 	historyQuery  string
 	historyLimit  int
 	historyScroll ui.ScrollState
+	inputRef      ui.Handle
 }
 
 // aiProviderFor 返回当前配置对应的 Provider；测试可注入。
@@ -205,7 +206,7 @@ func (a *root) startAIRequest(display string, msgs []ai.Message) error {
 		if err != nil {
 			if ctx.Err() == nil {
 				app.LogWarn("ai", "stream failed", "model", model, "err", err.Error())
-				win.Update(func() { a.applyAIEvent(seq, ai.Event{Kind: ai.EventError, Err: err}) })
+				a.safeUpdate(win, func() { a.applyAIEvent(seq, ai.Event{Kind: ai.EventError, Err: err}) })
 			}
 			return
 		}
@@ -234,7 +235,7 @@ func (a *root) consumeAI(seq uint64, ch <-chan ai.Event) {
 			}
 			text := buf.String()
 			buf.Reset()
-			win.Update(func() { a.applyAIEvent(seq, ai.Event{Kind: ai.EventText, Text: text}) })
+			a.safeUpdate(win, func() { a.applyAIEvent(seq, ai.Event{Kind: ai.EventText, Text: text}) })
 		}
 		for {
 			select {
@@ -249,7 +250,7 @@ func (a *root) consumeAI(seq uint64, ch <-chan ai.Event) {
 				}
 				flush()
 				event := ev
-				win.Update(func() { a.applyAIEvent(seq, event) })
+				a.safeUpdate(win, func() { a.applyAIEvent(seq, event) })
 			case <-ticker.C:
 				flush()
 			}
@@ -530,7 +531,7 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 			return
 		}
 		title := read(ch)
-		win.Update(func() { apply(title) })
+		a.safeUpdate(win, func() { apply(title) })
 	}()
 }
 

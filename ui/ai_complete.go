@@ -106,12 +106,12 @@ func (a *root) requestAICompletion() {
 		if err != nil {
 			if ctx.Err() == nil {
 				app.LogWarn("ai", "completion failed", "err", err.Error())
-				win.Update(func() { consume("", err) })
+				a.safeUpdate(win, func() { consume("", err) })
 			}
 			return
 		}
 		text, err := read(ch)
-		win.Update(func() { consume(text, err) })
+		a.safeUpdate(win, func() { consume(text, err) })
 	}()
 
 }

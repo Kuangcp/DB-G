@@ -15,6 +15,7 @@ import (
 //     keymap 处理（applyEditorBindings 已经把键位同步过去）。
 func (a *root) dispatchKeys(c *ui.Context) {
 	editorFocused := a.code != nil && a.code.state.Focused()
+	aiInputFocused := a.aiChat.open && a.aiChat.inputRef.Focused(c)
 	for _, act := range keyActions {
 		if act.Cmd != myeditor.NoCommand || !act.applies(editorFocused) {
 			continue
@@ -23,7 +24,13 @@ func (a *root) dispatchKeys(c *ui.Context) {
 			if !c.Shortcut(ch.Mods, ch.Key) {
 				continue
 			}
-			a.runKeyAction(c, act.ID)
+			// AI 输入框里 Ctrl+Enter 等价于「发送」，不能触发编辑器执行，
+			// 否则会把焦点带回编辑器并弹出补全。
+			if aiInputFocused && act.ID == "exec" && ch.Key == ui.KeyEnter && ch.Mods&ui.Ctrl != 0 {
+				a.sendAI()
+			} else {
+				a.runKeyAction(c, act.ID)
+			}
 			break
 		}
 	}

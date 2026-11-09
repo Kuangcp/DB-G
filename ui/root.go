@@ -328,7 +328,7 @@ func (a *root) runtime(id string) *app.Console {
 	c.SetOnDone(a.execDoneLogger(id))
 	if a.win != nil {
 		win := a.win
-		c.SetPublisher(func(f func()) { win.Update(f) })
+		c.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
 	}
 	a.consoles[id] = c
 	return c
@@ -582,9 +582,9 @@ func (a *root) Attach(win *mygo.Window) {
 		}
 		a.FlushAll()
 	})
-	a.con.SetPublisher(func(f func()) { win.Update(f) })
+	a.con.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
 	for _, c := range a.consoles {
-		c.SetPublisher(func(f func()) { win.Update(f) })
+		c.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
 	}
 }
 
@@ -593,15 +593,37 @@ func (a *root) View(c *ui.Context) {
 	rootView(a)(c)
 }
 
+// recoverPanic 是 UI 线程兜底：panic 只记日志并显示在顶栏，不让应用退出。
+func (a *root) recoverPanic(where string) {
+	if r := recover(); r != nil {
+		app.LogError("panic", where, "err", fmt.Sprint(r), "stack", string(debug.Stack()))
+		a.consoleErr = "内部错误：" + fmt.Sprint(r)
+	}
+}
+
 // guardView 包住一帧的构建：panic 时记堆栈并在顶栏显示错误，尽量让应用继续跑。
 func (a *root) guardView(fn func()) {
-	defer func() {
-		if r := recover(); r != nil {
-			app.LogError("panic", "view build", "err", fmt.Sprint(r), "stack", string(debug.Stack()))
-			a.consoleErr = "内部错误：" + fmt.Sprint(r)
-		}
-	}()
+	defer a.recoverPanic("view build")
 	fn()
+}
+
+// safeUpdate 把后台结果回投 UI 时兜住回调 panic；否则 mygo 主循环会直接退出。
+func (a *root) safeUpdate(win *mygo.Window, fn func()) {
+	if win == nil {
+		return
+	}
+	a.safeUpdateFunc(win.Update, fn)
+}
+
+// safeUpdateFunc 是 safeUpdate 对任意 Update(func()) 窗口接口的版本。
+func (a *root) safeUpdateFunc(update func(func()), fn func()) {
+	if update == nil {
+		return
+	}
+	update(func() {
+		defer a.recoverPanic("async update")
+		fn()
+	})
 }
 
 func rootView(a *root) func(c *ui.Context) {

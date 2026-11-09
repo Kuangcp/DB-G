@@ -64,7 +64,7 @@ func (a *root) ensureCatalog(connID string) {
 		app.LogInfo("catalog", "tables loaded", "conn", connID, "tables", len(tables), "views", len(views), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
-			win.Update(a.retriggerCompletions)
+			a.safeUpdate(win, a.retriggerCompletions)
 		}
 	}
 	if a.win == nil {
@@ -97,7 +97,7 @@ func (a *root) ensureColumns(connID, table string) {
 		app.LogInfo("catalog", "columns loaded", "conn", connID, "table", table, "cols", len(cols), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
-			win.Update(a.showCompletionsAtCursor)
+			a.safeUpdate(win, a.showCompletionsAtCursor)
 		}
 	}
 	if a.win == nil {

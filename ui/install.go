@@ -87,6 +87,6 @@ func (a *root) startInstall() {
 	win := a.win
 	go func() {
 		st, err := run()
-		win.Update(func() { done(st, err) })
+		a.safeUpdate(win, func() { done(st, err) })
 	}()
 }

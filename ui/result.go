@@ -922,7 +922,7 @@ func (a *root) fetchMore() {
 		}
 		if a.win != nil {
 			win := a.win
-			win.Update(apply)
+			a.safeUpdate(win, apply)
 			return
 		}
 		apply()
@@ -1022,11 +1022,11 @@ func (a *root) pickExport(format string, full bool) {
 		if err != nil || path == "" {
 			return
 		}
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			a.exportStatus = "导出中…"
 		})
 		n, err := a.exportTo(path, format, full)
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.exportStatus = "导出失败: " + err.Error()
 				app.LogError("export", "failed", "path", path, "format", format, "err", err.Error())
@@ -1057,9 +1057,9 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 		if err != nil || path == "" {
 			return
 		}
-		win.Update(func() { a.exportStatus = "导出中…" })
+		a.safeUpdate(win, func() { a.exportStatus = "导出中…" })
 		n, err := a.exportSelectionTo(path, format, rows, cols)
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.exportStatus = "导出失败: " + err.Error()
 				app.LogError("export", "selection failed", "path", path, "format", format, "err", err.Error())

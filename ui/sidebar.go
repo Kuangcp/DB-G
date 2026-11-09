@@ -964,7 +964,7 @@ func (a *root) browsePath() {
 		if err != nil || len(paths) == 0 {
 			return
 		}
-		win.Update(func() { a.connFormPath = paths[0] })
+		a.safeUpdate(win, func() { a.connFormPath = paths[0] })
 	}()
 }
 

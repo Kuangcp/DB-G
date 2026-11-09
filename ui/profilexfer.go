@@ -56,7 +56,7 @@ func (a *root) pickExportProfiles() {
 			return
 		}
 		n, err := a.exportProfiles(path)
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.consoleErr = "导出连接失败: " + err.Error()
 				return
@@ -78,7 +78,7 @@ func (a *root) pickImportProfiles() {
 			return
 		}
 		n, err := a.importProfiles(paths[0])
-		win.Update(func() {
+		a.safeUpdate(win, func() {
 			if err != nil {
 				a.consoleErr = "导入连接失败: " + err.Error()
 				return

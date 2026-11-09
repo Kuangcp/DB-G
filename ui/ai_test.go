@@ -351,3 +351,38 @@ func TestAIHistoryScrollPagination(t *testing.T) {
 		t.Fatalf("scroll to end should load all remaining rows: limit=%d", a.aiChat.historyLimit)
 	}
 }
+
+func TestAIChatCtrlEnterSendsFromInput(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	rec, err := a.consoleMgr().Create(prof.ID, "AI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.setActiveText("select 1")
+	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+		{Kind: ai.EventText, Text: "ok"},
+		{Kind: ai.EventDone},
+	}}
+	a.aiPrefs.Model = "fake"
+	a.aiChat.open = true
+	a.loadAIChat()
+	a.aiChat.input = "hello"
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.Click("AI 提问"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeyEnter)
+	tt.Frame()
+	if a.execPending {
+		t.Fatal("Ctrl+Enter in AI input must not execute the editor")
+	}
+	if len(a.aiChat.messages) != 2 || a.aiChat.messages[0].text != "hello" {
+		t.Fatalf("Ctrl+Enter should send the AI prompt: %+v", a.aiChat.messages)
+	}
+}
