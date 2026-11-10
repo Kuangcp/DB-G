@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 
@@ -260,14 +261,14 @@ func (a *root) refreshResult() {
 	rt.Run(sess, sql)
 }
 
-// editCellModal 渲染单元格编辑弹窗。
+// editCellModal 渲染单元格编辑弹窗；尺寸与查看弹窗一致，长文本用多行编辑器。
 func (a *root) editCellModal(c *ui.Context) {
 	if !a.editCellOpen {
 		return
 	}
 	ui.Modal(c, &a.editCellOpen, func() {
 		ui.Text(c, fmt.Sprintf("编辑 %s · 第 %d 行", a.editPlan.Columns[a.editCellCol], a.editCellRow+1)).Bold()
-		ui.TextInput(c, &a.editCellText).AutoFocus()
+		ui.TextArea(c, &a.editCellText).AutoFocus().Grow(1)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, "取消").Clicked() {
 				a.editCellOpen = false
@@ -281,7 +282,7 @@ func (a *root) editCellModal(c *ui.Context) {
 				a.editCellOpen = false
 			}
 		})
-	})
+	}).Width(680).Height(500)
 }
 
 // previewModal 渲染提交预览。
@@ -368,20 +369,87 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 	}
 }
 
-// beginEditCurrent 打开「编辑格」弹窗（当前选中单元格）。
-func (a *root) beginEditCurrent(r *engine.QueryResult) {
-	col := a.cursorDataCol(r)
-	row := a.displayToResult(r, a.resultRow)
-	if a.editPlan == nil || row < 0 || col < 0 {
+// inlineEditMaxRunes 是行内编辑的上限；超过或含换行就改用弹窗。
+const inlineEditMaxRunes = 60
+
+// inlineEditable 报告内容是否短到适合直接在表格里编辑。
+func inlineEditable(text string) bool {
+	return !strings.ContainsAny(text, "\r\n") && utf8.RuneCountInString(text) <= inlineEditMaxRunes
+}
+
+// beginEditAt 按内容长度选择行内编辑或弹窗编辑。
+func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
+	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Editable) {
+		if a.readonlyReason != "" {
+			a.consoleErr = "只读：" + a.readonlyReason
+		}
 		return
 	}
 	if !a.editPlan.Editable[col] {
 		a.consoleErr = "主键列不可编辑"
 		return
 	}
-	a.editCellRow, a.editCellCol = row, col
-	a.editCellText = cellString(cellValueOf(r, row, col))
+	if row < 0 || row >= len(r.Rows) {
+		return
+	}
+	text := cellString(cellValueOf(r, row, col))
+	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
+		text = cellString(pending)
+	}
+	if a.inlineEditOn {
+		a.stopInlineEdit()
+	}
+	if inlineEditable(text) {
+		a.startInlineEdit(row, col, text)
+		return
+	}
+	a.editCellRow, a.editCellCol, a.editCellText = row, col, text
 	a.editCellOpen = true
+}
+
+// startInlineEdit 进入表格内联编辑（短内容）。
+func (a *root) startInlineEdit(row, col int, text string) {
+	a.inlineEditOn, a.inlineEditRow, a.inlineEditCol = true, row, col
+	a.inlineEditText, a.inlineEditHadFocus = text, false
+}
+
+// stopInlineEdit 退出内联编辑，不提交。
+func (a *root) stopInlineEdit() {
+	a.inlineEditOn = false
+	a.inlineEditRow, a.inlineEditCol = -1, -1
+	a.inlineEditText, a.inlineEditHadFocus = "", false
+}
+
+// commitInlineEdit 把内联编辑写进待提交改动。
+func (a *root) commitInlineEdit() {
+	a.setCellEdit(a.inlineEditRow, a.inlineEditCol, parseEditValue(a.inlineEditText))
+	a.stopInlineEdit()
+}
+
+// inlineCellEditor 在结果表格的单元格里渲染输入框：Enter/失焦提交，Escape 取消。
+func (a *root) inlineCellEditor(c *ui.Context) {
+	in := ui.TextInput(c, &a.inlineEditText).FontSize(12).Fill().Padding(0, 2)
+	if !a.inlineEditHadFocus {
+		in.AutoFocus()
+	}
+	if in.Focused() {
+		a.inlineEditHadFocus = true
+	}
+	switch {
+	case in.Submitted():
+		a.commitInlineEdit()
+	case in.Shortcut(0, ui.KeyEscape):
+		a.stopInlineEdit()
+	case a.inlineEditHadFocus && !in.Focused():
+		a.commitInlineEdit()
+	}
+}
+
+// beginEditCurrent 打开「编辑格」（当前选中单元格），按内容长度选择行内/弹窗。
+func (a *root) beginEditCurrent(r *engine.QueryResult) {
+	col := a.cursorDataCol(r)
+	row := a.displayToResult(r, a.resultRow)
+	a.beginEditAt(r, row, col)
 }
 
 func cellValueOf(r *engine.QueryResult, row, col int) any {

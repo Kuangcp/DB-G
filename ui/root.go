@@ -162,6 +162,11 @@ type root struct {
 	editCellRow         int
 	editCellCol         int
 	editCellText        string
+	inlineEditOn        bool // 结果表格内联编辑进行中
+	inlineEditRow       int  // 数据行下标
+	inlineEditCol       int  // 数据列下标
+	inlineEditText      string
+	inlineEditHadFocus  bool // 输入框已经拿到过焦点（用于失焦提交）
 	previewOpen         bool
 	previewLines        []string
 	ddlOpen             bool

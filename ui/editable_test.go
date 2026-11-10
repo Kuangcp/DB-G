@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/engine"
 )
 
 func runEditQuery(t *testing.T, a *root, sql string) *ui.Tester {
@@ -168,5 +169,127 @@ func TestReadonlyReasonShownInToolbar(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("read-only hint missing: %q", tt.Texts())
+	}
+}
+
+func TestCtrlDoubleClickEditsShortCellInline(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users")
+	if a.editPlan == nil {
+		t.Fatalf("not editable: %q", a.readonlyReason)
+	}
+	rect, ok := tt.Find("alice")
+	if !ok {
+		t.Fatalf("cell missing: %q", tt.Texts())
+	}
+	tt.HoldModifiers(ui.Ctrl)
+	tt.ClickAtWith(ui.Ctrl, rect.X+2, rect.Y+2)
+	tt.ClickAtWith(ui.Ctrl, rect.X+2, rect.Y+2)
+	tt.Frame()
+	tt.Frame()
+	tt.HoldModifiers(0)
+	if !a.inlineEditOn || a.editCellOpen {
+		t.Fatalf("short cell must edit inline: inline=%v modal=%v view=%v row=%d cursor=%q plan=%v err=%q", a.inlineEditOn, a.editCellOpen, a.cellViewOpen, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
+	}
+	if a.inlineEditRow != 0 || a.inlineEditCol != 1 {
+		t.Fatalf("inline target = (%d,%d)", a.inlineEditRow, a.inlineEditCol)
+	}
+	tt.Type("2")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.inlineEditOn {
+		t.Fatal("Enter must finish inline editing")
+	}
+	if a.cellViewOpen || a.editCellOpen {
+		t.Fatalf("Enter must not open another panel: view=%v modal=%v", a.cellViewOpen, a.editCellOpen)
+	}
+	got, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]
+	if !ok || got != "alice2" {
+		t.Fatalf("pending edit = %#v, %v", got, ok)
+	}
+	tt.Frame()
+	if !tt.HasText("alice2") {
+		t.Fatalf("grid must show the pending value: %q", tt.Texts())
+	}
+}
+
+func TestCtrlDoubleClickLongCellOpensModal(t *testing.T) {
+	a := openForSelection(t)
+	long := strings.Repeat("长", inlineEditMaxRunes+1)
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, '"+long+"')"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users")
+	if a.editPlan == nil {
+		t.Fatalf("not editable: %q", a.readonlyReason)
+	}
+	label := ""
+	for _, text := range tt.Texts() {
+		if strings.HasPrefix(text, "长") {
+			label = text
+			break
+		}
+	}
+	rect, ok := tt.Find(label)
+	if !ok {
+		t.Fatalf("cell missing: %q", tt.Texts())
+	}
+	tt.HoldModifiers(ui.Ctrl)
+	tt.ClickAtWith(ui.Ctrl, rect.X+2, rect.Y+2)
+	tt.ClickAtWith(ui.Ctrl, rect.X+2, rect.Y+2)
+	tt.Frame()
+	tt.Frame()
+	tt.HoldModifiers(0)
+	if !a.editCellOpen || a.inlineEditOn {
+		t.Fatalf("long cell must open modal: modal=%v inline=%v view=%v row=%d cursor=%q plan=%v err=%q", a.editCellOpen, a.inlineEditOn, a.cellViewOpen, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
+	}
+	if a.editCellText != long {
+		t.Fatalf("modal text = %q", a.editCellText)
+	}
+	if !tt.HasText("编辑 name · 第 1 行") {
+		t.Fatalf("modal title missing: %q", tt.Texts())
+	}
+	a.editCellText = long + "改"
+	tt.Frame()
+	if err := tt.Click("保存"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.editCellOpen {
+		t.Fatal("save must close the edit modal")
+	}
+	got, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]
+	if !ok || got != long+"改" {
+		t.Fatalf("saved edit = %#v, %v", got, ok)
+	}
+}
+
+func TestCellViewerCloseIcon(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"v"},
+		Rows:    [][]any{{"hello"}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.openCellViewer(a.con.Result(), 0, 0)
+	tt.Frame()
+	if !a.cellViewOpen || !tt.HasText("hello") {
+		t.Fatalf("viewer missing: %v %q", a.cellViewOpen, tt.Texts())
+	}
+	if _, ok := tt.Find("复制原文"); !ok {
+		t.Fatalf("copy icon missing: %q", tt.Texts())
+	}
+	if err := tt.Click("关闭"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.cellViewOpen {
+		t.Fatal("close icon must close the viewer")
 	}
 }

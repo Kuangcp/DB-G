@@ -276,7 +276,11 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 	if r == nil || row < 0 || row >= len(r.Rows) || col < 0 || col >= len(r.Columns) {
 		return
 	}
-	text, isJSON := formatCellValue(r.Rows[row][col])
+	v := r.Rows[row][col]
+	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
+		v = pending
+	}
+	text, isJSON := formatCellValue(v)
 	a.cellViewTitle = r.Columns[col]
 	if isJSON {
 		a.cellViewTitle += "（JSON）"
@@ -314,16 +318,24 @@ func parseJSONValue(text string) (any, bool) {
 	return nil, false
 }
 
-// jsonToolbar JSON 查看器顶部工具栏：标题 + 展开/收缩全部按钮。
-func (a *root) jsonToolbar(c *ui.Context) {
-	ui.Row(c).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, a.cellViewTitle).Bold()
+// viewerToolbar 是单元格查看器的标题栏：标题在左，JSON 折叠控制与复制/关闭在右。
+func (a *root) viewerToolbar(c *ui.Context) {
+	ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
+		ui.Text(c, a.cellViewTitle).Bold().SingleLine()
 		ui.Spacer(c)
-		if iconButtonPlain(c, iconCollapseAll, "收起全部层级到第一层", ui.Transparent).Clicked() {
-			a.collapseAllJSON()
+		if a.cellViewJSONOK {
+			if iconButtonPlain(c, iconCollapseAll, "收起全部层级到第一层", ui.Transparent).Clicked() {
+				a.collapseAllJSON()
+			}
+			if iconButtonPlain(c, iconExpandAll, "展开全部层级", ui.Transparent).Clicked() {
+				a.expandAllJSON()
+			}
 		}
-		if iconButtonPlain(c, iconExpandAll, "展开全部层级", ui.Transparent).Clicked() {
-			a.expandAllJSON()
+		if iconButtonPlain(c, iconCopy, "复制原文", ui.Transparent).Tooltip("复制完整原文（未折叠的 JSON 文本）").Clicked() {
+			c.WriteClipboard(a.cellViewText)
+		}
+		if iconButtonPlain(c, iconClose, "关闭", ui.Transparent).Clicked() {
+			a.cellViewOpen = false
 		}
 	})
 }
@@ -404,27 +416,14 @@ func (a *root) cellViewer(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.cellViewOpen, func() {
-		// 标题栏：文件名 + JSON 树控制按钮
-		if a.cellViewJSONOK {
-			a.jsonToolbar(c)
-		} else {
-			ui.Text(c, a.cellViewTitle).Bold().SingleLine()
-		}
-		ui.ScrollBoth(c).Height(340).Children(func() {
+		a.viewerToolbar(c)
+		ui.ScrollBoth(c).Grow(1).Children(func() {
 			if a.cellViewJSONOK {
 				nodes := 0
 				a.jsonTree(c, "$", a.cellViewJSON, 0, &nodes)
 				return
 			}
 			a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12))
-		})
-		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "复制原文").Tooltip("复制完整原文（未折叠的 JSON 文本）").Clicked() {
-				c.WriteClipboard(a.cellViewText)
-			}
-			if ui.PrimaryButton(c, "关闭").Clicked() {
-				a.cellViewOpen = false
-			}
 		})
 	}).Width(680).Height(500)
 }
@@ -620,6 +619,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	if a.lastResult != r {
 		a.lastResult = r
 		a.resultSel.Clear()
+		a.stopInlineEdit()
 		// 列光标默认落在第一列数据（不是行号列），未点击时的复制/查看也有目标。
 		a.resultState.Cells = ui.ColumnRange{}
 		if len(r.Columns) > 0 {
@@ -709,6 +709,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		}
 	}
 
+	handledDouble := false
 	tbl := a.withResultFont(ui.Table(c, &a.resultState, cols, totalRows, func(row, col int) {
 		if row < 0 {
 			return
@@ -744,7 +745,15 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if col-1 >= len(r.Rows[ri]) {
 			return
 		}
-		txt := ui.Text(c, cellText(r.Rows[ri][col-1])).SingleLine()
+		if a.inlineEditOn && a.inlineEditRow == ri && a.inlineEditCol == col-1 {
+			a.inlineCellEditor(c)
+			return
+		}
+		v := r.Rows[ri][col-1]
+		if pending, ok := editSet.Cells[app.CellKey{Row: ri, Col: col - 1}]; ok {
+			v = pending
+		}
+		txt := ui.Text(c, cellText(v)).SingleLine()
 		if editSet.Deletes[ri] {
 			txt.TextColor(c.Theme().TextMuted)
 			return
@@ -752,9 +761,23 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if _, dirty := editSet.Cells[app.CellKey{Row: ri, Col: col - 1}]; dirty {
 			txt.TextColor(c.Theme().Accent).Bold()
 		}
+		if txt.RowDoubleClicked() {
+			handledDouble = true
+			if c.Modifiers()&ui.Ctrl != 0 {
+				a.beginEditAt(r, ri, col-1)
+			} else {
+				a.openCellViewer(r, ri, col-1)
+			}
+		}
 	})).Grow(1)
-	if tbl.Submitted() {
-		a.openCellViewer(r, a.displayToResult(r, a.resultRow), a.cursorDataCol(r))
+	if tbl.Submitted() && !handledDouble {
+		row := a.displayToResult(r, a.resultRow)
+		col := a.cursorDataCol(r)
+		if c.Modifiers()&ui.Ctrl != 0 {
+			a.beginEditAt(r, row, col)
+		} else {
+			a.openCellViewer(r, row, col)
+		}
 	}
 }
 
