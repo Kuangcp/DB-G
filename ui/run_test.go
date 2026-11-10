@@ -112,3 +112,89 @@ func TestRunErrorEndToEnd(t *testing.T) {
 		t.Fatalf("error not rendered: %q", tt.Texts())
 	}
 }
+
+func waitRerun(t *testing.T, a *root, tt *ui.Tester) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		tt.Frame()
+		rt := a.currentRuntime()
+		if !rt.Running() && rt.Result() != nil {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatal("rerun did not finish")
+}
+
+func TestRefreshRerunsCurrentQueryOnly(t *testing.T) {
+	a := openForSelection(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+
+	a.setActiveText("SELECT COUNT(*) AS n FROM users")
+	a.setSelection(0, len([]rune("SELECT COUNT(*) AS n FROM users")))
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 1)
+	tt.Frame()
+	if res := a.currentRuntime().Result(); res == nil || !res.IsQuery || cellString(res.Rows[0][0]) != "0" {
+		t.Fatalf("initial result: %+v", res)
+	}
+	if _, ok := tt.Find("重新执行此查询"); !ok {
+		t.Fatalf("refresh icon missing for query result: %q", tt.Texts())
+	}
+	refresh, _ := tt.Find("重新执行此查询")
+	fetch, _ := tt.Find("取更多行")
+	if refresh.X >= fetch.X {
+		t.Fatalf("refresh must sit left of 取更多行: refresh=%v fetch=%v", refresh, fetch)
+	}
+
+	if _, err := a.activeSession().RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('x')"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("重新执行此查询"); err != nil {
+		t.Fatal(err)
+	}
+	waitRerun(t, a, tt)
+	tt.Frame()
+	if res := a.currentRuntime().Result(); res == nil || cellString(res.Rows[0][0]) != "1" {
+		t.Fatalf("refreshed result: %+v", res)
+	}
+
+	// 写语句没有结果集，不出现刷新按钮。
+	a.setActiveText("INSERT INTO users (name) VALUES ('y')")
+	a.setSelection(0, len([]rune("INSERT INTO users (name) VALUES ('y')")))
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 1)
+	tt.Frame()
+	if _, ok := tt.Find("重新执行此查询"); ok {
+		t.Fatal("refresh icon must not show for non-query results")
+	}
+}
+
+func TestRefreshRerunsActiveStatementOnly(t *testing.T) {
+	a := openForSelection(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	text := "SELECT 1 AS a; SELECT 2 AS b"
+	a.setActiveText(text)
+	a.setSelection(0, len([]rune(text)))
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 2)
+	a.activeStmt = 1
+	tt.Frame()
+	if err := tt.Click("重新执行此查询"); err != nil {
+		t.Fatal(err)
+	}
+	waitRerun(t, a, tt)
+	tt.Frame()
+	if got := a.currentRuntime().Result(); got == nil || got.Columns[0] != "b" {
+		t.Fatalf("refresh must rerun the active result's SQL: %+v", got)
+	}
+	if a.activeStmt != 1 || len(a.stmtRuns) != 2 {
+		t.Fatalf("refresh must not re-plan statements: active=%d runs=%+v", a.activeStmt, a.stmtRuns)
+	}
+}

@@ -309,6 +309,90 @@ func textSlice(text string, start, end int) string {
 	return text[start:end]
 }
 
+// rerunnableSQL 返回当前结果对应的 SQL 快照；不是查询结果或没有快照时返回 false。
+// 刷新按钮只在这种情况下出现：写语句/DDL 没有可重放的结果集。
+func (a *root) rerunnableSQL() (string, bool) {
+	if a.activeStmt < 0 || a.activeStmt >= len(a.stmtRuns) {
+		return "", false
+	}
+	sql := strings.TrimSpace(a.stmtRuns[a.activeStmt].sql)
+	if sql == "" {
+		return "", false
+	}
+	if res := a.currentRuntime().Result(); res == nil || !res.IsQuery {
+		return "", false
+	}
+	return sql, true
+}
+
+// anyRunRunning 报告当前控制台的结果 tab 里是否还有语句在跑（多语句顺序执行中）。
+func (a *root) anyRunRunning() bool {
+	for _, run := range a.stmtRuns {
+		if a.runtimeFor(run.runtimeID).Running() {
+			return true
+		}
+	}
+	return false
+}
+
+// rerunQuery 用当前结果对应的 SQL 在同一个结果 tab 里再执行一次（刷新）。
+func (a *root) rerunQuery(sql string) {
+	sql = strings.TrimSpace(sql)
+	if sql == "" {
+		return
+	}
+	rt := a.currentRuntime()
+	if a.anyRunRunning() {
+		return
+	}
+	if a.activeConsole != "" {
+		if err := a.ensureConsoleConn(); err != nil {
+			a.consoleErr = err.Error()
+			return
+		}
+	}
+	sess := a.activeSession()
+	if sess == nil {
+		a.consoleErr = "请先连接数据源"
+		return
+	}
+	rtID := a.currentRuntimeID()
+	a.lastExecSQL = sql
+	app.LogInfo("exec", "rerun", "conn", a.activeConnName(), "console", a.activeConsole, "sql", truncateLogSQL(sql))
+	rt.SetOnDone(a.rerunDone(rtID, sql))
+	if !rt.RunTimeout(sess, sql, a.queryTimeoutFor()) {
+		app.LogWarn("exec", "rerun not started", "console", a.activeConsole)
+		return
+	}
+	a.refreshStmtBackgrounds()
+}
+
+// rerunDone 是刷新执行的完成回调：记日志/历史、更新分页状态，但不推进下一条语句。
+func (a *root) rerunDone(rtID, sql string) func(*engine.QueryResult, string, time.Duration) {
+	logDone := a.execDoneLogger(rtID)
+	connID, connName := a.activeConnID(), a.activeConnName()
+	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
+		logDone(res, errMsg, dur)
+		if a.history != nil {
+			e := app.HistoryEntry{ConnID: connID, ConnName: connName, SQL: sql, DurMS: dur.Milliseconds(), OK: errMsg == "", Err: errMsg}
+			if res != nil {
+				e.Rows = len(res.Rows)
+			}
+			_ = a.history.Add(e)
+		}
+		rec := func() {
+			a.recordFetchState(rtID, res)
+			a.refreshStmtBackgrounds()
+		}
+		if a.win != nil {
+			win := a.win
+			a.safeUpdate(win, rec)
+			return
+		}
+		rec()
+	}
+}
+
 // resetStmtRuns 为本次执行准备运行时：单条语句沿用当前控制台的运行态（兼容既有行为），
 // 多条语句各建一个（id = consoleID#i）。
 func (a *root) resetStmtRuns(ranges []app.SQLStatement) {

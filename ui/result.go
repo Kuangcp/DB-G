@@ -545,9 +545,15 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	insertRows := len(editSet.Inserts)
 	totalRows := len(displayRows) + insertRows
 
-	// 顶部操作条：钉住/取更多/编辑。工具条里的按钮悬停前没有面孔。
+	// 顶部操作条：刷新/取更多/钉住/编辑。工具条里的按钮悬停前没有面孔。
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Toolbar(c, func() {
+			if sql, ok := a.rerunnableSQL(); ok {
+				if iconButton(c, iconRefresh, "重新执行此查询", ui.Transparent).
+					Disabled(a.anyRunRunning() || a.activeSession() == nil).Clicked() {
+					a.rerunQuery(sql)
+				}
+			}
 			if iconButton(c, iconChevronDown, "取更多行", ui.Transparent).Disabled(!a.canFetchMore()).Clicked() {
 				a.fetchMore()
 			}
