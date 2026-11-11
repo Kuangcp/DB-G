@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	"github.com/egoist/mygo"
 	updaterNative "github.com/egoist/mygo/plugins/updater/native"
@@ -34,16 +35,19 @@ func main() {
 	defer app.CloseLogs()
 	// 原生更新窗口，不依赖 WebView；开发构建会自动报告更新不可用。
 	mygo.Use(updaterNative.Plugin)
+	// 主窗口的位置/大小记在配置目录；和连接库一样区分发布/开发构建。
+	mygo.App.SetWindowStateStore(windowStateStore{path: filepath.Join(app.AppConfigDir(), "window-state.json")})
 	app.LogInfo("startup", "db-g start", "config", app.DefaultStorePath(), "log_dir", app.DefaultLogDir())
 
 	r := ui.NewRoot()
 	r.SetAppIconPNG(appIconPNG)
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:   app.DisplayName,
-			Width:   1280,
-			Height:  800,
-			Content: mygoUI.View(r.View),
+			Title:    app.DisplayName,
+			Width:    1280,
+			Height:   800,
+			StateKey: "main",
+			Content:  mygoUI.View(r.View),
 		})
 		if err := win.SetIcon(appIconPNG); err != nil {
 			app.LogWarn("startup", "set window icon failed", "err", err.Error())

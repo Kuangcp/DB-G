@@ -182,6 +182,7 @@ type root struct {
 	cellViewText        string
 	cellViewJSON        any // 解析后的 JSON（非 JSON 为 nil）
 	cellViewJSONOK      bool
+	cellViewWrap        bool            // 查看器里的长文本是否自动折行
 	cellViewCollapsed   map[string]bool // JSON 树里折叠的节点路径
 	cellModalW          float32         // 单元格查看/编辑弹窗宽度
 	cellModalH          float32         // 单元格查看/编辑弹窗高度
@@ -232,6 +233,7 @@ func newRoot(text string) *root {
 		connFormTagColor: app.DefaultConnTagColor,
 		cellModalW:       cellModalDefaultW,
 		cellModalH:       cellModalDefaultH,
+		cellViewWrap:     true,
 		chords:           defaultChords(),
 		fontPrefs:        app.DefaultFontPrefs(),
 		themePrefs:       app.DefaultThemePrefs(),

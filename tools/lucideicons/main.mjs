@@ -21,6 +21,7 @@ const icons = {
   iconPlay: "play",
   iconSearch: "search",
   iconFormat: "align-left",
+  iconWrapText: "wrap-text",
   iconPlug: "plug",
   iconRefresh: "rotate-cw",
   iconTrash: "trash-2",

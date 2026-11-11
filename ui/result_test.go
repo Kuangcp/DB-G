@@ -467,3 +467,60 @@ func TestCellViewerSizesToContent(t *testing.T) {
 		t.Fatalf("large JSON should use a large dialog: %v×%v", big.cellModalW, big.cellModalH)
 	}
 }
+
+func TestCellViewerWrapToggle(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"v"},
+		Rows:    [][]any{{strings.Repeat("很长的文本 ", 80)}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.openCellViewer(a.con.Result(), 0, 0)
+	tt.Frame()
+	if !a.cellViewWrap {
+		t.Fatal("wrap must default on")
+	}
+	if err := tt.Click("自动折行：开（点击关闭）"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.cellViewWrap {
+		t.Fatal("wrap toggle must turn it off")
+	}
+	if err := tt.Click("自动折行：关（点击开启）"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.cellViewWrap {
+		t.Fatal("wrap toggle must turn it back on")
+	}
+}
+
+func TestCellViewerWrapChangesTextWidth(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{IsQuery: true, Columns: []string{"v"}, Rows: [][]any{{"seed"}}}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.openCellViewer(a.con.Result(), 0, 0)
+	text := strings.Repeat("x", 400)
+	a.cellViewText = text
+	a.fitCellModal(text, false)
+	tt.Frame()
+	wrapped, ok := tt.Find(text)
+	if !ok {
+		t.Fatalf("viewer text missing: %q", tt.Texts())
+	}
+	if err := tt.Click("自动折行：开（点击关闭）"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	plain, ok := tt.Find(text)
+	if !ok {
+		t.Fatalf("viewer text missing after unwrap: %q", tt.Texts())
+	}
+	if wrapped.H <= plain.H {
+		t.Fatalf("wrap must render multiple lines: wrapped=%v plain=%v", wrapped, plain)
+	}
+}

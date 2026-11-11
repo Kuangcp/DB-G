@@ -405,6 +405,15 @@ func (a *root) viewerToolbar(c *ui.Context) {
 			if iconButtonPlain(c, iconExpandAll, "展开全部层级", ui.Transparent).Clicked() {
 				a.expandAllJSON()
 			}
+		} else {
+			label := "自动折行：开（点击关闭）"
+			col := c.Theme().Accent
+			if !a.cellViewWrap {
+				label, col = "自动折行：关（点击开启）", ui.Transparent
+			}
+			if iconButtonPlain(c, iconWrapText, label, col).Clicked() {
+				a.cellViewWrap = !a.cellViewWrap
+			}
 		}
 		if iconButtonPlain(c, iconCopy, "复制原文", ui.Transparent).Tooltip("复制完整原文（未折叠的 JSON 文本）").Clicked() {
 			c.WriteClipboard(a.cellViewText)
@@ -493,14 +502,25 @@ func (a *root) cellViewer(c *ui.Context) {
 	w, h := a.cellModalSize()
 	ui.Modal(c, &a.cellViewOpen, func() {
 		a.viewerToolbar(c)
-		ui.ScrollBoth(c).Grow(1).Children(func() {
-			if a.cellViewJSONOK {
+		switch {
+		case a.cellViewJSONOK:
+			ui.ScrollBoth(c).Grow(1).Children(func() {
 				nodes := 0
 				a.jsonTree(c, "$", a.cellViewJSON, 0, &nodes)
-				return
-			}
-			a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12))
-		})
+			})
+		case a.cellViewWrap:
+			// 纵向滚动容器里再套一层 FillWidth，文本才会拿到视口宽度并折行。
+			ui.Scroll(c).Grow(1).Children(func() {
+				ui.Column(c).FillWidth().Children(func() {
+					a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12))
+				})
+			})
+		default:
+			// 不折行：整行保留自然宽度，交给横向滚动查看。
+			ui.ScrollBoth(c).Grow(1).Children(func() {
+				a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12).NoWrap())
+			})
+		}
 		a.cellModalGrip(c)
 	}).Width(w).Height(h)
 }
