@@ -21,4 +21,14 @@ func TestTitleBarRendersAppName(t *testing.T) {
 	if !tt.HasText("SQL 工作台") {
 		t.Fatalf("title bar missing subtitle: %v", tt.Texts())
 	}
+	for _, label := range []string{"打开 SQL 文件", "历史", "AI 助手", "设置"} {
+		if _, ok := tt.Find(label); !ok {
+			t.Fatalf("title bar action %q missing: %v", label, tt.Texts())
+		}
+	}
+	open, _ := tt.Find("打开 SQL 文件")
+	settings, _ := tt.Find("设置")
+	if open.X >= settings.X {
+		t.Fatalf("title bar actions out of order: open=%v settings=%v", open, settings)
+	}
 }

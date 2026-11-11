@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"math"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -726,9 +725,7 @@ func (a *root) view(c *ui.Context) {
 		a.guardModal(c)
 
 		ui.Column(c).Fill().Children(func() {
-			if a.win != nil {
-				a.titleBar(c)
-			}
+			a.titleBar(c)
 			ui.Split(c, &a.sidebarWidth, func() {
 				a.sidebar(c)
 			}, func() {
@@ -762,24 +759,6 @@ func (a *root) view(c *ui.Context) {
 							}
 							if iconButton(c, iconPlan, "执行计划", ui.Transparent).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
 								a.runExplain(false)
-							}
-							if iconButton(c, iconFolderOpen, "打开 SQL 文件", ui.Transparent).Clicked() {
-								a.pickOpenSQLFiles()
-							}
-							if iconButton(c, iconHistory, "历史", ui.Transparent).Clicked() {
-								a.historyOpen = true
-							}
-							if iconButton(c, iconSparkles, "AI 助手", ui.Transparent).Clicked() {
-								a.aiChat.open = !a.aiChat.open
-								if a.aiChat.open {
-									a.loadAIChat()
-									a.aiChat.scroll.Y = math.MaxFloat32
-								} else {
-									a.stopAI()
-								}
-							}
-							if iconButton(c, iconSettings, "设置", ui.Transparent).Clicked() {
-								a.requestSettings()
 							}
 							if a.installNeed.NeedInstall {
 								label := "安装到应用列表"
