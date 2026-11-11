@@ -44,10 +44,14 @@ func (a *root) setThemePrefs(p app.ThemePrefs) {
 	}
 	a.saveThemePrefs()
 	a.updateSettingsWindow()
+	bg := WindowBackgroundColor(prefs)
 	if a.win != nil {
-		_ = a.win.SetBackgroundColor(WindowBackgroundColor(prefs))
+		_ = a.win.SetBackgroundColor(bg)
 		win := a.win
 		a.safeUpdate(win, func() {})
+	}
+	if a.settingsWin != nil {
+		_ = a.settingsWin.SetBackgroundColor(bg)
 	}
 }
 

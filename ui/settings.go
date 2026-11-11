@@ -36,23 +36,26 @@ func (a *root) settingsView(c *ui.Context) {
 	if a.settingsSection < 0 || a.settingsSection >= len(sections) {
 		a.settingsSection = 0
 	}
-	ui.Row(c).Fill().Gap(0).Children(func() {
-		// 左：分区导航（无按钮外观、行间分隔线、选中高亮），底部版本号。
-		ui.Column(c).Width(168).FillHeight().Children(func() {
-			for i, sec := range sections {
-				row := sideNavRow(c, sec.label, nil, ui.Transparent, i == a.settingsSection)
-				if row.Clicked() {
-					a.settingsSection = i
+	ui.Column(c).Fill().Children(func() {
+		a.settingsTitleBar(c)
+		ui.Row(c).Fill().Gap(0).Children(func() {
+			// 左：分区导航（无按钮外观、行间分隔线、选中高亮），底部版本号。
+			ui.Column(c).Width(168).FillHeight().Children(func() {
+				for i, sec := range sections {
+					row := sideNavRow(c, sec.label, nil, ui.Transparent, i == a.settingsSection)
+					if row.Clicked() {
+						a.settingsSection = i
+					}
 				}
-			}
-			ui.Spacer(c)
-			ui.Text(c, app.Version()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(10, 10)
-		})
-		ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
-		// 右：当前分区的内容，整块可滚。
-		ui.Scroll(c).Fill().Children(func() {
-			ui.Column(c).FillWidth().Padding(14).Gap(10).Children(func() {
-				sections[a.settingsSection].build(c)
+				ui.Spacer(c)
+				ui.Text(c, app.Version()).FontSize(11).TextColor(c.Theme().TextMuted).Padding(10, 10)
+			})
+			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
+			// 右：当前分区的内容，整块可滚。
+			ui.Scroll(c).Fill().Children(func() {
+				ui.Column(c).FillWidth().Padding(14).Gap(10).Children(func() {
+					sections[a.settingsSection].build(c)
+				})
 			})
 		})
 	})
@@ -253,6 +256,11 @@ func (a *root) applyEditorPreset(n int) {
 type settingsWin interface {
 	Focus()
 	Update(func())
+	Minimize()
+	IsMaximized() bool
+	ToggleMaximize()
+	Close()
+	SetBackgroundColor(string) error
 }
 
 // requestSettings 请求打开（或聚焦）设置窗口。
@@ -278,10 +286,14 @@ func (a *root) openSettings() {
 		open = a.newSettingsWindow
 	}
 	a.settingsWin = open(mygo.WindowOptions{
-		Title:   "设置 — " + app.DisplayName,
-		Width:   720,
-		Height:  520,
-		Content: ui.View(func(c *ui.Context) { a.guardView(func() { a.settingsView(c) }) }),
+		Title:           "设置 — " + app.DisplayName,
+		Width:           760,
+		Height:          600,
+		StateKey:        "settings",
+		Frameless:       true,
+		CornerRadius:    a.themePrefs.Radius + 4,
+		BackgroundColor: WindowBackgroundColor(a.themePrefs),
+		Content:         ui.View(func(c *ui.Context) { a.guardView(func() { a.settingsView(c) }) }),
 	})
 }
 

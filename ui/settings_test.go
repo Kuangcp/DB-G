@@ -92,8 +92,13 @@ type fakeSettingsWin struct {
 	options mygo.WindowOptions
 }
 
-func (f *fakeSettingsWin) Focus()        { f.focuses++ }
-func (f *fakeSettingsWin) Update(func()) { f.updates++ }
+func (f *fakeSettingsWin) Focus()                          { f.focuses++ }
+func (f *fakeSettingsWin) Update(func())                   { f.updates++ }
+func (f *fakeSettingsWin) Minimize()                       {}
+func (f *fakeSettingsWin) IsMaximized() bool               { return false }
+func (f *fakeSettingsWin) ToggleMaximize()                 {}
+func (f *fakeSettingsWin) Close()                          {}
+func (f *fakeSettingsWin) SetBackgroundColor(string) error { return nil }
 
 func TestSettingsButtonOpensSingletonWindow(t *testing.T) {
 	a := newConsoleRoot(t)
@@ -115,6 +120,9 @@ func TestSettingsButtonOpensSingletonWindow(t *testing.T) {
 	}
 	if created[0].options.Title != "设置 — "+app.DisplayName {
 		t.Fatalf("window options: %+v", created[0].options)
+	}
+	if !created[0].options.Frameless || created[0].options.StateKey != "settings" {
+		t.Fatalf("settings window must be frameless and remembered: %+v", created[0].options)
 	}
 	// 再点一次：聚焦已有窗口，不新建
 	if err := tt.Click("设置"); err != nil {
@@ -329,5 +337,17 @@ func TestThemeExportImport(t *testing.T) {
 	want := app.ThemePrefs{Mode: "light", Scheme: app.ThemeSchemeDefault, Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15}
 	if a.themePrefs != want {
 		t.Fatalf("imported: %+v want %+v", a.themePrefs, want)
+	}
+}
+
+func TestSettingsTitleBarControls(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.settingsWin = &fakeSettingsWin{}
+	tt := ui.NewTester(a.settingsView, 760, 600)
+	tt.Frame()
+	for _, label := range []string{"设置", "最小化", "最大化", "关闭窗口"} {
+		if _, ok := tt.Find(label); !ok {
+			t.Fatalf("settings title bar missing %q: %q", label, tt.Texts())
+		}
 	}
 }

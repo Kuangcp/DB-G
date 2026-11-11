@@ -16,7 +16,8 @@ func TestWindowStateStoreRoundTrip(t *testing.T) {
 		t.Fatalf("missing file: %v %v", states, err)
 	}
 	want := map[string]mygo.WindowState{
-		"main": {X: 120, Y: 80, Width: 1440, Height: 900, Maximized: true},
+		"main":     {X: 120, Y: 80, Width: 1440, Height: 900, Maximized: true},
+		"settings": {X: 320, Y: 180, Width: 760, Height: 600},
 	}
 	if err := s.SaveWindowStates(want); err != nil {
 		t.Fatal(err)
