@@ -45,6 +45,7 @@ func (a *root) setThemePrefs(p app.ThemePrefs) {
 	a.saveThemePrefs()
 	a.updateSettingsWindow()
 	if a.win != nil {
+		_ = a.win.SetBackgroundColor(WindowBackgroundColor(prefs))
 		win := a.win
 		a.safeUpdate(win, func() {})
 	}
@@ -107,6 +108,7 @@ func resolveTheme(base *ui.Theme, p app.ThemePrefs, desk ui.Preferences) resolve
 		dark = true
 	}
 	t := lobeUITheme(dark)
+	applyThemePalette(&t, schemePalette(prefs, dark))
 	if prefs.FontSize > 0 {
 		t.FontSize = float32(prefs.FontSize)
 	} else {

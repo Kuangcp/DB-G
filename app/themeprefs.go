@@ -10,14 +10,27 @@ import (
 	"strings"
 )
 
-// ThemePrefs 是外观设置：模式、强调色、间距密度、圆角与界面字号。
-// 零值 / 缺省字段按默认值处理（跟随系统、主题自带强调色、标准密度）。
+// ThemePalette 是一套自定义配色的中性色覆盖；空字段表示沿用 Lobe 主题。
+type ThemePalette struct {
+	Background string `json:"background,omitempty"`
+	Surface    string `json:"surface,omitempty"`
+	Border     string `json:"border,omitempty"`
+	Text       string `json:"text,omitempty"`
+	TextMuted  string `json:"textMuted,omitempty"`
+}
+
+// ThemePrefs 是外观设置：模式、配色方案、强调色、间距密度、圆角与界面字号。
+// 零值 / 缺省字段按默认值处理（跟随系统、默认配色、主题自带强调色、标准密度）。
 type ThemePrefs struct {
 	Mode     string `json:"mode"`
+	Scheme   string `json:"scheme,omitempty"`
 	Accent   string `json:"accent"`
 	Density  string `json:"density"`
 	Radius   int    `json:"radius"`
 	FontSize int    `json:"fontSize"`
+	// CustomLight/CustomDark 只在 Scheme == "custom" 时生效；均为空时沿用默认配色。
+	CustomLight ThemePalette `json:"customLight,omitempty"`
+	CustomDark  ThemePalette `json:"customDark,omitempty"`
 }
 
 // 外观设置的可选范围与默认值。
@@ -25,6 +38,12 @@ const (
 	ThemeModeSystem = "system"
 	ThemeModeLight  = "light"
 	ThemeModeDark   = "dark"
+
+	ThemeSchemeDefault = "default"
+	ThemeSchemeOcean   = "ocean"
+	ThemeSchemeForest  = "forest"
+	ThemeSchemeWarm    = "warm"
+	ThemeSchemeCustom  = "custom"
 
 	ThemeDensityCompact = "compact"
 	ThemeDensityNormal  = "normal"
@@ -37,13 +56,13 @@ const (
 	MaxThemeFontSize     = 18
 	DefaultThemeFontSize = 0 // 0 = 跟随主题（含桌面 TextScale）
 
-	themeFileVersion = 1
+	themeFileVersion = 2
 	themeFileApp     = "db-g"
 )
 
-// DefaultThemePrefs 返回默认外观：跟随系统、主题强调色、标准密度、默认圆角。
+// DefaultThemePrefs 返回默认外观：跟随系统、默认配色、主题强调色、标准密度、默认圆角。
 func DefaultThemePrefs() ThemePrefs {
-	return ThemePrefs{Mode: ThemeModeSystem, Density: ThemeDensityNormal, Radius: DefaultThemeRadius}
+	return ThemePrefs{Mode: ThemeModeSystem, Scheme: ThemeSchemeDefault, Density: ThemeDensityNormal, Radius: DefaultThemeRadius}
 }
 
 // DefaultThemePrefsPath 返回外观设置路径（与连接库同目录）。
@@ -62,6 +81,41 @@ var accentHexPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 var accentPresets = map[string]bool{
 	"": true, "default": true, "blue": true, "violet": true,
 	"green": true, "orange": true, "rose": true,
+}
+
+// themeSchemes 是内置配色方案；custom 使用 ThemePrefs.CustomLight/CustomDark。
+var themeSchemes = map[string]bool{
+	ThemeSchemeDefault: true, ThemeSchemeOcean: true,
+	ThemeSchemeForest: true, ThemeSchemeWarm: true, ThemeSchemeCustom: true,
+}
+
+// ValidThemePaletteColor 报告调色板颜色是否合法；空串表示沿用主题默认。
+func ValidThemePaletteColor(s string) bool {
+	s = strings.TrimSpace(s)
+	return s == "" || accentHexPattern.MatchString(strings.ToLower(s))
+}
+
+// NormalizeThemePalette 修剪颜色并校验；非法项清空（沿用主题默认）。
+func NormalizeThemePalette(p ThemePalette, label string) (ThemePalette, []string) {
+	var warn []string
+	norm := func(v, field string) string {
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v == "" {
+			return ""
+		}
+		if !accentHexPattern.MatchString(v) {
+			warn = append(warn, fmt.Sprintf("%s的%s %q 无效，已沿用默认", label, field, v))
+			return ""
+		}
+		return v
+	}
+	return ThemePalette{
+		Background: norm(p.Background, "背景"),
+		Surface:    norm(p.Surface, "容器"),
+		Border:     norm(p.Border, "边框"),
+		Text:       norm(p.Text, "正文"),
+		TextMuted:  norm(p.TextMuted, "次要文字"),
+	}, warn
 }
 
 // Normalize 把缺省/非法字段回退为默认值，并返回被忽略项的说明。
@@ -88,6 +142,20 @@ func (p ThemePrefs) Normalize() (ThemePrefs, []string) {
 		accent = ""
 	}
 	out.Accent = accent
+	scheme := strings.ToLower(strings.TrimSpace(p.Scheme))
+	if scheme == "" {
+		scheme = ThemeSchemeDefault
+	}
+	if !themeSchemes[scheme] {
+		warn = append(warn, fmt.Sprintf("未知配色方案 %q，已用默认", p.Scheme))
+		scheme = ThemeSchemeDefault
+	}
+	out.Scheme = scheme
+	var pw []string
+	out.CustomLight, pw = NormalizeThemePalette(p.CustomLight, "浅色自定义配色")
+	warn = append(warn, pw...)
+	out.CustomDark, pw = NormalizeThemePalette(p.CustomDark, "深色自定义配色")
+	warn = append(warn, pw...)
 	switch strings.ToLower(strings.TrimSpace(p.Density)) {
 	case "", ThemeDensityNormal:
 		out.Density = ThemeDensityNormal

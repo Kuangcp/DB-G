@@ -9,7 +9,7 @@ import (
 
 func TestThemePrefsRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "theme.json")
-	want := ThemePrefs{Mode: ThemeModeDark, Accent: "#7c3aed", Density: ThemeDensityCompact, Radius: 8, FontSize: 15}
+	want := ThemePrefs{Mode: ThemeModeDark, Scheme: ThemeSchemeDefault, Accent: "#7c3aed", Density: ThemeDensityCompact, Radius: 8, FontSize: 15}
 	if err := SaveThemePrefs(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestThemePrefsLoadCorrupt(t *testing.T) {
 func TestThemePrefsExportImport(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "export.json")
-	want := ThemePrefs{Mode: ThemeModeLight, Accent: "violet", Density: ThemeDensityRoomy, Radius: 3, FontSize: 17}
+	want := ThemePrefs{Mode: ThemeModeLight, Scheme: ThemeSchemeDefault, Accent: "violet", Density: ThemeDensityRoomy, Radius: 3, FontSize: 17}
 	if err := ExportThemePrefs(src, want); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestThemePrefsExportImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"app": "db-g"`) || !strings.Contains(string(data), `"version": 1`) {
+	if !strings.Contains(string(data), `"app": "db-g"`) || !strings.Contains(string(data), `"version": 2`) {
 		t.Fatalf("export file: %s", data)
 	}
 	got, warn, err := ImportThemePrefs(src)
@@ -114,5 +114,50 @@ func TestThemePrefsImportRejectsOtherAppOrVersion(t *testing.T) {
 	got, warn, err := ImportThemePrefs(bare)
 	if err != nil || len(warn) != 0 || got.Mode != ThemeModeDark || got.Accent != "#112233" {
 		t.Fatalf("bare import: %+v warn=%v err=%v", got, warn, err)
+	}
+}
+
+func TestThemePrefsSchemeAndPalette(t *testing.T) {
+	p := ThemePrefs{
+		Scheme:      "ocean",
+		CustomLight: ThemePalette{Background: "#AABBCC", Surface: "bad", Text: " #112233 "},
+	}
+	got, warn := p.Normalize()
+	if got.Scheme != ThemeSchemeOcean {
+		t.Fatalf("scheme = %q", got.Scheme)
+	}
+	if got.CustomLight.Background != "#aabbcc" || got.CustomLight.Text != "#112233" {
+		t.Fatalf("palette colors = %+v", got.CustomLight)
+	}
+	if got.CustomLight.Surface != "" || len(warn) != 1 {
+		t.Fatalf("invalid color must be cleared: %+v warn=%v", got.CustomLight, warn)
+	}
+	got, warn = (ThemePrefs{Scheme: "neon"}).Normalize()
+	if got.Scheme != ThemeSchemeDefault || len(warn) != 1 {
+		t.Fatalf("unknown scheme: %+v warn=%v", got, warn)
+	}
+	got, _ = (ThemePrefs{}).Normalize()
+	if got.Scheme != ThemeSchemeDefault {
+		t.Fatalf("empty scheme = %q", got.Scheme)
+	}
+}
+
+func TestThemePrefsPaletteExportImport(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "theme.json")
+	want := ThemePrefs{
+		Mode: ThemeModeDark, Scheme: ThemeSchemeCustom, Density: ThemeDensityNormal,
+		Radius:      6,
+		CustomLight: ThemePalette{Background: "#eef4fb", Surface: "#ffffff", Border: "#d3e2f2"},
+		CustomDark:  ThemePalette{Background: "#0f1822", Surface: "#172433", Border: "#2a3d52"},
+	}
+	if err := ExportThemePrefs(path, want); err != nil {
+		t.Fatal(err)
+	}
+	got, warn, err := ImportThemePrefs(path)
+	if err != nil || len(warn) != 0 {
+		t.Fatalf("import: %+v warn=%v err=%v", got, warn, err)
+	}
+	if got != want {
+		t.Fatalf("palette round trip: %+v want %+v", got, want)
 	}
 }

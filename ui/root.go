@@ -64,6 +64,10 @@ type root struct {
 	themeSaveSeq     atomic.Uint64
 	themeHex         string // 外观分区里自定义强调色的输入框
 	themeHexErr      string
+	paletteLight     app.ThemePalette // 自定义配色的浅色草稿
+	paletteDark      app.ThemePalette // 自定义配色的深色草稿
+	paletteLoaded    bool             // 草稿是否已从 prefs 载入
+	paletteErr       string
 	aiPrefs          app.AIPrefs // AI 服务地址/模型/出网开关
 	aiPrefsPath      string      // ai.json 的位置（空 = 不落盘）
 	aiWarn           string

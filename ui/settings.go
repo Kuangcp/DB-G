@@ -372,6 +372,48 @@ func themeDensity(idx int) string {
 	return app.ThemeDensityNormal
 }
 
+// paletteEditor 是自定义配色的五组颜色输入；留空沿用默认。
+func (a *root) paletteEditor(c *ui.Context, cr float32, prefs app.ThemePrefs) {
+	t := c.Theme()
+	ui.Text(c, "自定义配色（颜色留空则沿用默认）").FontSize(12).TextColor(t.TextMuted)
+	fields := []struct {
+		label       string
+		light, dark *string
+	}{
+		{"背景", &a.paletteLight.Background, &a.paletteDark.Background},
+		{"容器", &a.paletteLight.Surface, &a.paletteDark.Surface},
+		{"边框", &a.paletteLight.Border, &a.paletteDark.Border},
+		{"正文", &a.paletteLight.Text, &a.paletteDark.Text},
+		{"次要文字", &a.paletteLight.TextMuted, &a.paletteDark.TextMuted},
+	}
+	changed := false
+	for _, f := range fields {
+		f := f
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, f.label).Width(68).FontSize(12).TextColor(t.TextMuted)
+			if ui.TextInput(c, f.light).Placeholder("浅色 " + f.label).Label("浅色" + f.label).
+				Radius(cr).Fill().Changed() {
+				changed = true
+			}
+			if ui.TextInput(c, f.dark).Placeholder("深色 " + f.label).Label("深色" + f.label).
+				Radius(cr).Fill().Changed() {
+				changed = true
+			}
+		})
+	}
+	if changed {
+		a.applyPaletteDrafts(prefs)
+	}
+	if a.paletteErr != "" {
+		ui.Text(c, a.paletteErr).FontSize(12).TextColor(t.Danger).SingleLine()
+	}
+	if ui.Button(c, "从默认配色重置").Radius(cr).Clicked() {
+		a.paletteLight, a.paletteDark = defaultCustomPalettes()
+		a.paletteErr = ""
+		a.applyPaletteDrafts(prefs)
+	}
+}
+
 // appearanceSection 是外观设置：模式 / 强调色 / 密度 / 圆角 / 界面字号 + 预览。
 func (a *root) appearanceSection(c *ui.Context) {
 	cr := controlRadius(c)
@@ -386,6 +428,27 @@ func (a *root) appearanceSection(c *ui.Context) {
 	if ui.Segmented(c, &mode, "跟随系统", "浅色", "深色").Radius(cr).Changed() {
 		prefs.Mode = themeMode(mode)
 		a.setThemePrefs(prefs)
+	}
+
+	// 配色方案
+	ui.Text(c, "配色方案").FontSize(12).TextColor(c.Theme().TextMuted)
+	schemeLabels := make([]string, len(themeSchemeOptions))
+	for i, opt := range themeSchemeOptions {
+		schemeLabels[i] = opt.label
+	}
+	scheme := themeSchemeIndex(prefs.Scheme)
+	if ui.Segmented(c, &scheme, schemeLabels...).Radius(cr).Changed() {
+		prefs.Scheme = themeSchemeOptions[scheme].key
+		if prefs.Scheme == app.ThemeSchemeCustom {
+			a.loadPaletteDrafts(a.themePrefs)
+		}
+		a.setThemePrefs(prefs)
+	}
+	if prefs.Scheme == app.ThemeSchemeCustom {
+		if !a.paletteLoaded {
+			a.loadPaletteDrafts(prefs)
+		}
+		a.paletteEditor(c, cr, prefs)
 	}
 
 	// 强调色
@@ -469,6 +532,7 @@ func (a *root) appearanceSection(c *ui.Context) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.Button(c, "恢复默认").Radius(cr).Clicked() {
 			a.themeHex, a.themeHexErr = "", ""
+			a.paletteLoaded, a.paletteErr = false, ""
 			a.setThemePrefs(app.DefaultThemePrefs())
 		}
 		if ui.Button(c, "导出主题…").Radius(cr).Clicked() {
@@ -495,6 +559,7 @@ func (a *root) importThemeFrom(path string) ([]string, error) {
 		return nil, err
 	}
 	a.themeHex, a.themeHexErr = "", ""
+	a.paletteLoaded, a.paletteErr = false, ""
 	a.setThemePrefs(prefs)
 	if len(warn) > 0 {
 		a.themeWarn = "已导入（" + strings.Join(warn, "；") + "）"

@@ -16,8 +16,11 @@ func TestResolveThemeSystemNoOverrides(t *testing.T) {
 	if got.Theme == base || !got.Theme.Dark {
 		t.Fatalf("system mode must apply the Lobe dark theme: %+v", got)
 	}
-	if got.Theme.Background != lobe.Dark().BgLayout {
-		t.Fatalf("background must come from Lobe tokens: %v", got.Theme.Background)
+	if got.Theme.Background != ui.Hex(defaultPalettePair.dark.Background) {
+		t.Fatalf("dark background must be softened, got %v", got.Theme.Background)
+	}
+	if got.Theme.Background == lobe.Dark().BgLayout {
+		t.Fatal("dark background must not stay pure black")
 	}
 }
 
@@ -137,11 +140,72 @@ func TestSetThemePrefsPersists(t *testing.T) {
 	if warn != "" {
 		t.Fatalf("warn: %s", warn)
 	}
-	want := app.ThemePrefs{Mode: "light", Accent: "violet", Density: "compact", Radius: 9, FontSize: 16}
+	want := app.ThemePrefs{Mode: "light", Scheme: app.ThemeSchemeDefault, Accent: "violet", Density: "compact", Radius: 9, FontSize: 16}
 	if got != want {
 		t.Fatalf("persisted: %+v want %+v", got, want)
 	}
 	if a.themeWarn != "" {
 		t.Fatalf("unexpected warn: %s", a.themeWarn)
+	}
+}
+
+func TestResolveThemeSchemesAndCustomPalette(t *testing.T) {
+	ocean := resolveTheme(ui.LightTheme(), app.ThemePrefs{Mode: app.ThemeModeDark, Scheme: app.ThemeSchemeOcean}, ui.Preferences{})
+	if ocean.Theme.Background != ui.Hex("#0f1822") || ocean.Theme.Surface != ui.Hex("#172433") {
+		t.Fatalf("ocean dark palette: bg=%v surface=%v", ocean.Theme.Background, ocean.Theme.Surface)
+	}
+	light := resolveTheme(ui.DarkTheme(), app.ThemePrefs{Mode: app.ThemeModeLight, Scheme: app.ThemeSchemeForest}, ui.Preferences{})
+	if light.Theme.Background != ui.Hex("#eef5ef") || light.Theme.Border != ui.Hex("#d2e3d5") {
+		t.Fatalf("forest light palette: %+v", light.Theme)
+	}
+
+	custom := app.ThemePrefs{
+		Mode:   app.ThemeModeDark,
+		Scheme: app.ThemeSchemeCustom,
+		CustomDark: app.ThemePalette{
+			Background: "#101820", Surface: "#182430", Border: "#2c3e50",
+			Text: "#f0f4f8", TextMuted: "#8fa3b8",
+		},
+	}
+	got := resolveTheme(ui.LightTheme(), custom, ui.Preferences{})
+	if got.Theme.Background != ui.Hex("#101820") || got.Theme.Surface != ui.Hex("#182430") ||
+		got.Theme.Border != ui.Hex("#2c3e50") || got.Theme.Text != ui.Hex("#f0f4f8") ||
+		got.Theme.TextMuted != ui.Hex("#8fa3b8") {
+		t.Fatalf("custom palette not applied: %+v", got.Theme)
+	}
+	if WindowBackgroundColor(custom) != "#101820" {
+		t.Fatalf("window background = %q", WindowBackgroundColor(custom))
+	}
+	if got := WindowBackgroundColor(app.ThemePrefs{Scheme: app.ThemeSchemeOcean}); got != "light-dark(#edf4fb, #0f1822)" {
+		t.Fatalf("system window background = %q", got)
+	}
+}
+
+func TestAppearanceSchemeSwitch(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	tt := openSettingsSection(t, a, "外观")
+	tt.SetSize(720, 900)
+	tt.Frame()
+	for _, want := range []string{"配色方案", "默认", "海洋", "森林", "暖阳", "自定义"} {
+		if !tt.HasText(want) {
+			t.Fatalf("scheme option %q missing: %q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("海洋"); err != nil {
+		t.Fatal(err)
+	}
+	if a.themePrefs.Scheme != app.ThemeSchemeOcean {
+		t.Fatalf("scheme = %q", a.themePrefs.Scheme)
+	}
+	if err := tt.Click("自定义"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.themePrefs.Scheme != app.ThemeSchemeCustom || !a.paletteLoaded {
+		t.Fatalf("custom scheme: %+v loaded=%v", a.themePrefs, a.paletteLoaded)
+	}
+	if !tt.HasText("自定义配色（颜色留空则沿用默认）") {
+		t.Fatalf("palette editor missing: %q", tt.Texts())
 	}
 }

@@ -303,6 +303,8 @@ func TestAppearanceReset(t *testing.T) {
 	a.themePath = filepath.Join(t.TempDir(), "theme.json")
 	a.setThemePrefs(app.ThemePrefs{Mode: "dark", Accent: "violet", Density: "compact", Radius: 10, FontSize: 16})
 	tt := openSettingsSection(t, a, "外观")
+	tt.SetSize(720, 900)
+	tt.Frame()
 	if err := tt.Click("恢复默认"); err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +326,7 @@ func TestThemeExportImport(t *testing.T) {
 	if err != nil || len(warn) != 0 {
 		t.Fatalf("import: warn=%v err=%v", warn, err)
 	}
-	want := app.ThemePrefs{Mode: "light", Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15}
+	want := app.ThemePrefs{Mode: "light", Scheme: app.ThemeSchemeDefault, Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15}
 	if a.themePrefs != want {
 		t.Fatalf("imported: %+v want %+v", a.themePrefs, want)
 	}

@@ -51,7 +51,7 @@ func main() {
 			Content:         mygoUI.View(r.View),
 			Frameless:       true,
 			CornerRadius:    themePrefs.Radius + 4,
-			BackgroundColor: "light-dark(#f9f9f9, #000000)",
+			BackgroundColor: ui.WindowBackgroundColor(themePrefs),
 		})
 		if err := win.SetIcon(appIconPNG); err != nil {
 			app.LogWarn("startup", "set window icon failed", "err", err.Error())
