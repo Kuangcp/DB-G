@@ -293,3 +293,178 @@ func TestCellViewerCloseIcon(t *testing.T) {
 		t.Fatal("close icon must close the viewer")
 	}
 }
+
+func TestCtrlShiftNSetsSelectedCellsNull(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice'),(2,'bob')"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users ORDER BY id")
+	a.resultRow = 0
+	a.resultState.Cells = ui.ColumnRange{Cursor: "name", Anchor: "name"}
+	a.resultSel.Clear()
+	a.resultSel.Add(0)
+	a.resultSel.Add(1)
+	tt.Frame()
+	tt.Key(ui.Ctrl|ui.Shift, ui.KeyN)
+	tt.Frame()
+
+	for row := 0; row < 2; row++ {
+		v, ok := a.editSet().Cells[app.CellKey{Row: row, Col: 1}]
+		if !ok || v != nil {
+			t.Fatalf("row %d name must be pending NULL, got %v (set=%v)", row, v, ok)
+		}
+	}
+	lines, err := a.previewEdits()
+	if err != nil || len(lines) != 2 {
+		t.Fatalf("preview: %v err=%v", lines, err)
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, `SET "name" = NULL`) {
+			t.Fatalf("preview must set NULL: %q", line)
+		}
+	}
+}
+
+func TestCtrlShiftNSkipsNotNullColumn(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	s := a.testSession(t)
+	if _, err := s.RunStatement(t.Context(), "CREATE TABLE strict (id INTEGER PRIMARY KEY, code TEXT NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RunStatement(t.Context(), "INSERT INTO strict (id, code) VALUES (1,'x')"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, code FROM strict")
+	a.resultRow = 0
+	a.resultState.Cells = ui.ColumnRange{Cursor: "code", Anchor: "code"}
+	a.resultSel.Clear()
+	a.resultSel.Add(0)
+	tt.Frame()
+	tt.Key(ui.Ctrl|ui.Shift, ui.KeyN)
+	tt.Frame()
+	if _, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; ok {
+		t.Fatal("NOT NULL column must not be marked as NULL")
+	}
+	if !strings.Contains(a.consoleErr, "不可为空") {
+		t.Fatalf("expected NOT NULL hint, got %q", a.consoleErr)
+	}
+}
+
+func TestEditingNullStartsWithEmptyText(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users")
+	_ = tt
+	r := a.currentRuntime().Result()
+	if r == nil || a.editPlan == nil {
+		t.Fatalf("precondition: result=%v plan=%v reason=%q", r, a.editPlan, a.readonlyReason)
+	}
+	a.beginEditAt(r, 0, 1)
+	if !a.inlineEditOn || a.inlineEditText != "" {
+		t.Fatalf("NULL cell must open an empty editor, got inline=%v text=%q", a.inlineEditOn, a.inlineEditText)
+	}
+	a.commitInlineEdit()
+	if _, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; ok {
+		t.Fatal("saving an empty editor over NULL must not create a fake change")
+	}
+}
+
+func TestParseEditValueKeepsDatetimeStrings(t *testing.T) {
+	cases := []struct {
+		in   string
+		want any
+	}{
+		{"2026-10-09 19:17:45", "2026-10-09 19:17:45"},
+		{"2026-10-09T19:17:45+08:00", "2026-10-09T19:17:45+08:00"},
+		{"42", int64(42)},
+		{"-7", int64(-7)},
+		{"3.5", 3.5},
+		{"12abc", "12abc"},
+		{"NULL", nil},
+	}
+	for _, c := range cases {
+		if got := parseEditValue(c.in); got != c.want {
+			t.Fatalf("parseEditValue(%q) = %#v (%T), want %#v", c.in, got, got, c.want)
+		}
+	}
+	if got := parseEditedValue(nil, ""); got != nil {
+		t.Fatalf("empty editor over NULL must stay NULL, got %#v", got)
+	}
+	if got := parseEditedValue("x", ""); got != "" {
+		t.Fatalf("empty editor over text must become empty string, got %#v", got)
+	}
+}
+
+func TestNewExecutionDiscardsEditState(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice'),(2,'bob')"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users ORDER BY id")
+	a.setCellEdit(0, 1, "alice2")
+	a.resView.sortBy(a.currentRuntime().Result(), 1, true)
+	a.resView.setFilter(1, "ali")
+	if a.editSet().Count() == 0 {
+		t.Fatal("precondition: pending edit")
+	}
+	tt = runEditQuery(t, a, "SELECT id, name FROM users WHERE id = 2")
+	tt.Frame()
+	if got := a.editSet().Count(); got != 0 {
+		t.Fatalf("new execution must discard the old edit set, got %d pending changes", got)
+	}
+	if _, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; ok {
+		t.Fatal("old pending cell leaked into the new result")
+	}
+	if a.resView.sortCol != -1 || len(a.resView.filters) != 0 {
+		t.Fatalf("view cache leaked: sort=%d filters=%v", a.resView.sortCol, a.resView.filters)
+	}
+}
+
+func TestPinnedResultKeepsEditState(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice'),(2,'bob')"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users ORDER BY id")
+	a.setCellEdit(0, 1, "alice2")
+	a.togglePin()
+	if len(a.stmtRuns) != 1 || !a.stmtRuns[0].pinned {
+		t.Fatalf("pin failed: %+v", a.stmtRuns)
+	}
+	pinID := a.stmtRuns[0].runtimeID
+	if v, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; !ok || v != "alice2" {
+		t.Fatalf("pending edit must follow the pin, got %v (set=%v)", v, ok)
+	}
+
+	tt = runEditQuery(t, a, "SELECT id, name FROM users WHERE id = 2")
+	if got := a.editSet().Count(); got != 0 {
+		t.Fatalf("new result must start clean, got %d pending changes", got)
+	}
+
+	found := false
+	for i, run := range a.stmtRuns {
+		if run.runtimeID == pinID {
+			a.activeStmt = i
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("pinned run missing: %+v", a.stmtRuns)
+	}
+	tt.Frame()
+	if a.editPlan == nil {
+		t.Fatalf("pinned result must stay editable: %q", a.readonlyReason)
+	}
+	if v, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; !ok || v != "alice2" {
+		t.Fatalf("switching back must restore the pending edit, got %v (set=%v)", v, ok)
+	}
+}

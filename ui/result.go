@@ -47,8 +47,9 @@ func (a *root) cursorDataCol(r *engine.QueryResult) int {
 
 // copyCurrentCell 复制当前选区（多格时按 TSV）或光标所在单元格（Ctrl+C 与「复制」按钮共用）。
 func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
+	kind := a.connKind()
 	if rows, cols, multi := a.resultSelection(r); multi {
-		c.WriteClipboard(rowsTSV(r, rows, cols, false))
+		c.WriteClipboard(rowsTSVFor(kind, r, rows, cols, false))
 		return
 	}
 	col := a.cursorDataCol(r)
@@ -56,7 +57,7 @@ func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
 	if r == nil || row < 0 || col < 0 || col >= len(r.Columns) {
 		return
 	}
-	c.WriteClipboard(cellString(r.Rows[row][col]))
+	c.WriteClipboard(cellStringFor(kind, r, col, r.Rows[row][col]))
 }
 
 // resultSelection 返回当前单元格块选中的结果行与数据列下标（都按显示顺序），
@@ -89,7 +90,7 @@ func (a *root) resultSelection(r *engine.QueryResult) (rows, cols []int, multi b
 }
 
 // blockCSV 把选区写成 CSV（与导出同一套转义；二进制给 base64 摘要）。
-func blockCSV(r *engine.QueryResult, rows, cols []int, header bool) string {
+func blockCSV(kind string, r *engine.QueryResult, rows, cols []int, header bool) string {
 	var b bytes.Buffer
 	w := csv.NewWriter(&b)
 	if header {
@@ -102,7 +103,7 @@ func blockCSV(r *engine.QueryResult, rows, cols []int, header bool) string {
 	for _, row := range rows {
 		rec := make([]string, len(cols))
 		for i, col := range cols {
-			rec[i] = cellString(cellAt(r.Rows[row], col))
+			rec[i] = cellStringFor(kind, r, col, cellAt(r.Rows[row], col))
 		}
 		_ = w.Write(rec)
 	}
@@ -280,7 +281,7 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
 		v = pending
 	}
-	text, isJSON := formatCellValue(v)
+	text, isJSON := formatCellText(cellStringFor(a.connKind(), r, col, v))
 	a.cellViewTitle = r.Columns[col]
 	if isJSON {
 		a.cellViewTitle += "（JSON）"
@@ -715,6 +716,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	// （mygo 要求两者都有），点击会同时移动行与列光标。
 	if a.lastResult != r {
 		a.lastResult = r
+		a.resView.clear()
 		a.resultSel.Clear()
 		a.stopInlineEdit()
 		// 列光标默认落在第一列数据（不是行号列），未点击时的复制/查看也有目标。
@@ -732,6 +734,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		Row:      c.Theme().Accent.Alpha(0.12),
 		Stripe:   c.Theme().Text.Alpha(0.035),
 	}
+	kind := a.connKind()
 	a.resultState.CellMenu = func(m *ui.Menu, row, col int) {
 		// resultRow 与 Table 一致，存「显示顺序」；取数据时再映射到结果行。
 		a.resultRow = row
@@ -739,15 +742,15 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		dataCol := col - 1 // 第 0 列是行号
 		if dataCol >= 0 && dataCol < len(r.Columns) {
 			if m.Item("复制单元格").Chosen() {
-				c.WriteClipboard(cellString(r.Rows[row][dataCol]))
+				c.WriteClipboard(cellStringFor(kind, r, dataCol, r.Rows[row][dataCol]))
 			}
 		}
 		if m.Item("复制本行").Chosen() {
-			c.WriteClipboard(rowsTSV(r, []int{row}, dataCols(r), false))
+			c.WriteClipboard(rowsTSVFor(kind, r, []int{row}, dataCols(r), false))
 		}
 		if it := m.Item("复制本行 → INSERT"); it.Chosen() {
 			if table, ok := a.rowTable(); ok {
-				c.WriteClipboard(insertSQL(a.connKind(), table, r.Columns, r.Rows[row]))
+				c.WriteClipboard(insertSQLFor(kind, table, r.Columns, r.ColumnTypes, r.Rows[row]))
 			}
 		} else if table, ok := a.rowTable(); !ok {
 			_ = table
@@ -755,13 +758,13 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if rows, cols, multi := a.resultSelection(r); multi {
 			m.Submenu("复制选区", func(sm *ui.Menu) {
 				if sm.Item("TSV").Chosen() {
-					c.WriteClipboard(rowsTSV(r, rows, cols, false))
+					c.WriteClipboard(rowsTSVFor(kind, r, rows, cols, false))
 				}
 				if sm.Item("TSV（含表头）").Chosen() {
-					c.WriteClipboard(rowsTSV(r, rows, cols, true))
+					c.WriteClipboard(rowsTSVFor(kind, r, rows, cols, true))
 				}
 				if sm.Item("CSV").Chosen() {
-					c.WriteClipboard(blockCSV(r, rows, cols, false))
+					c.WriteClipboard(blockCSV(kind, r, rows, cols, false))
 				}
 			})
 			_, hasTable := a.rowTable()
@@ -783,7 +786,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if a.editPlan != nil && dataCol >= 0 {
 			if it := m.Item("编辑单元格…"); it.Disabled(!a.editPlan.Editable[dataCol]).Chosen() {
 				a.editCellRow, a.editCellCol = row, dataCol
-				a.editCellText = cellString(cellValueOf(r, row, dataCol))
+				a.editCellText = editTextFor(kind, r, dataCol, a.editCellValue(row, dataCol))
 				a.editCellOpen = true
 			}
 			if a.editPlan.Editable[dataCol] && m.Item("设为 NULL").Chosen() {
@@ -850,7 +853,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if pending, ok := editSet.Cells[app.CellKey{Row: ri, Col: col - 1}]; ok {
 			v = pending
 		}
-		txt := ui.Text(c, cellText(v)).SingleLine()
+		txt := ui.Text(c, cellTextFor(kind, r, col-1, v)).SingleLine()
 		if editSet.Deletes[ri] {
 			txt.TextColor(c.Theme().TextMuted)
 			return
@@ -904,11 +907,11 @@ func cellText(v any) string {
 		// []byte 既可能是 MySQL 的 TEXT/VARCHAR（应渲染文本），也可能是真正的二进制
 		// （BLOB）。合法 UTF-8 且无 NUL 时按文本渲染，否则给字节数摘要。
 		if isTextBytes(t) {
-			return cutRunes(string(t), 512)
+			return string(t)
 		}
 		return fmt.Sprintf("[%d bytes]", len(t))
 	case string:
-		return cutRunes(t, 512)
+		return t
 	default:
 		return fmt.Sprint(t)
 	}
@@ -968,7 +971,7 @@ func resultWidths(r *engine.QueryResult) []float32 {
 			if i >= len(row) {
 				continue
 			}
-			if u := displayWidth(cellText(row[i])); u > units {
+			if u := displayWidth(cutRunes(cellText(row[i]), 128)); u > units {
 				units = u
 			}
 		}

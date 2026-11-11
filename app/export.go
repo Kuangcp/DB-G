@@ -29,6 +29,39 @@ func QuoteValue(v any) string { return QuoteValueFor("", v) }
 // MySQL/ClickHouse 的字符串支持反斜杠转义，必须把 JSON 里的 \ 和 \" 再转义一层；
 // PostgreSQL/SQLite 默认把反斜杠当普通字符，只能双写单引号。
 func QuoteValueFor(kind string, v any) string {
+	return QuoteValueForType(kind, "", v)
+}
+
+// MySQLDateTimeType 报告 DatabaseTypeName 是否是 MySQL 的 DATETIME/TIMESTAMP。
+// 只看 time.Time 无法区分 DATE：ParseTime 下 MySQL 的 DATE 也会解析成 time.Time。
+func MySQLDateTimeType(dbType string) bool {
+	switch strings.ToUpper(strings.TrimSpace(dbType)) {
+	case "DATETIME", "TIMESTAMP":
+		return true
+	}
+	return false
+}
+
+// MySQLDateTimeText 把时间渲染成 MySQL 惯用的字面量：YYYY-MM-DD HH:MM:SS[.ffffff]。
+// 有小微秒时最多保留 6 位并去掉尾零（MySQL 的小数秒精度上限是 6）。
+func MySQLDateTimeText(t time.Time) string {
+	if t.IsZero() {
+		return "0000-00-00 00:00:00"
+	}
+	if t.Nanosecond() != 0 {
+		return t.Format("2006-01-02 15:04:05.999999")
+	}
+	return t.Format("2006-01-02 15:04:05")
+}
+
+// QuoteValueForType 在 QuoteValueFor 基础上带列类型：MySQL DATETIME/TIMESTAMP
+// 用 "YYYY-MM-DD HH:MM:SS" 字面量，其余情况保持原行为。
+func QuoteValueForType(kind, dbType string, v any) string {
+	if kind == "mysql" && MySQLDateTimeType(dbType) {
+		if t, ok := v.(time.Time); ok {
+			return quoteSQLString(kind, MySQLDateTimeText(t))
+		}
+	}
 	switch t := v.(type) {
 	case nil:
 		return "NULL"
@@ -36,7 +69,7 @@ func QuoteValueFor(kind string, v any) string {
 		return quoteSQLString(kind, t)
 	case []byte:
 		if utf8.Valid(t) && !hasControl(t) {
-			return QuoteValueFor(kind, string(t))
+			return QuoteValueForType(kind, dbType, string(t))
 		}
 		return "NULL"
 	case bool:
@@ -77,16 +110,24 @@ func quoteSQLString(kind, s string) string {
 	return "'" + s + "'"
 }
 
-// InsertStatement 生成一条 INSERT。
+// InsertStatement 生成一条 INSERT（不带列类型）。
 func InsertStatement(kind, table string, cols []string, row []any) string {
+	return InsertStatementFor(kind, table, cols, nil, row)
+}
+
+// InsertStatementFor 生成一条 INSERT；types 与 cols 对齐，供 MySQL 时间列选对字面量。
+func InsertStatementFor(kind, table string, cols, types []string, row []any) string {
 	quoted := make([]string, len(cols))
 	values := make([]string, len(cols))
 	for i, c := range cols {
 		quoted[i] = QuoteIdent(kind, c)
-		if i < len(row) {
-			values[i] = QuoteValueFor(kind, row[i])
-		} else {
+		switch {
+		case i >= len(row):
 			values[i] = "NULL"
+		case i < len(types):
+			values[i] = QuoteValueForType(kind, types[i], row[i])
+		default:
+			values[i] = QuoteValueFor(kind, row[i])
 		}
 	}
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);",

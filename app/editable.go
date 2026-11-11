@@ -12,6 +12,7 @@ import (
 type ColumnInfo struct {
 	Name       string
 	Type       string
+	Nullable   bool
 	PrimaryKey bool
 }
 
@@ -21,6 +22,7 @@ type EditPlan struct {
 	Table    string
 	Columns  []string // 结果列（必须都能在表列里找到）
 	Editable []bool   // 每列是否可改（主键列不可改）
+	Nullable []bool   // 每列是否允许 NULL（设 NULL 快捷键用）
 	PKIdx    []int    // 主键列在结果里的下标
 	PKNames  []string
 }
@@ -65,6 +67,7 @@ func BuildEditPlan(kind, table string, resultCols []string, tableCols []ColumnIn
 			return nil, fmt.Errorf("%w：结果列 %q 不在表 %s 里（别名/表达式只读）", ErrColumnRange, name, table)
 		}
 		plan.Editable = append(plan.Editable, !col.PrimaryKey)
+		plan.Nullable = append(plan.Nullable, col.Nullable)
 	}
 	for _, pk := range pkNames {
 		idx := -1
@@ -170,7 +173,7 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 			continue
 		}
 		old := cellValue(rows[k.Row], k.Col)
-		if equalCell(old, e.Cells[k]) {
+		if EqualCell(old, e.Cells[k]) {
 			continue
 		}
 		keys = append(keys, k)
@@ -296,8 +299,8 @@ func cellValue(row []any, col int) any {
 	return row[col]
 }
 
-// equalCell 比较两个单元格值（[]byte 按文本/字节比较）。
-func equalCell(a, b any) bool {
+// EqualCell 比较两个单元格值（[]byte 按文本/字节比较）。
+func EqualCell(a, b any) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}

@@ -30,10 +30,39 @@ func cellString(v any) string {
 	}
 }
 
-// formatCellValue 返回查看器里的文本：JSON 美化（仅当原值是合法 JSON 对象/数组），
+// resultColumnType 返回结果里某列的数据库类型名；驱动未提供时为空。
+func resultColumnType(r *engine.QueryResult, col int) string {
+	if r == nil || col < 0 || col >= len(r.ColumnTypes) {
+		return ""
+	}
+	return r.ColumnTypes[col]
+}
+
+// cellStringFor 返回某列值的完整文本。MySQL 的 DATETIME/TIMESTAMP 用
+// YYYY-MM-DD HH:MM:SS[.ffffff]，方便复制出去直接写 SQL；其它列保持原样。
+func cellStringFor(kind string, r *engine.QueryResult, col int, v any) string {
+	if kind == "mysql" && app.MySQLDateTimeType(resultColumnType(r, col)) {
+		if t, ok := v.(time.Time); ok {
+			return app.MySQLDateTimeText(t)
+		}
+	}
+	return cellString(v)
+}
+
+// cellTextFor 是表格单元格的展示文本：MySQL DATETIME/TIMESTAMP 用
+// YYYY-MM-DD HH:MM:SS[.ffffff]，其余列保持 cellText 的截断/二进制摘要行为。
+func cellTextFor(kind string, r *engine.QueryResult, col int, v any) string {
+	if kind == "mysql" && app.MySQLDateTimeType(resultColumnType(r, col)) {
+		if t, ok := v.(time.Time); ok {
+			return app.MySQLDateTimeText(t)
+		}
+	}
+	return cellText(v)
+}
+
+// formatCellText 返回查看器里的文本：JSON 美化（仅当文本是合法 JSON 对象/数组），
 // 否则返回原文本并 isJSON=false。
-func formatCellValue(v any) (string, bool) {
-	text := cellString(v)
+func formatCellText(text string) (string, bool) {
 	trimmed := strings.TrimSpace(text)
 	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
 		return text, false
@@ -53,8 +82,8 @@ func tsvField(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-// rowsTSV 把选中的行与列拼成 TSV（rowIdx 为结果行下标顺序，colsIdx 为数据列下标）。
-func rowsTSV(r *engine.QueryResult, rowIdx, colsIdx []int, header bool) string {
+// rowsTSVFor 把选中的行与列拼成 TSV（rowIdx 为结果行下标顺序，colsIdx 为数据列下标）。
+func rowsTSVFor(kind string, r *engine.QueryResult, rowIdx, colsIdx []int, header bool) string {
 	var b strings.Builder
 	if header && len(colsIdx) > 0 {
 		heads := make([]string, len(colsIdx))
@@ -73,7 +102,7 @@ func rowsTSV(r *engine.QueryResult, rowIdx, colsIdx []int, header bool) string {
 		fields := make([]string, len(colsIdx))
 		for i, c := range colsIdx {
 			if c >= 0 && c < len(r.Rows[row]) {
-				fields[i] = tsvField(cellString(r.Rows[row][c]))
+				fields[i] = tsvField(cellStringFor(kind, r, c, r.Rows[row][c]))
 			} else {
 				fields[i] = "NULL"
 			}
@@ -84,7 +113,8 @@ func rowsTSV(r *engine.QueryResult, rowIdx, colsIdx []int, header bool) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// insertSQL 生成「复制本行 → INSERT」语句（与导出共用同一套转义）。
-func insertSQL(kind, table string, cols []string, row []any) string {
-	return app.InsertStatement(kind, table, cols, row)
+// insertSQLFor 生成「复制本行 → INSERT」语句（与导出共用同一套转义）。
+// types 与 cols 对齐，MySQL DATETIME/TIMESTAMP 用 SQL 友好字面量。
+func insertSQLFor(kind, table string, cols, types []string, row []any) string {
+	return app.InsertStatementFor(kind, table, cols, types, row)
 }

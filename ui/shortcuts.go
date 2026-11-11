@@ -57,6 +57,12 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		a.requestAICompletion()
 	case "copyCell":
 		a.copyCurrentCell(c, a.currentRuntime().Result())
+	case "setNull":
+		if a.resultsHidden || a.inlineEditOn || a.editCellOpen || a.cellViewOpen ||
+			a.filterOpen || a.previewOpen || a.aiChat.open {
+			return
+		}
+		a.setSelectedNull(a.currentRuntime().Result())
 	case "nextConsole":
 		a.switchToRecentConsole()
 	case "toggleResults":

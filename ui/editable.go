@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,6 +21,23 @@ func (a *root) editStateKey(r *engine.QueryResult) string {
 		return ""
 	}
 	return fmt.Sprintf("%s|%p|%d", a.currentRuntimeID(), r, len(r.Rows))
+}
+
+// discardEditState 丢弃某个运行态的编辑缓存。执行新语句替换结果时调用；
+// 钉住的结果有自己的运行态 id，不会被这里动到。
+func (a *root) discardEditState(id string) {
+	if a.editSets != nil {
+		delete(a.editSets, id)
+	}
+	if id != a.currentRuntimeID() {
+		return
+	}
+	a.editKey = ""
+	a.editPlan = nil
+	a.readonlyReason = ""
+	a.stopInlineEdit()
+	a.editCellOpen = false
+	a.previewOpen = false
 }
 
 // ensureEditState 在结果变化时重算可编辑计划（只读原因也一并算出）。
@@ -86,7 +104,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	}
 	infos := make([]app.ColumnInfo, 0, len(cols[0]))
 	for _, c := range cols[0] {
-		infos = append(infos, app.ColumnInfo{Name: c.Name, Type: c.Type, PrimaryKey: c.PrimaryKey})
+		infos = append(infos, app.ColumnInfo{Name: c.Name, Type: c.Type, Nullable: c.Nullable, PrimaryKey: c.PrimaryKey})
 	}
 	plan, err := app.BuildEditPlan(a.connKind(), table, r.Columns, infos)
 	if err != nil {
@@ -122,6 +140,70 @@ func (a *root) setCellEdit(row, col int, v any) {
 		return
 	}
 	a.editSet().SetCell(row, col, v)
+}
+
+// setSelectedNull 把当前选中的所有单元格标成 NULL（本地待提交改动）。
+// 主键/只读列与 NOT NULL 列跳过；一格都没改动时在顶栏说明原因。
+func (a *root) setSelectedNull(r *engine.QueryResult) {
+	if r == nil || !r.IsQuery {
+		return
+	}
+	if a.editPlan == nil {
+		if a.readonlyReason != "" {
+			a.consoleErr = "只读：" + a.readonlyReason
+		}
+		return
+	}
+	rows, cols, _ := a.resultSelection(r)
+	if len(rows) == 0 || len(cols) == 0 {
+		row := a.displayToResult(r, a.resultRow)
+		col := a.cursorDataCol(r)
+		if row < 0 || col < 0 {
+			return
+		}
+		rows, cols = []int{row}, []int{col}
+	}
+	es := a.editSet()
+	changed, readonly, nullCol := 0, 0, ""
+	for _, row := range rows {
+		if row < 0 || row >= len(r.Rows) || es.Deletes[row] {
+			continue
+		}
+		for _, col := range cols {
+			if col < 0 || col >= len(a.editPlan.Columns) {
+				continue
+			}
+			if !a.editPlan.Editable[col] {
+				readonly++
+				continue
+			}
+			if col >= len(a.editPlan.Nullable) || !a.editPlan.Nullable[col] {
+				if nullCol == "" {
+					nullCol = a.editPlan.Columns[col]
+				}
+				continue
+			}
+			key := app.CellKey{Row: row, Col: col}
+			if cur, ok := es.Cells[key]; ok {
+				if cur == nil {
+					continue // 已经是 NULL
+				}
+			} else if cellValueOf(r, row, col) == nil {
+				continue
+			}
+			es.SetCell(row, col, nil)
+			changed++
+		}
+	}
+	if changed > 0 {
+		return
+	}
+	switch {
+	case nullCol != "":
+		a.consoleErr = "列 " + nullCol + " 不可为空"
+	case readonly > 0:
+		a.consoleErr = "主键列不可设为 NULL"
+	}
 }
 
 // clearRowEdit 还原一行（取消删除标记或丢弃该行改格）。
@@ -279,7 +361,7 @@ func (a *root) editCellModal(c *ui.Context) {
 				a.editCellOpen = false
 			}
 			if ui.PrimaryButton(c, "保存").Clicked() {
-				a.setCellEdit(a.editCellRow, a.editCellCol, parseEditValue(a.editCellText))
+				a.commitCellEdit(a.editCellRow, a.editCellCol, a.editCellText)
 				a.editCellOpen = false
 			}
 		})
@@ -308,30 +390,28 @@ func (a *root) previewModal(c *ui.Context) {
 	})
 }
 
-// parseEditValue 把输入的文本变成值：能解析成数字就数字，否则字符串；"NULL" 视为 NULL。
+// parseEditValue 把输入的文本变成值：整串是数字才数字，否则字符串；"NULL" 视为 NULL。
+// 必须用 strconv 而不是 fmt.Sscan：Sscan 会把 "2026-10-09 19:17:45" 只解析出开头的 2026。
 func parseEditValue(s string) any {
 	if s == "NULL" {
 		return nil
 	}
-	if n, err := parseInt(s); err == nil {
+	t := strings.TrimSpace(s)
+	if n, err := strconv.ParseInt(t, 10, 64); err == nil {
 		return n
 	}
-	if f, err := parseFloat(s); err == nil {
+	if f, err := strconv.ParseFloat(t, 64); err == nil {
 		return f
 	}
 	return s
 }
 
-func parseInt(s string) (int64, error) {
-	var n int64
-	_, err := fmt.Sscan(s, &n)
-	return n, err
-}
-
-func parseFloat(s string) (float64, error) {
-	var f float64
-	_, err := fmt.Sscan(s, &f)
-	return f, err
+// parseEditedValue 把编辑框文本变成值：原本是 NULL 且文本为空时保持 NULL。
+func parseEditedValue(original any, s string) any {
+	if original == nil && s == "" {
+		return nil
+	}
+	return parseEditValue(s)
 }
 
 // editToolbar 渲染写操作按钮；只读时禁用并显示原因。
@@ -379,6 +459,15 @@ func inlineEditable(text string) bool {
 	return !strings.ContainsAny(text, "\r\n") && utf8.RuneCountInString(text) <= inlineEditMaxRunes
 }
 
+// editTextFor 是编辑框的预填文本：NULL 显示为空（不能把 "NULL" 当成可编辑内容），
+// 其余值沿用结果的显示格式。
+func editTextFor(kind string, r *engine.QueryResult, col int, v any) string {
+	if v == nil {
+		return ""
+	}
+	return cellStringFor(kind, r, col, v)
+}
+
 // beginEditAt 按内容长度选择行内编辑或弹窗编辑。
 func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Editable) {
@@ -394,9 +483,10 @@ func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 	if row < 0 || row >= len(r.Rows) {
 		return
 	}
-	text := cellString(cellValueOf(r, row, col))
+	kind := a.connKind()
+	text := editTextFor(kind, r, col, cellValueOf(r, row, col))
 	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
-		text = cellString(pending)
+		text = editTextFor(kind, r, col, pending)
 	}
 	if a.inlineEditOn {
 		a.stopInlineEdit()
@@ -423,9 +513,35 @@ func (a *root) stopInlineEdit() {
 	a.inlineEditText, a.inlineEditHadFocus = "", false
 }
 
+// commitCellEdit 把编辑框文本写进待提交改动：
+// 与当前值相同就什么都不改（NULL 格打开再保存不会产生空改动）；改回数据库原值则撤掉改动。
+func (a *root) commitCellEdit(row, col int, text string) {
+	if row < 0 || col < 0 {
+		return
+	}
+	cur := a.editCellValue(row, col)
+	next := parseEditedValue(cur, text)
+	if app.EqualCell(cur, next) {
+		return
+	}
+	if app.EqualCell(next, cellValueOf(a.currentRuntime().Result(), row, col)) {
+		a.editSet().ClearCell(row, col)
+		return
+	}
+	a.setCellEdit(row, col, next)
+}
+
+// editCellValue 返回某格当前生效的值（优先本地待提交改动）。
+func (a *root) editCellValue(row, col int) any {
+	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
+		return pending
+	}
+	return cellValueOf(a.currentRuntime().Result(), row, col)
+}
+
 // commitInlineEdit 把内联编辑写进待提交改动。
 func (a *root) commitInlineEdit() {
-	a.setCellEdit(a.inlineEditRow, a.inlineEditCol, parseEditValue(a.inlineEditText))
+	a.commitCellEdit(a.inlineEditRow, a.inlineEditCol, a.inlineEditText)
 	a.stopInlineEdit()
 }
 

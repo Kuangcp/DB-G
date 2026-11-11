@@ -54,6 +54,8 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Ctrl | ui.Shift, ui.KeyF}}},
 	{ID: "copyCell", Label: "复制当前单元格", Scope: scopeNoEditor,
 		Def: []chord{{ui.Ctrl, ui.KeyC}}},
+	{ID: "setNull", Label: "将选中单元格设为 NULL", Scope: scopeNoEditor,
+		Def: []chord{{ui.Ctrl | ui.Shift, ui.KeyN}}},
 	{ID: "nextConsole", Label: "切换到最近使用的控制台", Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyTab}}},
 	{ID: "toggleResults", Label: "显示/隐藏查询结果", Scope: scopeAlways,

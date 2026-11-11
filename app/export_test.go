@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExportCSVQuoting(t *testing.T) {
@@ -135,5 +136,56 @@ func TestSQLStringEscapingKeepsJSON(t *testing.T) {
 	ins := InsertStatement("mysql", "meeting_case3", []string{"id", "payload"}, row)
 	if !strings.Contains(ins, `C:\\\\tmp`) || !strings.Contains(ins, `say \\"hi\\"`) {
 		t.Fatalf("insert must use mysql escaping: %s", ins)
+	}
+}
+
+func TestMySQLDateTimeText(t *testing.T) {
+	zone := time.FixedZone("CST", 8*3600)
+	cases := []struct {
+		in   time.Time
+		want string
+	}{
+		{time.Date(2030, 11, 11, 18, 28, 47, 0, zone), "2030-11-11 18:28:47"},
+		{time.Date(2030, 11, 11, 18, 28, 47, 123456000, zone), "2030-11-11 18:28:47.123456"},
+		{time.Date(2030, 11, 11, 18, 28, 47, 500000000, zone), "2030-11-11 18:28:47.5"},
+		{time.Time{}, "0000-00-00 00:00:00"},
+	}
+	for _, c := range cases {
+		if got := MySQLDateTimeText(c.in); got != c.want {
+			t.Fatalf("MySQLDateTimeText(%v) = %q want %q", c.in, got, c.want)
+		}
+	}
+	for _, typ := range []string{"DATETIME", "timestamp", " DateTime "} {
+		if !MySQLDateTimeType(typ) {
+			t.Fatalf("%q 应当识别为 MySQL 日期时间", typ)
+		}
+	}
+	for _, typ := range []string{"DATE", "VARCHAR", "", "TIMESTAMP(6)"} {
+		if MySQLDateTimeType(typ) {
+			t.Fatalf("%q 不应识别为 MySQL DATETIME/TIMESTAMP", typ)
+		}
+	}
+}
+
+func TestInsertStatementWithColumnTypes(t *testing.T) {
+	zone := time.FixedZone("CST", 8*3600)
+	ts := time.Date(2030, 11, 11, 18, 28, 47, 0, zone)
+	cols := []string{"id", "created_at", "updated_at"}
+	types := []string{"BIGINT", "DATETIME", "TIMESTAMP"}
+	row := []any{int64(1), ts, ts}
+	got := InsertStatementFor("mysql", "t", cols, types, row)
+	want := "INSERT INTO `t` (`id`, `created_at`, `updated_at`) VALUES (1, '2030-11-11 18:28:47', '2030-11-11 18:28:47');"
+	if got != want {
+		t.Fatalf("typed insert:\n got %q\nwant %q", got, want)
+	}
+	// DATE 不走特殊格式，保持原有 RFC3339 行为。
+	got = InsertStatementFor("mysql", "t", []string{"d"}, []string{"DATE"}, []any{ts})
+	if !strings.Contains(got, "'2030-11-11T18:28:47+08:00'") {
+		t.Fatalf("DATE must keep RFC3339: %s", got)
+	}
+	// 非 MySQL 数据源不特殊处理。
+	got = InsertStatementFor("postgres", "t", []string{"ts"}, []string{"TIMESTAMP"}, []any{ts})
+	if !strings.Contains(got, "'2030-11-11T18:28:47+08:00'") {
+		t.Fatalf("postgres must keep RFC3339: %s", got)
 	}
 }

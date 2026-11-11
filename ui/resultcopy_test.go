@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"db-g/engine"
 )
 
 func TestCellStringFullValue(t *testing.T) {
@@ -45,13 +47,13 @@ func TestTSVFieldQuoting(t *testing.T) {
 
 func TestRowsTSV(t *testing.T) {
 	r := resultWith([]string{"id", "name"}, []any{int64(1), "alice"}, []any{int64(2), "bob\tx"})
-	got := rowsTSV(r, []int{0, 1}, []int{0, 1}, true)
+	got := rowsTSVFor("", r, []int{0, 1}, []int{0, 1}, true)
 	want := "id\tname\n1\talice\n2\t\"bob\tx\""
 	if got != want {
 		t.Fatalf("rowsTSV:\n%q\nwant\n%q", got, want)
 	}
 	// 只取第二行第二列
-	if got := rowsTSV(r, []int{1}, []int{1}, false); got != "\"bob\tx\"" {
+	if got := rowsTSVFor("", r, []int{1}, []int{1}, false); got != "\"bob\tx\"" {
 		t.Fatalf("subset: %q", got)
 	}
 }
@@ -59,29 +61,29 @@ func TestRowsTSV(t *testing.T) {
 func TestInsertSQL(t *testing.T) {
 	cols := []string{"id", "name", "note"}
 	row := []any{int64(1), "O'Reilly", nil}
-	got := insertSQL("sqlite", "users", cols, row)
+	got := insertSQLFor("sqlite", "users", cols, nil, row)
 	want := `INSERT INTO "users" ("id", "name", "note") VALUES (1, 'O''Reilly', NULL);`
 	if got != want {
 		t.Fatalf("sqlite insert:\n%q\nwant\n%q", got, want)
 	}
-	got = insertSQL("mysql", "users", cols, row)
+	got = insertSQLFor("mysql", "users", cols, nil, row)
 	want = "INSERT INTO `users` (`id`, `name`, `note`) VALUES (1, 'O''Reilly', NULL);"
 	if got != want {
 		t.Fatalf("mysql insert:\n%q\nwant\n%q", got, want)
 	}
 	// 字节文本按字符串转义；换行保留在引号内
-	got = insertSQL("sqlite", "t", []string{"c"}, []any{[]byte("a\nb")})
+	got = insertSQLFor("sqlite", "t", []string{"c"}, nil, []any{[]byte("a\nb")})
 	if !strings.Contains(got, "'a\nb'") {
 		t.Fatalf("bytes insert: %q", got)
 	}
 }
 
 func TestFormatCellValueJSON(t *testing.T) {
-	text, isJSON := formatCellValue([]byte(`{"a":1}`))
+	text, isJSON := formatCellText(cellString([]byte(`{"a":1}`)))
 	if !isJSON || !strings.Contains(text, "\n") || !strings.Contains(text, `"a": 1`) {
 		t.Fatalf("json formatted: %q isJSON=%v", text, isJSON)
 	}
-	text, isJSON = formatCellValue("not json")
+	text, isJSON = formatCellText("not json")
 	if isJSON || text != "not json" {
 		t.Fatalf("plain: %q %v", text, isJSON)
 	}
@@ -89,13 +91,65 @@ func TestFormatCellValueJSON(t *testing.T) {
 
 func TestInsertSQLKeepsJSONStructure(t *testing.T) {
 	payload := `{"path":"C:\\tmp","quote":"say \"hi\"","name":"O'Reilly"}`
-	got := insertSQL("mysql", "meeting_case3", []string{"payload"}, []any{payload})
+	got := insertSQLFor("mysql", "meeting_case3", []string{"payload"}, nil, []any{payload})
 	if !strings.Contains(got, `C:\\\\tmp`) || !strings.Contains(got, `say \\"hi\\"`) ||
 		!strings.Contains(got, `O''Reilly`) {
 		t.Fatalf("mysql JSON escaping: %s", got)
 	}
-	got = insertSQL("postgres", "meeting_case3", []string{"payload"}, []any{payload})
+	got = insertSQLFor("postgres", "meeting_case3", []string{"payload"}, nil, []any{payload})
 	if !strings.Contains(got, `C:\\tmp`) || !strings.Contains(got, `say \"hi\"`) {
 		t.Fatalf("postgres JSON escaping: %s", got)
+	}
+}
+
+func TestCellStringForMySQLDateTime(t *testing.T) {
+	zone := time.FixedZone("CST", 8*3600)
+	ts := time.Date(2030, 11, 11, 18, 28, 47, 0, zone)
+	r := &engine.QueryResult{
+		IsQuery:     true,
+		Columns:     []string{"created_at", "updated_at", "day"},
+		ColumnTypes: []string{"DATETIME", "TIMESTAMP", "DATE"},
+		Rows:        [][]any{{ts, ts, ts}},
+	}
+	if got := cellStringFor("mysql", r, 0, ts); got != "2030-11-11 18:28:47" {
+		t.Fatalf("DATETIME = %q", got)
+	}
+	if got := cellStringFor("mysql", r, 1, ts); got != "2030-11-11 18:28:47" {
+		t.Fatalf("TIMESTAMP = %q", got)
+	}
+	if got := cellStringFor("mysql", r, 2, ts); got != "2030-11-11T18:28:47+08:00" {
+		t.Fatalf("DATE must keep RFC3339, got %q", got)
+	}
+	if got := cellStringFor("sqlite", r, 0, ts); got != "2030-11-11T18:28:47+08:00" {
+		t.Fatalf("non-mysql must keep RFC3339, got %q", got)
+	}
+	if got := cellStringFor("mysql", r, 0, nil); got != "NULL" {
+		t.Fatalf("nil = %q", got)
+	}
+	if got := cellTextFor("mysql", r, 0, ts); got != "2030-11-11 18:28:47" {
+		t.Fatalf("table text = %q", got)
+	}
+}
+
+func TestRowsTSVForMySQLDateTime(t *testing.T) {
+	zone := time.FixedZone("CST", 8*3600)
+	ts := time.Date(2030, 11, 11, 18, 28, 47, 0, zone)
+	r := &engine.QueryResult{
+		IsQuery:     true,
+		Columns:     []string{"id", "created_at"},
+		ColumnTypes: []string{"BIGINT", "DATETIME"},
+		Rows:        [][]any{{int64(1), ts}},
+	}
+	if got, want := rowsTSVFor("mysql", r, []int{0}, []int{0, 1}, true),
+		"id\tcreated_at\n1\t2030-11-11 18:28:47"; got != want {
+		t.Fatalf("TSV:\n got %q\nwant %q", got, want)
+	}
+	got := blockCSV("mysql", r, []int{0}, []int{1}, false)
+	if got != "2030-11-11 18:28:47" {
+		t.Fatalf("CSV = %q", got)
+	}
+	got = insertSQLFor("mysql", "t", r.Columns, r.ColumnTypes, r.Rows[0])
+	if !strings.Contains(got, "'2030-11-11 18:28:47'") {
+		t.Fatalf("typed insert = %q", got)
 	}
 }

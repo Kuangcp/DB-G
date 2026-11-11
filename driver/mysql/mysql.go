@@ -179,6 +179,12 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 		return nil, err
 	}
 	out := &engine.QueryResult{Columns: cols, IsQuery: true}
+	if cts, err := rows.ColumnTypes(); err == nil && len(cts) == len(cols) {
+		out.ColumnTypes = make([]string, len(cols))
+		for i, ct := range cts {
+			out.ColumnTypes[i] = ct.DatabaseTypeName()
+		}
+	}
 	total := 0
 	for rows.Next() {
 		if len(out.Rows) == rowLimit {

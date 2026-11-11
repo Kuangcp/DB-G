@@ -116,10 +116,13 @@ func TestCellTextAndCutRunes(t *testing.T) {
 	if got := cellText([]byte{0xff, 0xfe}); got != "[2 bytes]" {
 		t.Fatalf("invalid UTF-8 must stay binary → %q", got)
 	}
-	longBytes := []byte(strings.Repeat("好", 600))
-	cut := cellText(longBytes)
-	if !strings.HasSuffix(cut, "…") || len([]rune(cut)) != 513 {
-		t.Fatalf("long text []byte must be cut like string, runes=%d", len([]rune(cut)))
+	longText := strings.Repeat("好", 600)
+	if got := cellText(longText); got != longText {
+		t.Fatalf("long string must stay complete, runes=%d", len([]rune(got)))
+	}
+	longBytes := []byte(longText)
+	if got := cellText(longBytes); got != longText {
+		t.Fatalf("long text []byte must stay complete, runes=%d", len([]rune(got)))
 	}
 	if got := cellText(int64(42)); got != "42" {
 		t.Fatalf("int64 → %q", got)

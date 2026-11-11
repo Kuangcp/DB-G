@@ -99,6 +99,10 @@ func (a *root) rekeyRuntime(oldID, newID string) {
 		a.fetchStates[newID] = fs
 		delete(a.fetchStates, oldID)
 	}
+	if es, ok := a.editSets[oldID]; ok {
+		a.editSets[newID] = es
+		delete(a.editSets, oldID)
+	}
 }
 
 // togglePin 切换当前结果 tab 的钉住状态（仅查询结果）。钉住后立即移到 pin 区最右并选中；
@@ -207,11 +211,18 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 	kept := make([]stmtRun, 0, len(a.stmtRuns))
 	for _, run := range a.stmtRuns {
 		if owner[baseID(run.runtimeID)] {
+			a.discardEditState(run.runtimeID)
 			delete(a.consoles, run.runtimeID)
 			delete(a.fetchStates, run.runtimeID)
 			continue
 		}
 		kept = append(kept, run)
+	}
+	// 连没有结果 tab 的控制台编辑缓存也一起清掉（多语句的 id 是 console#i）。
+	for id := range a.editSets {
+		if owner[baseID(id)] {
+			delete(a.editSets, id)
+		}
 	}
 	a.stmtRuns = kept
 	if a.activeStmt >= len(kept) {
@@ -364,6 +375,7 @@ func (a *root) rerunQuery(sql string) {
 		app.LogWarn("exec", "rerun not started", "console", a.activeConsole)
 		return
 	}
+	a.discardEditState(rtID)
 	a.refreshStmtBackgrounds()
 }
 
@@ -403,10 +415,11 @@ func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 			pinned = append(pinned, run)
 			continue
 		}
-		// 丢弃的非 pinned 旧结果：连同 pin 专用运行态与分页缓存一起清理。
+		// 丢弃的非 pinned 旧结果：连同编辑状态、分页缓存与 pin 专用运行态一起清理。
+		a.discardEditState(run.runtimeID)
+		delete(a.fetchStates, run.runtimeID)
 		if strings.Contains(run.runtimeID, "#pin") {
 			delete(a.consoles, run.runtimeID)
-			delete(a.fetchStates, run.runtimeID)
 		}
 	}
 	multi := len(ranges) > 1
