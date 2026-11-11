@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -406,5 +407,63 @@ func TestResultSelectionCopyAndExport(t *testing.T) {
 	want := "id,name\n10,\"alice, A\"\n20,bob\n"
 	if string(data) != want {
 		t.Fatalf("exported CSV:\n%q\nwant:\n%q", data, want)
+	}
+}
+
+func TestCellViewerResizable(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"v"},
+		Rows:    [][]any{{strings.Repeat("长文本", 200)}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.openCellViewer(a.con.Result(), 0, 0)
+	tt.Frame()
+	if a.cellModalW <= 0 || a.cellModalH <= 0 {
+		t.Fatalf("size not initialized: %v×%v", a.cellModalW, a.cellModalH)
+	}
+	grip, ok := tt.Find("调整弹窗大小")
+	if !ok {
+		t.Fatalf("resize grip missing: %q", tt.Texts())
+	}
+	beforeW, beforeH := a.cellModalW, a.cellModalH
+	tt.Press(grip.X+grip.W/2, grip.Y+grip.H/2)
+	tt.Move(grip.X+grip.W/2+60, grip.Y+grip.H/2+30)
+	tt.Release(grip.X+grip.W/2+60, grip.Y+grip.H/2+30)
+	tt.Frame()
+	if a.cellModalW <= beforeW || a.cellModalH <= beforeH {
+		t.Fatalf("resize did not grow: before %v×%v after %v×%v", beforeW, beforeH, a.cellModalW, a.cellModalH)
+	}
+	if a.cellModalW > 1200-40 || a.cellModalH > 800-40 {
+		t.Fatalf("size escaped window: %v×%v", a.cellModalW, a.cellModalH)
+	}
+}
+
+func TestCellViewerSizesToContent(t *testing.T) {
+	short := newTestRoot()
+	short.con.SetOutcome(&engine.QueryResult{IsQuery: true, Columns: []string{"v"}, Rows: [][]any{{"hi"}}}, "")
+	ts := ui.NewTester(rootView(short), 1200, 800)
+	ts.Frame()
+	short.openCellViewer(short.con.Result(), 0, 0)
+	ts.Frame()
+	if short.cellModalW > 440 || short.cellModalH > 280 {
+		t.Fatalf("short text should use a small dialog: %v×%v", short.cellModalW, short.cellModalH)
+	}
+
+	big := newTestRoot()
+	payload := "{\n"
+	for i := range 80 {
+		payload += fmt.Sprintf("  %q: %q,\n", fmt.Sprintf("key%02d", i), strings.Repeat("值", i%20+1))
+	}
+	payload += "  \"end\": true\n}"
+	big.con.SetOutcome(&engine.QueryResult{IsQuery: true, Columns: []string{"json"}, Rows: [][]any{{payload}}}, "")
+	tb := ui.NewTester(rootView(big), 1200, 800)
+	tb.Frame()
+	big.openCellViewer(big.con.Result(), 0, 0)
+	tb.Frame()
+	if big.cellModalW < 500 || big.cellModalH < 600 {
+		t.Fatalf("large JSON should use a large dialog: %v×%v", big.cellModalW, big.cellModalH)
 	}
 }

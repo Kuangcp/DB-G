@@ -286,6 +286,7 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 		a.cellViewTitle += "（JSON）"
 	}
 	a.cellViewText = text
+	a.fitCellModal(text, isJSON)
 	a.cellViewJSON, a.cellViewJSONOK = nil, false
 	a.cellViewCollapsed = map[string]bool{}
 	// 避免对超大文本做树解析（解析与节点量都随大小爆炸），超出就退回纯文本。
@@ -316,6 +317,80 @@ func parseJSONValue(text string) (any, bool) {
 		return v, true
 	}
 	return nil, false
+}
+
+// 单元格查看/编辑弹窗的默认与最小尺寸；窗口再小时由 Modal 的 MaxWidth/MaxHeight 兜底。
+const (
+	cellModalDefaultW = 880
+	cellModalDefaultH = 660
+	cellModalMinW     = 360
+	cellModalMinH     = 240
+)
+
+// cellModalSize 返回查看/编辑弹窗当前尺寸；首次使用时补默认值。
+func (a *root) cellModalSize() (float32, float32) {
+	if a.cellModalW <= 0 {
+		a.cellModalW = cellModalDefaultW
+	}
+	if a.cellModalH <= 0 {
+		a.cellModalH = cellModalDefaultH
+	}
+	return a.cellModalW, a.cellModalH
+}
+
+// fitCellModal 按内容给查看/编辑弹窗一个合适的初始尺寸：短文本用小窗口，
+// 大段文本/复杂 JSON 才用默认大窗口；用户仍可拖拽右下角调整。
+func (a *root) fitCellModal(text string, isJSON bool) {
+	const charW = 7.5
+	minW, minH := float32(380), float32(220)
+	if isJSON {
+		minW, minH = 520, 380
+	}
+	lines := strings.Split(text, "\n")
+	maxRunes, total := 0, 0
+	for _, line := range lines {
+		n := utf8.RuneCountInString(line)
+		if n > maxRunes {
+			maxRunes = n
+		}
+		total += n
+	}
+	if total == 0 {
+		a.cellModalW, a.cellModalH = minW, minH
+		return
+	}
+	w := min(max(float32(maxRunes)*charW+100, minW), cellModalDefaultW)
+	perLine := max(int((w-60)/charW), 8)
+	wrapped := 0
+	for _, line := range lines {
+		n := utf8.RuneCountInString(line)
+		wrapped += max((n+perLine-1)/perLine, 1)
+	}
+	h := min(max(float32(wrapped)*20+110, minH), cellModalDefaultH)
+	a.cellModalW, a.cellModalH = w, h
+}
+
+// cellModalGrip 是弹窗右下角的拖拽调整大小手柄。面板在窗口里居中，
+// 所以右下角要跟住指针，宽高按两倍增量变化。
+func (a *root) cellModalGrip(c *ui.Context) {
+	a.cellModalSize()
+	grip := ui.Box(c).Absolute().Right(2).Bottom(2).Size(18, 18).Cursor(ui.CursorResizeNWSE).
+		Label("调整弹窗大小").Tooltip("拖拽调整弹窗大小")
+	col := c.Theme().TextMuted
+	if grip.Hovered() || grip.Pressed() {
+		col = c.Theme().Accent
+	}
+	grip.Draw(func(p *ui.Painter, r ui.Rect) {
+		var path ui.Path
+		path.MoveTo(r.X+r.W-4, r.Y+r.H-11).LineTo(r.X+r.W-11, r.Y+r.H-4)
+		path.MoveTo(r.X+r.W-4, r.Y+r.H-6).LineTo(r.X+r.W-6, r.Y+r.H-4)
+		p.StrokePath(&path, 1.5, col)
+	})
+	if dx, dy, held := grip.Dragged(); held {
+		w, h := c.Size()
+		a.cellModalW = min(max(a.cellModalW+2*dx, cellModalMinW), w-40)
+		a.cellModalH = min(max(a.cellModalH+2*dy, cellModalMinH), h-40)
+	}
 }
 
 // viewerToolbar 是单元格查看器的标题栏：标题在左，JSON 折叠控制与复制/关闭在右。
@@ -415,6 +490,7 @@ func (a *root) cellViewer(c *ui.Context) {
 	if !a.cellViewOpen {
 		return
 	}
+	w, h := a.cellModalSize()
 	ui.Modal(c, &a.cellViewOpen, func() {
 		a.viewerToolbar(c)
 		ui.ScrollBoth(c).Grow(1).Children(func() {
@@ -425,7 +501,8 @@ func (a *root) cellViewer(c *ui.Context) {
 			}
 			a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12))
 		})
-	}).Width(680).Height(500)
+		a.cellModalGrip(c)
+	}).Width(w).Height(h)
 }
 
 // jsonTree 递归渲染 JSON 节点；path 是折叠状态的键。

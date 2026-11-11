@@ -183,6 +183,8 @@ type root struct {
 	cellViewJSON        any // 解析后的 JSON（非 JSON 为 nil）
 	cellViewJSONOK      bool
 	cellViewCollapsed   map[string]bool // JSON 树里折叠的节点路径
+	cellModalW          float32         // 单元格查看/编辑弹窗宽度
+	cellModalH          float32         // 单元格查看/编辑弹窗高度
 	consoleErr          string
 	widthsFor           *engine.QueryResult
 	widths              []float32
@@ -228,6 +230,8 @@ func newRoot(text string) *root {
 		treeGroupStale:   map[string]bool{},
 		connFormKind:     "sqlite",
 		connFormTagColor: app.DefaultConnTagColor,
+		cellModalW:       cellModalDefaultW,
+		cellModalH:       cellModalDefaultH,
 		chords:           defaultChords(),
 		fontPrefs:        app.DefaultFontPrefs(),
 		themePrefs:       app.DefaultThemePrefs(),

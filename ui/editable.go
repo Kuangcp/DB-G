@@ -266,6 +266,7 @@ func (a *root) editCellModal(c *ui.Context) {
 	if !a.editCellOpen {
 		return
 	}
+	w, h := a.cellModalSize()
 	ui.Modal(c, &a.editCellOpen, func() {
 		ui.Text(c, fmt.Sprintf("编辑 %s · 第 %d 行", a.editPlan.Columns[a.editCellCol], a.editCellRow+1)).Bold()
 		ui.TextArea(c, &a.editCellText).AutoFocus().Grow(1)
@@ -282,7 +283,8 @@ func (a *root) editCellModal(c *ui.Context) {
 				a.editCellOpen = false
 			}
 		})
-	}).Width(680).Height(500)
+		a.cellModalGrip(c)
+	}).Width(w).Height(h)
 }
 
 // previewModal 渲染提交预览。
@@ -404,6 +406,7 @@ func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 		return
 	}
 	a.editCellRow, a.editCellCol, a.editCellText = row, col, text
+	a.fitCellModal(text, false)
 	a.editCellOpen = true
 }
 
