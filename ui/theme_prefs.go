@@ -8,25 +8,19 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	lobe "db-g/ui/lobe"
 )
 
 // applyTheme 在帧首应用外观设置；跟随系统且无覆盖时不调 SetTheme。
 // 功能界面字体单独于 theme.json，设置后强制 SetTheme（只改字体，不动桌面主题）。
 func (a *root) applyTheme(c *ui.Context) {
-	r := resolveTheme(c.Theme(), a.themePrefs, c.Preferences())
-	t := r.Theme
+	t := resolveTheme(c.Theme(), a.themePrefs, c.Preferences()).Theme
 	if fam := strings.TrimSpace(a.fontPrefs.UI); fam != "" {
-		if !r.Apply {
-			cp := *t
-			t = &cp
-		}
-		t.Font = fam
-		c.SetTheme(t)
-		return
+		cp := *t
+		cp.Font = fam
+		t = &cp
 	}
-	if r.Apply {
-		c.SetTheme(t)
-	}
+	c.SetTheme(t)
 }
 
 // resolvedThemeFor 是 resolvedTheme 的测试友好入口（用当前设置）。
@@ -85,11 +79,9 @@ func (a *root) saveThemePrefs() {
 	}()
 }
 
-// resolvedTheme 是外观设置解析后的主题：Apply=false 表示完全交给 mygo
-// 的默认主题（跟随系统且没有任何覆盖项）。
+// resolvedTheme 是外观设置解析后的主题。
 type resolvedTheme struct {
 	Theme *ui.Theme
-	Apply bool
 }
 
 // themeAccentPresets 是内置强调色（浅/深色共用，派生 hover/pressed）。
@@ -103,40 +95,26 @@ var themeAccentPresets = map[string]ui.Color{
 
 // resolveTheme 按外观设置算出这一帧要用的主题。
 //
-//	base 是 mygo 的默认主题（已跟随系统与桌面偏好）；
-//	desk 是桌面偏好（提供强调色与 TextScale）。
-//
-// mode=system 且无覆盖项时返回 Apply=false，确保 HighContrast 等桌面行为不丢。
+// 基底是 Lobe UI 的设计 token（随浅/深色切换），再覆盖用户的外观设置；
+// base 只用来判断系统模式下的深浅色。
 func resolveTheme(base *ui.Theme, p app.ThemePrefs, desk ui.Preferences) resolvedTheme {
 	prefs, _ := p.Normalize()
-	var t ui.Theme
+	dark := base.Dark
 	switch prefs.Mode {
-	case app.ThemeModeLight, app.ThemeModeDark:
-		if prefs.Mode == app.ThemeModeDark {
-			t = *ui.DarkTheme()
-		} else {
-			t = *ui.LightTheme()
+	case app.ThemeModeLight:
+		dark = false
+	case app.ThemeModeDark:
+		dark = true
+	}
+	t := lobeUITheme(dark)
+	if prefs.FontSize > 0 {
+		t.FontSize = float32(prefs.FontSize)
+	} else {
+		scale := desk.TextScale
+		if scale <= 0 {
+			scale = 1
 		}
-		// 显式模式不再经过 mygo 的内部 follow，手动应用桌面字号缩放。
-		if prefs.FontSize > 0 {
-			t.FontSize = float32(prefs.FontSize)
-		} else {
-			scale := desk.TextScale
-			if scale <= 0 {
-				scale = 1
-			}
-			t.FontSize *= scale
-		}
-	case app.ThemeModeSystem:
-		t = *base
-		if !themeHasOverrides(prefs) {
-			return resolvedTheme{Theme: base, Apply: false}
-		}
-		if prefs.FontSize > 0 {
-			t.FontSize = float32(prefs.FontSize)
-		}
-	default:
-		t = *base
+		t.FontSize *= scale
 	}
 	if color, ok := themeAccent(prefs.Accent, &t, desk); ok {
 		applyThemeAccent(&t, color)
@@ -150,15 +128,18 @@ func resolveTheme(base *ui.Theme, p app.ThemePrefs, desk ui.Preferences) resolve
 	default:
 		t.Spacing = 4
 	}
-	return resolvedTheme{Theme: &t, Apply: true}
+	return resolvedTheme{Theme: &t}
 }
 
-// themeHasOverrides 报告设置里是否有任何覆盖主题的项。
-func themeHasOverrides(p app.ThemePrefs) bool {
-	return p.Accent != "" ||
-		p.Density != app.ThemeDensityNormal ||
-		p.Radius != app.DefaultThemeRadius ||
-		p.FontSize != app.DefaultThemeFontSize
+// lobeUITheme 把 Lobe UI 的 token 映射成 mygo 的 ui.Theme。
+func lobeUITheme(dark bool) ui.Theme {
+	var tokens *lobe.Tokens
+	if dark {
+		tokens = lobe.Dark()
+	} else {
+		tokens = lobe.Light()
+	}
+	return *tokens.Theme()
 }
 
 // themeAccent 返回要用的强调色：设置里的预设/自定义优先；"默认"时优先用
