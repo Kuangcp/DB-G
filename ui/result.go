@@ -856,7 +856,11 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			return
 		}
 		if _, dirty := editSet.Cells[app.CellKey{Row: ri, Col: col - 1}]; dirty {
-			txt.TextColor(c.Theme().Accent).Bold()
+			if row == a.resultRow && col-1 == a.cursorDataCol(r) {
+				txt.TextColor(c.Theme().AccentText).Bold()
+			} else {
+				txt.TextColor(c.Theme().Accent).Bold()
+			}
 		}
 		if txt.RowDoubleClicked() {
 			handledDouble = true
