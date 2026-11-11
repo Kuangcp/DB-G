@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"db-g/engine"
 )
 
@@ -151,5 +153,25 @@ func TestRowsTSVForMySQLDateTime(t *testing.T) {
 	got = insertSQLFor("mysql", "t", r.Columns, r.ColumnTypes, r.Rows[0])
 	if !strings.Contains(got, "'2030-11-11 18:28:47'") {
 		t.Fatalf("typed insert = %q", got)
+	}
+}
+
+func TestCopyLongCellKeepsFullText(t *testing.T) {
+	long := strings.Repeat("甲", 100_000)
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"raw_result_json"},
+		Rows:    [][]any{{[]byte(long)}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.resultRow = 0
+	a.resultState.Cells = ui.ColumnRange{Cursor: "raw_result_json", Anchor: "raw_result_json"}
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeyC)
+	tt.Frame()
+	if got := tt.Clipboard(); got != long {
+		t.Fatalf("clipboard length = %d, want %d", len(got), len(long))
 	}
 }
