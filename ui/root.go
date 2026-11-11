@@ -70,6 +70,11 @@ type root struct {
 	aiPrefs          app.AIPrefs // AI 服务地址/模型/出网开关
 	aiPrefsPath      string      // ai.json 的位置（空 = 不落盘）
 	aiWarn           string
+	aiModels         []string // /models 返回的模型列表
+	aiModelsLoading  bool
+	aiModelsErr      string
+	aiModelsSeq      int    // 异步获取轮次；旧结果作废
+	aiModelsKey      string // 已请求过的 baseURL+key 指纹
 	vault            *app.Vault
 	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
 	aiChat           aiChatState

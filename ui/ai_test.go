@@ -16,13 +16,23 @@ import (
 )
 
 type fakeAIProvider struct {
-	req    ai.Request
-	events []ai.Event
-	err    error
-	calls  int
+	req      ai.Request
+	events   []ai.Event
+	err      error
+	models   []string
+	modelErr error
+	calls    int
 }
 
-func (f *fakeAIProvider) Models(context.Context) ([]string, error) { return []string{"fake"}, nil }
+func (f *fakeAIProvider) Models(context.Context) ([]string, error) {
+	if f.modelErr != nil {
+		return nil, f.modelErr
+	}
+	if f.models != nil {
+		return f.models, nil
+	}
+	return []string{"fake"}, nil
+}
 
 func (f *fakeAIProvider) Stream(_ context.Context, req ai.Request) (<-chan ai.Event, error) {
 	f.calls++
