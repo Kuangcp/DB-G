@@ -12,9 +12,10 @@ func TestFontPrefsRoundTrip(t *testing.T) {
 		t.Fatalf("缺文件应用默认值: %+v %q", got, warn)
 	}
 	want := FontPrefs{
-		Editor: FontSpec{Family: "JetBrains Mono", Size: 16},
-		Result: FontSpec{Family: "monospace", Size: 12},
-		UI:     "Noto Sans CJK SC",
+		Editor:  FontSpec{Family: "JetBrains Mono", Size: 16},
+		Result:  FontSpec{Family: "monospace", Size: 12},
+		TabSize: 14.5,
+		UI:      "Noto Sans CJK SC",
 	}
 	if err := SaveFontPrefs(path, want); err != nil {
 		t.Fatal(err)
@@ -42,6 +43,9 @@ func TestFontPrefsClampsAndRecovers(t *testing.T) {
 	}
 	if got.UI != "IBM Plex Sans" {
 		t.Fatalf("字体族应去空白: %q", got.UI)
+	}
+	if got.TabSize != DefaultTabFontSize {
+		t.Fatalf("缺失的控制台标签字号应用默认值: %+v", got)
 	}
 	if err := os.WriteFile(path, []byte("{oops"), 0o600); err != nil {
 		t.Fatal(err)

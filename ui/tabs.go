@@ -29,7 +29,7 @@ func (a *root) tabBar(c *ui.Context) {
 	}
 	ui.Row(c).AlignItems(ui.Center).Gap(6).FillWidth().Children(func() {
 		if len(open) == 0 {
-			ui.Text(c, "在左侧数据源下新建或打开控制台").TextColor(c.Theme().TextMuted).FontSize(12.5).SingleLine()
+			ui.Text(c, "在左侧数据源下新建或打开控制台").TextColor(c.Theme().TextMuted).FontSize(a.tabFontSize()).SingleLine()
 			ui.Spacer(c)
 		} else {
 			ui.Toolbar(c, func() {
@@ -43,6 +43,15 @@ func (a *root) tabBar(c *ui.Context) {
 			ui.MenuButton(c, name, a.workspaceMenu)
 		}).Padding(0).Shrink(0)
 	})
+}
+
+// tabFontSize 返回控制台标签的字号；配置越界时回退默认值。
+func (a *root) tabFontSize() float32 {
+	size := a.fontPrefs.TabSize
+	if size < app.MinTabFontSize || size > app.MaxTabFontSize {
+		size = app.DefaultTabFontSize
+	}
+	return float32(size)
 }
 
 // tab 是一个控制台标签：数据源名在前，控制台名在后且字号更小；
@@ -70,7 +79,9 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 		label = "● " + label
 	}
 	active := rec.ID == a.activeConsole
-	btn := ui.ButtonBase(c).Label(label).Gap(5).Height(t.Space(6.5)).
+	size := a.tabFontSize()
+	height := max(t.Space(6.5), size*1.7+4)
+	btn := ui.ButtonBase(c).Label(label).Gap(5).Height(height).
 		Padding(2, 9).Radius(t.Space(1.25)).
 		BorderWidth(0, 0, 2, 0).BorderColor(ui.Transparent)
 	if active {
@@ -86,17 +97,18 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 		if dirty {
 			ui.Text(c, "●").FontSize(10).TextColor(t.Accent)
 		}
-		srcText := ui.Text(c, src).FontSize(12.5).SingleLine()
+		srcText := ui.Text(c, src).FontSize(size).SingleLine()
 		if active {
 			srcText.Bold()
 		}
 		if showConsole {
-			ui.Text(c, "/").FontSize(10.5).TextColor(t.TextMuted)
+			sub := max(float32(10), size-2)
+			ui.Text(c, "/").FontSize(sub).TextColor(t.TextMuted)
 			col := t.TextMuted
 			if active {
 				col = t.Text
 			}
-			ui.Text(c, rec.Name).FontSize(10.5).TextColor(col).SingleLine()
+			ui.Text(c, rec.Name).FontSize(sub).TextColor(col).SingleLine()
 		}
 	})
 	if btn.Clicked() {

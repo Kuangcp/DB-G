@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -23,6 +24,7 @@ func (a *root) settingsSections() []settingsSection {
 		{"外观", a.appearanceSection},
 		{"字体", a.fontSection},
 		{"结果", a.resultSection},
+		{"控制台", a.consolePrefsSection},
 		{"AI", a.aiSection},
 		{"快捷键", a.keymapSection},
 		{"连接档案", a.profilesSection},
@@ -40,7 +42,9 @@ func (a *root) settingsView(c *ui.Context) {
 	}
 	ui.Column(c).Fill().Children(func() {
 		a.settingsTitleBar(c)
-		ui.Row(c).Fill().Gap(0).Children(func() {
+		// 标题栏占固定高度后，内容行必须用 Grow 取剩余空间；Fill 的 100%
+		// 会从标题栏下方再占满整窗高度，底部 38px 被挤出窗口。
+		ui.Row(c).FillWidth().Grow(1).Gap(0).Children(func() {
 			// 左：分区导航（无按钮外观、行间分隔线、选中高亮），底部版本号。
 			ui.Column(c).Width(168).FillHeight().Children(func() {
 				for i, sec := range sections {
@@ -77,7 +81,7 @@ func (a *root) fontSection(c *ui.Context) {
 			a.setThemePrefs(p)
 		}
 	})
-	ui.Text(c, "三类区域各用一套字体；修改即时生效并保存到 fonts.json。").FontSize(12).
+	ui.Text(c, "编辑区、结果区、控制台标签、功能界面各用一套字体；修改即时生效并保存到 fonts.json，直接看主窗口即可。").FontSize(12).
 		TextColor(c.Theme().TextMuted)
 
 	ui.Text(c, "编辑区").Bold()
@@ -94,8 +98,6 @@ func (a *root) fontSection(c *ui.Context) {
 		Placeholder("例如 JetBrains Mono / Sarasa Mono SC").Radius(cr).Changed() {
 		a.applyFontPrefs()
 	}
-	fontPreview(c, "SELECT id, name FROM users WHERE id = 1; -- 预览 Preview", a.fontPrefs.Editor, true)
-
 	ui.Divider(c)
 
 	ui.Text(c, "结果区").Bold()
@@ -113,7 +115,19 @@ func (a *root) fontSection(c *ui.Context) {
 		Placeholder("例如 JetBrains Mono / monospace").Radius(cr).Changed() {
 		a.applyFontPrefs()
 	}
-	fontPreview(c, "id\tname\n1\talice\n2\tNULL", a.fontPrefs.Result, false)
+	ui.Divider(c)
+
+	ui.Text(c, "控制台标签").Bold()
+	ui.Text(c, "控制台标签栏的数据源名与控制台名字号；控制台名自动小 2pt。").FontSize(12).
+		TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		if ui.NumberInput(c, &a.fontPrefs.TabSize, app.MinTabFontSize, app.MaxTabFontSize, 0.5).
+			Label("控制台标签字号").Width(90).Radius(cr).Changed() {
+			a.applyFontPrefs()
+		}
+		ui.Text(c, fmt.Sprintf("%.1f pt", a.fontPrefs.TabSize)).FontSize(12).
+			TextColor(c.Theme().TextMuted)
+	})
 
 	ui.Divider(c)
 
@@ -135,31 +149,60 @@ func (a *root) fontSection(c *ui.Context) {
 		Placeholder("例如 Noto Sans CJK SC").Radius(cr).Changed() {
 		a.applyFontPrefs()
 	}
-	ui.Box(c).FillWidth().Padding(10).Radius(c.Theme().Radius).
-		Background(c.Theme().Surface).Border(1, c.Theme().Border).Children(func() {
-		ui.Text(c, "设置 · 控制台名 · 菜单 · 按钮").SingleLine()
-	})
-
 	if a.fontPrefsWarn != "" {
 		ui.Text(c, a.fontPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
 	}
 }
 
-// fontPreview 用给定字体设置渲染一行预览。
-func fontPreview(c *ui.Context, sample string, spec app.FontSpec, monoFallback bool) {
-	ui.Text(c, "预览").FontSize(12).TextColor(c.Theme().TextMuted)
-	ui.Box(c).FillWidth().Padding(10).Radius(6).
-		Background(c.Theme().Surface).Border(1, c.Theme().Border).Children(func() {
-		txt := ui.Text(c, sample)
-		if fam := strings.TrimSpace(spec.Family); fam != "" {
-			txt.Font(fam)
-		} else if monoFallback {
-			txt.Font("monospace")
-		}
-		if spec.Size > 0 {
-			txt.FontSize(float32(spec.Size))
+// consolePrefsSection 是控制台正文自动保存设置。
+func (a *root) consolePrefsSection(c *ui.Context) {
+	cr := controlRadius(c)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "控制台").Bold()
+		ui.Spacer(c)
+		if ui.Button(c, "恢复默认").Radius(cr).Clicked() {
+			a.setConsolePrefs(app.DefaultConsolePrefs())
 		}
 	})
+	ui.Text(c, "停止输入后自动保存正文的延迟；切换标签、执行、关闭窗口或退出时仍会立即保存。").
+		FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		secs := float64(a.consolePrefs.SaveDelaySeconds)
+		if ui.NumberInput(c, &secs, float64(app.MinConsoleSaveDelaySeconds), float64(app.MaxConsoleSaveDelaySeconds), 1).
+			Label("自动保存延迟").Width(90).Radius(cr).Changed() {
+			p := a.consolePrefs
+			p.SaveDelaySeconds = int(secs)
+			a.setConsolePrefs(p)
+		}
+		ui.Text(c, fmt.Sprintf("%d 秒", a.consolePrefs.SaveDelaySeconds)).FontSize(12).
+			TextColor(c.Theme().TextMuted)
+	})
+	if a.consolePrefsWarn != "" {
+		ui.Text(c, a.consolePrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
+	}
+}
+
+// setConsolePrefs 更新控制台设置并应用到当前管理器。
+func (a *root) setConsolePrefs(p app.ConsolePrefs) {
+	p = app.NormalizeConsolePrefs(p)
+	a.consolePrefs = p
+	a.applyConsolePrefs()
+	if a.consolePrefsPath == "" {
+		return
+	}
+	if err := app.SaveConsolePrefs(a.consolePrefsPath, p); err != nil {
+		a.consolePrefsWarn = "保存控制台设置失败: " + err.Error()
+	} else {
+		a.consolePrefsWarn = ""
+	}
+	a.updateSettingsWindow()
+}
+
+// applyConsolePrefs 把保存延迟应用到控制台管理器。
+func (a *root) applyConsolePrefs() {
+	if m := a.consoleMgr(); m != nil {
+		m.SetSaveDelay(time.Duration(a.consolePrefs.SaveDelaySeconds) * time.Second)
+	}
 }
 
 // resultSection 是查询结果的加载预算设置。

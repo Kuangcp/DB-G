@@ -8,8 +8,14 @@ import (
 	"db-g/app"
 )
 
-// SetAppIconPNG 由 main 传入打包进程序的图标字节；自举安装时写到图标目录。
-func (a *root) SetAppIconPNG(png []byte) { a.appIconPNG = png }
+// SetAppIconPNG 由 main 传入打包进程序的图标字节；自举安装时写到图标目录，
+// 同时解码一份给标题栏渲染。
+func (a *root) SetAppIconPNG(png []byte) {
+	a.appIconPNG = png
+	if src, err := ui.DecodeImage(png); err == nil {
+		a.appIcon = src
+	}
+}
 
 // installModal 渲染「安装到应用列表 / 升级」确认弹窗。
 func (a *root) installModal(c *ui.Context) {

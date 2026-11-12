@@ -3,6 +3,7 @@ package ui
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -239,10 +240,13 @@ func TestFontSectionCoversThreeAreas(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
 	tt := openSettingsSection(t, a, "字体")
-	for _, want := range []string{"编辑区", "结果区", "功能界面", "预览"} {
+	for _, want := range []string{"编辑区", "结果区", "控制台标签", "功能界面"} {
 		if !tt.HasText(want) {
 			t.Fatalf("字体分区缺少 %q: %q", want, tt.Texts())
 		}
+	}
+	if tt.HasText("预览") {
+		t.Fatalf("字体分区不应再有预览: %q", tt.Texts())
 	}
 	a.fontPrefs.UI = "Noto Sans CJK SC"
 	a.applyFontPrefs()
@@ -382,5 +386,64 @@ func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 	tt.Frame()
 	if got := engine.ResultBudgetBytes(); got != 8<<20 {
 		t.Fatalf("budget after reset = %d", got)
+	}
+}
+
+func TestTabFontSizeAppliesAndSaves(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	if got := a.tabFontSize(); got != float32(app.DefaultTabFontSize) {
+		t.Fatalf("默认标签字号 = %v", got)
+	}
+	a.fontPrefs.TabSize = 15
+	a.applyFontPrefs()
+	if got := a.tabFontSize(); got != 15 {
+		t.Fatalf("标签字号没应用: %v", got)
+	}
+	prefs, warn := app.LoadFontPrefs(a.fontPrefsPath)
+	if warn != "" || prefs.TabSize != 15 {
+		t.Fatalf("没落盘: %+v warn=%q", prefs, warn)
+	}
+}
+
+func TestConsoleSaveDelaySetting(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.consolePrefsPath = filepath.Join(t.TempDir(), "console.json")
+	tt := openSettingsSection(t, a, "控制台")
+	if !tt.HasText("自动保存") {
+		t.Fatalf("控制台分区缺少自动保存说明: %q", tt.Texts())
+	}
+	if err := tt.Click("Increase"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := a.consoleMgr().SaveDelay; got != 6*time.Second {
+		t.Fatalf("save delay = %v, want 6s", got)
+	}
+	prefs, warn := app.LoadConsolePrefs(a.consolePrefsPath)
+	if warn != "" || prefs.SaveDelaySeconds != 6 {
+		t.Fatalf("not saved: %+v warn=%q", prefs, warn)
+	}
+	if err := tt.Click("恢复默认"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := a.consoleMgr().SaveDelay; got != 5*time.Second {
+		t.Fatalf("reset delay = %v, want 5s", got)
+	}
+}
+
+// 设置窗口右侧滚动到底时，最后一个控件必须完整落在窗口内，不能被底边裁掉。
+func TestSettingsContentReachesWindowBottom(t *testing.T) {
+	a := newConsoleRoot(t)
+	tt := openSettingsSection(t, a, "外观")
+	tt.Scroll(500, 300, 0, 2000)
+	tt.Frame()
+	rect, ok := tt.Find("导入主题…")
+	if !ok {
+		t.Fatalf("导入主题按钮缺失: %q", tt.Texts())
+	}
+	if rect.Y+rect.H > 520 {
+		t.Fatalf("底部控件被窗口裁掉: rect=%+v height=520", rect)
 	}
 }

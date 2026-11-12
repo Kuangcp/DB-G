@@ -14,23 +14,29 @@ type FontSpec struct {
 	Size   float64 `json:"size,omitempty"`
 }
 
-// FontPrefs 是全局字体设置：编辑区、结果区、功能界面各用一套。
+// FontPrefs 是全局字体设置：编辑区、结果区、控制台标签、功能界面各用一套。
 // 功能界面的字号仍由 ThemePrefs.FontSize 统一控制（外观里叫「界面字号」）。
 type FontPrefs struct {
-	Editor FontSpec `json:"editor"`
-	Result FontSpec `json:"result"`
-	UI     string   `json:"ui,omitempty"` // 字体族，空 = 系统 UI 字体
+	Editor  FontSpec `json:"editor"`
+	Result  FontSpec `json:"result"`
+	TabSize float64  `json:"tabSize,omitempty"` // 控制台标签字号
+	UI      string   `json:"ui,omitempty"`      // 字体族，空 = 系统 UI 字体
 }
 
-// DefaultFontPrefs 返回默认设置：编辑区 13pt 系统等宽；结果区与功能界面跟随主题。
+// DefaultFontPrefs 返回默认设置：编辑区 13pt 系统等宽；结果区跟随主题；
+// 控制台标签 13.5pt；功能界面跟随主题。
 func DefaultFontPrefs() FontPrefs {
-	return FontPrefs{Editor: FontSpec{Size: 13}}
+	return FontPrefs{Editor: FontSpec{Size: 13}, TabSize: DefaultTabFontSize}
 }
 
 // 字号的可选范围。
 const (
 	MinFontSize = 8
 	MaxFontSize = 24
+
+	DefaultTabFontSize = 13.5
+	MinTabFontSize     = 10
+	MaxTabFontSize     = 20
 )
 
 // DefaultFontPrefsPath 返回字体设置路径（与连接库同目录）。
@@ -48,6 +54,9 @@ func NormalizeFontPrefs(p FontPrefs) FontPrefs {
 	}
 	if p.Result.Size != 0 && (p.Result.Size < MinFontSize || p.Result.Size > MaxFontSize) {
 		p.Result.Size = 0
+	}
+	if p.TabSize < MinTabFontSize || p.TabSize > MaxTabFontSize {
+		p.TabSize = DefaultTabFontSize
 	}
 	return p
 }

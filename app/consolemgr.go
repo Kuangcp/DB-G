@@ -36,7 +36,7 @@ type ConsoleManager struct {
 // NewConsoleManager 创建管理器；sink 的生产实现是 ConsoleFiles。
 func NewConsoleManager(store *ConnStore, sink TextSink) *ConsoleManager {
 	return &ConsoleManager{
-		SaveDelay:  700 * time.Millisecond,
+		SaveDelay:  time.Duration(DefaultConsoleSaveDelaySeconds) * time.Second,
 		CaretDelay: 1500 * time.Millisecond,
 		store:      store,
 		sink:       sink,
@@ -55,6 +55,13 @@ func NewConsoleManager(store *ConnStore, sink TextSink) *ConsoleManager {
 
 // Store 暴露底层存储（工作区/控制台元数据的其余操作）。
 func (m *ConsoleManager) Store() *ConnStore { return m.store }
+
+// SetSaveDelay 更新正文自动保存的防抖间隔；已有定时器不重置，下一次编辑生效。
+func (m *ConsoleManager) SetSaveDelay(d time.Duration) {
+	m.mu.Lock()
+	m.SaveDelay = d
+	m.mu.Unlock()
+}
 
 // Text 返回控制台已保存的正文（内存缓冲优先，其次磁盘；文件缺失 = 空串）。
 // 它绝不读活动控制台的惰性编辑器来源：编辑器内容只在 Flush 时可见，

@@ -60,6 +60,9 @@ type root struct {
 	resultPrefs      app.ResultPrefs // 结果大小预算
 	resultPrefsPath  string          // results.json 的位置（空 = 不落盘）
 	resultPrefsWarn  string
+	consolePrefs     app.ConsolePrefs // 控制台自动保存
+	consolePrefsPath string           // console.json 的位置（空 = 不落盘）
+	consolePrefsWarn string
 	themePrefs       app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
 	themePath        string         // theme.json 的位置（空 = 不落盘）
 	themeWarn        string
@@ -119,6 +122,7 @@ type root struct {
 	execPending      bool
 
 	appIconPNG  []byte                                  // 窗口图标；自举安装时写入图标目录
+	appIcon     ui.ImageSource                          // 标题栏渲染用
 	selfInstall bool                                    // 发布构建才启用（app.ReleaseBuild）
 	installNeed app.InstallStatus                       // 安装/升级状态；NeedInstall 决定顶栏图标
 	installOpen bool                                    // 安装确认弹窗
@@ -254,6 +258,7 @@ func newRoot(text string) *root {
 		chords:           defaultChords(),
 		fontPrefs:        app.DefaultFontPrefs(),
 		resultPrefs:      app.DefaultResultPrefs(),
+		consolePrefs:     app.DefaultConsolePrefs(),
 		themePrefs:       app.DefaultThemePrefs(),
 		sessions:         map[string]engine.Session{},
 		sessionUse:       map[string]uint64{},
@@ -294,6 +299,8 @@ func newRootWithStore(storePath string) *root {
 	r.resultPrefsPath = filepath.Join(filepath.Dir(storePath), "results.json")
 	r.resultPrefs, r.resultPrefsWarn = app.LoadResultPrefs(r.resultPrefsPath)
 	engine.SetResultBudgetMB(r.resultPrefs.BudgetMB)
+	r.consolePrefsPath = filepath.Join(filepath.Dir(storePath), "console.json")
+	r.consolePrefs, r.consolePrefsWarn = app.LoadConsolePrefs(r.consolePrefsPath)
 	r.themePath = app.DefaultThemePrefsPath()
 	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
 	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
@@ -314,6 +321,7 @@ func newRootWithStore(storePath string) *root {
 	files := app.ConsoleFiles{Dir: r.store.ConsolesDir(), Store: r.store}
 	files.Migrate()
 	r.mgr = app.NewConsoleManager(r.store, files)
+	r.applyConsolePrefs()
 	r.pruneMissingExternal()
 	r.restoreSession()
 	r.selfInstall = app.ReleaseBuild() && !app.UpdateBuild() && runtime.GOOS == "linux"

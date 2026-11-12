@@ -123,12 +123,13 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 数据源元数据缓存 | `meta/<connID>.json` | `app.MetaCache`；schema/计数/已加载对象页，24h TTL，指纹不含密码/名称；删除连接/改目标地址/重载时清理 |
 | SQL 历史 | `history/<connectionID>.jsonl` | 每个数据源一个文件；到 6000 条惰性裁剪到 5000 条，面板只展示最近 100 条 |
 | 日志 | `logs/YYYY-MM/YYYY-MM-DD_N.log` | 纯文本（时间/级别/标签/消息/kv），一次启动一个文件，0600 |
-| 全局字体（编辑区/结果区/功能界面） | `fonts.json` | `app.FontPrefs`，改完即时生效；启动时把旧 `editor.json` 自动迁移过来 |
+| 全局字体（编辑区/结果区/控制台标签/功能界面） | `fonts.json` | `app.FontPrefs`，改完即时生效；控制台标签字号也在这里；启动时把旧 `editor.json` 自动迁移过来 |
 | 外观设置（模式/强调色/密度/圆角/字号） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
 | AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
 | 结果加载预算 | `results.json` | `app.ResultPrefs`；结果集大小上限（MB，默认 8），设置页「结果」可改，驱动读取结果时按它截断 |
+| 控制台自动保存 | `console.json` | `app.ConsolePrefs`；正文停止输入后的保存延迟（秒，默认 5，范围 1-60），设置页「控制台」可改 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
 
 判断口诀：**删掉实体要不要一起消失、要不要按它查询？** 要 → `connections.json` 的结构化字段；
@@ -156,13 +157,14 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 
 左右布局：左侧分区导航 + 右侧内容 + 左下角版本号（`app.Version()`，`db-g -version` 也能看）。
 
-- 分区在 `ui/settings.go` 的 `settingsSections()`：外观 / 字体 / 结果 / AI / 快捷键 / 连接档案 / 日志 / 开发。
+- 分区在 `ui/settings.go` 的 `settingsSections()`：外观 / 字体 / 结果 / 控制台 / AI / 快捷键 / 连接档案 / 日志 / 开发。
   新增一个分区 = 加一行 `{标签, 构建函数}`，右侧内容自动可滚。
 - 导航行用 `ui/navrow.go` 的 `sideNavRow()`：无按钮外观、行底 1px 分隔线、选中 accent 浅底 +
   加粗。连接弹窗左侧的数据源列表用的是同一个（`connKindRow`），新增侧边列表照这个来。
-- 字体设置（编辑区/结果区/功能界面）改完立即 `applyFontPrefs()`：编辑区写
-  `code.state.Font`；结果区由 `withResultFont()` 套在表格/长文本上；功能界面写
-  `Theme.Font`（字号仍是外观里的「界面字号」）。全部落盘到 `fonts.json`，预览框用同一份数据渲染。
+- 字体设置（编辑区/结果区/控制台标签/功能界面）改完立即 `applyFontPrefs()`：编辑区写
+  `code.state.Font`；结果区由 `withResultFont()` 套在表格/长文本上；控制台标签由
+  `tabFontSize()` 读取字号；功能界面写 `Theme.Font`（字号仍是外观里的「界面字号」）。
+  全部落盘到 `fonts.json`；设置页不再放预览框，改完直接看主窗口。
 
 ## UI 约定（★ 必读）
 

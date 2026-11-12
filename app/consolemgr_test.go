@@ -502,3 +502,10 @@ func TestFlushStillUsesLiveSource(t *testing.T) {
 		t.Fatalf("flush must write the live editor body: %q", got)
 	}
 }
+
+func TestConsoleManagerDefaultSaveDelay(t *testing.T) {
+	m := NewConsoleManager(nil, nil)
+	if m.SaveDelay != 5*time.Second {
+		t.Fatalf("SaveDelay = %v, want 5s", m.SaveDelay)
+	}
+}
