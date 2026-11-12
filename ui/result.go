@@ -692,6 +692,9 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 				a.exportStatus = ""
 			}
 		}
+		if a.editStatus != "" {
+			ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
+		}
 		if n := len(a.resView.filters); n > 0 {
 			ui.Text(c, fmt.Sprintf("筛选 %d 列", n)).FontSize(12).TextColor(c.Theme().TextMuted)
 		}

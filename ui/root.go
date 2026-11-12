@@ -188,6 +188,8 @@ type root struct {
 	exportConfirm       bool
 	exportFormat        string
 	exportStatus        string
+	editStatus          string
+	editStatusSeq       atomic.Uint64
 	exportBusy          bool
 	exportFull          bool
 	exportRows          atomic.Int64

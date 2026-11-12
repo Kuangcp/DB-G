@@ -158,7 +158,8 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
 - [x] 快捷键：统一动作表 + 可改键（`keymap.json`，设置窗口里点「录制」改）；
       `Ctrl+Enter` 执行、`Ctrl+S` 保存、`Ctrl+C` 复制（编辑器内为复制文本、结果区为复制单元格）、
       `Ctrl+Shift+N` 将结果区选中单元格设为 NULL、
-      `Ctrl+Y` 复制当前行、`Ctrl+D` 删除当前行/选区、`Ctrl+Shift+F` 格式化、
+      `Ctrl+Y` 复制当前行、`Ctrl+D` 删除当前行/选区、`Ctrl+/` 注释/取消注释当前行（单光标时自动下移一行）、
+      `Ctrl+Shift+F` 格式化、
       `Ctrl+Tab` 切换最近使用的控制台、`Alt+D` 显隐结果区、`Ctrl+Q` 查看所选对象 DDL、
       `Alt+\` 请求 AI 内联补全
 - [x] 外观：基于 [Lobe UI](https://github.com/lobehub/lobe-ui) 设计 token（浅/深色成对生成）

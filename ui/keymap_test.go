@@ -196,3 +196,40 @@ func TestExecChordStillTakenFromEditor(t *testing.T) {
 	}
 	t.Fatal("Ctrl+Enter 没有执行")
 }
+
+// Ctrl+/ 注释当前行后光标下移一行，方便连续注释/取消注释多行。
+func TestCtrlSlashCommentsAndMovesDown(t *testing.T) {
+	a, tt := focusEditor(t, "SELECT 1\nSELECT 2\nSELECT 3")
+	a.code.SetSelection(0, 0)
+	tt.Frame()
+
+	tt.Key(ui.Ctrl, ui.KeySlash)
+	tt.Frame()
+	if got := a.code.Text(); got != "-- SELECT 1\nSELECT 2\nSELECT 3" {
+		t.Fatalf("第一行注释: %q", got)
+	}
+	if pos := a.code.state.CursorPos(); pos.Line != 1 || pos.Col != 0 {
+		t.Fatalf("光标应下移到第 2 行行首: %+v", pos)
+	}
+
+	tt.Key(ui.Ctrl, ui.KeySlash)
+	tt.Frame()
+	if got := a.code.Text(); got != "-- SELECT 1\n-- SELECT 2\nSELECT 3" {
+		t.Fatalf("第二行注释: %q", got)
+	}
+	if pos := a.code.state.CursorPos(); pos.Line != 2 {
+		t.Fatalf("光标应下移到第 3 行: %+v", pos)
+	}
+
+	// 回到第一行，取消注释后同样下移。
+	a.code.SetSelection(0, 0)
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeySlash)
+	tt.Frame()
+	if got := a.code.Text(); got != "SELECT 1\n-- SELECT 2\nSELECT 3" {
+		t.Fatalf("取消第一行注释: %q", got)
+	}
+	if pos := a.code.state.CursorPos(); pos.Line != 1 || pos.Col != 0 {
+		t.Fatalf("取消注释后光标应下移: %+v", pos)
+	}
+}

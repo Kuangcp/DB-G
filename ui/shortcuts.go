@@ -53,6 +53,8 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		a.externalAfterSave(a.activeConsole)
 	case "format":
 		a.formatActive()
+	case "commentLine":
+		a.toggleCommentDown()
 	case "aiComplete":
 		a.requestAICompletion()
 	case "copyCell":

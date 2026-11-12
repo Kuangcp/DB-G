@@ -289,6 +289,27 @@ func (a *root) commitEdits() {
 	a.previewOpen = true
 }
 
+// setEditStatus 在结果工具条显示一条短状态，3 秒后自动消失。
+// 只用于提交成功这类非错误反馈；失败仍走顶栏 consoleErr。
+func (a *root) setEditStatus(msg string) {
+	a.editStatus = msg
+	seq := a.editStatusSeq.Add(1)
+	if msg == "" || a.win == nil {
+		return
+	}
+	win := a.win
+	time.AfterFunc(3*time.Second, func() {
+		if a.editStatusSeq.Load() != seq {
+			return
+		}
+		a.safeUpdate(win, func() {
+			if a.editStatusSeq.Load() == seq {
+				a.editStatus = ""
+			}
+		})
+	})
+}
+
 // applyConfirmedEdits 在确认后执行（有窗口时后台 + Update）。
 func (a *root) applyConfirmedEdits() {
 	a.previewOpen = false
@@ -299,13 +320,14 @@ func (a *root) applyConfirmedEdits() {
 	done := func(err error) {
 		a.editBusy = false
 		if err != nil {
+			a.setEditStatus("")
 			a.consoleErr = "提交失败（已回滚）：" + err.Error()
 			app.LogWarn("write", "commit failed", "err", err.Error())
 			return
 		}
-		a.consoleErr = "提交成功"
+		a.consoleErr = ""
 		a.editKey = ""
-		a.refreshResult()
+		a.refreshResult(func() { a.setEditStatus("提交成功") })
 	}
 	if a.win == nil {
 		done(a.applyEditsSync())
@@ -319,10 +341,14 @@ func (a *root) applyConfirmedEdits() {
 }
 
 // refreshResult 重跑最近一次语句（刷新结果，保持排序/筛选与分页状态）。
-func (a *root) refreshResult() {
+// onDone 在结果回投并更新状态后调用，可为 nil。
+func (a *root) refreshResult(onDone func()) {
 	sql := a.lastExecSQL
 	sess := a.activeSession()
 	if sql == "" || sess == nil {
+		if onDone != nil {
+			onDone()
+		}
 		return
 	}
 	id := a.currentRuntimeID()
@@ -332,6 +358,9 @@ func (a *root) refreshResult() {
 			a.recordFetchState(id, res)
 			a.editKey = ""
 			a.refreshStmtBackgrounds()
+			if onDone != nil {
+				onDone()
+			}
 		}
 		if a.win != nil {
 			win := a.win

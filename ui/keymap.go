@@ -50,6 +50,8 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Ctrl, ui.KeyY}}},
 	{ID: "deleteLine", Label: "删除当前行 / 选区", Scope: scopeEditor, Cmd: myeditor.DeleteLine,
 		Def: []chord{{ui.Ctrl, ui.KeyD}}},
+	{ID: "commentLine", Label: "注释/取消注释当前行", Scope: scopeEditor,
+		Def: []chord{{ui.Ctrl, ui.KeySlash}}},
 	{ID: "format", Label: "格式化 SQL", Scope: scopeEditor,
 		Def: []chord{{ui.Ctrl | ui.Shift, ui.KeyF}}},
 	{ID: "copyCell", Label: "复制当前单元格", Scope: scopeNoEditor,

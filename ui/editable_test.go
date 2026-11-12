@@ -468,3 +468,30 @@ func TestPinnedResultKeepsEditState(t *testing.T) {
 		t.Fatalf("switching back must restore the pending edit, got %v (set=%v)", v, ok)
 	}
 }
+
+func TestCommitSuccessStatusShownInResultToolbar(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1,'alice')"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users")
+	a.setCellEdit(0, 1, "alice2")
+	a.applyConfirmedEdits()
+	for i := 0; i < 200; i++ {
+		if !a.currentRuntime().Running() && a.currentRuntime().Result() != nil {
+			break
+		}
+		tt.Frame()
+	}
+	tt.Frame()
+	if a.consoleErr != "" {
+		t.Fatalf("提交成功不应占用顶栏错误: %q", a.consoleErr)
+	}
+	if a.editStatus != "提交成功" {
+		t.Fatalf("edit status = %q", a.editStatus)
+	}
+	if !tt.HasText("提交成功") {
+		t.Fatalf("结果工具条缺少提交状态: %q", tt.Texts())
+	}
+}

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
@@ -193,4 +194,32 @@ func byteToRune(s string, byteOff int) int {
 		byteOff--
 	}
 	return utf8.RuneCountInString(s[:byteOff])
+}
+
+// toggleCommentDown 注释/取消注释当前行；单光标时把光标移到下一行，
+// 方便按住 Ctrl+/ 连续处理多行。多选/多光标保持 mygo 的原行为。
+func (a *root) toggleCommentDown() {
+	if a.code == nil || a.code.state == nil || a.code.state.Buffer == nil {
+		return
+	}
+	st := a.code.state
+	sel := st.Selection()
+	lone := sel.Empty() && len(st.Selections()) == 1
+	pos := st.CursorPos()
+	if !st.Run(myeditor.ToggleComment) || !lone {
+		return
+	}
+	text := a.code.Text()
+	cursor := st.Cursor()
+	nl := strings.IndexByte(text[cursor:], '\n')
+	if nl < 0 {
+		return
+	}
+	start := cursor + nl + 1
+	end := len(text)
+	if i := strings.IndexByte(text[start:], '\n'); i >= 0 {
+		end = start + i
+	}
+	col := min(pos.Col, end-start)
+	st.Select(start+col, start+col)
 }
