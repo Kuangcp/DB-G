@@ -21,7 +21,7 @@ release:
 	CGO_ENABLED=0 MYGO_LDFLAGS="-X db-g/app.buildVersion=$(VERSION) -X db-g/app.releaseBuild=1 -X db-g/app.updateBuild=1" \
 		go tool mygo build -platform linux/amd64,windows/amd64
 
-releaseLocalLinux:
+localRelease:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o ~/.config/db-g/bin/db-g .
 
 install:
