@@ -247,3 +247,30 @@ func TestExternalDropPickerUI(t *testing.T) {
 		t.Fatalf("选择数据源后应绑定并激活: %q", a.activeConsole)
 	}
 }
+
+func TestOpenSQLFilesFromCLI(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	path := filepath.Join(t.TempDir(), "cli.sql")
+	if err := os.WriteFile(path, []byte("SELECT 42;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.OpenSQLFiles([]string{path})
+	if !a.extPickOpen || len(a.extPickPaths) != 1 {
+		t.Fatalf("-o 后应弹数据源选择: %+v", a.extPickPaths)
+	}
+	a.bindExternal(prof.ID)
+	rec, ok := a.store.GetConsoleByFilePath(path)
+	if !ok || rec.ConnectionID != prof.ID || !rec.External {
+		t.Fatalf("绑定记录: %+v", rec)
+	}
+	if got := a.code.Text(); got != "SELECT 42;\n" {
+		t.Fatalf("正文: %q", got)
+	}
+	// 已绑定文件再次通过 -o 打开：直接激活，不再弹选择。
+	a.OpenSQLFiles([]string{path})
+	if a.extPickOpen || a.activeConsole != rec.ID {
+		t.Fatalf("重复打开不应新建/弹窗: pick=%v active=%q", a.extPickOpen, a.activeConsole)
+	}
+}

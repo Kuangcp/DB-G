@@ -201,6 +201,18 @@ func (a *root) pruneMissingExternal() {
 	}
 }
 
+// OpenSQLFiles 把命令行传入的 .sql 文件按拖入流程打开。
+func (a *root) OpenSQLFiles(paths []string) {
+	a.handleDroppedFiles(paths)
+}
+
+// FocusWindow 把主窗口带到前台（第二个实例启动时用）。
+func (a *root) FocusWindow() {
+	if a.win != nil {
+		a.win.Focus()
+	}
+}
+
 // handleDroppedFiles 处理拖入的 .sql：已绑定路径直接激活，其余弹数据源选择。
 func (a *root) handleDroppedFiles(paths []string) {
 	if a.store == nil || a.consoleMgr() == nil {

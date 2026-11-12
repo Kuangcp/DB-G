@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"image/png"
 	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 
 	"db-g/engine"
@@ -63,5 +65,18 @@ func TestAllConnKindsLinked(t *testing.T) {
 		if !engine.Registered(kind) {
 			t.Fatalf("%s 未注册：main.go 缺 _ \"db-g/driver/%s\"", kind, kind)
 		}
+	}
+}
+
+func TestOpenPathsFromSecondInstance(t *testing.T) {
+	wd := t.TempDir()
+	abs := filepath.Join(t.TempDir(), "b.sql")
+	got := openPathsFromArgs([]string{"-o", "a.sql", "-o=" + abs}, wd)
+	want := []string{filepath.Join(wd, "a.sql"), abs}
+	if !slices.Equal(got, want) {
+		t.Fatalf("paths = %v, want %v", got, want)
+	}
+	if got := openPathsFromArgs(nil, wd); len(got) != 0 {
+		t.Fatalf("no -o must open nothing: %v", got)
 	}
 }
