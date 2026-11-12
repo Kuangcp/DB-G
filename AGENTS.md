@@ -73,6 +73,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | `CapObjects` / `CapColumns` | 对象树 / 列目录与补全 |
 | `CapSQLCompletion` | 参与 SQL 补全 |
 | `CapExplain` | 「执行计划」/ `PlanExplainer`；解析由 `ai/plan` 负责 |
+| `CapExplainAnalyze` | 「ANALYZE 重跑」；目前 PostgreSQL / MySQL 支持，SQLite / ClickHouse 不显示该按钮 |
 
 连接参数：`app.ConnProfile` → `ui.engineProfile()` → `engine.Profile`，**三处打开连接
 （`connect` / 测试连接）都走这个函数**，不要各自拼 `engine.Profile`。

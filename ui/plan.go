@@ -66,6 +66,10 @@ func (a *root) runExplain(analyze bool) {
 		a.consoleErr = "请先连接数据源"
 		return
 	}
+	if analyze && !sess.Caps().Has(engine.CapExplainAnalyze) {
+		a.consoleErr = "当前数据源不支持 EXPLAIN ANALYZE"
+		return
+	}
 	pe, ok := sess.(engine.PlanExplainer)
 	if !ok || !sess.Caps().Has(engine.CapExplain) {
 		a.consoleErr = "当前数据源不支持执行计划"
@@ -152,7 +156,7 @@ func (a *root) planPane(c *ui.Context) {
 				if ui.Button(c, "AI 诊断").Clicked() {
 					a.diagnosePlan()
 				}
-				if ui.Button(c, "ANALYZE 重跑").Clicked() {
+				if a.planAnalyzeSupported() && ui.Button(c, "ANALYZE 重跑").Clicked() {
 					ps.confirm = true
 				}
 			}
@@ -186,6 +190,12 @@ func (a *root) planPane(c *ui.Context) {
 	})
 }
 
+// planAnalyzeSupported 报告当前数据源是否支持 EXPLAIN ANALYZE。
+func (a *root) planAnalyzeSupported() bool {
+	sess := a.activeSession()
+	return sess != nil && sess.Caps().Has(engine.CapExplainAnalyze)
+}
+
 func planMaxCost(nodes []plan.PlanNode) float64 {
 	max := 0.0
 	for _, n := range nodes {
@@ -211,14 +221,25 @@ func (a *root) planNode(c *ui.Context, n plan.PlanNode, depth int, maxCost float
 		if n.Relation != "" {
 			ui.Text(c, n.Relation).FontSize(12).TextColor(t.TextMuted)
 		}
-		if n.Cost > 0 {
+		if n.StartupCost > 0 && n.Cost > 0 {
+			ui.Text(c, fmt.Sprintf("startup %.1f → cost %.1f", n.StartupCost, n.Cost)).FontSize(11).TextColor(t.TextMuted)
+		} else if n.Cost > 0 {
 			ui.Text(c, fmt.Sprintf("cost %.1f", n.Cost)).FontSize(11).TextColor(t.TextMuted)
 		}
 		if n.Rows > 0 {
 			ui.Text(c, fmt.Sprintf("rows %.0f", n.Rows)).FontSize(11).TextColor(t.TextMuted)
 		}
 		if n.Actual > 0 {
-			ui.Text(c, n.Actual.String()).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, "actual "+n.Actual.String()).FontSize(11).TextColor(t.TextMuted)
+		}
+		if n.ActualRows > 0 {
+			ui.Text(c, fmt.Sprintf("actual rows %.0f", n.ActualRows)).FontSize(11).TextColor(t.TextMuted)
+		}
+		if n.Loops > 1 {
+			ui.Text(c, fmt.Sprintf("loops %.0f", n.Loops)).FontSize(11).TextColor(t.TextMuted)
+		}
+		if n.Buffers != "" {
+			ui.Text(c, n.Buffers).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
 		}
 		if n.Detail != "" && n.Detail != n.Op {
 			ui.Text(c, n.Detail).FontSize(10.5).TextColor(t.TextMuted).SingleLine()

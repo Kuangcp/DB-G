@@ -138,9 +138,10 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       获取失败或服务未返回时保留手动输入模型名；API Key 本机加密；会话按工作区保存，
       支持多段历史切换与新建（搜索、滚动分页）；标题默认取首条消息截取，可在设置里开关 AI 生成标题
 - [x] 执行计划：顶栏「执行计划」按当前语句/选区跑 EXPLAIN，结果区展示统一计划树，
-      节点按代价着色并显示 rows/actual；支持 SQLite `EXPLAIN QUERY PLAN`、PostgreSQL JSON、
-      MySQL JSON/TREE、ClickHouse JSON，解析失败回退原始结果；ANALYZE 每次确认且只允许
-      SELECT/WITH；可一键把计划树交给 AI 做诊断
+      节点按代价着色并显示估算 rows、actual time/rows/loops、PG BUFFERS；支持 SQLite
+      `EXPLAIN QUERY PLAN`、PostgreSQL JSON、MySQL JSON/TREE、ClickHouse JSON，解析失败
+      回退原始结果；ANALYZE 每次确认且只允许 SELECT/WITH，只有 PostgreSQL / MySQL 显示
+      「ANALYZE 重跑」（SQLite / ClickHouse 无此能力）；可一键把计划树交给 AI 做诊断
 - [x] SQL 错误修复：执行失败横幅点「AI 修复」，把失败 SQL、驱动错误和涉及表结构发给模型；
       结果用 diff 预览，用户点「应用修复」或「应用并执行」才改编辑器；模型没返回 SQL 代码块时明确报错
 - [x] 高危 SQL 拦截：本地确定性规则检查 UPDATE/DELETE 无 WHERE、恒真条件、DROP/TRUNCATE；

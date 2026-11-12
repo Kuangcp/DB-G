@@ -13,13 +13,17 @@ import (
 
 // PlanNode 是一个执行计划节点。
 type PlanNode struct {
-	Op       string
-	Relation string
-	Cost     float64
-	Rows     float64
-	Actual   time.Duration
-	Detail   string
-	Children []PlanNode
+	Op          string
+	Relation    string
+	StartupCost float64
+	Cost        float64
+	Rows        float64
+	Actual      time.Duration // 实际耗时（PostgreSQL 为每 loop 平均，MySQL TREE 为实际起点）
+	ActualRows  float64
+	Loops       float64
+	Buffers     string // PostgreSQL BUFFERS 统计，已格式化为一行
+	Detail      string
+	Children    []PlanNode
 }
 
 // Parse 按数据源 kind 解析 EXPLAIN 结果。
@@ -137,19 +141,23 @@ func parsePostgres(raw string) ([]PlanNode, error) {
 
 func pgNode(m map[string]any) PlanNode {
 	n := PlanNode{
-		Op:       text(m["Node Type"]),
-		Relation: text(m["Relation Name"]),
-		Cost:     number(m["Total Cost"]),
-		Rows:     number(m["Plan Rows"]),
-		Actual:   time.Duration(number(m["Actual Total Time"]) * float64(time.Millisecond)),
+		Op:          text(m["Node Type"]),
+		Relation:    text(m["Relation Name"]),
+		StartupCost: number(m["Startup Cost"]),
+		Cost:        number(m["Total Cost"]),
+		Rows:        number(m["Plan Rows"]),
+		Actual:      time.Duration(number(m["Actual Total Time"]) * float64(time.Millisecond)),
+		ActualRows:  number(m["Actual Rows"]),
+		Loops:       number(m["Actual Loops"]),
 	}
 	var details []string
-	for _, key := range []string{"Join Type", "Filter", "Index Cond", "Hash Cond", "Sort Key", "Actual Rows", "Actual Loops"} {
+	for _, key := range []string{"Join Type", "Index Name", "Filter", "Index Cond", "Hash Cond", "Sort Key", "Sort Method"} {
 		if v := text(m[key]); v != "" {
 			details = append(details, key+": "+v)
 		}
 	}
 	n.Detail = strings.Join(details, "; ")
+	n.Buffers = pgBuffers(m)
 	if plans, ok := m["Plans"].([]any); ok {
 		for _, p := range plans {
 			if child, ok := p.(map[string]any); ok {
@@ -158,6 +166,28 @@ func pgNode(m map[string]any) PlanNode {
 		}
 	}
 	return n
+}
+
+// pgBuffers 把 PostgreSQL EXPLAIN (ANALYZE, BUFFERS) 的块统计压成一行。
+func pgBuffers(m map[string]any) string {
+	var parts []string
+	add := func(label, key string) {
+		if v := number(m[key]); v > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%.0f", label, v))
+		}
+	}
+	add("shared hit", "Shared Hit Blocks")
+	add("shared read", "Shared Read Blocks")
+	add("shared dirtied", "Shared Dirtied Blocks")
+	add("shared written", "Shared Written Blocks")
+	add("local hit", "Local Hit Blocks")
+	add("local read", "Local Read Blocks")
+	add("temp read", "Temp Read Blocks")
+	add("temp written", "Temp Written Blocks")
+	if len(parts) == 0 {
+		return ""
+	}
+	return "buffers: " + strings.Join(parts, " ")
 }
 
 // ---- MySQL JSON ----
@@ -185,6 +215,7 @@ func mysqlBlock(m map[string]any) PlanNode {
 	for _, key := range []string{
 		"ordering_operation", "grouping_operation", "duplicates_removal",
 		"buffer_result", "union_result", "windowing", "materialized_from_subquery",
+		"optimized_away_subqueries", "subqueries",
 	} {
 		if child, ok := m[key].(map[string]any); ok {
 			c := mysqlBlock(child)
@@ -229,7 +260,10 @@ func mysqlTable(m map[string]any) PlanNode {
 		n.Rows = number(m["rows"])
 	}
 	var details []string
-	for _, key := range []string{"key", "possible_keys", "filtered", "using_index"} {
+	for _, key := range []string{
+		"key", "possible_keys", "key_length", "ref", "filtered", "using_index",
+		"attached_condition", "rows_examined_per_scan", "rows_produced_per_join", "data_read_per_join",
+	} {
 		if v := text(m[key]); v != "" {
 			details = append(details, key+": "+v)
 		}
@@ -272,7 +306,7 @@ func parseClickHouse(raw string) ([]PlanNode, error) {
 		}
 	case map[string]any:
 		if p, ok := v["Plan"].(map[string]any); ok {
-			return []PlanNode{pgNode(p)}, nil
+			return []PlanNode{genericNode(p)}, nil
 		}
 		if p, ok := v["plan"].(map[string]any); ok {
 			return []PlanNode{genericNode(p)}, nil
@@ -284,13 +318,16 @@ func parseClickHouse(raw string) ([]PlanNode, error) {
 
 func genericNode(m map[string]any) PlanNode {
 	n := PlanNode{
-		Op:       firstText(m, "Node Type", "node_type", "type", "name", "expression", "description"),
-		Relation: firstText(m, "Relation Name", "table", "table_name"),
-		Cost:     firstNumber(m, "Cost", "cost", "Total Cost"),
-		Rows:     firstNumber(m, "Rows", "rows", "Plan Rows"),
-		Detail:   firstText(m, "Detail", "detail", "description", "Expression"),
+		Op:          firstText(m, "Node Type", "node_type", "type", "name", "expression", "description"),
+		Relation:    firstText(m, "Relation Name", "table", "table_name"),
+		StartupCost: firstNumber(m, "Startup Cost", "startup_cost"),
+		Cost:        firstNumber(m, "Cost", "cost", "Total Cost", "Estimated Cost", "estimated_cost"),
+		Rows:        firstNumber(m, "Rows", "rows", "Plan Rows", "Estimated Rows", "estimated_rows"),
+		ActualRows:  firstNumber(m, "Actual Rows", "actual_rows"),
+		Loops:       firstNumber(m, "Actual Loops", "actual_loops", "loops"),
+		Detail:      firstText(m, "Detail", "detail", "description", "Expression", "Header", "Step", "Sort Description", "Condition"),
 	}
-	for _, key := range []string{"Plans", "plans", "Children", "children"} {
+	for _, key := range []string{"Plans", "plans", "Children", "children", "Steps", "steps"} {
 		if arr, ok := m[key].([]any); ok {
 			for _, item := range arr {
 				if child, ok := item.(map[string]any); ok {
@@ -379,9 +416,11 @@ func parseSQLite(columns []string, rows [][]any) ([]PlanNode, error) {
 }
 
 var (
-	treeCostRe   = regexp.MustCompile(`cost=([0-9.]+)`)
-	treeRowsRe   = regexp.MustCompile(`rows=([0-9.]+)`)
-	treeActualRe = regexp.MustCompile(`actual time=([0-9.]+)`)
+	treeCostRe       = regexp.MustCompile(`cost=([0-9.]+)`)
+	treeRowsRe       = regexp.MustCompile(`rows=([0-9.]+)`)
+	treeActualRe     = regexp.MustCompile(`actual time=([0-9.]+)`)
+	treeActualRowsRe = regexp.MustCompile(`actual time=[^)]*rows=([0-9.]+)`)
+	treeLoopsRe      = regexp.MustCompile(`loops=([0-9.]+)`)
 )
 
 func parseTree(raw string) []PlanNode {
@@ -418,6 +457,12 @@ func parseTree(raw string) []PlanNode {
 			ms, _ := strconv.ParseFloat(m[1], 64)
 			node.Actual = time.Duration(ms * float64(time.Millisecond))
 		}
+		if m := treeActualRowsRe.FindStringSubmatch(body); len(m) == 2 {
+			node.ActualRows, _ = strconv.ParseFloat(m[1], 64)
+		}
+		if m := treeLoopsRe.FindStringSubmatch(body); len(m) == 2 {
+			node.Loops, _ = strconv.ParseFloat(m[1], 64)
+		}
 		for len(stack) > 0 && stack[len(stack)-1].indent >= indent {
 			stack = stack[:len(stack)-1]
 		}
@@ -447,6 +492,9 @@ func Text(nodes []PlanNode) string {
 			if n.Relation != "" {
 				b.WriteString(" on " + n.Relation)
 			}
+			if n.StartupCost > 0 {
+				fmt.Fprintf(&b, " startup=%.2f", n.StartupCost)
+			}
 			if n.Cost > 0 {
 				fmt.Fprintf(&b, " cost=%.2f", n.Cost)
 			}
@@ -455,6 +503,15 @@ func Text(nodes []PlanNode) string {
 			}
 			if n.Actual > 0 {
 				fmt.Fprintf(&b, " actual=%s", n.Actual)
+			}
+			if n.ActualRows > 0 {
+				fmt.Fprintf(&b, " actual_rows=%.0f", n.ActualRows)
+			}
+			if n.Loops > 0 {
+				fmt.Fprintf(&b, " loops=%.0f", n.Loops)
+			}
+			if n.Buffers != "" {
+				b.WriteString(" " + n.Buffers)
 			}
 			if n.Detail != "" && n.Detail != n.Op {
 				b.WriteString(" | " + n.Detail)

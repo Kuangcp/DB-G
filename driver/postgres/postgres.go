@@ -82,7 +82,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL | engine.CapExplain
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL | engine.CapExplain | engine.CapExplainAnalyze
 }
 
 // ServerInfo 返回当前库名与 PostgreSQL 版本（server_version 是短版本号）。

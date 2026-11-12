@@ -15,13 +15,17 @@ type fakePlanSession struct {
 	opts engine.ExplainOptions
 	sql  string
 	err  error
+	caps engine.Capabilities
 }
 
 func (s *fakePlanSession) Open(context.Context) error { return nil }
 func (s *fakePlanSession) Close() error               { return nil }
 func (s *fakePlanSession) Cancel() bool               { return false }
 func (s *fakePlanSession) Caps() engine.Capabilities {
-	return engine.CapExplain | engine.CapObjects | engine.CapColumns
+	if s.caps != 0 {
+		return s.caps
+	}
+	return engine.CapExplain | engine.CapExplainAnalyze | engine.CapObjects | engine.CapColumns
 }
 func (s *fakePlanSession) RunStatement(context.Context, string) (*engine.QueryResult, error) {
 	return &engine.QueryResult{}, nil
@@ -105,5 +109,21 @@ func TestDiagnosePlanSendsExecutionContext(t *testing.T) {
 	if !strings.Contains(p.req.Messages[1].Content, "执行计划") ||
 		!strings.Contains(p.req.Messages[1].Content, "SCAN users") {
 		t.Fatalf("plan missing from prompt:\n%s", p.req.Messages[1].Content)
+	}
+}
+
+func TestRunExplainAnalyzeUnsupported(t *testing.T) {
+	a, sess := planRoot(t)
+	sess.caps = engine.CapExplain | engine.CapObjects | engine.CapColumns
+	a.setActiveText("select * from users")
+	a.runExplain(true)
+	if a.plan.open || !strings.Contains(a.consoleErr, "不支持 EXPLAIN ANALYZE") {
+		t.Fatalf("unsupported analyze: open=%v err=%q", a.plan.open, a.consoleErr)
+	}
+	a.runExplain(false)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if tt.HasText("ANALYZE 重跑") {
+		t.Fatalf("unsupported driver must hide analyze button: %q", tt.Texts())
 	}
 }

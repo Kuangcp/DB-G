@@ -6,7 +6,7 @@ import (
 )
 
 func TestParsePostgres(t *testing.T) {
-	raw := `[{"Plan":{"Node Type":"Hash Join","Total Cost":42.5,"Plan Rows":10,"Actual Total Time":1.25,"Plans":[{"Node Type":"Seq Scan","Relation Name":"users","Total Cost":10,"Plan Rows":100}]}}]`
+	raw := `[{"Plan":{"Node Type":"Hash Join","Startup Cost":3.5,"Total Cost":42.5,"Plan Rows":10,"Actual Total Time":1.25,"Actual Rows":8,"Actual Loops":2,"Shared Hit Blocks":12,"Shared Read Blocks":3,"Plans":[{"Node Type":"Seq Scan","Relation Name":"users","Total Cost":10,"Plan Rows":100}]}}]`
 	nodes, err := Parse("postgres", []string{"QUERY PLAN"}, [][]any{{raw}})
 	if err != nil {
 		t.Fatal(err)
@@ -17,8 +17,14 @@ func TestParsePostgres(t *testing.T) {
 	if nodes[0].Cost != 42.5 || nodes[0].Children[0].Relation != "users" {
 		t.Fatalf("values: %+v", nodes)
 	}
-	if !strings.Contains(Text(nodes), "Seq Scan") {
-		t.Fatal("Text must render children")
+	if nodes[0].StartupCost != 3.5 || nodes[0].ActualRows != 8 || nodes[0].Loops != 2 {
+		t.Fatalf("actual fields: %+v", nodes[0])
+	}
+	if !strings.Contains(nodes[0].Buffers, "shared hit=12") || !strings.Contains(nodes[0].Buffers, "shared read=3") {
+		t.Fatalf("buffers: %q", nodes[0].Buffers)
+	}
+	if !strings.Contains(Text(nodes), "Seq Scan") || !strings.Contains(Text(nodes), "actual_rows=8") {
+		t.Fatal("Text must render children and actual rows")
 	}
 }
 
@@ -63,5 +69,22 @@ func TestParseMySQLAnalyzeTree(t *testing.T) {
 	}
 	if nodes[0].Cost != 12.5 || nodes[0].Children[0].Rows != 9 {
 		t.Fatalf("tree values: %+v", nodes)
+	}
+	if nodes[0].ActualRows != 3 || nodes[0].Loops != 1 || nodes[0].Children[0].ActualRows != 9 {
+		t.Fatalf("tree actual fields: %+v", nodes)
+	}
+}
+
+func TestParseClickHouse(t *testing.T) {
+	raw := `[{"Node Type":"Expression","Description":"(a + 1)","Estimated Rows":42,"Estimated Cost":7.5,"Plans":[{"Node Type":"ReadFromMergeTree","table":"events","Estimated Rows":1000}]}]`
+	nodes, err := Parse("clickhouse", []string{"explain"}, [][]any{{raw}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 1 || nodes[0].Op != "Expression" || nodes[0].Rows != 42 || nodes[0].Cost != 7.5 {
+		t.Fatalf("root: %+v", nodes)
+	}
+	if len(nodes[0].Children) != 1 || nodes[0].Children[0].Relation != "events" {
+		t.Fatalf("children: %+v", nodes[0].Children)
 	}
 }
