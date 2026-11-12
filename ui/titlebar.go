@@ -20,6 +20,12 @@ type titleWindow interface {
 	Close()
 }
 
+// 窗口控制图标沿用 git-k：正方形表示最大化，两个叠放方框表示还原，比折叠箭头直观。
+var (
+	windowMaximizeIcon = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>`))
+	windowRestoreIcon  = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="8" width="11" height="11" rx="1"/><path d="M9 8V5h10v10h-3"/></svg>`))
+)
+
 // windowButtons 画最小化/最大化/关闭；调用方负责在它前面留空隙。
 func windowButtons(c *ui.Context, win titleWindow) {
 	if win == nil {
@@ -30,9 +36,9 @@ func windowButtons(c *ui.Context, win titleWindow) {
 		win.Minimize()
 	}
 	maximized := win.IsMaximized()
-	icon, label := iconExpandAll, "最大化"
+	icon, label := windowMaximizeIcon, "最大化"
 	if maximized {
-		icon, label = iconCollapseAll, "还原"
+		icon, label = windowRestoreIcon, "还原"
 	}
 	if iconButtonPlain(c, icon, label, t.TextMuted).Clicked() {
 		win.ToggleMaximize()

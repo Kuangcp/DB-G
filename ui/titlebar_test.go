@@ -32,3 +32,29 @@ func TestTitleBarRendersAppName(t *testing.T) {
 		t.Fatalf("title bar actions out of order: open=%v settings=%v", open, settings)
 	}
 }
+
+type fakeTitleWindow struct{ maximized bool }
+
+func (w *fakeTitleWindow) Minimize()         {}
+func (w *fakeTitleWindow) IsMaximized() bool { return w.maximized }
+func (w *fakeTitleWindow) ToggleMaximize()   { w.maximized = !w.maximized }
+func (w *fakeTitleWindow) Close()            {}
+
+func TestWindowButtonsMaximizeAndRestore(t *testing.T) {
+	a := newTestRoot()
+	for _, max := range []bool{false, true} {
+		w := &fakeTitleWindow{maximized: max}
+		tt := ui.NewTester(func(c *ui.Context) {
+			a.applyTheme(c)
+			windowButtons(c, w)
+		}, 300, 80)
+		tt.Frame()
+		want := "最大化"
+		if max {
+			want = "还原"
+		}
+		if _, ok := tt.Find(want); !ok {
+			t.Fatalf("window button %q missing: %v", want, tt.Texts())
+		}
+	}
+}
