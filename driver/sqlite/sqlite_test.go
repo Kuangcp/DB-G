@@ -151,6 +151,8 @@ func TestCancelRunning(t *testing.T) {
 }
 
 func TestCellAndResultBudget(t *testing.T) {
+	engine.SetResultBudgetMB(16)
+	t.Cleanup(func() { engine.SetResultBudgetMB(engine.DefaultResultBudgetMB) })
 	ctx := context.Background()
 	s := newMemSession(t)
 	if _, err := s.RunStatement(ctx, "CREATE TABLE c (v TEXT)"); err != nil {

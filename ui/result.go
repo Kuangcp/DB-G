@@ -147,7 +147,7 @@ func (a *root) resultPane(c *ui.Context) {
 					return
 				}
 				if r.Truncated {
-					ui.Badge(c, "结果已截断：超过 500 行或 16MB 字符预算")
+					ui.Badge(c, fmt.Sprintf("结果已截断：超过 500 行或 %dMB 大小预算", engine.ResultBudgetBytes()>>20))
 				}
 				a.resultTable(c, r)
 			default:

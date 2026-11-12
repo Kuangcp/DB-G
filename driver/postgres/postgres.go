@@ -18,9 +18,8 @@ import (
 )
 
 const (
-	rowLimit      = 500
-	maxCellBytes  = 1 << 20
-	maxResultByte = 16 << 20
+	rowLimit     = 500
+	maxCellBytes = 1 << 20
 )
 
 func init() { engine.Register("postgres", openSession) }
@@ -186,7 +185,7 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 			}
 		}
 		out.Rows = append(out.Rows, append([]any(nil), vals...))
-		if total > maxResultByte {
+		if total > engine.ResultBudgetBytes() {
 			out.Truncated = true
 			break
 		}

@@ -57,6 +57,9 @@ type root struct {
 	fontPrefs        app.FontPrefs                // 编辑区/结果区/功能界面字体
 	fontPrefsPath    string                       // fonts.json 的位置（空 = 不落盘）
 	fontPrefsWarn    string
+	resultPrefs      app.ResultPrefs // 结果大小预算
+	resultPrefsPath  string          // results.json 的位置（空 = 不落盘）
+	resultPrefsWarn  string
 	themePrefs       app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
 	themePath        string         // theme.json 的位置（空 = 不落盘）
 	themeWarn        string
@@ -244,6 +247,7 @@ func newRoot(text string) *root {
 		cellViewWrap:     true,
 		chords:           defaultChords(),
 		fontPrefs:        app.DefaultFontPrefs(),
+		resultPrefs:      app.DefaultResultPrefs(),
 		themePrefs:       app.DefaultThemePrefs(),
 		sessions:         map[string]engine.Session{},
 		sessionUse:       map[string]uint64{},
@@ -258,6 +262,7 @@ func newRoot(text string) *root {
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.resView = newResultView()
 	a.fetchStates = map[string]fetchState{}
+	engine.SetResultBudgetMB(app.DefaultResultBudgetMB)
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
@@ -280,6 +285,9 @@ func newRootWithStore(storePath string) *root {
 	r.fontPrefsPath = app.DefaultFontPrefsPath()
 	r.fontPrefs, r.fontPrefsWarn = app.LoadFontPrefs(r.fontPrefsPath)
 	r.applyFontPrefs()
+	r.resultPrefsPath = filepath.Join(filepath.Dir(storePath), "results.json")
+	r.resultPrefs, r.resultPrefsWarn = app.LoadResultPrefs(r.resultPrefsPath)
+	engine.SetResultBudgetMB(r.resultPrefs.BudgetMB)
 	r.themePath = app.DefaultThemePrefsPath()
 	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
 	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")

@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/engine"
 )
 
 // openSettingsSection 打开设置窗口并切到指定分区。
@@ -349,5 +350,37 @@ func TestSettingsTitleBarControls(t *testing.T) {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("settings title bar missing %q: %q", label, tt.Texts())
 		}
+	}
+}
+
+func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.resultPrefsPath = filepath.Join(t.TempDir(), "results.json")
+	if got := engine.ResultBudgetBytes(); got != 8<<20 {
+		t.Fatalf("default budget = %d", got)
+	}
+	tt := openSettingsSection(t, a, "结果")
+	for _, want := range []string{"结果大小预算", "MB", "恢复默认"} {
+		if !tt.HasText(want) {
+			t.Fatalf("结果分区缺少 %q: %q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("Increase"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := engine.ResultBudgetBytes(); got != 9<<20 {
+		t.Fatalf("budget after + = %d, want 9MB", got)
+	}
+	prefs, warn := app.LoadResultPrefs(a.resultPrefsPath)
+	if warn != "" || prefs.BudgetMB != 9 {
+		t.Fatalf("not saved: %+v warn=%q", prefs, warn)
+	}
+	if err := tt.Click("恢复默认"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := engine.ResultBudgetBytes(); got != 8<<20 {
+		t.Fatalf("budget after reset = %d", got)
 	}
 }

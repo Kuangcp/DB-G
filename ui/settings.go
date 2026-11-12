@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/engine"
 )
 
 // settingsSection 是设置窗口左侧导航的一项。
@@ -21,6 +22,7 @@ func (a *root) settingsSections() []settingsSection {
 	return []settingsSection{
 		{"外观", a.appearanceSection},
 		{"字体", a.fontSection},
+		{"结果", a.resultSection},
 		{"AI", a.aiSection},
 		{"快捷键", a.keymapSection},
 		{"连接档案", a.profilesSection},
@@ -158,6 +160,52 @@ func fontPreview(c *ui.Context, sample string, spec app.FontSpec, monoFallback b
 			txt.FontSize(float32(spec.Size))
 		}
 	})
+}
+
+// resultSection 是查询结果的加载预算设置。
+func (a *root) resultSection(c *ui.Context) {
+	cr := controlRadius(c)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "结果").Bold()
+		ui.Spacer(c)
+		if ui.Button(c, "恢复默认").Radius(cr).Clicked() {
+			a.setResultPrefs(app.DefaultResultPrefs())
+		}
+	})
+	ui.Text(c, "超过预算后停止加载后续行，并在结果区显示「结果已截断」；最多返回 500 行。").FontSize(12).
+		TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		mb := float64(a.resultPrefs.BudgetMB)
+		if ui.NumberInput(c, &mb, float64(app.MinResultBudgetMB), float64(app.MaxResultBudgetMB), 1).
+			Label("结果大小预算").Width(90).Radius(cr).Changed() {
+			p := a.resultPrefs
+			p.BudgetMB = int(mb)
+			a.setResultPrefs(p)
+		}
+		ui.Text(c, fmt.Sprintf("MB（当前 %d MB）", a.resultPrefs.BudgetMB)).FontSize(12).
+			TextColor(c.Theme().TextMuted)
+	})
+	ui.Text(c, "预算按结果集文本/二进制单元格的字节数累计；单个单元格另有 1 MiB 驱动上限。").FontSize(11).
+		TextColor(c.Theme().TextMuted)
+	if a.resultPrefsWarn != "" {
+		ui.Text(c, a.resultPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
+	}
+}
+
+// setResultPrefs 更新结果预算：立即作用于后续查询，并写入 results.json。
+func (a *root) setResultPrefs(p app.ResultPrefs) {
+	p = app.NormalizeResultPrefs(p)
+	a.resultPrefs = p
+	engine.SetResultBudgetMB(p.BudgetMB)
+	if a.resultPrefsPath == "" {
+		return
+	}
+	if err := app.SaveResultPrefs(a.resultPrefsPath, p); err != nil {
+		a.resultPrefsWarn = "保存结果设置失败: " + err.Error()
+	} else {
+		a.resultPrefsWarn = ""
+	}
+	a.updateSettingsWindow()
 }
 
 // logSection 显示日志目录与打开入口。

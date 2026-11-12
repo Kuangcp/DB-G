@@ -17,9 +17,8 @@ import (
 )
 
 const (
-	rowLimit      = 500
-	maxCellBytes  = 1 << 20
-	maxResultByte = 16 << 20
+	rowLimit     = 500
+	maxCellBytes = 1 << 20
 )
 
 func init() {
@@ -186,7 +185,7 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 			}
 		}
 		out.Rows = append(out.Rows, vals)
-		if total > maxResultByte {
+		if total > engine.ResultBudgetBytes() {
 			out.Truncated = true
 			break
 		}

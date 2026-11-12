@@ -128,6 +128,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
 | AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
+| 结果加载预算 | `results.json` | `app.ResultPrefs`；结果集大小上限（MB，默认 8），设置页「结果」可改，驱动读取结果时按它截断 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
 
 判断口诀：**删掉实体要不要一起消失、要不要按它查询？** 要 → `connections.json` 的结构化字段；
@@ -155,7 +156,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 
 左右布局：左侧分区导航 + 右侧内容 + 左下角版本号（`app.Version()`，`db-g -version` 也能看）。
 
-- 分区在 `ui/settings.go` 的 `settingsSections()`：外观 / 字体 / 快捷键 / 连接档案 / 日志 / 开发。
+- 分区在 `ui/settings.go` 的 `settingsSections()`：外观 / 字体 / 结果 / AI / 快捷键 / 连接档案 / 日志 / 开发。
   新增一个分区 = 加一行 `{标签, 构建函数}`，右侧内容自动可滚。
 - 导航行用 `ui/navrow.go` 的 `sideNavRow()`：无按钮外观、行底 1px 分隔线、选中 accent 浅底 +
   加粗。连接弹窗左侧的数据源列表用的是同一个（`connKindRow`），新增侧边列表照这个来。
