@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"db-g/app"
 	"db-g/engine"
@@ -49,15 +50,50 @@ func cellStringFor(kind string, r *engine.QueryResult, col int, v any) string {
 	return cellString(v)
 }
 
+// 表格单元格只渲染前 512 个字符：列宽最多 320 DIP，长文本必须截断，
+// 否则 mygo 每帧都要排版整段大字段；复制/查看器仍取全文。
+const (
+	displayCellRunes = 512
+	displayCellBytes = displayCellRunes * 4 // UTF-8 单字符最多 4 字节
+)
+
+// cellTextDisplay 是表格单元格的截断文本；对 []byte 只检查/转换前缀，
+// 避免每帧对 1MB 的 TEXT/BLOB 做完整 UTF-8 校验与排版。
+func cellTextDisplay(v any) string {
+	switch t := v.(type) {
+	case string:
+		return cutRunes(t, displayCellRunes)
+	case []byte:
+		pre := t
+		if len(pre) > displayCellBytes {
+			pre = pre[:displayCellBytes]
+			// 前缀可能切在多字节字符中间，回退最多 3 字节让它成为合法 UTF-8。
+			for i := 0; i < utf8.UTFMax-1 && len(pre) > 0 && !utf8.Valid(pre); i++ {
+				pre = pre[:len(pre)-1]
+			}
+		}
+		if isTextBytes(pre) {
+			s := cutRunes(string(pre), displayCellRunes)
+			if len(t) > len(pre) && !strings.HasSuffix(s, "…") {
+				s += "…"
+			}
+			return s
+		}
+		return fmt.Sprintf("[%d bytes]", len(t))
+	default:
+		return cellText(v)
+	}
+}
+
 // cellTextFor 是表格单元格的展示文本：MySQL DATETIME/TIMESTAMP 用
-// YYYY-MM-DD HH:MM:SS[.ffffff]，其余列保持 cellText 的截断/二进制摘要行为。
+// YYYY-MM-DD HH:MM:SS[.ffffff]，其余列只渲染前 512 个字符。
 func cellTextFor(kind string, r *engine.QueryResult, col int, v any) string {
 	if kind == "mysql" && app.MySQLDateTimeType(resultColumnType(r, col)) {
 		if t, ok := v.(time.Time); ok {
 			return app.MySQLDateTimeText(t)
 		}
 	}
-	return cellText(v)
+	return cellTextDisplay(v)
 }
 
 // formatCellText 返回查看器里的文本：JSON 美化（仅当文本是合法 JSON 对象/数组），

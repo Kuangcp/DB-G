@@ -839,7 +839,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 				ui.Text(c, "").SingleLine()
 				return
 			}
-			ui.Text(c, cellText(v)).SingleLine().TextColor(c.Theme().Success)
+			ui.Text(c, cellTextDisplay(v)).SingleLine().TextColor(c.Theme().Success)
 			return
 		}
 		ri := displayRows[row]
@@ -981,7 +981,7 @@ func resultWidths(r *engine.QueryResult) []float32 {
 			if i >= len(row) {
 				continue
 			}
-			if u := displayWidth(cutRunes(cellText(row[i]), 128)); u > units {
+			if u := displayWidth(cutRunes(cellTextDisplay(row[i]), 128)); u > units {
 				units = u
 			}
 		}

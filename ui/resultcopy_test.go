@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -173,5 +175,24 @@ func TestCopyLongCellKeepsFullText(t *testing.T) {
 	tt.Frame()
 	if got := tt.Clipboard(); got != long {
 		t.Fatalf("clipboard length = %d, want %d", len(got), len(long))
+	}
+}
+
+func TestCellTextDisplayBoundedCopyFull(t *testing.T) {
+	long := strings.Repeat("甲", 100_000)
+	r := &engine.QueryResult{IsQuery: true, Columns: []string{"raw"}, Rows: [][]any{{[]byte(long)}}}
+	display := cellTextFor("", r, 0, r.Rows[0][0])
+	if n := len([]rune(display)); n > displayCellRunes+1 {
+		t.Fatalf("display length = %d runes, want <= %d", n, displayCellRunes+1)
+	}
+	if !strings.HasSuffix(display, "…") {
+		t.Fatalf("long display must end with ellipsis: %q", display)
+	}
+	if full := cellStringFor("", r, 0, r.Rows[0][0]); full != long {
+		t.Fatalf("copy must stay full: got %d runes", len([]rune(full)))
+	}
+	bin := append([]byte{0}, bytes.Repeat([]byte("x"), displayCellBytes+100)...)
+	if got := cellTextDisplay(bin); got != fmt.Sprintf("[%d bytes]", len(bin)) {
+		t.Fatalf("binary display = %q", got)
 	}
 }
