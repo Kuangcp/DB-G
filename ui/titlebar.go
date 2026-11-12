@@ -74,6 +74,7 @@ func (a *root) titleBar(c *ui.Context) {
 		if a.appIcon != nil {
 			ui.Image(c, a.appIcon).Width(20).Height(20)
 		}
+		ui.Text(c, app.DisplayName).Bold().FontSize(12.5)
 		ui.Spacer(c)
 		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
 			if iconButtonPlain(c, iconFolderOpen, "打开 SQL 文件", t.TextMuted).Clicked() {
