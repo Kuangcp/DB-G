@@ -188,6 +188,10 @@ type root struct {
 	exportConfirm       bool
 	exportFormat        string
 	exportStatus        string
+	exportBusy          bool
+	exportFull          bool
+	exportRows          atomic.Int64
+	exportCloseConfirm  bool
 	cellViewOpen        bool
 	cellViewTitle       string
 	cellViewText        string
@@ -614,6 +618,14 @@ func (a *root) Attach(win *mygo.Window) {
 	win.OnFileDrop(func(e *mygo.FileDropEvent) { a.handleDroppedFiles(e.Paths) })
 	win.OnFocus(func() { a.pollExternalFiles(true) })
 	win.OnClose(func(e *mygo.CloseEvent) {
+		// 导出尚未完成时先确认，避免用户顺手关窗把导出中断成半截文件。
+		if a.exportBusy {
+			e.PreventDefault()
+			if !a.exportCloseConfirm {
+				a.safeUpdate(win, func() { a.exportCloseConfirm = true })
+			}
+			return
+		}
 		// 外部文件有未解决冲突/缺失且本地有改动时，先让用户选择，别默默丢内容。
 		if id := a.firstBlockedExternal(); id != "" {
 			e.PreventDefault()
@@ -725,6 +737,7 @@ func (a *root) view(c *ui.Context) {
 		a.cellViewer(c)
 		a.filterModal(c)
 		a.exportConfirmModal(c)
+		a.exportCloseModal(c)
 		a.historyPanel(c)
 		a.ddlPanel(c)
 		a.editCellModal(c)

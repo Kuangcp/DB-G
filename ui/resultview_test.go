@@ -166,9 +166,10 @@ func TestExportCurrentAndFull(t *testing.T) {
 	}
 
 	jsonPath := dir + "/out.json"
-	n, err = a.exportTo(jsonPath, "json", true) // 全量流式
-	if err != nil || n != 2 {
-		t.Fatalf("full export: n=%d err=%v", n, err)
+	progress := 0
+	n, err = a.exportToProgress(jsonPath, "json", true, func(v int) { progress = v }) // 全量流式
+	if err != nil || n != 2 || progress != 2 {
+		t.Fatalf("full export: n=%d progress=%d err=%v", n, progress, err)
 	}
 	data, _ = os.ReadFile(jsonPath)
 	if !strings.Contains(string(data), `"name":"bob"`) {

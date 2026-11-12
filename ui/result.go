@@ -658,7 +658,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		}).Label("结果操作")
 		ui.Divider(c)
 		a.pinButton(c)
-		iconButtonPlain(c, iconDownload, "导出…", ui.Transparent).Menu(func(m *ui.Menu) {
+		iconButtonPlain(c, iconDownload, "导出…", ui.Transparent).Disabled(a.exportBusy).Menu(func(m *ui.Menu) {
 			if m.Item("当前结果 CSV").Chosen() {
 				a.pickExport("csv", false)
 			}
@@ -676,7 +676,17 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 				a.confirmFullExport("json")
 			}
 		})
-		if a.exportStatus != "" {
+		if a.exportBusy {
+			ui.Spinner(c)
+			label := "正在导出 " + strings.ToUpper(a.exportFormat) + "，请勿关闭应用"
+			if a.exportFull {
+				label = "正在全量导出 " + strings.ToUpper(a.exportFormat) + "，请勿关闭应用"
+			}
+			if n := a.exportRows.Load(); n > 0 {
+				label += fmt.Sprintf(" · 已写 %d 行", n)
+			}
+			ui.Text(c, label).FontSize(12).TextColor(c.Theme().Accent).SingleLine()
+		} else if a.exportStatus != "" {
 			ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 			if iconButtonPlain(c, iconClose, "清除导出提示", ui.Transparent).Clicked() {
 				a.exportStatus = ""
@@ -1137,6 +1147,29 @@ func (a *root) exportConfirmModal(c *ui.Context) {
 	})
 }
 
+// exportCloseModal 在导出进行中阻止关窗时给用户选择。
+func (a *root) exportCloseModal(c *ui.Context) {
+	if !a.exportCloseConfirm {
+		return
+	}
+	ui.Modal(c, &a.exportCloseConfirm, func() {
+		ui.Text(c, "正在导出，确定退出？").Bold()
+		ui.Text(c, "导出尚未完成，退出会中断并留下不完整的文件。").TextColor(c.Theme().TextMuted)
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, "继续导出").Clicked() {
+				a.exportCloseConfirm = false
+			}
+			if ui.Button(c, "仍要退出").TextColor(c.Theme().Danger).Clicked() {
+				a.exportCloseConfirm = false
+				a.exportBusy = false
+				if a.win != nil {
+					a.win.Close()
+				}
+			}
+		})
+	})
+}
+
 // pickExport 弹保存对话框（goroutine），选定后后台导出。
 func (a *root) pickExport(format string, full bool) {
 	win := a.win
@@ -1157,10 +1190,24 @@ func (a *root) pickExport(format string, full bool) {
 			return
 		}
 		a.safeUpdate(win, func() {
-			a.exportStatus = "导出中…"
+			a.exportStatus = ""
+			a.exportBusy = true
+			a.exportFull = full
+			a.exportFormat = format
+			a.exportRows.Store(0)
+			a.exportCloseConfirm = false
 		})
-		n, err := a.exportTo(path, format, full)
+		var progress func(int)
+		if full {
+			progress = func(n int) {
+				a.exportRows.Store(int64(n))
+				a.safeUpdate(win, func() {})
+			}
+		}
+		n, err := a.exportToProgress(path, format, full, progress)
 		a.safeUpdate(win, func() {
+			a.exportBusy = false
+			a.exportCloseConfirm = false
 			if err != nil {
 				a.exportStatus = "导出失败: " + err.Error()
 				app.LogError("export", "failed", "path", path, "format", format, "err", err.Error())
@@ -1191,9 +1238,18 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 		if err != nil || path == "" {
 			return
 		}
-		a.safeUpdate(win, func() { a.exportStatus = "导出中…" })
+		a.safeUpdate(win, func() {
+			a.exportStatus = ""
+			a.exportBusy = true
+			a.exportFull = false
+			a.exportFormat = format
+			a.exportRows.Store(0)
+			a.exportCloseConfirm = false
+		})
 		n, err := a.exportSelectionTo(path, format, rows, cols)
 		a.safeUpdate(win, func() {
+			a.exportBusy = false
+			a.exportCloseConfirm = false
 			if err != nil {
 				a.exportStatus = "导出失败: " + err.Error()
 				app.LogError("export", "selection failed", "path", path, "format", format, "err", err.Error())
@@ -1235,6 +1291,12 @@ func (a *root) exportSelectionTo(path, format string, rows, cols []int) (int, er
 
 // exportTo 同步导出（对话框之外的实现；测试直接调用）。
 func (a *root) exportTo(path, format string, full bool) (int, error) {
+	return a.exportToProgress(path, format, full, nil)
+}
+
+// exportToProgress 是 exportTo 的带进度版本；progress 在流式全量导出时按行数回调，
+// 用于在界面上显示「正在导出」。非全量导出不回调。
+func (a *root) exportToProgress(path, format string, full bool, progress func(int)) (int, error) {
 	kind := a.connKind()
 	table := ""
 	if _, ok := fetchMoreSQL(a.lastExecSQL, 0, 1); ok {
@@ -1251,10 +1313,26 @@ func (a *root) exportTo(path, format string, full bool) (int, error) {
 			return 0, errors.New("当前数据源不支持流式导出")
 		}
 		sql := a.lastExecSQL
+		written := 0
+		last := time.Now()
 		stream := func(onCols func([]string) error, onRow func([]any) error) error {
-			return streamer.Stream(context.Background(), sql, onCols, onRow)
+			return streamer.Stream(context.Background(), sql, onCols, func(row []any) error {
+				if err := onRow(row); err != nil {
+					return err
+				}
+				written++
+				if progress != nil && (written%500 == 0 || time.Since(last) >= 200*time.Millisecond) {
+					last = time.Now()
+					progress(written)
+				}
+				return nil
+			})
 		}
-		return app.ExportStream(path, format, kind, table, stream)
+		n, err := app.ExportStream(path, format, kind, table, stream)
+		if progress != nil {
+			progress(n)
+		}
+		return n, err
 	}
 	r := a.currentRuntime().Result()
 	if r == nil || !r.IsQuery {

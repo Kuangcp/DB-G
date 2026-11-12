@@ -527,3 +527,27 @@ func TestCellViewerWrapChangesTextWidth(t *testing.T) {
 		t.Fatalf("wrap must render multiple lines: wrapped=%v plain=%v", wrapped, plain)
 	}
 }
+
+func TestExportBusyIndicator(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"id"},
+		Rows:    [][]any{{int64(1)}},
+	}, "")
+	a.exportBusy = true
+	a.exportFull = true
+	a.exportFormat = "csv"
+	a.exportRows.Store(1234)
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if !tt.HasText("正在全量导出 CSV") || !tt.HasText("已写 1234 行") {
+		t.Fatalf("busy export indicator missing: %q", tt.Texts())
+	}
+
+	a.exportCloseConfirm = true
+	tt.Frame()
+	if !tt.HasText("正在导出，确定退出？") || !tt.HasText("继续导出") || !tt.HasText("仍要退出") {
+		t.Fatalf("close confirmation missing: %q", tt.Texts())
+	}
+}
