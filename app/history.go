@@ -21,15 +21,7 @@ type HistoryEntry struct {
 	OK       bool   `json:"ok"`
 	Rows     int    `json:"rows,omitempty"`
 	Err      string `json:"err,omitempty"`
-	// Kind 区分记录来源；空串是正常执行（旧记录也按此解释），
-	// HistoryKindAIRewrite 表示 Ctrl+K 生成的 SQL。
-	Kind string `json:"kind,omitempty"`
-	// Note 是附加说明（如改写要求），只用于展示。
-	Note string `json:"note,omitempty"`
 }
-
-// HistoryKindAIRewrite 标记 AI 改写产生的历史记录。
-const HistoryKindAIRewrite = "ai-rewrite"
 
 // HistoryKeep 是裁剪后保留的条数；HistoryTrimAt 是触发裁剪的条数。
 // 每追加到 6000 条才重写一次文件，回到 5000 条，减少磁盘写。

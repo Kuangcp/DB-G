@@ -26,8 +26,6 @@ type aiRewriteState struct {
 	seq         uint64
 	cancel      context.CancelFunc
 	diff        *myeditor.DiffState
-	started     time.Time
-	durMS       int64
 }
 
 // openAIRewrite 用当前选区（无选区时用光标所在语句）打开改写弹窗。
@@ -66,7 +64,6 @@ func (a *root) startAIRewrite() {
 	a.recordAIRequest("改写", a.aiModelName(),
 		aiContextNote(snap, fmt.Sprintf("待改写 %dB · 要求 %dB", len(st.target), len(instruction))), msgs)
 	st.loading, st.err, st.result, st.diff = true, "", "", nil
-	st.started = time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	st.seq++
 	seq := st.seq
@@ -125,7 +122,6 @@ func (a *root) finishAIRewrite(seq uint64, raw string, err error) {
 		return
 	}
 	st.loading, st.cancel = false, nil
-	st.durMS = time.Since(st.started).Milliseconds()
 	if err != nil {
 		st.err = err.Error()
 		return
@@ -147,7 +143,53 @@ func (a *root) finishAIRewrite(seq uint64, raw string, err error) {
 		Indicators:   myeditor.DiffClassic,
 		ContextLines: 5,
 	}
+	a.recordAIRewriteConversation()
 	app.LogInfo("ai", "rewrite ready", "in_len", len(st.target), "out_len", len(fixed))
+}
+
+// recordAIRewriteConversation 把这次 Ctrl+K 对话写进当前工作区的 AI 会话历史。
+// 执行历史只记真实执行，改写结果不混进去。
+func (a *root) recordAIRewriteConversation() {
+	st := &a.aiRewrite
+	instruction := strings.TrimSpace(st.instruction)
+	if st.result == "" || instruction == "" {
+		return
+	}
+	if !a.ensureAIChatStore() {
+		return
+	}
+	now := time.Now().UnixMilli()
+	title := "改写：" + truncateRunes(firstLine(instruction), 28)
+	conv := app.AIConversation{
+		ID:        app.NewAIConversationID(),
+		Title:     title,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Messages: []app.AIMessageRecord{
+			{Role: "user", Text: rewriteConversationUser(st.target, instruction), Done: true, Time: now},
+			{Role: "assistant", Text: "```sql\n" + st.result + "\n```", Done: true, Time: now},
+		},
+	}
+	a.aiChat.store.Conversations = append(a.aiChat.store.Conversations, conv)
+	if a.aiChat.store.ActiveID == "" {
+		a.aiChat.store.ActiveID = conv.ID
+	}
+	a.saveAIChat()
+	app.LogInfo("ai", "rewrite conversation saved", "out_len", len(st.result))
+}
+
+// rewriteConversationUser 是写进 AI 历史里的用户消息；保留原文才看得出改了什么。
+func rewriteConversationUser(target, instruction string) string {
+	return "要求：" + instruction + "\n\n原文：\n```sql\n" + target + "\n```"
+}
+
+// truncateRunes 截到 n 个字符并补省略号。
+func truncateRunes(s string, n int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= n {
+		return string(r)
+	}
+	return string(r[:n]) + "…"
 }
 
 // stopAIRewrite 取消改写请求。
@@ -185,36 +227,7 @@ func (a *root) applyAIRewrite(appendMode bool) {
 	} else {
 		a.code.Replace(st.start, st.end, st.result)
 	}
-	a.addAIRewriteHistory(appendMode)
 	st.open = false
-}
-
-// addAIRewriteHistory 把应用后的 SQL 记入当前数据源的执行历史，用 Kind 区分。
-func (a *root) addAIRewriteHistory(appended bool) {
-	st := &a.aiRewrite
-	if a.history == nil || strings.TrimSpace(st.result) == "" {
-		return
-	}
-	mode := "替换选区"
-	if appended {
-		mode = "追加到选区后"
-	}
-	note := strings.TrimSpace(st.instruction)
-	if note == "" {
-		note = mode
-	} else {
-		note += "（" + mode + "）"
-	}
-	e := app.HistoryEntry{
-		ConnID: a.activeConnID(), ConnName: a.activeConnName(),
-		SQL: st.result, DurMS: st.durMS, OK: true,
-		Kind: app.HistoryKindAIRewrite, Note: note,
-	}
-	if err := a.history.Add(e); err != nil {
-		app.LogWarn("ai", "rewrite history failed", "err", err.Error())
-		return
-	}
-	app.LogInfo("ai", "rewrite applied", "mode", mode, "out_len", len(st.result))
 }
 
 // aiRewriteModal 是 Ctrl+K 打开的改写浮窗。

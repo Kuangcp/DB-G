@@ -40,6 +40,8 @@ type aiChatState struct {
 	md            markdown.Options
 	scroll        ui.ScrollState
 	store         app.AIConversationStore
+	storeLoaded   bool
+	storePath     string
 	convID        string
 	showHistory   bool
 	historyQuery  string
@@ -341,13 +343,41 @@ func (a *root) aiChatFile() string {
 	return app.AIConversationPath(filepath.Dir(a.aiPrefsPath), ws.ID)
 }
 
-// loadAIChat 读取当前工作区会话（打开面板时调用）。
-func (a *root) loadAIChat() {
-	store, warn := app.LoadAIConversations(a.aiChatFile())
+// ensureAIChatStore 保证内存里是当前工作区的会话库；切换工作区后重新读盘。
+// 返回 false 表示没有可落盘的位置（测试或未配置）。
+func (a *root) ensureAIChatStore() bool {
+	path := a.aiChatFile()
+	if path == "" {
+		return false
+	}
+	if a.aiChat.storeLoaded && a.aiChat.storePath == path {
+		return true
+	}
+	if a.aiChat.storeLoaded && a.aiChat.storePath != "" {
+		// 旧工作区还有未落盘的消息：先写回旧文件，再切到新工作区。
+		a.syncAIChat()
+		if err := app.SaveAIConversations(a.aiChat.storePath, a.aiChat.store); err != nil {
+			a.aiWarn = "保存 AI 会话失败：" + err.Error()
+		}
+	}
+	store, warn := app.LoadAIConversations(path)
 	if warn != "" {
 		a.aiWarn = warn
 	}
 	a.aiChat.store = store
+	a.aiChat.storeLoaded = true
+	a.aiChat.storePath = path
+	return true
+}
+
+// loadAIChat 读取当前工作区会话（打开面板时调用）。
+func (a *root) loadAIChat() {
+	if !a.ensureAIChatStore() {
+		a.aiChat.convID = ""
+		a.newAIConversation()
+		return
+	}
+	store := a.aiChat.store
 	id := store.ActiveID
 	if id == "" && len(store.Conversations) > 0 {
 		id = store.Conversations[0].ID

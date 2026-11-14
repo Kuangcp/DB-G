@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,6 +47,7 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 	}}
 	a.aiTestProvider = p
 	a.aiPrefs.Model = "fake"
+	a.aiPrefsPath = filepath.Join(t.TempDir(), "ai.json")
 	a.history = app.OpenHistory(t.TempDir())
 	a.aiRewrite.instruction = "只查 id"
 	a.startAIRewrite()
@@ -69,19 +71,33 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 	if a.aiRewrite.open {
 		t.Fatal("modal should close after apply")
 	}
-	entries := a.history.List(a.activeConnID(), 10)
-	if len(entries) != 1 || entries[0].Kind != app.HistoryKindAIRewrite {
-		t.Fatalf("rewrite history: %+v", entries)
+	// 执行历史只记真实执行；这次改写不能混进去。
+	if entries := a.history.List(a.activeConnID(), 10); len(entries) != 0 {
+		t.Fatalf("execution history must stay clean: %+v", entries)
 	}
-	if entries[0].SQL != "SELECT id FROM users WHERE id = 1" || entries[0].Note == "" {
-		t.Fatalf("rewrite history entry: %+v", entries[0])
+	// Ctrl+K 的对话进 AI 助手会话历史。
+	store, warn := app.LoadAIConversations(a.aiChatFile())
+	if warn != "" {
+		t.Fatal(warn)
+	}
+	if len(store.Conversations) != 1 {
+		t.Fatalf("AI conversations: %+v", store.Conversations)
+	}
+	conv := store.Conversations[0]
+	if !strings.HasPrefix(conv.Title, "改写：只查 id") {
+		t.Fatalf("title: %q", conv.Title)
+	}
+	if len(conv.Messages) != 2 || !strings.Contains(conv.Messages[1].Text, "SELECT id FROM users") {
+		t.Fatalf("messages: %+v", conv.Messages)
 	}
 
-	// 历史面板要能看出这是 AI 改写，而不是普通执行。
-	a.historyOpen = true
+	// AI 助手的「会话历史」里能看到这次改写。
+	a.aiChat.open = true
+	a.aiChat.showHistory = true
+	a.loadAIChat()
 	tt.Frame()
-	if !tt.HasText("AI 改写") {
-		t.Fatalf("history panel missing type label: %q", tt.Texts())
+	if !tt.HasText("改写：只查 id") {
+		t.Fatalf("AI history missing rewrite: %q", tt.Texts())
 	}
 }
 
