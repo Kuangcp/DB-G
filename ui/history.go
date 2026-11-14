@@ -66,6 +66,13 @@ func (a *root) historyRow(c *ui.Context, e app.HistoryEntry) {
 	ui.Row(c).Gap(8).PaddingEnd(8).Children(func() {
 		ui.Text(c, status).FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Text(c, when).FontSize(12).TextColor(c.Theme().TextMuted)
+		if e.Kind != "" {
+			label := historyKindLabel(e.Kind)
+			tag := ui.Text(c, label).FontSize(10.5).TextColor(c.Theme().Accent)
+			if e.Note != "" {
+				tag.Tooltip(e.Note)
+			}
+		}
 		if e.ConnName != "" {
 			ui.Text(c, e.ConnName).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 		}
@@ -79,6 +86,15 @@ func (a *root) historyRow(c *ui.Context, e app.HistoryEntry) {
 			c.WriteClipboard(e.SQL)
 		}
 	})
+}
+
+// historyKindLabel 把记录类型翻成面板里的短标签；未知类型原样显示。
+func historyKindLabel(kind string) string {
+	switch kind {
+	case app.HistoryKindAIRewrite:
+		return "AI 改写"
+	}
+	return kind
 }
 
 func firstLine(s string) string {

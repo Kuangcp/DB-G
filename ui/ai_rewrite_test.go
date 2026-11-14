@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/ai"
+	"db-g/app"
 )
 
 func TestCtrlKOpensRewriteForSelection(t *testing.T) {
@@ -26,7 +27,7 @@ func TestCtrlKOpensRewriteForSelection(t *testing.T) {
 	if got := a.code.Text(); got != sql {
 		t.Fatalf("Ctrl+K must not cut to line end: %q", got)
 	}
-	if !tt.HasText("AI 改写 SQL") {
+	if !tt.HasText("AI 改写 SQL") || !tt.HasText("Ctrl+Enter 发送指令") {
 		t.Fatalf("modal missing: %q", tt.Texts())
 	}
 }
@@ -45,6 +46,7 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 	}}
 	a.aiTestProvider = p
 	a.aiPrefs.Model = "fake"
+	a.history = app.OpenHistory(t.TempDir())
 	a.aiRewrite.instruction = "只查 id"
 	a.startAIRewrite()
 
@@ -66,6 +68,20 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 	}
 	if a.aiRewrite.open {
 		t.Fatal("modal should close after apply")
+	}
+	entries := a.history.List(a.activeConnID(), 10)
+	if len(entries) != 1 || entries[0].Kind != app.HistoryKindAIRewrite {
+		t.Fatalf("rewrite history: %+v", entries)
+	}
+	if entries[0].SQL != "SELECT id FROM users WHERE id = 1" || entries[0].Note == "" {
+		t.Fatalf("rewrite history entry: %+v", entries[0])
+	}
+
+	// 历史面板要能看出这是 AI 改写，而不是普通执行。
+	a.historyOpen = true
+	tt.Frame()
+	if !tt.HasText("AI 改写") {
+		t.Fatalf("history panel missing type label: %q", tt.Texts())
 	}
 }
 

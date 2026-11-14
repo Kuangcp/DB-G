@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
@@ -25,6 +26,8 @@ type aiRewriteState struct {
 	seq         uint64
 	cancel      context.CancelFunc
 	diff        *myeditor.DiffState
+	started     time.Time
+	durMS       int64
 }
 
 // openAIRewrite 用当前选区（无选区时用光标所在语句）打开改写弹窗。
@@ -63,6 +66,7 @@ func (a *root) startAIRewrite() {
 	a.recordAIRequest("改写", a.aiModelName(),
 		aiContextNote(snap, fmt.Sprintf("待改写 %dB · 要求 %dB", len(st.target), len(instruction))), msgs)
 	st.loading, st.err, st.result, st.diff = true, "", "", nil
+	st.started = time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	st.seq++
 	seq := st.seq
@@ -121,6 +125,7 @@ func (a *root) finishAIRewrite(seq uint64, raw string, err error) {
 		return
 	}
 	st.loading, st.cancel = false, nil
+	st.durMS = time.Since(st.started).Milliseconds()
 	if err != nil {
 		st.err = err.Error()
 		return
@@ -180,7 +185,36 @@ func (a *root) applyAIRewrite(appendMode bool) {
 	} else {
 		a.code.Replace(st.start, st.end, st.result)
 	}
+	a.addAIRewriteHistory(appendMode)
 	st.open = false
+}
+
+// addAIRewriteHistory 把应用后的 SQL 记入当前数据源的执行历史，用 Kind 区分。
+func (a *root) addAIRewriteHistory(appended bool) {
+	st := &a.aiRewrite
+	if a.history == nil || strings.TrimSpace(st.result) == "" {
+		return
+	}
+	mode := "替换选区"
+	if appended {
+		mode = "追加到选区后"
+	}
+	note := strings.TrimSpace(st.instruction)
+	if note == "" {
+		note = mode
+	} else {
+		note += "（" + mode + "）"
+	}
+	e := app.HistoryEntry{
+		ConnID: a.activeConnID(), ConnName: a.activeConnName(),
+		SQL: st.result, DurMS: st.durMS, OK: true,
+		Kind: app.HistoryKindAIRewrite, Note: note,
+	}
+	if err := a.history.Add(e); err != nil {
+		app.LogWarn("ai", "rewrite history failed", "err", err.Error())
+		return
+	}
+	app.LogInfo("ai", "rewrite applied", "mode", mode, "out_len", len(st.result))
 }
 
 // aiRewriteModal 是 Ctrl+K 打开的改写浮窗。
@@ -196,6 +230,7 @@ func (a *root) aiRewriteModal(c *ui.Context) {
 			ui.Spacer(c)
 			ui.Text(c, "生成结果不会自动执行；应用前可看 diff").FontSize(11).TextColor(t.TextMuted)
 		})
+		ui.Text(c, "Ctrl+Enter 发送指令；应用前不会改动正文").FontSize(11).TextColor(t.TextMuted)
 		ui.TextArea(c, &st.instruction).
 			Lines(2, 4).
 			Placeholder("例如：改成参数化查询 / 只保留需要的列 / 加上时间范围过滤").
