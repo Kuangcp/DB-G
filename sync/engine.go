@@ -38,13 +38,26 @@ func NewEngine(workTree, remote, branch, sshKey string) *Engine {
 	}
 }
 
-// EnsureRepo 创建工作树、初始化 git、设置 origin 与本地身份。
+// EnsureRepo 创建工作树、初始化 git、设置 origin 与本地身份，并把本地分支绑到配置分支。
 func (e *Engine) EnsureRepo(ctx context.Context) error {
 	if err := e.Git.Init(ctx); err != nil {
 		return err
 	}
 	e.Git.SetIdentity(ctx)
-	return e.Git.SetRemote(ctx, e.Remote)
+	if err := e.Git.SetRemote(ctx, e.Remote); err != nil {
+		return err
+	}
+	e.BindBranch(ctx)
+	return nil
+}
+
+// BindBranch 让未提交的仓库使用配置的分支名，并写入 origin 跟踪配置。
+// 远端还没有该分支时也先写配置，首次 push 后即可正常跟踪。
+func (e *Engine) BindBranch(ctx context.Context) {
+	if cur, err := e.Git.CurrentBranch(ctx); err == nil && cur != "" && cur != e.Branch && !e.Git.HasCommits(ctx) {
+		_ = e.Git.SymbolicRef(ctx, "refs/heads/"+e.Branch)
+	}
+	e.Git.SetBranchTracking(ctx, e.Branch, "origin")
 }
 
 // Fetch 拉取远端分支。

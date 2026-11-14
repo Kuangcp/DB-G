@@ -126,6 +126,37 @@ func (g *Git) SetRemote(ctx context.Context, url string) error {
 	return err
 }
 
+// CurrentBranch 返回当前分支名；仓库还没有提交时用 symbolic-ref 也能拿到名字。
+func (g *Git) CurrentBranch(ctx context.Context) (string, error) {
+	if out, err := g.run(ctx, "symbolic-ref", "--short", "HEAD"); err == nil {
+		if name := strings.TrimSpace(out); name != "" {
+			return name, nil
+		}
+	}
+	out, err := g.run(ctx, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	name := strings.TrimSpace(out)
+	if name == "HEAD" {
+		return "", nil
+	}
+	return name, nil
+}
+
+// SymbolicRef 把 HEAD 指向一个尚未提交的分支。
+func (g *Git) SymbolicRef(ctx context.Context, ref string) error {
+	_, err := g.run(ctx, "symbolic-ref", "HEAD", ref)
+	return err
+}
+
+// SetBranchTracking 写入 origin/<branch> 的跟踪配置；远端 ref 还不存在时只写配置。
+func (g *Git) SetBranchTracking(ctx context.Context, branch, remote string) {
+	_, _ = g.run(ctx, "config", "branch."+branch+".remote", remote)
+	_, _ = g.run(ctx, "config", "branch."+branch+".merge", "refs/heads/"+branch)
+	_, _ = g.run(ctx, "branch", "--set-upstream-to="+remote+"/"+branch, branch)
+}
+
 // HasCommits 报告本地是否已有提交。
 func (g *Git) HasCommits(ctx context.Context) bool {
 	_, err := g.run(ctx, "rev-parse", "--verify", "HEAD")

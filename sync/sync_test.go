@@ -2,6 +2,7 @@ package sync
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -162,5 +163,21 @@ func TestWriteFilesSweepsStaleEntities(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(eng.WorkTree, "README.md")); err != nil {
 		t.Fatal("README should be kept")
+	}
+}
+
+func TestEnsureRepoBindsConfiguredBranch(t *testing.T) {
+	dir := t.TempDir()
+	eng := NewEngine(filepath.Join(dir, "repo"), "https://example.invalid/db-g.git", "develop", "")
+	if err := eng.EnsureRepo(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	cur, err := eng.Git.CurrentBranch(context.Background())
+	if err != nil || cur != "develop" {
+		t.Fatalf("branch: %q %v", cur, err)
+	}
+	cfg, _ := os.ReadFile(filepath.Join(eng.WorkTree, ".git", "config"))
+	if !strings.Contains(string(cfg), "[branch \"develop\"]") {
+		t.Fatalf("tracking config missing:\n%s", cfg)
 	}
 }

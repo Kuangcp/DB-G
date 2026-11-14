@@ -171,6 +171,7 @@ func (s *SyncService) push(ctx context.Context, eng *sync.Engine, prefs SyncPref
 	if err := eng.Git.Push(ctx, prefs.Branch); err != nil {
 		return SyncOutcome{Message: pushMessage(err)}
 	}
+	eng.BindBranch(ctx)
 	s.markSynced()
 	LogInfo("sync", "push ok", "written", stats.Written, "deleted", stats.Deleted, "conns", len(snap.Conns), "consoles", len(snap.Consoles))
 	return SyncOutcome{
@@ -181,7 +182,14 @@ func (s *SyncService) push(ctx context.Context, eng *sync.Engine, prefs SyncPref
 
 func (s *SyncService) pull(ctx context.Context, eng *sync.Engine, prefs SyncPrefs, key []byte) SyncOutcome {
 	if _, ok := eng.RemoteRef(ctx); !ok {
-		return SyncOutcome{Message: "远端分支还没有数据；请先点击「提交并推送」"}
+		// 远端还没有提交：把这次拉取当成首次初始化，绑定好本地分支即可，不报错。
+		eng.BindBranch(ctx)
+		s.markSynced()
+		return SyncOutcome{
+			OK: true,
+			Message: fmt.Sprintf("远端仓库为空，已初始化本地仓库并绑定分支 %s；可点击「提交并推送」",
+				prefs.Branch),
+		}
 	}
 	snap := s.Snapshot()
 	hasLocal := eng.HasLocalCommits(ctx)
@@ -191,6 +199,7 @@ func (s *SyncService) pull(ctx context.Context, eng *sync.Engine, prefs SyncPref
 		if err := eng.ResetToRemote(ctx); err != nil {
 			return SyncOutcome{Message: "拉取失败：" + gitMessage(err)}
 		}
+		eng.BindBranch(ctx)
 		return s.importTree(eng, prefs, key, "已拉取远端数据")
 	}
 	if !localEmpty {
@@ -218,6 +227,7 @@ func (s *SyncService) pull(ctx context.Context, eng *sync.Engine, prefs SyncPref
 		}
 		return SyncOutcome{Message: "合并失败：" + gitMessage(err)}
 	}
+	eng.BindBranch(ctx)
 	return s.importTree(eng, prefs, key, "已拉取并导入")
 }
 

@@ -90,6 +90,19 @@ func TestSyncServiceTwoDevices(t *testing.T) {
 	a := newSyncDevice(t, remote, key)
 	b := newSyncDevice(t, remote, key)
 
+	// 空仓库的第一次拉取应当是初始化成功，而不是“远端还没有数据”的错误。
+	res := syncRun(t, a.service, "pull")
+	if !res.OK || res.Applied || !strings.Contains(res.Message, "远端仓库为空") {
+		t.Fatalf("initialize empty remote: %+v", res)
+	}
+	if cur, err := exec.Command("git", "-C", filepath.Join(a.dir, "sync", "repo"), "symbolic-ref", "--short", "HEAD").Output(); err != nil || strings.TrimSpace(string(cur)) != "main" {
+		t.Fatalf("branch after init: %q %v", cur, err)
+	}
+	cfg, _ := os.ReadFile(filepath.Join(a.dir, "sync", "repo", ".git", "config"))
+	if !strings.Contains(string(cfg), "[branch \"main\"]") {
+		t.Fatalf("branch tracking missing:\n%s", cfg)
+	}
+
 	conn := a.addConn(t, "本地", "pw-1")
 	console := a.addConsole(t, conn.ID, "查询", "select 1;")
 	// 建一个工作区，确认跨设备同步。
@@ -101,7 +114,7 @@ func TestSyncServiceTwoDevices(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := syncRun(t, a.service, "push")
+	res = syncRun(t, a.service, "push")
 	if !res.OK {
 		t.Fatalf("push A: %+v", res)
 	}

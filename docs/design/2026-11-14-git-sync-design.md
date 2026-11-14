@@ -248,6 +248,8 @@ import 方向：`ui → app → sync`，`sync` 不 import `app/ui/engine`。AGEN
 5. 本地快照写工作树 + commit（保证本地未推送改动进入合并面）；
    写盘/提交前同样跑 §9 扫描，避免敏感 SQL 进入本地提交历史（取消则整次拉取中止）
 6. git fetch origin <branch>
+   - 远端还没有该分支（空仓库）：不报错，绑定本地分支与 origin 跟踪配置后直接返回
+     「已初始化，可提交并推送」；这是第一次使用空仓库的正常路径
    - 本地还没有任何提交：直接 reset --hard origin/<branch>
    - 否则 git merge --no-edit（无共同祖先时 --allow-unrelated-histories）
 7. 冲突：
@@ -407,7 +409,7 @@ SSH 私钥     [ ~/.ssh/id_ed25519            ] [选择…]
 |---|---|
 | `sync/secret` | 密钥生成/读写 0600、加解密往返、错误密钥失败、KCV 计算/比对、密文前缀 |
 | `sync/paths` | 实体路径 ↔ id、非 `db-g/` 路径忽略、JSON/ENC 扩展名 |
-| `sync/engine`（临时裸仓，git 缺失则 skip） | init→commit→push；clone→import；两边改不同控制台自动合并；两边改同一控制台冲突检测；一边删一边没改传播删除；空库守卫；push 被拒 |
+| `sync/engine`（临时裸仓，git 缺失则 skip） | init→commit→push；空仓库首次拉取只初始化并绑定分支；clone→import；两边改不同控制台自动合并；两边改同一控制台冲突检测；一边删一边没改传播删除；空库守卫；push 被拒 |
 | `sync` 去抖 | 明文相同不重写 `.enc`；改一个字段才产生文件变化 |
 | `app` 导入 | 解密失败整体不写；孤儿控制台跳过；外部控制台保留；caret/active 保留；删除传播；单次落盘 |
 | `app/secretscan` | 高置信正例全部命中；占位符/变量/列名不误报；中置信正反例；指纹去重；脱敏预览 |
