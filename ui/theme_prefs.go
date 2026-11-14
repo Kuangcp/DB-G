@@ -21,6 +21,11 @@ func (a *root) applyTheme(c *ui.Context) {
 		t = &cp
 	}
 	c.SetTheme(t)
+	// 语句状态圆点取主题色；主题变了才重算，避免每帧重写编辑器状态。
+	if a.stmtOKColor != t.Success || a.stmtErrColor != t.Danger || a.stmtRunColor != t.Accent {
+		a.stmtOKColor, a.stmtErrColor, a.stmtRunColor = t.Success, t.Danger, t.Accent
+		a.refreshStmtMarks()
+	}
 }
 
 // resolvedThemeFor 是 resolvedTheme 的测试友好入口（用当前设置）。

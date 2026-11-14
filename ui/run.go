@@ -150,7 +150,7 @@ func (a *root) togglePin() {
 		a.stmtRuns = slices.Insert(rest, pinnedCount, cur)
 		a.activeStmt = pinnedCount
 	}
-	a.refreshStmtBackgrounds()
+	a.refreshStmtMarks()
 }
 
 // consoleRuns 是一个控制台最近一次的结果 tab 与当前选中项（切控制台各自保留，参照 db-k）。
@@ -178,7 +178,7 @@ func (a *root) loadStmtRuns(consoleID string) {
 		if a.activeStmt >= len(a.stmtRuns) {
 			a.activeStmt = len(a.stmtRuns) - 1
 		}
-		a.refreshStmtBackgrounds()
+		a.refreshStmtMarks()
 		return
 	}
 	a.stmtRuns, a.activeStmt = nil, 0
@@ -376,7 +376,7 @@ func (a *root) rerunQuery(sql string) {
 		return
 	}
 	a.discardEditState(rtID)
-	a.refreshStmtBackgrounds()
+	a.refreshStmtMarks()
 }
 
 // rerunDone 是刷新执行的完成回调：记日志/历史、更新分页状态，但不推进下一条语句。
@@ -394,7 +394,7 @@ func (a *root) rerunDone(rtID, sql string) func(*engine.QueryResult, string, tim
 		}
 		rec := func() {
 			a.recordFetchState(rtID, res)
-			a.refreshStmtBackgrounds()
+			a.refreshStmtMarks()
 		}
 		if a.win != nil {
 			win := a.win
@@ -436,7 +436,7 @@ func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 	}
 	a.stmtRuns = runs
 	a.activeStmt = len(pinned)
-	a.refreshStmtBackgrounds()
+	a.refreshStmtMarks()
 }
 
 // startStmt 执行第 i 条语句；完成回调里顺序推进下一条（失败即停）。
@@ -459,7 +459,7 @@ func (a *root) startStmt(i int) {
 	if !rt.RunTimeout(sess, sql, a.queryTimeoutFor()) {
 		app.LogWarn("exec", "statement not started", "index", i)
 	}
-	a.refreshStmtBackgrounds()
+	a.refreshStmtMarks()
 }
 
 // queryTimeoutFor 返回当前执行数据源配置的查询超时；0 交给 Console 用默认 30 秒。
@@ -501,7 +501,7 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 		}
 		ok := errMsg == ""
 		advance := func() {
-			a.refreshStmtBackgrounds()
+			a.refreshStmtMarks()
 			if !ok {
 				return
 			}

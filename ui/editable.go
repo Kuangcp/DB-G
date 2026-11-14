@@ -357,7 +357,7 @@ func (a *root) refreshResult(onDone func()) {
 		apply := func() {
 			a.recordFetchState(id, res)
 			a.editKey = ""
-			a.refreshStmtBackgrounds()
+			a.refreshStmtMarks()
 			if onDone != nil {
 				onDone()
 			}

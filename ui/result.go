@@ -229,7 +229,7 @@ func (a *root) stmtTabs(c *ui.Context) {
 				})
 				if btn.Clicked() {
 					a.activeStmt = i
-					a.refreshStmtBackgrounds()
+					a.refreshStmtMarks()
 				}
 			}
 		})

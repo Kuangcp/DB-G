@@ -19,6 +19,9 @@ import (
 
 type root struct {
 	code             *codeEditor
+	stmtOKColor      ui.Color // 执行成功圆点（主题 Success）
+	stmtErrColor     ui.Color // 执行失败圆点（主题 Danger）
+	stmtRunColor     ui.Color // 执行中圆点（主题 Accent）
 	con              *app.Console
 	win              *mygo.Window
 	resultState      ui.ListState
@@ -429,17 +432,19 @@ func (a *root) hasPinned() bool {
 	return false
 }
 
-// refreshStmtBackgrounds 按语句范围与状态刷新编辑器的行底色（当前/成功/失败）。
-func (a *root) refreshStmtBackgrounds() {
+// refreshStmtMarks 按语句范围与状态刷新编辑器 gutter 上的状态圆点：
+// 执行中强调色、成功绿色、失败红色。正文不再整行着色，免得和当前行高亮抢注意力。
+func (a *root) refreshStmtMarks() {
 	st := a.code.state
 	if len(a.stmtRuns) == 0 || st.Buffer == nil {
+		st.GutterMarks = nil
 		st.LineBackgrounds = nil
 		return
 	}
 	buf := st.Buffer
-	out := make([]myeditor.LineBackground, 0, len(a.stmtRuns))
-	for i, run := range a.stmtRuns {
-		// 钉住的结果来自旧正文，行号已经失效，不画 gutter 底色。
+	out := make([]myeditor.GutterMark, 0, len(a.stmtRuns))
+	for _, run := range a.stmtRuns {
+		// 钉住的结果来自旧正文，行号已经失效，不画 gutter 标记。
 		if run.pinned || !run.started || run.sql == "" {
 			continue
 		}
@@ -452,20 +457,19 @@ func (a *root) refreshStmtBackgrounds() {
 		first := buf.Pos(run.stmt.Start).Line
 		last := buf.Pos(run.stmt.End - 1).Line
 		rt := a.runtimeFor(run.runtimeID)
-		var col ui.Color
+		col := a.stmtOKColor
 		switch {
 		case rt.Running():
-			col = ui.RGBA(80, 100, 160, 0.20)
+			col = a.stmtRunColor
 		case rt.Err() != "":
-			col = ui.RGBA(200, 60, 60, 0.18)
-		case i == a.activeStmt:
-			col = ui.RGBA(80, 160, 110, 0.16)
-		default:
-			col = ui.RGBA(80, 160, 110, 0.07)
+			col = a.stmtErrColor
 		}
-		out = append(out, myeditor.LineBackground{First: first, Last: last, Color: col})
+		for line := first; line <= last; line++ {
+			out = append(out, myeditor.GutterMark{Line: line, Color: col})
+		}
 	}
-	st.LineBackgrounds = out
+	st.GutterMarks = out
+	st.LineBackgrounds = nil
 }
 
 // activateConsole 把编辑器切成该控制台的正文，并安排光标回位。
@@ -603,7 +607,7 @@ func (a *root) syncActiveBuffer() {
 	if a.activeConsole == "" {
 		if ver != a.lastVer[""] {
 			a.lastVer[""] = ver
-			a.refreshStmtBackgrounds()
+			a.refreshStmtMarks()
 		}
 		return
 	}
@@ -614,7 +618,7 @@ func (a *root) syncActiveBuffer() {
 	if ver != a.lastVer[a.activeConsole] {
 		a.lastVer[a.activeConsole] = ver
 		m.TouchVersion(a.activeConsole, ver)
-		a.refreshStmtBackgrounds()
+		a.refreshStmtMarks()
 	}
 	if s, e := a.code.CaretRunes(); [2]int{s, e} != a.lastCaret {
 		a.lastCaret = [2]int{s, e}

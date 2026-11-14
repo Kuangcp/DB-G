@@ -97,6 +97,37 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	} else if !rectHasColor(tt.Image(), r, th.Danger) {
 		t.Fatal("failed tab must show a red status dot")
 	}
+	marks := a.code.state.GutterMarks
+	if len(marks) != 1 || marks[0].Line != 0 || marks[0].Color != th.Danger {
+		t.Fatalf("失败语句的 gutter 标记应为红色圆点: %+v", marks)
+	}
+}
+
+// 成功语句只在行号后的 gutter 画绿点，正文不再整行着色。
+func TestStmtSuccessMarksGutterOnly(t *testing.T) {
+	a := openForSelection(t)
+	a.setActiveText("SELECT 1;")
+	a.setSelection(0, len([]rune("SELECT 1;")))
+	var th *ui.Theme
+	tt := ui.NewTester(func(c *ui.Context) { rootView(a)(c); th = c.Theme() }, 1400, 800)
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 1)
+	tt.Frame()
+	if lbs := a.code.state.LineBackgrounds; len(lbs) != 0 {
+		t.Fatalf("正文不应再整行着色: %+v", lbs)
+	}
+	marks := a.code.state.GutterMarks
+	if len(marks) != 1 || marks[0].Line != 0 || marks[0].Color != th.Success {
+		t.Fatalf("成功语句的 gutter 标记应为绿色圆点: %+v", marks)
+	}
+	r, ok := tt.Find("编辑器")
+	if !ok {
+		t.Fatal("editor missing")
+	}
+	if !rectHasColor(tt.Image(), ui.Rect{X: r.X, Y: r.Y, W: 48, H: 40}, th.Success) {
+		t.Fatalf("行号后的 gutter 里没有画出绿色圆点: %v", r)
+	}
 }
 
 func TestSingleStatementKeepsCurrentRuntime(t *testing.T) {
@@ -116,16 +147,16 @@ func TestSingleStatementKeepsCurrentRuntime(t *testing.T) {
 	}
 }
 
-// 改过的语句不能再保留 gutter 底色：同长度的编辑也要让该语句的颜色消失。
-func TestEditingStatementClearsItsBackground(t *testing.T) {
+// 改过的语句不能再保留 gutter 标记：同长度的编辑也要让该语句的圆点消失。
+func TestEditingStatementClearsItsMark(t *testing.T) {
 	a, tt := focusEditor(t, "SELECT 1;\nSELECT 2;")
 	a.setSelection(0, len([]rune(a.code.Text())))
 	tt.Frame()
 	a.runSQL()
 	waitStmts(t, a, tt, 2)
 	tt.Frame()
-	if got := len(a.code.state.LineBackgrounds); got != 2 {
-		t.Fatalf("两条语句都应着色: %d", got)
+	if got := len(a.code.state.GutterMarks); got != 2 {
+		t.Fatalf("两条语句都应有状态圆点: %d", got)
 	}
 	// 只改第一行的 1 → 9，长度不变，第二段的偏移仍然有效。
 	a.setSelection(7, 8)
@@ -135,14 +166,17 @@ func TestEditingStatementClearsItsBackground(t *testing.T) {
 	if got := a.code.Text(); got != "SELECT 9;\nSELECT 2;" {
 		t.Fatalf("text: %q", got)
 	}
-	lbs := a.code.state.LineBackgrounds
-	if len(lbs) != 1 || lbs[0].First != 1 || lbs[0].Last != 1 {
-		t.Fatalf("只有未改动的第二段保留底色: %+v", lbs)
+	marks := a.code.state.GutterMarks
+	if len(marks) != 1 || marks[0].Line != 1 {
+		t.Fatalf("只有未改动的第二段保留标记: %+v", marks)
+	}
+	if lbs := a.code.state.LineBackgrounds; len(lbs) != 0 {
+		t.Fatalf("正文不应再有整行底色: %+v", lbs)
 	}
 }
 
 // 删除一行后，旧语句的行号不能漂移到下面的行上。
-func TestDeleteLineClearsStmtBackground(t *testing.T) {
+func TestDeleteLineClearsStmtMark(t *testing.T) {
 	a, tt := focusEditor(t, "SELECT 1;\nSELECT 2;")
 	a.setSelection(0, len([]rune(a.code.Text())))
 	tt.Frame()
@@ -156,8 +190,8 @@ func TestDeleteLineClearsStmtBackground(t *testing.T) {
 	if got := a.code.Text(); got != "SELECT 2;" {
 		t.Fatalf("text: %q", got)
 	}
-	if lbs := a.code.state.LineBackgrounds; len(lbs) != 0 {
-		t.Fatalf("删行后不能再有旧行号底色: %+v", lbs)
+	if marks := a.code.state.GutterMarks; len(marks) != 0 {
+		t.Fatalf("删行后不能再有旧行号标记: %+v", marks)
 	}
 }
 
@@ -174,8 +208,8 @@ func TestStartStmtUsesSnapshotAfterEdit(t *testing.T) {
 	}
 }
 
-// 没有激活控制台的临时缓冲：编辑后同样不能留下旧行底色。
-func TestEditingScratchBufferClearsBackground(t *testing.T) {
+// 没有激活控制台的临时缓冲：编辑后同样不能留下旧行标记。
+func TestEditingScratchBufferClearsMark(t *testing.T) {
 	a := openForSelection(t)
 	a.setActiveText("SELECT 1;\nSELECT 2;")
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -189,14 +223,14 @@ func TestEditingScratchBufferClearsBackground(t *testing.T) {
 	a.runSQL()
 	waitStmts(t, a, tt, 2)
 	tt.Frame()
-	if got := len(a.code.state.LineBackgrounds); got != 2 {
-		t.Fatalf("两条语句都应着色: %d", got)
+	if got := len(a.code.state.GutterMarks); got != 2 {
+		t.Fatalf("两条语句都应有状态圆点: %d", got)
 	}
 	a.setSelection(7, 8)
 	tt.Frame()
 	tt.Type("9")
 	tt.Frame()
-	if lbs := a.code.state.LineBackgrounds; len(lbs) != 1 || lbs[0].First != 1 {
-		t.Fatalf("只有未改动的第二段保留底色: %+v", lbs)
+	if marks := a.code.state.GutterMarks; len(marks) != 1 || marks[0].Line != 1 {
+		t.Fatalf("只有未改动的第二段保留标记: %+v", marks)
 	}
 }
