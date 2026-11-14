@@ -35,6 +35,7 @@ CGO_ENABLED=0 go test ./ui -run 'TestEditor.*Perf' -v   # 只跑编辑器性能�
 
 ```
 main.go ──> ui ──> app ──> engine
+        │         └──> sync
         └──> _ driver/<kind> ──> engine
 ```
 
@@ -43,7 +44,8 @@ main.go ──> ui ──> app ──> engine
 | `engine/` | **协议无关契约**：`Session` / `Capabilities` / `Profile` / `QueryResult` / `Params` | 只用标准库 |
 | `driver/<kind>/` | 各数据源实现（`sqlite` `mysql` `postgres` `clickhouse`），`init()` 里 `engine.Register` | `engine` + 驱动库，**禁止 import app/ui** |
 | `ai/` | **纯叶层**：Provider 接口、go-openai SDK 封装、上下文 DTO、提示词、检索、计划解析 | 标准库 + go-openai，**禁止 import ui/app/engine** |
-| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划 | `engine`、`ai`，**禁止 import ui / mygo** |
+| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划、git 同步编排 | `engine`、`ai`、`sync`，**禁止 import ui / mygo** |
+| `sync/` | **纯叶层**：系统 git 封装、AES-GCM/KCV、仓库路径与 DTO、工作树读写 | 只用标准库 |
 | `ui/` | mygo 视图层（唯一 import mygo 的地方）：`root` 编排一切交互 | `ai`、`app`、`engine`、`mygo` |
 | `tools/` | 生成器（`genicon` 应用图标、`lucideicons` 图标代码），不是运行时代码 | 标准库 / mygo |
 
@@ -131,6 +133,8 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
 | 结果加载预算 | `results.json` | `app.ResultPrefs`；结果集大小上限（MB，默认 8），设置页「结果」可改，驱动读取结果时按它截断 |
 | 控制台自动保存 | `console.json` | `app.ConsolePrefs`；正文停止输入后的保存延迟（秒，默认 5，范围 1-60），设置页「控制台」可改 |
+| Git 同步配置 | `sync.json` | `app.SyncPrefs`；仓库地址、分支、SSH 私钥、KCV、已确认的敏感扫描指纹、上次同步时间 |
+| Git 同步密钥 | `sync.key` | 32 字节 AES-256，0600；只在本机，绝不进仓库；丢失后仓库连接无法解密 |
 | 纯瞬态 | 内存 | 结果集、分页状态、UI 开关、补全缓存（TTL 5 分钟） |
 
 判断口诀：**删掉实体要不要一起消失、要不要按它查询？** 要 → `connections.json` 的结构化字段；
@@ -244,7 +248,7 @@ tt.Texts() / tt.Clipboard() / tt.Image()      // 文案表 / 剪贴板 / 像素
 ## 日志与脱敏
 
 - 用 `app.LogInfo/LogWarn/LogError(tag, msg, "k", v, …)`，tag 已有：`startup` `conn` `exec`
-  `console` `catalog` `export` `import` `write` `ddl` `install` `external` `ai` `panic`；新增行为先想"出事怎么查"。
+  `console` `catalog` `export` `import` `write` `ddl` `install` `external` `ai` `sync` `panic`；新增行为先想"出事怎么查"。
   `ai` 只记 provider/model/耗时/token，**不记 prompt 正文、API Key、DSN**。
 - **密码与 DSN 必须脱敏**：`app.RedactDSN()`；日志里永远不出现 `Password`。
 - 日志写入失败不能影响调用方（日志不能把应用搞崩）。

@@ -15,116 +15,132 @@ import (
 	"db-g/ai"
 	"db-g/app"
 	"db-g/engine"
+	"db-g/sync"
 )
 
 type root struct {
-	code             *codeEditor
-	stmtOKColor      ui.Color // 执行成功圆点（主题 Success）
-	stmtErrColor     ui.Color // 执行失败圆点（主题 Danger）
-	stmtRunColor     ui.Color // 执行中圆点（主题 Accent）
-	aiDebug          aiDebugState
-	aiRewrite        aiRewriteState
-	con              *app.Console
-	win              *mygo.Window
-	resultState      ui.ListState
-	editorPercent    float32 // 编辑器占上下的百分比（结果区在下方）
-	resultsHidden    bool    // Alt+D 临时隐藏结果区
-	selConn          app.ConnProfile
-	selObj           engine.DBObject
-	hasSelObj        bool
-	sidebarWidth     float32
-	store            *app.ConnStore
-	connErr          string // 顶栏一行错误（最近一次连接失败的原因）
-	connFormOpen     bool
-	connFormID       string
-	connFormName     string
-	connFormPath     string
-	connFormErr      string
-	connFormKind     string
-	connFormHost     string
-	connFormPort     string
-	connFormUser     string
-	connFormPass     string
-	connFormDB       string
-	connFormParams   string
-	connFormTimeout  string                       // 查询超时（秒，空 = 默认 30）
-	connFormGuard    bool                         // 高危 SQL 硬阻断
-	connProto        int                          // ClickHouse 协议：0 native / 1 http / 2 https
-	connFormFolder   string                       // 连接所属文件夹；空 = 根级
-	connFormTags     []connTagDraft               // 已添加标签（最多 app.MaxConnTags）
-	connFormTagInput string                       // 标签输入框正文
-	connFormTagColor string                       // 下一个新标签使用的调色板键
-	serverInfo       map[string]engine.ServerInfo // connID → 数据库名/版本
-	serverInfoErr    map[string]string            // connID → 版本查询失败原因
-	serverInfoSeq    map[string]uint64            // connID → 异步查询轮次（旧结果作废）
-	chords           map[string][]chord           // 动作 → 键位（见 keymap.go）
-	keymapPath       string                       // keymap.json 的位置（空 = 不读盘，测试用）
-	fontPrefs        app.FontPrefs                // 编辑区/结果区/功能界面字体
-	fontPrefsPath    string                       // fonts.json 的位置（空 = 不落盘）
-	fontPrefsWarn    string
-	resultPrefs      app.ResultPrefs // 结果大小预算
-	resultPrefsPath  string          // results.json 的位置（空 = 不落盘）
-	resultPrefsWarn  string
-	consolePrefs     app.ConsolePrefs // 控制台自动保存
-	consolePrefsPath string           // console.json 的位置（空 = 不落盘）
-	consolePrefsWarn string
-	themePrefs       app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
-	themePath        string         // theme.json 的位置（空 = 不落盘）
-	themeWarn        string
-	themeSaveSeq     atomic.Uint64
-	themeHex         string // 外观分区里自定义强调色的输入框
-	themeHexErr      string
-	paletteLight     app.ThemePalette // 自定义配色的浅色草稿
-	paletteDark      app.ThemePalette // 自定义配色的深色草稿
-	paletteLoaded    bool             // 草稿是否已从 prefs 载入
-	paletteErr       string
-	aiPrefs          app.AIPrefs // AI 服务地址/模型/出网开关
-	aiPrefsPath      string      // ai.json 的位置（空 = 不落盘）
-	aiWarn           string
-	aiModels         []string // /models 返回的模型列表
-	aiModelsLoading  bool
-	aiModelsErr      string
-	aiModelsSeq      int    // 异步获取轮次；旧结果作废
-	aiModelsKey      string // 已请求过的 baseURL+key 指纹
-	vault            *app.Vault
-	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
-	aiChat           aiChatState
-	aiFix            aiFixState
-	aiCompletion     aiCompletionState
-	plan             planState
-	guardOpen        bool
-	guardBlocked     bool
-	guardRisks       []app.SQLRisk
-	settingsSection  int    // 设置窗口选中的分区
-	captureAction    string // 设置窗口正在录制键位的动作
-	keymapWarn       string // 键位文件读写问题的提示
-	connTestMsg      string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
-	connTestErr      bool
-	connTestBusy     bool
-	connTestSeq      int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
-	connDeleteOpen   bool
-	connDeleting     string
-	treeExpand       map[string]bool
-	treeOpen         map[string]*bool
-	treeData         map[string]map[engine.ObjectKind][]engine.DBObject
-	treeCounts       map[string]map[engine.ObjectKind]int
-	treeLoading      map[string]bool
-	treePageStarted  map[string]bool
-	treeSchemas      map[string][]string
-	schemaLoading    map[string]bool   // connID → schema 列表加载中
-	connSchema       map[string]string // connID → 当前 schema/库（空 = 未选）
-	treeErr          map[string]string
-	treeSelected     string
-	objSearch        string          // 对象树搜索词（非空时过滤连接/文件夹/已加载对象）
-	folderCollapsed  map[string]bool // folderID → 收起；缺省 = 展开
-	metaCache        *app.MetaCache
-	metaCacheTried   map[string]bool
-	metaCacheLoading map[string]bool
-	metaCacheStale   map[string]bool
-	metaSaveSeq      map[string]uint64
-	treeGroupStale   map[string]bool // 过期缓存的分组；展开时替换首页
-	treeGen          uint64          // 重载/删除时递增，丢弃旧的异步结果
-	execPending      bool
+	code              *codeEditor
+	stmtOKColor       ui.Color // 执行成功圆点（主题 Success）
+	stmtErrColor      ui.Color // 执行失败圆点（主题 Danger）
+	stmtRunColor      ui.Color // 执行中圆点（主题 Accent）
+	aiDebug           aiDebugState
+	aiRewrite         aiRewriteState
+	con               *app.Console
+	win               *mygo.Window
+	resultState       ui.ListState
+	editorPercent     float32 // 编辑器占上下的百分比（结果区在下方）
+	resultsHidden     bool    // Alt+D 临时隐藏结果区
+	selConn           app.ConnProfile
+	selObj            engine.DBObject
+	hasSelObj         bool
+	sidebarWidth      float32
+	store             *app.ConnStore
+	connErr           string // 顶栏一行错误（最近一次连接失败的原因）
+	connFormOpen      bool
+	connFormID        string
+	connFormName      string
+	connFormPath      string
+	connFormErr       string
+	connFormKind      string
+	connFormHost      string
+	connFormPort      string
+	connFormUser      string
+	connFormPass      string
+	connFormDB        string
+	connFormParams    string
+	connFormTimeout   string                       // 查询超时（秒，空 = 默认 30）
+	connFormGuard     bool                         // 高危 SQL 硬阻断
+	connProto         int                          // ClickHouse 协议：0 native / 1 http / 2 https
+	connFormFolder    string                       // 连接所属文件夹；空 = 根级
+	connFormTags      []connTagDraft               // 已添加标签（最多 app.MaxConnTags）
+	connFormTagInput  string                       // 标签输入框正文
+	connFormTagColor  string                       // 下一个新标签使用的调色板键
+	serverInfo        map[string]engine.ServerInfo // connID → 数据库名/版本
+	serverInfoErr     map[string]string            // connID → 版本查询失败原因
+	serverInfoSeq     map[string]uint64            // connID → 异步查询轮次（旧结果作废）
+	chords            map[string][]chord           // 动作 → 键位（见 keymap.go）
+	keymapPath        string                       // keymap.json 的位置（空 = 不读盘，测试用）
+	fontPrefs         app.FontPrefs                // 编辑区/结果区/功能界面字体
+	fontPrefsPath     string                       // fonts.json 的位置（空 = 不落盘）
+	fontPrefsWarn     string
+	resultPrefs       app.ResultPrefs // 结果大小预算
+	resultPrefsPath   string          // results.json 的位置（空 = 不落盘）
+	resultPrefsWarn   string
+	consolePrefs      app.ConsolePrefs // 控制台自动保存
+	consolePrefsPath  string           // console.json 的位置（空 = 不落盘）
+	consolePrefsWarn  string
+	themePrefs        app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
+	themePath         string         // theme.json 的位置（空 = 不落盘）
+	themeWarn         string
+	themeSaveSeq      atomic.Uint64
+	themeHex          string // 外观分区里自定义强调色的输入框
+	themeHexErr       string
+	paletteLight      app.ThemePalette // 自定义配色的浅色草稿
+	paletteDark       app.ThemePalette // 自定义配色的深色草稿
+	paletteLoaded     bool             // 草稿是否已从 prefs 载入
+	paletteErr        string
+	aiPrefs           app.AIPrefs // AI 服务地址/模型/出网开关
+	aiPrefsPath       string      // ai.json 的位置（空 = 不落盘）
+	aiWarn            string
+	syncPrefsPath     string        // sync.json 的位置（空 = 不落盘）
+	syncPrefs         app.SyncPrefs // 仓库地址/分支/SSH 私钥
+	syncWarn          string
+	syncResult        string
+	syncBusy          bool
+	syncKeySet        bool
+	syncKeyKCV        string
+	syncKeyOpen       bool
+	syncKeyImportOnly bool
+	syncKeyInput      string
+	syncKeyErr        string
+	syncKeyRepoKCV    string
+	syncPendingKind   string
+	syncFindings      []app.SecretFinding
+	syncFindingsOpen  bool
+	aiModels          []string // /models 返回的模型列表
+	aiModelsLoading   bool
+	aiModelsErr       string
+	aiModelsSeq       int    // 异步获取轮次；旧结果作废
+	aiModelsKey       string // 已请求过的 baseURL+key 指纹
+	vault             *app.Vault
+	aiTestProvider    ai.Provider // 测试注入；nil = 按 aiPrefs 创建
+	aiChat            aiChatState
+	aiFix             aiFixState
+	aiCompletion      aiCompletionState
+	plan              planState
+	guardOpen         bool
+	guardBlocked      bool
+	guardRisks        []app.SQLRisk
+	settingsSection   int    // 设置窗口选中的分区
+	captureAction     string // 设置窗口正在录制键位的动作
+	keymapWarn        string // 键位文件读写问题的提示
+	connTestMsg       string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	connTestErr       bool
+	connTestBusy      bool
+	connTestSeq       int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
+	connDeleteOpen    bool
+	connDeleting      string
+	treeExpand        map[string]bool
+	treeOpen          map[string]*bool
+	treeData          map[string]map[engine.ObjectKind][]engine.DBObject
+	treeCounts        map[string]map[engine.ObjectKind]int
+	treeLoading       map[string]bool
+	treePageStarted   map[string]bool
+	treeSchemas       map[string][]string
+	schemaLoading     map[string]bool   // connID → schema 列表加载中
+	connSchema        map[string]string // connID → 当前 schema/库（空 = 未选）
+	treeErr           map[string]string
+	treeSelected      string
+	objSearch         string          // 对象树搜索词（非空时过滤连接/文件夹/已加载对象）
+	folderCollapsed   map[string]bool // folderID → 收起；缺省 = 展开
+	metaCache         *app.MetaCache
+	metaCacheTried    map[string]bool
+	metaCacheLoading  map[string]bool
+	metaCacheStale    map[string]bool
+	metaSaveSeq       map[string]uint64
+	treeGroupStale    map[string]bool // 过期缓存的分组；展开时替换首页
+	treeGen           uint64          // 重载/删除时递增，丢弃旧的异步结果
+	execPending       bool
 
 	appIconPNG  []byte                                  // 窗口图标；自举安装时写入图标目录
 	appIcon     ui.ImageSource                          // 标题栏渲染用
@@ -309,6 +325,12 @@ func newRootWithStore(storePath string) *root {
 	r.themePath = app.DefaultThemePrefsPath()
 	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
 	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
+	r.syncPrefsPath = filepath.Join(filepath.Dir(storePath), "sync.json")
+	r.syncPrefs, r.syncWarn = app.LoadSyncPrefs(r.syncPrefsPath)
+	if key, ok := app.LoadSyncKey(r.syncPrefsPath); ok {
+		r.syncKeySet = true
+		r.syncKeyKCV = sync.KCV(key)
+	}
 	if vault, err := app.LoadVault(storePath); err != nil {
 		r.aiWarn = "AI 密钥不可用：" + err.Error()
 	} else {
@@ -764,6 +786,8 @@ func (a *root) view(c *ui.Context) {
 		a.aiDebugModal(c)
 		a.aiFixModal(c)
 		a.aiRewriteModal(c)
+		a.syncKeyModal(c)
+		a.syncFindingsModal(c)
 		a.planConfirmModal(c)
 		a.guardModal(c)
 

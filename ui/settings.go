@@ -28,6 +28,7 @@ func (a *root) settingsSections() []settingsSection {
 		{"AI", a.aiSection},
 		{"快捷键", a.keymapSection},
 		{"连接档案", a.profilesSection},
+		{"同步", a.syncSection},
 		{"日志", a.logSection},
 		{"开发", a.devSection},
 	}
