@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -45,7 +46,10 @@ func (a *root) fixErrorSQL() {
 		a.aiFix = aiFixState{open: true, err: err.Error(), original: sql}
 		return
 	}
-	msgs := ai.BuildFixMessages(a.aiSnapshot(), sql, errText)
+	snap := a.aiSnapshot()
+	msgs := ai.BuildFixMessages(snap, sql, errText)
+	a.recordAIRequest("修复", a.aiModelName(),
+		aiContextNote(snap, fmt.Sprintf("失败 SQL %dB · 错误 %dB", len(sql), len(errText))), msgs)
 	a.aiFix = aiFixState{open: true, loading: true, original: sql}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiFix.seq++

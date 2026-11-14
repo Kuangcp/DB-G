@@ -22,6 +22,8 @@ type root struct {
 	stmtOKColor      ui.Color // 执行成功圆点（主题 Success）
 	stmtErrColor     ui.Color // 执行失败圆点（主题 Danger）
 	stmtRunColor     ui.Color // 执行中圆点（主题 Accent）
+	aiDebug          aiDebugState
+	aiRewrite        aiRewriteState
 	con              *app.Console
 	win              *mygo.Window
 	resultState      ui.ListState
@@ -759,8 +761,9 @@ func (a *root) view(c *ui.Context) {
 		a.installModal(c)
 		a.externalPickerModal(c)
 		a.externalResolveModal(c)
-		a.aiContextModal(c)
+		a.aiDebugModal(c)
 		a.aiFixModal(c)
+		a.aiRewriteModal(c)
 		a.planConfirmModal(c)
 		a.guardModal(c)
 

@@ -68,6 +68,8 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Ctrl, ui.KeySpace}}},
 	{ID: "aiComplete", Label: "AI 补全", Scope: scopeEditor,
 		Def: []chord{{ui.Alt, ui.KeyBackslash}}},
+	{ID: "aiRewrite", Label: "AI 改写选中 SQL", Scope: scopeEditor,
+		Def: []chord{{ui.Ctrl, ui.KeyK}}},
 }
 
 // applies 报告该动作在「编辑器是否聚焦」时是否生效。

@@ -269,6 +269,21 @@ func BuildFixMessages(snapshot ContextSnapshot, sql, errText string) []Message {
 	return msgs
 }
 
+// BuildRewriteMessages 组装一次「按诉求改写选中 SQL」请求。
+// target 是被选中的原文；它与快照里的当前语句/选区重复时只保留一份。
+func BuildRewriteMessages(snapshot ContextSnapshot, target, instruction string) []Message {
+	target = strings.TrimSpace(target)
+	snapshot.Selection = ""
+	if strings.TrimSpace(snapshot.ActiveSQL) == target {
+		snapshot.ActiveSQL = ""
+	}
+	question := "按下面的要求改写这条 SQL。除非要求改变，保持原有语句类型（SELECT/UPDATE/…）与业务语义。" +
+		"需要 SQL 时只输出一个 ```sql 代码块。\n要求：" + instruction
+	msgs := BuildMessages(snapshot, question)
+	msgs[1].Content += "\n\n# 待改写 SQL\n```sql\n" + target + "\n```\n"
+	return msgs
+}
+
 // BuildCompletionMessages 组装一次编辑器内联补全请求。
 // before 是光标前文，after 是光标后文；模型只返回应插入光标处的 SQL 片段。
 func BuildCompletionMessages(snapshot ContextSnapshot, before, after string) []Message {

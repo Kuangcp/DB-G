@@ -62,12 +62,14 @@ func (a *root) aiPanel(c *ui.Context) {
 				}
 			})
 		})
-		if st.lastCtx != "" {
+		if st.lastCtx != "" || len(a.aiDebug.entries) > 0 {
 			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, st.lastCtx).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
+				if st.lastCtx != "" {
+					ui.Text(c, st.lastCtx).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
+				}
 				ui.Spacer(c)
 				if ui.Button(c, "查看上下文").FontSize(10.5).Clicked() {
-					st.ctxOpen = true
+					a.openAIDebug()
 				}
 			})
 		}
@@ -100,23 +102,6 @@ func (a *root) aiPanel(c *ui.Context) {
 			}
 		})
 	})
-}
-
-func (a *root) aiContextModal(c *ui.Context) {
-	if !a.aiChat.ctxOpen {
-		return
-	}
-	ui.Modal(c, &a.aiChat.ctxOpen, func() {
-		ui.Text(c, "将发送给模型的内容").Bold()
-		ui.Text(c, "不包含 DSN、密码；历史/样本/错误日志只有开启后才会出现。").FontSize(11).
-			TextColor(c.Theme().TextMuted)
-		ui.TextArea(c, &a.aiChat.lastPrompt).ReadOnly(true).Lines(16, 24)
-		ui.Row(c).Justify(ui.End).Children(func() {
-			if ui.Button(c, "关闭").Clicked() {
-				a.aiChat.ctxOpen = false
-			}
-		})
-	}).Width(720).Height(560)
 }
 
 func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {

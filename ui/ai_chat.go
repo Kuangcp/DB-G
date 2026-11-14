@@ -35,8 +35,6 @@ type aiChatState struct {
 	seq           uint64
 	err           string
 	lastCtx       string
-	lastPrompt    string
-	ctxOpen       bool
 	usage         ai.Usage
 	started       time.Time
 	md            markdown.Options
@@ -136,15 +134,15 @@ func (a *root) sendAI() {
 	msgs := ai.BuildMessages(snap, q)
 	tables, cols, rows := snap.Summary()
 	a.aiChat.lastCtx = fmt.Sprintf("上下文：%d 张表 / %d 列 / %d 行样本", tables, cols, rows)
-	if err := a.startAIRequest(q, msgs); err != nil {
+	if err := a.startAIRequest("对话", aiContextNote(snap, ""), q, msgs); err != nil {
 		a.aiChat.err = err.Error()
 		return
 	}
 	a.aiChat.input = ""
 }
 
-// startAIRequest 追加一轮消息并发起流式请求。
-func (a *root) startAIRequest(display string, msgs []ai.Message) error {
+// startAIRequest 追加一轮消息并发起流式请求；kind 只用于「最近 AI 请求」查看器。
+func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) error {
 	if a.aiChat.streaming {
 		return errors.New("正在生成，请先停止")
 	}
@@ -155,13 +153,8 @@ func (a *root) startAIRequest(display string, msgs []ai.Message) error {
 	if err != nil {
 		return err
 	}
-	model := a.aiPrefs.Model
-	if model == "" {
-		model = "local"
-	}
-	if len(msgs) > 1 {
-		a.aiChat.lastPrompt = msgs[0].Content + "\n\n---\n\n" + msgs[1].Content
-	}
+	model := a.aiModelName()
+	a.recordAIRequest(kind, model, note, msgs)
 	a.aiChat.err = ""
 	a.aiChat.usage = ai.Usage{}
 	a.aiChat.messages = append(a.aiChat.messages,

@@ -168,3 +168,29 @@ func TestBuildCompletionMessages(t *testing.T) {
 		t.Fatalf("extract completion: %q", got)
 	}
 }
+
+func TestBuildRewriteMessagesKeepsTargetOnce(t *testing.T) {
+	target := "select * from users where id = 1"
+	snapshot := ContextSnapshot{
+		Connection: ConnInfo{Kind: "mysql", Database: "shop"},
+		ActiveSQL:  target,
+		Selection:  target,
+		Tables:     []TableContext{{Name: "users", Columns: []ColumnContext{{Name: "id"}}}},
+	}
+	msgs := BuildRewriteMessages(snapshot, target, "只保留需要的列")
+	if len(msgs) != 2 {
+		t.Fatalf("messages: %+v", msgs)
+	}
+	body := msgs[1].Content
+	for _, want := range []string{"只保留需要的列", "# 待改写 SQL", target, "users"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("rewrite prompt missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Count(body, target) != 1 {
+		t.Fatalf("target should appear once, got %d:\n%s", strings.Count(body, target), body)
+	}
+	if strings.Contains(body, "# 当前选区") || strings.Contains(body, "# 当前 SQL") {
+		t.Fatalf("duplicate current-SQL sections:\n%s", body)
+	}
+}

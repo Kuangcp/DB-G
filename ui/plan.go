@@ -282,7 +282,7 @@ func (a *root) diagnosePlan() {
 	msgs := ai.BuildPlanMessages(snap, plan.Text(a.plan.nodes), a.plan.analyze)
 	a.aiChat.open = true
 	a.aiChat.lastCtx = "上下文：当前连接 + 执行计划"
-	if err := a.startAIRequest("诊断执行计划", msgs); err != nil {
+	if err := a.startAIRequest("执行计划", aiContextNote(snap, fmt.Sprintf("计划文本 %dB", len(plan.Text(a.plan.nodes)))), "诊断执行计划", msgs); err != nil {
 		a.aiChat.err = err.Error()
 	}
 }

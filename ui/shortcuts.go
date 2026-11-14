@@ -57,6 +57,8 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		a.toggleCommentDown()
 	case "aiComplete":
 		a.requestAICompletion()
+	case "aiRewrite":
+		a.openAIRewrite()
 	case "copyCell":
 		a.copyCurrentCell(c, a.currentRuntime().Result())
 	case "setNull":

@@ -133,7 +133,8 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       建议作为补全菜单第一项（Detail「AI」），Tab 才插入；光标/正文版本变化后旧建议自动丢弃
 - [x] AI 助手（第一阶段）：右侧可折叠、可拖动调整宽度的面板做 Chat-to-SQL，默认本地 Ollama、也可配置
       任意 OpenAI-compatible 服务；默认只发送表结构 + 当前 SQL，样本/历史/错误日志逐项开启；
-      发送前可查看完整上下文；流式回复，生成的 SQL 需用户点「插入 SQL」才进入编辑器；
+      「查看上下文」列出最近 12 次 AI 请求（对话/修复/补全/计划/改写），展示发给模型的完整
+      system/user 消息与估算 token（只存内存，不写日志或磁盘）；流式回复，生成的 SQL 需用户点「插入 SQL」才进入编辑器；
       设置窗口「AI」分区先填服务地址与 API Key，再通过 OpenAI 协议的 `/models` 自动获取模型列表下拉选择；
       获取失败或服务未返回时保留手动输入模型名；API Key 本机加密；会话按工作区保存，
       支持多段历史切换与新建（搜索、滚动分页）；标题默认取首条消息截取，可在设置里开关 AI 生成标题
@@ -142,6 +143,9 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       `EXPLAIN QUERY PLAN`、PostgreSQL JSON、MySQL JSON/TREE、ClickHouse JSON，解析失败
       回退原始结果；ANALYZE 每次确认且只允许 SELECT/WITH，只有 PostgreSQL / MySQL 显示
       「ANALYZE 重跑」（SQLite / ClickHouse 无此能力）；可一键把计划树交给 AI 做诊断
+- [x] AI 改写选中 SQL：编辑器里选中 SQL 按 `Ctrl+K`（无选区时用光标所在语句）打开浮窗，
+      写诉求（如「只保留需要的列」「改成参数化查询」）后生成；diff 预览，
+      「替换选区」或「追加到选区后」由用户确认，原文被改过则拒绝应用；生成结果不自动执行
 - [x] SQL 错误修复：执行失败横幅点「AI 修复」，把失败 SQL、驱动错误和涉及表结构发给模型；
       结果用 diff 预览，用户点「应用修复」或「应用并执行」才改编辑器；模型没返回 SQL 代码块时明确报错
 - [x] 高危 SQL 拦截：本地确定性规则检查 UPDATE/DELETE 无 WHERE、恒真条件、DROP/TRUNCATE；
@@ -162,7 +166,7 @@ Release 页面提供安装包（GitHub / Gitee 均可）：
       `Ctrl+Y` 复制当前行、`Ctrl+D` 删除当前行/选区、`Ctrl+/` 注释/取消注释当前行（单光标时自动下移一行）、
       `Ctrl+Shift+F` 格式化、
       `Ctrl+Tab` 切换最近使用的控制台、`Alt+D` 显隐结果区、`Ctrl+Q` 查看所选对象 DDL、
-      `Alt+\` 请求 AI 内联补全
+      `Alt+\` 请求 AI 内联补全、`Ctrl+K` AI 改写选中 SQL
 - [x] 外观：基于 [Lobe UI](https://github.com/lobehub/lobe-ui) 设计 token（浅/深色成对生成）
       的统一配色与层级；跟随系统 / 浅色 / 深色；配色方案（默认/海洋/森林/暖阳/自定义，
       自定义可分别设置浅色与深色的背景/容器/边框/正文/次要文字）、强调色（默认/预设/自定义 hex）、

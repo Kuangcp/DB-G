@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	myeditor "github.com/egoist/mygo/ui/editor"
@@ -44,10 +45,13 @@ func (a *root) requestAICompletion() {
 	st.seq++
 	seq := st.seq
 	st.offset, st.version = offset, a.code.Version()
+	snap := a.aiSnapshot()
 	st.prefix = text[start:offset]
 	st.suggestion = ""
 	st.loading = true
-	msgs := ai.BuildCompletionMessages(a.aiSnapshot(), text[:offset], text[offset:])
+	msgs := ai.BuildCompletionMessages(snap, text[:offset], text[offset:])
+	a.recordAIRequest("补全", a.aiModelName(),
+		aiContextNote(snap, fmt.Sprintf("光标前 %dB · 光标后 %dB", offset, len(text)-offset)), msgs)
 	ctx, cancel := context.WithCancel(context.Background())
 	st.cancel = cancel
 	req := ai.Request{
