@@ -65,10 +65,7 @@ func (s *SyncService) ProbeKey(ctx context.Context) (string, bool, error) {
 		return "", false, errors.New("未找到系统 git，请先安装 git")
 	}
 	eng := s.engine(prefs)
-	if err := eng.EnsureRepo(ctx); err != nil {
-		return "", false, err
-	}
-	if err := eng.Fetch(ctx); err != nil && !errors.Is(err, sync.ErrNoRemoteRef) {
+	if _, err := eng.EnsureRepo(ctx); err != nil {
 		return "", false, err
 	}
 	kcv, ok := eng.RepoKCV(ctx)
@@ -111,11 +108,9 @@ func (s *SyncService) Run(ctx context.Context, action string) SyncOutcome {
 		return SyncOutcome{Message: "未找到系统 git，请先安装 git"}
 	}
 	eng := s.engine(prefs)
-	if err := eng.EnsureRepo(ctx); err != nil {
-		return SyncOutcome{Message: "git 初始化失败：" + err.Error()}
-	}
-	if err := eng.Fetch(ctx); err != nil && !errors.Is(err, sync.ErrNoRemoteRef) {
-		return SyncOutcome{Message: gitMessage(err)}
+	cloned, err := eng.EnsureRepo(ctx)
+	if err != nil {
+		return SyncOutcome{Message: "准备同步仓库失败：" + gitMessage(err)}
 	}
 	key, ok := LoadSyncKey(s.PrefsPath)
 	if !ok {
@@ -138,18 +133,18 @@ func (s *SyncService) Run(ctx context.Context, action string) SyncOutcome {
 		}
 	}
 	if action == "pull" {
-		return s.pull(ctx, eng, prefs, key)
+		return s.pull(ctx, eng, prefs, key, cloned)
 	}
-	return s.push(ctx, eng, prefs, key)
+	return s.push(ctx, eng, prefs, key, cloned)
 }
 
-func (s *SyncService) push(ctx context.Context, eng *sync.Engine, prefs SyncPrefs, key []byte) SyncOutcome {
+func (s *SyncService) push(ctx context.Context, eng *sync.Engine, prefs SyncPrefs, key []byte, cloned bool) SyncOutcome {
 	snap := s.Snapshot()
 	if len(snap.Conns) == 0 && eng.RemoteHasConnections(ctx) {
 		return SyncOutcome{Message: "本地连接为空、远端已有数据；已阻止推送，避免清空仓库"}
 	}
-	if !eng.HasLocalCommits(ctx) && eng.RemoteHasConnections(ctx) {
-		return SyncOutcome{Message: "远端已有同步数据；请先拉取，再提交本地改动"}
+	if prefs.LastSyncAt == 0 && eng.RemoteHasConnections(ctx) {
+		return SyncOutcome{Message: "远端已有同步数据；请先拉取导入，再提交本地改动"}
 	}
 	files, err := eng.BuildFiles(key, snap, sync.KCV(key))
 	if err != nil {
@@ -168,67 +163,74 @@ func (s *SyncService) push(ctx context.Context, eng *sync.Engine, prefs SyncPref
 	if _, err := eng.Git.Commit(ctx, fmt.Sprintf("db-g sync: %s %s", s.Hostname, time.Now().Format(time.RFC3339))); err != nil {
 		return SyncOutcome{Message: "git 提交失败：" + gitMessage(err)}
 	}
+
+	// 提交本地配置后先把远端合并进来，再推送；冲突时整体中止，不 push。
+	headBefore := eng.Head(ctx)
+	merged := false
+	if paths, err := eng.MergeRemote(ctx); err != nil {
+		var ce *sync.ConflictError
+		switch {
+		case errors.Is(err, sync.ErrNoRemoteRef):
+			// 远端还没有分支：首次 push，直接推。
+		case errors.As(err, &ce) || len(paths) > 0:
+			return SyncOutcome{Message: "合并远端失败（冲突），已放弃本次提交：" + strings.Join(paths, ", ")}
+		default:
+			return SyncOutcome{Message: "合并远端失败：" + gitMessage(err)}
+		}
+	} else {
+		merged = eng.Head(ctx) != headBefore
+	}
+	removed := 0
+	if merged {
+		tree, skipped, err := eng.ReadTree(key)
+		if err != nil {
+			return SyncOutcome{Message: "读取合并结果失败：" + err.Error()}
+		}
+		gone, err := s.apply(tree)
+		if err != nil {
+			return SyncOutcome{Message: "导入合并结果失败：" + err.Error()}
+		}
+		removed = len(gone)
+		LogInfo("sync", "push merged remote", "conns", len(tree.Conns), "consoles", len(tree.Consoles), "skipped", skipped)
+	}
 	if err := eng.Git.Push(ctx, prefs.Branch); err != nil {
 		return SyncOutcome{Message: pushMessage(err)}
 	}
 	eng.BindBranch(ctx)
 	s.markSynced()
-	LogInfo("sync", "push ok", "written", stats.Written, "deleted", stats.Deleted, "conns", len(snap.Conns), "consoles", len(snap.Consoles))
+	LogInfo("sync", "push ok", "written", stats.Written, "deleted", stats.Deleted, "conns", len(snap.Conns), "consoles", len(snap.Consoles), "merged", merged)
 	return SyncOutcome{
-		OK: true, Written: stats.Written, Deleted: stats.Deleted,
+		OK: true, Written: stats.Written, Deleted: stats.Deleted, Applied: merged, Removed: removed,
 		Message: fmt.Sprintf("已提交并推送：写入 %d、删除 %d 个文件", stats.Written, stats.Deleted),
 	}
 }
 
-func (s *SyncService) pull(ctx context.Context, eng *sync.Engine, prefs SyncPrefs, key []byte) SyncOutcome {
+func (s *SyncService) pull(ctx context.Context, eng *sync.Engine, prefs SyncPrefs, key []byte, cloned bool) SyncOutcome {
 	if _, ok := eng.RemoteRef(ctx); !ok {
-		// 远端还没有提交：把这次拉取当成首次初始化，绑定好本地分支即可，不报错。
+		// 远端还没有提交：这次拉取只完成 clone/分支绑定，不报错。
 		eng.BindBranch(ctx)
 		s.markSynced()
 		return SyncOutcome{
-			OK: true,
-			Message: fmt.Sprintf("远端仓库为空，已初始化本地仓库并绑定分支 %s；可点击「提交并推送」",
-				prefs.Branch),
+			OK:      true,
+			Message: fmt.Sprintf("远端仓库为空，已克隆并绑定分支 %s；可点击「提交并推送」", prefs.Branch),
 		}
 	}
-	snap := s.Snapshot()
-	hasLocal := eng.HasLocalCommits(ctx)
-	localEmpty := len(snap.Conns) == 0 && len(snap.Consoles) == 0
-
-	if !hasLocal && localEmpty {
-		if err := eng.ResetToRemote(ctx); err != nil {
-			return SyncOutcome{Message: "拉取失败：" + gitMessage(err)}
-		}
-		eng.BindBranch(ctx)
-		return s.importTree(eng, prefs, key, "已拉取远端数据")
-	}
-	if !localEmpty {
-		files, err := eng.BuildFiles(key, snap, sync.KCV(key))
-		if err != nil {
-			return SyncOutcome{Message: "生成同步文件失败：" + err.Error()}
-		}
-		if findings := s.scan(prefs, key, files); len(findings) > 0 {
-			return SyncOutcome{
-				Message:  fmt.Sprintf("发现 %d 处疑似明文凭据", len(findings)),
-				Findings: findings,
-			}
-		}
-		if _, err := eng.WriteFiles(files); err != nil {
-			return SyncOutcome{Message: "写入同步目录失败：" + err.Error()}
-		}
-		if _, err := eng.Git.Commit(ctx, fmt.Sprintf("db-g sync: %s %s", s.Hostname, time.Now().Format(time.RFC3339))); err != nil {
-			return SyncOutcome{Message: "git 提交失败：" + gitMessage(err)}
-		}
+	if eng.Dirty(ctx) {
+		return SyncOutcome{Message: "同步目录有未提交改动，请先点击「提交并推送」"}
 	}
 	if paths, err := eng.MergeRemote(ctx); err != nil {
 		var ce *sync.ConflictError
 		if errors.As(err, &ce) || len(paths) > 0 {
 			return SyncOutcome{Message: "合并冲突，已放弃本次拉取：" + strings.Join(paths, ", ")}
 		}
-		return SyncOutcome{Message: "合并失败：" + gitMessage(err)}
+		return SyncOutcome{Message: "拉取失败：" + gitMessage(err)}
 	}
 	eng.BindBranch(ctx)
-	return s.importTree(eng, prefs, key, "已拉取并导入")
+	msg := "已拉取并导入"
+	if cloned {
+		msg = "已克隆仓库、检出分支并导入"
+	}
+	return s.importTree(eng, prefs, key, msg)
 }
 
 func (s *SyncService) importTree(eng *sync.Engine, prefs SyncPrefs, key []byte, okMsg string) SyncOutcome {

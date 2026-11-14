@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -167,9 +168,16 @@ func TestWriteFilesSweepsStaleEntities(t *testing.T) {
 }
 
 func TestEnsureRepoBindsConfiguredBranch(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
 	dir := t.TempDir()
-	eng := NewEngine(filepath.Join(dir, "repo"), "https://example.invalid/db-g.git", "develop", "")
-	if err := eng.EnsureRepo(context.Background()); err != nil {
+	remote := filepath.Join(dir, "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-b", "main", remote).CombinedOutput(); err != nil {
+		t.Fatalf("init bare: %v %s", err, out)
+	}
+	eng := NewEngine(filepath.Join(dir, "repo"), remote, "develop", "")
+	if _, err := eng.EnsureRepo(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	cur, err := eng.Git.CurrentBranch(context.Background())

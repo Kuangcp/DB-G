@@ -62,11 +62,15 @@ func shellQuote(s string) string {
 }
 
 func (g *Git) run(ctx context.Context, args ...string) (string, error) {
+	return g.runAt(ctx, g.Dir, args...)
+}
+
+func (g *Git) runAt(ctx context.Context, dir string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, g.timeout())
 	defer cancel()
 	full := append([]string{"-c", "core.quotepath=false"}, args...)
 	cmd := exec.CommandContext(ctx, "git", full...)
-	cmd.Dir = g.Dir
+	cmd.Dir = dir
 	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_ASKPASS=true")
 	if g.SSHKey != "" {
 		env = append(env, "GIT_SSH_COMMAND=ssh -i "+shellQuote(g.SSHKey)+
@@ -85,21 +89,46 @@ func (g *Git) run(ctx context.Context, args ...string) (string, error) {
 	return text, nil
 }
 
-// Init 初始化仓库（默认 main），已存在时直接返回。
-func (g *Git) Init(ctx context.Context) error {
-	if _, err := os.Stat(filepath.Join(g.Dir, ".git")); err == nil {
-		return nil
+// Clone 把远端克隆到 g.Dir；目标必须是空目录或不存在，绝不覆盖已有内容。
+func (g *Git) Clone(ctx context.Context, url string) error {
+	if strings.TrimSpace(url) == "" {
+		return errors.New("仓库地址为空")
 	}
-	if err := os.MkdirAll(g.Dir, 0o700); err != nil {
+	if st, err := os.Stat(g.Dir); err == nil {
+		if !st.IsDir() {
+			return errors.New("同步目录已存在且不是目录")
+		}
+		entries, _ := os.ReadDir(g.Dir)
+		if len(entries) > 0 {
+			return errors.New("同步目录已有内容但不是一个 git 仓库")
+		}
+	}
+	parent := filepath.Dir(g.Dir)
+	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return err
 	}
-	if _, err := g.run(ctx, "init", "-b", "main"); err == nil {
+	_, err := g.runAt(ctx, parent, "clone", url, g.Dir)
+	return err
+}
+
+// CheckoutBranch 检出配置的分支：本地已有就切换，否则从 origin/<branch> 建立；
+// 远端为空时创建同名分支。
+func (g *Git) CheckoutBranch(ctx context.Context, branch string) error {
+	if strings.TrimSpace(branch) == "" {
+		return errors.New("分支为空")
+	}
+	if cur, err := g.CurrentBranch(ctx); err == nil && cur == branch {
 		return nil
 	}
-	if _, err := g.run(ctx, "init"); err != nil {
+	if _, err := g.run(ctx, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+		_, err := g.run(ctx, "checkout", branch)
 		return err
 	}
-	_, err := g.run(ctx, "symbolic-ref", "HEAD", "refs/heads/main")
+	if _, err := g.run(ctx, "rev-parse", "--verify", "refs/remotes/origin/"+branch); err == nil {
+		_, err := g.run(ctx, "checkout", "-b", branch, "origin/"+branch)
+		return err
+	}
+	_, err := g.run(ctx, "checkout", "-B", branch)
 	return err
 }
 
@@ -157,6 +186,21 @@ func (g *Git) SetBranchTracking(ctx context.Context, branch, remote string) {
 	_, _ = g.run(ctx, "branch", "--set-upstream-to="+remote+"/"+branch, branch)
 }
 
+// Head 返回当前提交 id；仓库为空时返回空串。
+func (g *Git) Head(ctx context.Context) string {
+	out, err := g.run(ctx, "rev-parse", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// Dirty 报告工作树是否有未提交改动。
+func (g *Git) Dirty(ctx context.Context) bool {
+	out, err := g.run(ctx, "status", "--porcelain")
+	return err == nil && strings.TrimSpace(out) != ""
+}
+
 // HasCommits 报告本地是否已有提交。
 func (g *Git) HasCommits(ctx context.Context) bool {
 	_, err := g.run(ctx, "rev-parse", "--verify", "HEAD")
@@ -188,12 +232,6 @@ func (g *Git) RemoteRef(ctx context.Context, branch string) (string, bool) {
 		return "", false
 	}
 	return ref, true
-}
-
-// ResetHard 把工作树重置到 ref（首次拉取且本地无提交时用）。
-func (g *Git) ResetHard(ctx context.Context, ref string) error {
-	_, err := g.run(ctx, "reset", "--hard", ref)
-	return err
 }
 
 // HasMergeBase 报告两个 ref 是否有共同祖先。

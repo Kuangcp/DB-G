@@ -183,6 +183,26 @@ func TestSyncServiceTwoDevices(t *testing.T) {
 	if got, ok := b.store.Get(conn2.ID); !ok || got.Password != "pw-2" {
 		t.Fatalf("B second connection: %+v", got)
 	}
+
+	// 两边各加一条连接：远端领先时提交也要先 merge 再 push，不能直接失败。
+	connB := b.addConn(t, "B 新增", "pw-b")
+	if res := syncRun(t, b.service, "push"); !res.OK {
+		t.Fatalf("push B new: %+v", res)
+	}
+	connA := a.addConn(t, "A 新增", "pw-a")
+	res = syncRun(t, a.service, "push")
+	if !res.OK || !res.Applied {
+		t.Fatalf("push A must merge remote first: %+v", res)
+	}
+	if _, ok := a.store.Get(connB.ID); !ok {
+		t.Fatal("A should import remote connection after merge-before-push")
+	}
+	if res := syncRun(t, b.service, "pull"); !res.OK {
+		t.Fatalf("pull B after merged push: %+v", res)
+	}
+	if got, ok := b.store.Get(connA.ID); !ok || got.Password != "pw-a" {
+		t.Fatalf("B should see A connection: %+v", got)
+	}
 }
 
 func TestSyncServiceSecretScanRequiresConfirmation(t *testing.T) {

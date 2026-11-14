@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -49,8 +51,16 @@ func (a *root) syncSection(c *ui.Context) {
 			}
 		})
 	})
-	ui.Text(c, "同步目录："+app.SyncWorkTree(a.syncPrefsPath)).FontSize(11).
+	workTree := app.SyncWorkTree(a.syncPrefsPath)
+	ui.Text(c, "同步目录："+workTree).FontSize(11).
 		TextColor(t.TextMuted).SingleLine().Tooltip("固定在本机配置目录，不随仓库走")
+	if _, err := os.Stat(filepath.Join(workTree, ".git")); err != nil {
+		ui.Text(c, "首次点「拉取」会 clone 仓库、检出配置分支并导入数据；本地改动请先「提交并推送」。").
+			FontSize(11).TextColor(t.Warning)
+	} else {
+		ui.Text(c, "拉取会以远端为准覆盖本地配置；本地改动请先「提交并推送」。").
+			FontSize(11).TextColor(t.TextMuted)
+	}
 
 	ui.Divider(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {

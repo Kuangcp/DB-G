@@ -10,9 +10,9 @@
 
 但有两处需要按 db-g 现实调整：
 
-1. **拉取不能是裸 `git pull`**。本地有未推送改动时，裸 pull 要么失败，要么把工作树改脏；
-   正确顺序是「编辑器落盘 → 本地快照写入工作树并提交 → fetch/merge → 导入合并结果」。
-   否则一次拉取就可能丢掉本地改动，这是这个功能最不能接受的事故。
+1. **三条路径要分清**：首次初始化是 `clone → checkout 配置分支 → 解析导入`；后续拉取是
+   `fetch/merge → 解析导入`；提交是「本地快照写入仓库并 commit → fetch/merge（冲突则中止）
+   → push」。本地未提交的 DB 改动属于提交流程，拉取以远端为准；工作树有未提交文件时拉取直接拒绝。
 2. **本地 AES 密钥要解决跨设备分发与错钥防护**。密钥不进仓库，另一台设备没有同一个密钥就解不开连接。
    因此不能「没有密钥就一律生成新密钥」：仓库里已有密文时必须让用户导入已有密钥，
    否则新密钥只会让同步永久失效。仓库里放 **KCV**（Key Check Value），
@@ -229,44 +229,46 @@ import 方向：`ui → app → sync`，`sync` 不 import `app/ui/engine`。AGEN
 3. adapter.Snapshot()          // 读内存/磁盘的 conns/folders/workspaces/consoles(内部控制台)
 4. 生成文件清单（内存）：engine.BuildFiles(key)  // 写/删 db-g/、.enc 明文比对去抖
 5. 敏感信息扫描：对清单里的 *.sql 跑 §9；有命中且未确认 → 中止，不写盘/不提交
-6. engine.WriteFiles() + git add -A -- db-g && commit("db-g sync: <hostname> <ISO 时间>")
-   - 无变更：跳过 commit，继续下一次 push 判断，不算失败
-7. 空库守卫：本地同步态为空而远端 db-g/ 有连接 → 拒绝推送，要求先拉取/确认
-8. git push origin HEAD:refs/heads/<branch>
-   - non-fast-forward → 不改本地，提示「远端有新提交，请先拉取」
-9. 记录 lastSyncAt、文件计数，刷新状态
+6. engine.WriteFiles() + commit("db-g sync: <hostname> <ISO 时间>")
+   - 无变更：跳过 commit，但仍继续 merge/push
+7. 空库/首次守卫：
+   - 本地连接为空而远端 db-g/ 有连接 → 拒绝推送
+   - 本机从未成功同步（lastSyncAt=0）而远端已有 db-g/ 数据 → 要求先拉取导入
+8. fetch + merge origin/<branch>
+   - 冲突：git merge --abort → 返回冲突文件列表，不 push
+   - 远端还没有该分支：跳过 merge，直接 push（首次建分支）
+9. 合并产生了新提交：读取合并后的工作树 → 解析 → Apply 到本地（让应用与仓库一致）
+10. git push origin HEAD:refs/heads/<branch>
+    - non-fast-forward → 提示「远端有新提交，请重试提交」
+11. 记录 lastSyncAt、文件计数，刷新状态
 ```
 
 ### 7.2 拉取（pull）
 
 ```
-1. ensureRepo：无 .git → clone；有 .git → 更新 remote URL
-2. 校验配置与密钥（§5.5，需先有工作树才能读 key.kcv）
-3. 刷新编辑器（同 push）
-4. 首次同步守卫：本地快照为空且仓库 db-g/ 已有实体 → 跳过第 5 步的本地提交，
-   直接以合并结果导入（不能把空状态提交成“删除远端所有实体”）
-5. 本地快照写工作树 + commit（保证本地未推送改动进入合并面）；
-   写盘/提交前同样跑 §9 扫描，避免敏感 SQL 进入本地提交历史（取消则整次拉取中止）
-6. git fetch origin <branch>
-   - 远端还没有该分支（空仓库）：不报错，绑定本地分支与 origin 跟踪配置后直接返回
-     「已初始化，可提交并推送」；这是第一次使用空仓库的正常路径
-   - 本地还没有任何提交：直接 reset --hard origin/<branch>
-   - 否则 git merge --no-edit（无共同祖先时 --allow-unrelated-histories）
-7. 冲突：
-   - 一期：git merge --abort → 返回冲突文件列表，本地库不动，提示重试/手动处理
-   - 二期：按实体逐项取舍（§10）
-8. 读取合并后的工作树：解密/解析全部实体；任一连接解不开 → 整体失败，不写本地
-9. adapter.Apply(plan)：校验引用 → 写控制台正文 → 单次批量替换 store → 清理被删的正文文件
-10. ui 刷新：关闭已删除/已变更连接的会话、重建树与标签、修正活动工作区/控制台
-11. 记录 lastSyncAt
+1. ensureRepo：
+   - 工作树没有 .git → git clone <repo> → checkout <branch>
+   - 已有 .git → 更新 origin URL → fetch → checkout <branch>
+   - 远端为空仓库：clone 后创建同名本地分支；拉取只返回「已初始化」
+2. 校验配置与密钥（§5.5，需要工作树才能读 key.kcv）
+3. 工作树有未提交改动 → 拒绝拉取，提示先提交（避免半状态）
+4. fetch + merge origin/<branch>
+   - 首次 clone 后一般 Already up to date
+   - 冲突：git merge --abort → 返回冲突路径，本地库不动
+5. 读取合并后的工作树：解密/解析全部实体；任一连接解不开 → 整体失败，不写本地
+6. adapter.Apply(plan)：校验引用 → 写控制台正文 → 单次批量替换 store → 清理被删的正文文件
+7. ui 刷新：关闭已删除/已变更连接的会话、重建树与标签、修正活动工作区/控制台
+8. 记录 lastSyncAt
 ```
 
 关键点：
 
-- 第 5 步不可省。裸 `git pull` 在有本地未提交修改时会失败；先提交本地快照，
-  git 的三路合并才能正确处理「一边删、一边没改」并只对真正冲突的实体报错。
-- 第 8 步必须在第 9 步之前完成全部解密与 JSON 解析；不能“边解析边写”。
-- 合并结果里出现 `<<<<<<<` 的 `.sql` 绝不导入：冲突路径应先被第 7 步拦下。
+- 首次使用空仓库：clone 会成功（git 给出 empty repository 警告），随后 checkout/创建配置分支；
+  不把“远端没有分支”当失败。
+- 配置分支在远端不存在但仓库有其他分支：明确报「远端没有分支 X」，不悄悄建空分支。
+- 拉取不替用户提交本地 DB 改动；工作树脏时直接拒绝，避免把半成品提交进历史。
+- 第 5 步必须在第 6 步之前完成全部解密与 JSON 解析；不能“边解析边写”。
+- 合并结果里出现 `<<<<<<<` 的 `.sql` 绝不导入：冲突路径应先被第 4 步拦下。
 
 ## 8. 导入语义（app 层）
 

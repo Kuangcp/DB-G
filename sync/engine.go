@@ -38,18 +38,34 @@ func NewEngine(workTree, remote, branch, sshKey string) *Engine {
 	}
 }
 
-// EnsureRepo 创建工作树、初始化 git、设置 origin 与本地身份，并把本地分支绑到配置分支。
-func (e *Engine) EnsureRepo(ctx context.Context) error {
-	if err := e.Git.Init(ctx); err != nil {
-		return err
+// EnsureRepo 保证工作树可用：首次 clone 远端，随后 fetch 并检出配置分支。
+// 返回值 cloned 表示这次刚克隆，调用方据此决定首次导入/防覆盖策略。
+func (e *Engine) EnsureRepo(ctx context.Context) (cloned bool, err error) {
+	if _, statErr := os.Stat(filepath.Join(e.WorkTree, ".git")); statErr != nil {
+		if err := e.Git.Clone(ctx, e.Remote); err != nil {
+			return false, err
+		}
+		cloned = true
 	}
 	e.Git.SetIdentity(ctx)
 	if err := e.Git.SetRemote(ctx, e.Remote); err != nil {
-		return err
+		return cloned, err
+	}
+	if err := e.Git.Fetch(ctx, e.Branch); err != nil && !errors.Is(err, ErrNoRemoteRef) {
+		return cloned, err
+	}
+	if err := e.Git.CheckoutBranch(ctx, e.Branch); err != nil {
+		return cloned, err
 	}
 	e.BindBranch(ctx)
-	return nil
+	return cloned, nil
 }
+
+// Head 返回当前提交。
+func (e *Engine) Head(ctx context.Context) string { return e.Git.Head(ctx) }
+
+// Dirty 报告工作树是否有未提交改动。
+func (e *Engine) Dirty(ctx context.Context) bool { return e.Git.Dirty(ctx) }
 
 // BindBranch 让未提交的仓库使用配置的分支名，并写入 origin 跟踪配置。
 // 远端还没有该分支时也先写配置，首次 push 后即可正常跟踪。
@@ -60,24 +76,12 @@ func (e *Engine) BindBranch(ctx context.Context) {
 	e.Git.SetBranchTracking(ctx, e.Branch, "origin")
 }
 
-// Fetch 拉取远端分支。
-func (e *Engine) Fetch(ctx context.Context) error { return e.Git.Fetch(ctx, e.Branch) }
-
 // HasLocalCommits 报告工作树是否已有提交。
 func (e *Engine) HasLocalCommits(ctx context.Context) bool { return e.Git.HasCommits(ctx) }
 
 // RemoteRef 返回远端 ref。
 func (e *Engine) RemoteRef(ctx context.Context) (string, bool) {
 	return e.Git.RemoteRef(ctx, e.Branch)
-}
-
-// ResetToRemote 把工作树重置成远端内容（首次拉取且本地无提交）。
-func (e *Engine) ResetToRemote(ctx context.Context) error {
-	ref, ok := e.Git.RemoteRef(ctx, e.Branch)
-	if !ok {
-		return ErrNoRemoteRef
-	}
-	return e.Git.ResetHard(ctx, ref)
 }
 
 // RemoteHasConnections 报告远端分支是否已有 db-g/ 连接密文。
