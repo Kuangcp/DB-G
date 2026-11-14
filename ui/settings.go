@@ -66,6 +66,9 @@ func (a *root) settingsView(c *ui.Context) {
 			})
 		})
 	})
+	// 同步密钥/敏感信息弹窗由设置页触发，必须在这里也渲染；主窗口此时可能在后面。
+	a.syncKeyModal(c)
+	a.syncFindingsModal(c)
 }
 
 // fontSection 是全局字体设置：编辑区、结果区、功能界面各一套。

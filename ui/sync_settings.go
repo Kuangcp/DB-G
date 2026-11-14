@@ -101,7 +101,9 @@ func (a *root) syncSection(c *ui.Context) {
 			}
 		}
 	})
-	ui.Text(c, "密钥只保存在本机；丢失后仓库里的连接无法解密。控制台 SQL 不加密。").
+	ui.Text(c, "第一台设备生成并备份密钥；后续设备必须导入同一把密钥，否则仓库里的连接无法解密。").
+		FontSize(11).TextColor(t.TextMuted)
+	ui.Text(c, "密钥只保存在本机，控制台 SQL 不加密。").
 		FontSize(11).TextColor(t.TextMuted)
 
 	ui.Divider(c)

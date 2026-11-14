@@ -59,6 +59,28 @@ func TestSyncKeyModalForbidsGenerateWhenRepoHasKey(t *testing.T) {
 	}
 }
 
+// 设置页里点「导入密钥」必须真的弹出输入框（弹窗曾只在主窗口渲染，设置页点了没反应）。
+func TestSyncImportKeyFromSettingsOpensModal(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.syncPrefsPath = filepath.Join(t.TempDir(), "sync.json")
+	a.syncPrefs = app.DefaultSyncPrefs()
+	a.syncPrefs.RepoURL = "git@example.com:me/db-g-sync.git"
+	a.syncKeySet, a.syncKeyKCV = false, ""
+	tt := openSettingsSection(t, a, "同步")
+	if err := tt.Click("导入密钥"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.syncKeyOpen {
+		t.Fatal("import button must open key modal")
+	}
+	for _, want := range []string{"仓库还没有加密数据：可以生成新密钥，或导入已有密钥。", "导入"} {
+		if !tt.HasText(want) {
+			t.Fatalf("key modal missing %q: %q", want, tt.Texts())
+		}
+	}
+}
+
 func TestSyncFindingsModalCancelKeepsNothing(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.syncPrefsPath = filepath.Join(t.TempDir(), "sync.json")
