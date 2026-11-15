@@ -19,6 +19,90 @@ func (s *SyncService) scan(prefs SyncPrefs, key []byte, files map[string][]byte)
 	return ScanSecrets(key, files, accepted)
 }
 
+// mergeSyncTrees 把仓库合并结果与本地快照求并集：同 id 以远端为准，
+// 本地独有的连接/文件夹/工作区/控制台全部保留；返回保留的本地实体数。
+func mergeSyncTrees(remote, local sync.Snapshot) (sync.Snapshot, int) {
+	out := remote
+	preserved := 0
+	connSet := map[string]bool{}
+	for _, c := range out.Conns {
+		connSet[c.ID] = true
+	}
+	for _, c := range local.Conns {
+		if !connSet[c.ID] {
+			out.Conns = append(out.Conns, c)
+			connSet[c.ID] = true
+			preserved++
+		}
+	}
+	folderSet := map[string]bool{}
+	for _, f := range out.Folders {
+		folderSet[f.ID] = true
+	}
+	for _, f := range local.Folders {
+		if !folderSet[f.ID] {
+			out.Folders = append(out.Folders, f)
+			folderSet[f.ID] = true
+			preserved++
+		}
+	}
+	consoleSet := map[string]bool{}
+	for _, c := range out.Consoles {
+		consoleSet[c.Meta.ID] = true
+	}
+	for _, c := range local.Consoles {
+		if !consoleSet[c.Meta.ID] {
+			out.Consoles = append(out.Consoles, c)
+			consoleSet[c.Meta.ID] = true
+			preserved++
+		}
+	}
+	localWS := map[string]sync.Workspace{}
+	for _, w := range local.Workspaces {
+		localWS[w.ID] = w
+	}
+	wsSet := map[string]bool{}
+	for i := range out.Workspaces {
+		w := &out.Workspaces[i]
+		wsSet[w.ID] = true
+		old, ok := localWS[w.ID]
+		if !ok {
+			continue
+		}
+		seen := map[string]bool{}
+		for _, id := range w.Members {
+			seen[id] = true
+		}
+		for _, id := range old.Members {
+			if consoleSet[id] && !seen[id] {
+				w.Members = append(w.Members, id)
+				seen[id] = true
+			}
+		}
+		if w.LastActiveConsoleID == "" && consoleSet[old.LastActiveConsoleID] {
+			w.LastActiveConsoleID = old.LastActiveConsoleID
+		}
+	}
+	for _, w := range local.Workspaces {
+		if wsSet[w.ID] {
+			continue
+		}
+		members := w.Members[:0]
+		for _, id := range w.Members {
+			if consoleSet[id] {
+				members = append(members, id)
+			}
+		}
+		w.Members = members
+		if !consoleSet[w.LastActiveConsoleID] {
+			w.LastActiveConsoleID = ""
+		}
+		out.Workspaces = append(out.Workspaces, w)
+		preserved++
+	}
+	return out, preserved
+}
+
 // apply 把合并结果写入本地：先写正文，再单次替换 store，最后清理被删控制台文件。
 func (s *SyncService) apply(tree sync.Snapshot) ([]ConsoleRecord, error) {
 	connSet := map[string]bool{}

@@ -22,6 +22,7 @@ type SyncOutcome struct {
 	Applied    bool
 	Findings   []SecretFinding
 	Removed    int
+	Preserved  int
 	Skipped    int
 	Written    int
 	Deleted    int
@@ -181,17 +182,20 @@ func (s *SyncService) push(ctx context.Context, eng *sync.Engine, prefs SyncPref
 		merged = eng.Head(ctx) != headBefore
 	}
 	removed := 0
+	mergedPreserved := 0
 	if merged {
 		tree, skipped, err := eng.ReadTree(key)
 		if err != nil {
 			return SyncOutcome{Message: "读取合并结果失败：" + err.Error()}
 		}
+		tree, preserved := mergeSyncTrees(tree, s.Snapshot())
 		gone, err := s.apply(tree)
 		if err != nil {
 			return SyncOutcome{Message: "导入合并结果失败：" + err.Error()}
 		}
 		removed = len(gone)
-		LogInfo("sync", "push merged remote", "conns", len(tree.Conns), "consoles", len(tree.Consoles), "skipped", skipped)
+		mergedPreserved = preserved
+		LogInfo("sync", "push merged remote", "conns", len(tree.Conns), "consoles", len(tree.Consoles), "skipped", skipped, "preserved", preserved)
 	}
 	if err := eng.Git.Push(ctx, prefs.Branch); err != nil {
 		return SyncOutcome{Message: pushMessage(err)}
@@ -201,7 +205,8 @@ func (s *SyncService) push(ctx context.Context, eng *sync.Engine, prefs SyncPref
 	LogInfo("sync", "push ok", "written", stats.Written, "deleted", stats.Deleted, "conns", len(snap.Conns), "consoles", len(snap.Consoles), "merged", merged)
 	return SyncOutcome{
 		OK: true, Written: stats.Written, Deleted: stats.Deleted, Applied: merged, Removed: removed,
-		Message: fmt.Sprintf("已提交并推送：写入 %d、删除 %d 个文件", stats.Written, stats.Deleted),
+		Preserved: mergedPreserved,
+		Message:   fmt.Sprintf("已提交并推送：写入 %d、删除 %d 个文件", stats.Written, stats.Deleted),
 	}
 }
 
@@ -238,16 +243,22 @@ func (s *SyncService) importTree(eng *sync.Engine, prefs SyncPrefs, key []byte, 
 	if err != nil {
 		return SyncOutcome{Message: "读取仓库数据失败：" + err.Error()}
 	}
-	removed, err := s.apply(tree)
+	mergedTree, preserved := mergeSyncTrees(tree, s.Snapshot())
+	removed, err := s.apply(mergedTree)
 	if err != nil {
 		return SyncOutcome{Message: "导入本地失败：" + err.Error()}
 	}
 	s.markSynced()
-	LogInfo("sync", "pull ok", "conns", len(tree.Conns), "consoles", len(tree.Consoles), "skipped", skipped, "removed", len(removed))
+	LogInfo("sync", "pull ok", "remote_conns", len(tree.Conns), "remote_consoles", len(tree.Consoles),
+		"preserved", preserved, "skipped", skipped, "removed", len(removed))
+	msg := fmt.Sprintf("%s：远端 %d 个连接、%d 个控制台（跳过 %d 个）",
+		okMsg, len(tree.Conns), len(tree.Consoles), skipped)
+	if preserved > 0 {
+		msg += fmt.Sprintf("；本地独有的 %d 项已保留，点「提交并推送」可共存", preserved)
+	}
 	return SyncOutcome{
-		OK: true, Applied: true, Removed: len(removed), Skipped: skipped,
-		Message: fmt.Sprintf("%s：%d 个连接、%d 个控制台（跳过 %d 个）",
-			okMsg, len(tree.Conns), len(tree.Consoles), skipped),
+		OK: true, Applied: true, Removed: len(removed), Preserved: preserved, Skipped: skipped,
+		Message: msg,
 	}
 }
 

@@ -271,3 +271,60 @@ func TestSyncServiceRejectsWrongKey(t *testing.T) {
 		t.Fatal("wrong key must not import anything")
 	}
 }
+
+func TestSyncPullPreservesLocalOnlyData(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-b", "main", remote).CombinedOutput(); err != nil {
+		t.Fatalf("init bare: %v %s", err, out)
+	}
+	key, _ := sync.NewKey()
+	a := newSyncDevice(t, remote, key)
+	b := newSyncDevice(t, remote, key)
+
+	remoteConn := a.addConn(t, "远端连接", "pw-remote")
+	remoteConsole := a.addConsole(t, remoteConn.ID, "远端控制台", "select 'remote';")
+	if res := syncRun(t, a.service, "push"); !res.OK {
+		t.Fatalf("seed remote: %+v", res)
+	}
+
+	localConn := b.addConn(t, "本地连接", "pw-local")
+	localConsole := b.addConsole(t, localConn.ID, "本地控制台", "select 'local';")
+
+	res := syncRun(t, b.service, "pull")
+	if !res.OK || !res.Applied {
+		t.Fatalf("pull B: %+v", res)
+	}
+	if res.Preserved < 2 || !strings.Contains(res.Message, "本地独有") {
+		t.Fatalf("preserved summary: %+v", res)
+	}
+	if _, ok := b.store.Get(remoteConn.ID); !ok {
+		t.Fatal("remote connection missing after merge")
+	}
+	if _, ok := b.store.Get(localConn.ID); !ok {
+		t.Fatal("local connection must survive pull")
+	}
+	if _, ok := b.store.GetConsole(remoteConsole.ID); !ok {
+		t.Fatal("remote console missing after merge")
+	}
+	if _, ok := b.store.GetConsole(localConsole.ID); !ok {
+		t.Fatal("local console must survive pull")
+	}
+	body, _ := os.ReadFile(filepath.Join(b.store.ConsolesDir(), localConn.ID+"-"+localConsole.ID+".sql"))
+	if string(body) != "select 'local';" {
+		t.Fatalf("local console body: %q", body)
+	}
+
+	// 保留的本地数据在下一次提交里共存进远端。
+	if res := syncRun(t, b.service, "push"); !res.OK {
+		t.Fatalf("push preserved data: %+v", res)
+	}
+	if res := syncRun(t, a.service, "pull"); !res.OK {
+		t.Fatalf("pull A: %+v", res)
+	}
+	if got, ok := a.store.Get(localConn.ID); !ok || got.Password != "pw-local" {
+		t.Fatalf("A should receive preserved local connection: %+v", got)
+	}
+}
