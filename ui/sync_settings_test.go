@@ -108,3 +108,18 @@ func TestSyncFindingsModalCancelKeepsNothing(t *testing.T) {
 		t.Fatalf("cancel must not accept findings: %+v", prefs.AcceptedFindings)
 	}
 }
+
+func TestSyncBranchCanBeCleared(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.syncPrefsPath = filepath.Join(t.TempDir(), "sync.json")
+	a.syncPrefs = app.DefaultSyncPrefs()
+	a.syncPrefs.Branch = ""
+	a.saveSyncPrefs()
+	if a.syncPrefs.Branch != "" {
+		t.Fatalf("input branch was forced to %q", a.syncPrefs.Branch)
+	}
+	prefs, _ := app.LoadSyncPrefs(a.syncPrefsPath)
+	if prefs.Branch != "main" {
+		t.Fatalf("persisted branch = %q", prefs.Branch)
+	}
+}

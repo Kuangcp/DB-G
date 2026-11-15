@@ -137,10 +137,11 @@ func (a *root) syncSection(c *ui.Context) {
 }
 
 func (a *root) saveSyncPrefs() {
-	if strings.TrimSpace(a.syncPrefs.Branch) == "" {
-		a.syncPrefs.Branch = "main"
+	prefs := a.syncPrefs
+	if strings.TrimSpace(prefs.Branch) == "" {
+		prefs.Branch = "main"
 	}
-	if err := app.SaveSyncPrefs(a.syncPrefsPath, a.syncPrefs); err != nil {
+	if err := app.SaveSyncPrefs(a.syncPrefsPath, prefs); err != nil {
 		a.syncWarn = "保存同步配置失败：" + err.Error()
 	}
 }
