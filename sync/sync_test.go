@@ -3,6 +3,8 @@ package sync
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -162,8 +164,8 @@ func TestWriteFilesSweepsStaleEntities(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(eng.WorkTree, filepath.FromSlash(ConnectionPath("c1")))); !os.IsNotExist(err) {
 		t.Fatalf("stale file remains: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(eng.WorkTree, "README.md")); err != nil {
-		t.Fatal("README should be kept")
+	if _, err := os.Stat(filepath.Join(eng.WorkTree, "README.md")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal("sync must not create a root README")
 	}
 }
 

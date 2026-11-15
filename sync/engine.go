@@ -207,24 +207,11 @@ func (e *Engine) BuildFiles(key []byte, snap Snapshot, kcv string) (map[string][
 		files[ConsoleBodyPath(c.Meta.ID)] = []byte(c.Body)
 	}
 	files[KCVFile] = []byte(strings.ToUpper(strings.TrimSpace(kcv)) + "\n")
-	if _, err := os.Stat(filepath.Join(e.WorkTree, "README.md")); errors.Is(err, fs.ErrNotExist) {
-		files["README.md"] = []byte(defaultReadme)
-	}
 	gitAttrPath := filepath.Join(e.WorkTree, ".gitattributes")
 	existing, _ := os.ReadFile(gitAttrPath)
 	files[".gitattributes"] = mergeGitAttributes(existing)
 	return files, nil
 }
-
-const defaultReadme = `# db-g sync repository
-
-This repository stores db-g connection profiles and SQL consoles.
-
-- ` + "`db-g/connections/*.enc`" + ` are AES-GCM ciphertexts; do not edit them.
-- ` + "`db-g/consoles/*.sql`" + ` are plain text and may contain sensitive SQL.
-  Use a private repository and never put passwords in SQL.
-- ` + "`db-g/key.kcv`" + ` is a Key Check Value, not a secret.
-`
 
 func mergeGitAttributes(existing []byte) []byte {
 	need := []string{"*.enc -text", "*.sql text eol=lf"}

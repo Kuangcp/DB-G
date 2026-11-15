@@ -290,7 +290,7 @@ func (g *Git) Conflicted(ctx context.Context) []string {
 
 // Commit 暂存 db-g/ 与两个根文件并提交；没有变更时返回 false。
 func (g *Git) Commit(ctx context.Context, message string) (bool, error) {
-	paths := []string{AppDir, ".gitattributes", "README.md"}
+	paths := []string{AppDir, ".gitattributes"}
 	status, err := g.run(ctx, append([]string{"status", "--porcelain", "--"}, paths...)...)
 	if err != nil {
 		return false, err
