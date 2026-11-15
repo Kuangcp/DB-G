@@ -133,6 +133,25 @@ func (e *EditSet) RemoveInsert(i int) {
 	e.Inserts = append(e.Inserts[:i], e.Inserts[i+1:]...)
 }
 
+// SetInsertCell 设置新增行的一列；col 是结果列下标。
+func (e *EditSet) SetInsertCell(i, col int, v any) {
+	if i < 0 || i >= len(e.Inserts) || col < 0 {
+		return
+	}
+	if e.Inserts[i] == nil {
+		e.Inserts[i] = map[int]any{}
+	}
+	e.Inserts[i][col] = v
+}
+
+// ClearInsertCell 清掉新增行的一列（该列走库默认）。
+func (e *EditSet) ClearInsertCell(i, col int) {
+	if i < 0 || i >= len(e.Inserts) || col < 0 {
+		return
+	}
+	delete(e.Inserts[i], col)
+}
+
 // Clear 丢弃全部本地改动。
 func (e *EditSet) Clear() {
 	e.Cells = map[CellKey]any{}
@@ -204,7 +223,8 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 	for i, ins := range e.Inserts {
 		cols := make([]int, 0, len(ins))
 		for c := range ins {
-			if c >= 0 && c < len(plan.Columns) && plan.Editable[c] {
+			// 新增行可以填主键（自增列留空走默认）；Editable 只约束已有行改格。
+			if c >= 0 && c < len(plan.Columns) {
 				cols = append(cols, c)
 			}
 		}

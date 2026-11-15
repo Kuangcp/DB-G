@@ -25,7 +25,6 @@
 
 
 # 查询结果
-- 添加一行  需要修复和重新设计
 - ClickHouse 作为一个大宽表分析型数据库，用户最核心的诉求通常不是 DDL 查看或简单的只读，而是大数据量的高效流式导出（TSV/Parquet）、复杂的聚合查询可视化（执行计划/火焰图分析）。
 - ~~Explain 的各数据源的渲染支持~~（已做：四类库统一计划树，PG/MySQL 结构化 actual rows/loops；PG BUFFERS；MySQL TREE actual；ClickHouse 通用 JSON。SQLite/ClickHouse 不提供 ANALYZE）
 

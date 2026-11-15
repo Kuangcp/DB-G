@@ -750,9 +750,32 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	kind := a.connKind()
 	a.resultState.CellMenu = func(m *ui.Menu, row, col int) {
 		// resultRow 与 Table 一致，存「显示顺序」；取数据时再映射到结果行。
-		a.resultRow = row
-		row = a.displayToResult(r, row)
+		displayRow := row
+		a.resultRow = displayRow
+		dataRows := len(a.resView.apply(r))
 		dataCol := col - 1 // 第 0 列是行号
+		if displayRow >= dataRows {
+			insIdx := displayRow - dataRows
+			if a.editPlan != nil && dataCol >= 0 && dataCol < len(a.editPlan.Columns) && dataCol < len(a.editPlan.Nullable) {
+				if m.Item("编辑单元格…").Chosen() {
+					a.beginEditAt(r, -1-insIdx, dataCol)
+				}
+				if a.editPlan.Nullable[dataCol] && m.Item("设为 NULL").Chosen() {
+					a.setCellEdit(-1-insIdx, dataCol, nil)
+				}
+				if _, ok := a.editSet().Inserts[insIdx][dataCol]; ok && m.Item("还原本格").Chosen() {
+					a.editSet().ClearInsertCell(insIdx, dataCol)
+				}
+			}
+			if m.Item("删除新增行").Chosen() {
+				a.removeInsertRow(r, insIdx)
+			}
+			return
+		}
+		row = a.displayToResult(r, displayRow)
+		if row < 0 {
+			return
+		}
 		if dataCol >= 0 && dataCol < len(r.Columns) {
 			if m.Item("复制单元格").Chosen() {
 				c.WriteClipboard(cellStringFor(kind, r, dataCol, r.Rows[row][dataCol]))
@@ -837,12 +860,24 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 				ui.Text(c, "+").TextColor(c.Theme().Success)
 				return
 			}
-			v, ok := editSet.Inserts[insIdx][col-1]
-			if !ok {
-				ui.Text(c, "").SingleLine()
+			if a.inlineEditOn && a.inlineEditRow == -1-insIdx && a.inlineEditCol == col-1 {
+				a.inlineCellEditor(c)
 				return
 			}
-			ui.Text(c, cellTextDisplay(v)).SingleLine().TextColor(c.Theme().Success)
+			v, ok := editSet.Inserts[insIdx][col-1]
+			if !ok {
+				txt := ui.Text(c, "").SingleLine()
+				if txt.RowDoubleClicked() {
+					handledDouble = true
+					a.beginEditAt(r, -1-insIdx, col-1)
+				}
+				return
+			}
+			txt := ui.Text(c, cellTextDisplay(v)).SingleLine().TextColor(c.Theme().Success)
+			if txt.RowDoubleClicked() {
+				handledDouble = true
+				a.beginEditAt(r, -1-insIdx, col-1)
+			}
 			return
 		}
 		ri := displayRows[row]

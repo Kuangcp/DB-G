@@ -85,7 +85,7 @@ func TestEditInsertAndDeleteThroughUI(t *testing.T) {
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
 	_ = tt
-	ins := a.addInsertRow()
+	ins := a.addInsertRow(a.currentRuntime().Result())
 	a.editSet().Inserts[ins][0] = int64(2)
 	a.editSet().Inserts[ins][1] = "bob"
 	a.deleteRow(0)
@@ -98,6 +98,65 @@ func TestEditInsertAndDeleteThroughUI(t *testing.T) {
 	}
 	if len(r.Rows) != 1 || r.Rows[0][0] != int64(2) || r.Rows[0][1] != "bob" {
 		t.Fatalf("rows: %v", r.Rows)
+	}
+}
+
+// 新增行必须能逐格编辑（包括主键列），不能只是画一行空文本。
+func TestEditInsertRowCellsThroughUI(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "DELETE FROM users"); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users")
+	r := a.currentRuntime().Result()
+	ins := a.addInsertRow(r)
+	if ins != 0 || !a.inlineEditOn || a.inlineEditRow != -1 || a.inlineEditCol != 1 {
+		t.Fatalf("add row should edit first non-pk column: ins=%d inline=%v row=%d col=%d",
+			ins, a.inlineEditOn, a.inlineEditRow, a.inlineEditCol)
+	}
+	a.inlineEditText = "bob"
+	a.commitInlineEdit()
+	if got, ok := a.editSet().Inserts[0][1]; !ok || got != "bob" {
+		t.Fatalf("insert name: %v %v", got, ok)
+	}
+	// 主键列对已有行只读，但对新增行必须可填。
+	a.beginEditAt(r, -1, 0)
+	if !a.inlineEditOn || a.inlineEditRow != -1 || a.inlineEditCol != 0 {
+		t.Fatalf("insert pk editor: %v %d %d", a.inlineEditOn, a.inlineEditRow, a.inlineEditCol)
+	}
+	a.inlineEditText = "2"
+	a.commitInlineEdit()
+	if got, ok := a.editSet().Inserts[0][0]; !ok || got != int64(2) {
+		t.Fatalf("insert pk: %v %v", got, ok)
+	}
+	lines, err := a.previewEdits()
+	if err != nil || len(lines) != 1 || !strings.Contains(lines[0], `"id"`) || !strings.Contains(lines[0], `"name"`) {
+		t.Fatalf("preview: %v err=%v", lines, err)
+	}
+	if err := a.applyEditsSync(); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	got, err := a.testSession(t).RunStatement(t.Context(), "SELECT id, name FROM users")
+	if err != nil || len(got.Rows) != 1 || got.Rows[0][0] != int64(2) || got.Rows[0][1] != "bob" {
+		t.Fatalf("inserted row: %+v err=%v", got, err)
+	}
+}
+
+func TestEditDeleteInsertRow(t *testing.T) {
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	runEditQuery(t, a, "SELECT id, name FROM users")
+	r := a.currentRuntime().Result()
+	a.addInsertRow(r)
+	if len(a.editSet().Inserts) != 1 {
+		t.Fatal("insert row missing")
+	}
+	a.resultRow = len(a.resView.apply(r)) // 新增行
+	a.deleteSelectedRow(r)
+	if len(a.editSet().Inserts) != 0 || a.editSet().Count() != 0 {
+		t.Fatalf("insert row must be removed: %+v", a.editSet())
 	}
 }
 

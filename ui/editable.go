@@ -134,9 +134,16 @@ func (a *root) rowsForPlan() [][]any {
 	return nil
 }
 
-// setCellEdit 暂存一格改动（结果行下标 + 结果列下标）。
+// setCellEdit 暂存一格改动（结果行下标 + 结果列下标；row < 0 为新增行 -row-1）。
 func (a *root) setCellEdit(row, col int, v any) {
-	if a.editPlan == nil || row < 0 || col < 0 || col >= len(a.editPlan.Columns) || !a.editPlan.Editable[col] {
+	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Columns) {
+		return
+	}
+	if row >= 0 && !a.editPlan.Editable[col] {
+		return
+	}
+	if row < 0 {
+		a.editSet().SetInsertCell(-row-1, col, v)
 		return
 	}
 	a.editSet().SetCell(row, col, v)
@@ -217,9 +224,54 @@ func (a *root) clearRowEdit(row int) {
 	}
 }
 
-// addInsertRow 追加一行待新增。
-func (a *root) addInsertRow() int {
-	return a.editSet().AddInsert()
+// addInsertRow 追加一行待新增，选中它并直接编辑第一个可编辑列。
+func (a *root) addInsertRow(r *engine.QueryResult) int {
+	es := a.editSet()
+	idx := es.AddInsert()
+	if r != nil {
+		row := len(a.resView.apply(r)) + idx
+		a.resultRow = row
+		a.resultState.ScrollTo(row, ui.End)
+		if a.editPlan != nil {
+			for col, editable := range a.editPlan.Editable {
+				if editable {
+					a.beginEditAt(r, -1-idx, col)
+					break
+				}
+			}
+		}
+	}
+	return idx
+}
+
+// removeInsertRow 删掉一条新增行，并修正选中行。
+func (a *root) removeInsertRow(r *engine.QueryResult, idx int) {
+	es := a.editSet()
+	if idx < 0 || idx >= len(es.Inserts) {
+		return
+	}
+	es.RemoveInsert(idx)
+	dataRows := len(a.resView.apply(r))
+	if a.resultRow >= dataRows+idx {
+		a.resultRow--
+	}
+	if a.resultRow < dataRows+len(es.Inserts) {
+		return
+	}
+	a.resultRow = dataRows + len(es.Inserts) - 1
+	if a.resultRow < 0 {
+		a.resultRow = 0
+	}
+}
+
+// deleteSelectedRow 删除当前选中行：数据行打删除标记，新增行直接移除。
+func (a *root) deleteSelectedRow(r *engine.QueryResult) {
+	dataRows := len(a.resView.apply(r))
+	if a.resultRow >= dataRows {
+		a.removeInsertRow(r, a.resultRow-dataRows)
+		return
+	}
+	a.deleteRow(a.displayToResult(r, a.resultRow))
 }
 
 // deleteRow 标记删除某结果行。
@@ -379,7 +431,11 @@ func (a *root) editCellModal(c *ui.Context) {
 	}
 	w, h := a.cellModalSize()
 	ui.Modal(c, &a.editCellOpen, func() {
-		ui.Text(c, fmt.Sprintf("编辑 %s · 第 %d 行", a.editPlan.Columns[a.editCellCol], a.editCellRow+1)).Bold()
+		pos := fmt.Sprintf("第 %d 行", a.editCellRow+1)
+		if a.editCellRow < 0 {
+			pos = fmt.Sprintf("新增行 %d", -a.editCellRow)
+		}
+		ui.Text(c, fmt.Sprintf("编辑 %s · %s", a.editPlan.Columns[a.editCellCol], pos)).Bold()
 		ui.TextArea(c, &a.editCellText).AutoFocus().Grow(1)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, "取消").Clicked() {
@@ -453,10 +509,11 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 			a.beginEditCurrent(r)
 		}
 		if iconButton(c, iconPlus, "新增行", ui.Transparent).Clicked() {
-			a.addInsertRow()
+			a.addInsertRow(r)
 		}
-		if iconButton(c, iconMinus, "删除当前行", c.Theme().Danger).Disabled(len(a.rowsForPlan()) == 0).Clicked() {
-			a.deleteRow(a.displayToResult(r, a.resultRow))
+		if iconButton(c, iconMinus, "删除当前行", c.Theme().Danger).
+			Disabled(len(a.rowsForPlan()) == 0 && len(es.Inserts) == 0).Clicked() {
+			a.deleteSelectedRow(r)
 		}
 		if iconButton(c, iconUndo, "撤销改动", ui.Transparent).Disabled(n == 0).Clicked() {
 			a.editSet().Clear()
@@ -498,6 +555,7 @@ func editTextFor(kind string, r *engine.QueryResult, col int, v any) string {
 }
 
 // beginEditAt 按内容长度选择行内编辑或弹窗编辑。
+// row >= 0 是结果行下标；row < 0 表示新增行，编号为 -row-1。
 func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Editable) {
 		if a.readonlyReason != "" {
@@ -505,17 +563,28 @@ func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 		}
 		return
 	}
-	if !a.editPlan.Editable[col] {
+	if row >= 0 && !a.editPlan.Editable[col] {
 		a.consoleErr = "主键列不可编辑"
 		return
 	}
-	if row < 0 || row >= len(r.Rows) {
-		return
-	}
 	kind := a.connKind()
-	text := editTextFor(kind, r, col, cellValueOf(r, row, col))
-	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
-		text = editTextFor(kind, r, col, pending)
+	var text string
+	if row < 0 {
+		idx := -row - 1
+		if idx < 0 || idx >= len(a.editSet().Inserts) {
+			return
+		}
+		if v, ok := a.editSet().Inserts[idx][col]; ok {
+			text = editTextFor(kind, r, col, v)
+		}
+	} else {
+		if r == nil || row >= len(r.Rows) {
+			return
+		}
+		text = editTextFor(kind, r, col, cellValueOf(r, row, col))
+		if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
+			text = editTextFor(kind, r, col, pending)
+		}
 	}
 	if a.inlineEditOn {
 		a.stopInlineEdit()
@@ -544,8 +613,24 @@ func (a *root) stopInlineEdit() {
 
 // commitCellEdit 把编辑框文本写进待提交改动：
 // 与当前值相同就什么都不改（NULL 格打开再保存不会产生空改动）；改回数据库原值则撤掉改动。
+// 新增行没有“原值”：空文本表示该列走库默认，其余文本按普通值解析。
 func (a *root) commitCellEdit(row, col int, text string) {
-	if row < 0 || col < 0 {
+	if col < 0 || a.editPlan == nil || col >= len(a.editPlan.Columns) {
+		return
+	}
+	if row >= 0 && !a.editPlan.Editable[col] {
+		return
+	}
+	if row < 0 {
+		idx := -row - 1
+		if idx < 0 || idx >= len(a.editSet().Inserts) {
+			return
+		}
+		if strings.TrimSpace(text) == "" {
+			a.editSet().ClearInsertCell(idx, col)
+			return
+		}
+		a.setCellEdit(row, col, parseEditValue(text))
 		return
 	}
 	cur := a.editCellValue(row, col)
@@ -562,6 +647,13 @@ func (a *root) commitCellEdit(row, col int, text string) {
 
 // editCellValue 返回某格当前生效的值（优先本地待提交改动）。
 func (a *root) editCellValue(row, col int) any {
+	if row < 0 {
+		idx := -row - 1
+		if v, ok := a.editSet().Inserts[idx][col]; ok {
+			return v
+		}
+		return nil
+	}
 	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
 		return pending
 	}
@@ -596,7 +688,11 @@ func (a *root) inlineCellEditor(c *ui.Context) {
 // beginEditCurrent 打开「编辑格」（当前选中单元格），按内容长度选择行内/弹窗。
 func (a *root) beginEditCurrent(r *engine.QueryResult) {
 	col := a.cursorDataCol(r)
+	dataRows := len(a.resView.apply(r))
 	row := a.displayToResult(r, a.resultRow)
+	if a.resultRow >= dataRows {
+		row = -1 - (a.resultRow - dataRows)
+	}
 	a.beginEditAt(r, row, col)
 }
 
