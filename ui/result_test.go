@@ -551,3 +551,32 @@ func TestExportBusyIndicator(t *testing.T) {
 		t.Fatalf("close confirmation missing: %q", tt.Texts())
 	}
 }
+
+type stuckFake struct{ done chan struct{} }
+
+func (s stuckFake) Open(context.Context) error { return nil }
+func (s stuckFake) Close() error               { return nil }
+func (s stuckFake) Caps() engine.Capabilities  { return 0 }
+func (s stuckFake) Cancel() bool               { return false }
+func (s stuckFake) RunStatement(context.Context, string) (*engine.QueryResult, error) {
+	<-s.done
+	return nil, fmt.Errorf("released")
+}
+
+func TestForceStopDropsSession(t *testing.T) {
+	a := newTestRoot()
+	sess := stuckFake{done: make(chan struct{})}
+	a.testSetSession("test", sess)
+	if !a.con.Run(sess, "SELECT 1") {
+		t.Fatal("run must start")
+	}
+	gen := a.con.Generation()
+	a.forceStopRuntime(a.con, gen, "test")
+	if a.con.Running() || !strings.Contains(a.con.Err(), "强制停止") {
+		t.Fatalf("force stop: running=%v err=%q", a.con.Running(), a.con.Err())
+	}
+	if a.sessionFor("test") != nil {
+		t.Fatal("session must be dropped after cancel timeout")
+	}
+	close(sess.done)
+}

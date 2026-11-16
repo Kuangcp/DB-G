@@ -142,3 +142,28 @@ func (c *Console) Cancel() {
 		cancel()
 	}
 }
+
+// Generation 返回当前执行轮次；用于判断“取消后是否已经换了新查询”。
+func (c *Console) Generation() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.gen
+}
+
+// AbortIf 在 gen 仍是当前轮次时强制结束：递增 gen，让卡在驱动里的旧查询结果作废。
+// 返回 false 表示该轮次已经结束（或已经换了新查询），调用方不应再动连接。
+func (c *Console) AbortIf(gen uint64, message string) bool {
+	c.mu.Lock()
+	if c.gen != gen || !c.running {
+		c.mu.Unlock()
+		return false
+	}
+	c.gen++
+	c.running, c.cancel = false, nil
+	c.result, c.err = nil, message
+	c.dur = 0
+	pub := c.publish
+	c.mu.Unlock()
+	pub(func() {})
+	return true
+}

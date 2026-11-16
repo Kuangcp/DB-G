@@ -128,7 +128,7 @@ func (a *root) resultPane(c *ui.Context) {
 					ui.Spinner(c)
 					ui.Text(c, "执行中…")
 					if ui.Button(c, "停止").Clicked() {
-						a.currentRuntime().Cancel()
+						a.stopActiveRuns()
 					}
 				})
 			case a.currentRuntime().Err() != "":

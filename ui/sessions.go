@@ -220,6 +220,65 @@ func (a *root) closeSession(connID, reason string) {
 	}
 }
 
+// cancelForceAfter 是“已请求停止但驱动没回来”的宽限期；测试可临时改小。
+var cancelForceAfter = 3 * time.Second
+
+// stopActiveRuns 取消当前控制台里正在跑的语句：先取消 context + 驱动 Cancel；
+// 若宽限期内还没结束，强制把运行态作废并摘掉会话，避免 UI 永远停在“执行中”。
+func (a *root) stopActiveRuns() {
+	connID := a.activeConnID()
+	if sess := a.activeSession(); sess != nil {
+		sess.Cancel()
+	}
+	seen := map[*app.Console]bool{}
+	add := func(rt *app.Console) {
+		if rt == nil || !rt.Running() || seen[rt] {
+			return
+		}
+		seen[rt] = true
+		gen := rt.Generation()
+		rt.Cancel()
+		app.LogInfo("exec", "cancel", "conn", a.activeConnName(), "console", a.activeConsole)
+		if a.win != nil {
+			win := a.win
+			go func() {
+				time.Sleep(cancelForceAfter)
+				a.safeUpdate(win, func() { a.forceStopRuntime(rt, gen, connID) })
+			}()
+		}
+	}
+	for _, run := range a.stmtRuns {
+		add(a.runtimeFor(run.runtimeID))
+	}
+	add(a.currentRuntime())
+}
+
+// forceStopRuntime 是停止的兜底：驱动/网络卡死时不再等它，直接把结果作废并摘掉会话。
+func (a *root) forceStopRuntime(rt *app.Console, gen uint64, connID string) {
+	if rt == nil || !rt.AbortIf(gen, "已强制停止：数据源无响应，连接已断开") {
+		return
+	}
+	a.dropSession(connID, "cancel timeout")
+	a.consoleErr = "查询停止无响应，已断开数据源；重新执行会自动重连"
+	app.LogWarn("exec", "cancel timeout", "conn", connID)
+}
+
+// dropSession 只把会话从内存里摘掉，关闭动作放到后台：
+// 驱动/网络卡死时 DB.Close 可能等当前查询，这里不能阻塞 UI。
+func (a *root) dropSession(connID, reason string) {
+	sess, ok := a.sessions[connID]
+	if !ok {
+		return
+	}
+	delete(a.sessions, connID)
+	delete(a.sessionUse, connID)
+	a.clearServerInfo(connID)
+	app.LogWarn("conn", "drop session", "id", connID, "reason", reason)
+	if sess != nil {
+		go func() { _ = sess.Close() }()
+	}
+}
+
 // closeAllSessions 关掉全部会话（退出时用）。
 func (a *root) closeAllSessions() {
 	for id := range a.sessions {

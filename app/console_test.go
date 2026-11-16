@@ -151,3 +151,26 @@ func TestRunTimeoutFires(t *testing.T) {
 		t.Fatalf("err after rerun: %q", c.Err())
 	}
 }
+
+func TestAbortIfInvalidatesStuckRun(t *testing.T) {
+	f := &fakeSession{block: make(chan struct{})}
+	c := NewConsole()
+	if !c.Run(f, "SELECT slow") {
+		t.Fatal("run must start")
+	}
+	gen := c.Generation()
+	if !c.AbortIf(gen, "已强制停止") {
+		t.Fatal("abort must apply to the running generation")
+	}
+	if c.Running() || !strings.Contains(c.Err(), "强制停止") || c.Result() != nil {
+		t.Fatalf("after abort: running=%v err=%q result=%v", c.Running(), c.Err(), c.Result())
+	}
+	if c.AbortIf(gen, "again") {
+		t.Fatal("the same generation must not abort twice")
+	}
+	close(f.block) // 释放旧查询；它完成时不能把结果写回
+	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
+	if c.Result() != nil || !strings.Contains(c.Err(), "强制停止") {
+		t.Fatalf("stale result must be ignored: %+v %q", c.Result(), c.Err())
+	}
+}
