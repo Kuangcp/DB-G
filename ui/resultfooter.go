@@ -10,6 +10,9 @@ import (
 	"db-g/app"
 )
 
+// resultFooterHeight 是状态栏固定高度（含底边分隔线），让布局不随内容抖动。
+const resultFooterHeight = 26
+
 // runtimeTiming 返回当前结果 tab 的最近一次执行耗时；执行中/未执行返回空串。
 func (a *root) runtimeTiming() string {
 	rt := a.currentRuntime()
@@ -49,7 +52,7 @@ func formatDuration(d time.Duration) string {
 func (a *root) resultFooter(c *ui.Context) {
 	t := c.Theme()
 	ui.Box(c).Height(1).FillWidth().Background(t.Border)
-	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(10).Padding(4, 0).Children(func() {
+	ui.Row(c).FillWidth().Height(resultFooterHeight-1).AlignItems(ui.Center).Gap(10).Padding(4, 0).Children(func() {
 		connID := a.activeConnID()
 		if connID == "" {
 			ui.Text(c, "未连接数据源").FontSize(11.5).TextColor(t.TextMuted)

@@ -174,7 +174,6 @@ func (a *root) resultPane(c *ui.Context) {
 				}
 			}
 		})
-		a.resultFooter(c)
 	})
 }
 

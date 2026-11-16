@@ -873,13 +873,13 @@ func (a *root) view(c *ui.Context) {
 						}
 						if a.resultsHidden {
 							ui.Column(c).Grow(1).Children(editor)
-							// 结果区隐藏时状态栏仍然常驻在窗口底部。
-							a.resultFooter(c)
 						} else {
 							ui.SplitVerticalPercent(c, &a.editorPercent, editor, func() {
 								a.resultPane(c)
 							}).Grow(1).SplitReset(65)
 						}
+						// 状态栏贴在主窗口底部：结果区隐藏、执行计划或结果很高时都不会被挤掉。
+						a.resultFooter(c)
 					})
 				}
 				if a.aiChat.open {

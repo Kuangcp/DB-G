@@ -33,11 +33,11 @@ func TestEditorResultSplitIsProportional(t *testing.T) {
 	if small.H >= big.H {
 		t.Fatalf("editor should shrink with the window: %v -> %v", big.H, small.H)
 	}
-	// 比例保持（标题栏、工具栏等固定高度会带来一点偏差）。
-	got := small.H / big.H
-	want := float32(600-TitleBarHeight) / float32(900-TitleBarHeight)
-	if got < want-0.08 || got > want+0.08 {
-		t.Fatalf("editor keeps its share: ratio %.3f want ~%.3f", got, want)
+	// 编辑器按设置比例分配“窗口变矮减少的高度”；标题栏/工具栏/常驻状态栏是固定 chrome。
+	got := (big.H - small.H) / float32(900-600)
+	want := a.editorPercent / 100
+	if got < want-0.06 || got > want+0.06 {
+		t.Fatalf("editor keeps its share: shrunk %.3f want ~%.3f", got, want)
 	}
 }
 
