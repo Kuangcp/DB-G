@@ -124,10 +124,23 @@ func (a *root) resultPane(c *ui.Context) {
 			}
 			switch {
 			case a.currentRuntime().Running():
-				ui.Row(c).Gap(8).Children(func() {
+				rt := a.currentRuntime()
+				rows, bytes := rt.Progress()
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Spinner(c)
-					ui.Text(c, "执行中…")
-					if ui.Button(c, "停止").Clicked() {
+					status := "执行中…"
+					if rt.Canceling() {
+						status = "正在停止…"
+					}
+					ui.Text(c, status)
+					if rows > 0 {
+						detail := fmt.Sprintf("已接收 %d 行", rows)
+						if bytes > 0 {
+							detail += " · " + humanBytes(bytes)
+						}
+						ui.Text(c, detail).FontSize(12).TextColor(c.Theme().TextMuted)
+					}
+					if !rt.Canceling() && ui.Button(c, "停止").Clicked() {
 						a.stopActiveRuns()
 					}
 				})
@@ -297,6 +310,18 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 		}
 	}
 	a.cellViewOpen = true
+}
+
+// humanBytes 把字节数缩成 KB/MB，结果区的进度提示用。
+func humanBytes(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }
 
 // jsonNodeLimit 是 JSON 树一次最多渲染的节点数，超过后停止展开。

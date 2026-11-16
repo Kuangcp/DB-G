@@ -481,3 +481,24 @@ func TestServerInfo(t *testing.T) {
 		t.Fatalf("version = %q", info.Version)
 	}
 }
+
+func TestQueryReportsProgress(t *testing.T) {
+	s := newMemSession(t)
+	var last engine.QueryProgress
+	calls := 0
+	ctx := engine.WithProgress(context.Background(), func(p engine.QueryProgress) {
+		last, calls = p, calls+1
+	})
+	res, err := s.RunStatement(ctx,
+		`WITH RECURSIVE x(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM x WHERE n < 200)
+		 SELECT n, printf('%050d', n) FROM x`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 200 {
+		t.Fatalf("rows: %d", len(res.Rows))
+	}
+	if calls == 0 || last.Rows == 0 || last.Bytes == 0 {
+		t.Fatalf("progress not reported: calls=%d last=%+v", calls, last)
+	}
+}

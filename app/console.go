@@ -12,15 +12,19 @@ const queryTimeout = 30 * time.Second
 
 // Console 承载一条控制台的执行状态；所有字段由 mu 保护。
 type Console struct {
-	mu      sync.Mutex
-	publish func(func())
-	gen     uint64
-	running bool
-	result  *engine.QueryResult
-	err     string
-	cancel  context.CancelFunc
-	onDone  func(res *engine.QueryResult, errMsg string, dur time.Duration)
-	dur     time.Duration
+	mu        sync.Mutex
+	publish   func(func())
+	gen       uint64
+	running   bool
+	canceling bool
+	result    *engine.QueryResult
+	err       string
+	cancel    context.CancelFunc
+	onDone    func(res *engine.QueryResult, errMsg string, dur time.Duration)
+	dur       time.Duration
+	progRows  int
+	progBytes int64
+	progAt    time.Time
 }
 
 func NewConsole() *Console {
@@ -69,7 +73,22 @@ func (c *Console) Err() string {
 func (c *Console) SetOutcome(res *engine.QueryResult, errMsg string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.running, c.result, c.err = false, res, errMsg
+	c.running, c.canceling, c.result, c.err = false, false, res, errMsg
+	c.progRows, c.progBytes = 0, 0
+}
+
+// Canceling 报告是否已经点过停止、正在等驱动结束。
+func (c *Console) Canceling() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.running && c.canceling
+}
+
+// Progress 返回执行中已读取的行数与字节数。
+func (c *Console) Progress() (rows int, bytes int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.progRows, c.progBytes
 }
 
 // Run 在后台协程用 sess 执行 query；无会话、已在执行或空串时返回 false。
@@ -91,8 +110,10 @@ func (c *Console) RunTimeout(sess engine.Session, query string, timeout time.Dur
 	c.gen++
 	gen := c.gen
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx = engine.WithProgress(ctx, c.reportProgress)
 	c.cancel = cancel
-	c.running, c.result, c.err = true, nil, ""
+	c.running, c.canceling, c.result, c.err = true, false, nil, ""
+	c.progRows, c.progBytes, c.progAt = 0, 0, time.Time{}
 	c.mu.Unlock()
 
 	start := time.Now()
@@ -108,7 +129,7 @@ func (c *Console) RunTimeout(sess engine.Session, query string, timeout time.Dur
 		c.mu.Lock()
 		if gen == c.gen {
 			c.dur = dur
-			c.running, c.cancel = false, nil
+			c.running, c.canceling, c.cancel = false, false, nil
 			if err != nil {
 				c.result, c.err = nil, err.Error()
 			} else {
@@ -133,14 +154,41 @@ func (e *TimeoutError) Error() string {
 	return "查询超时（" + e.Timeout.String() + "），已取消"
 }
 
-// Cancel 取消当前执行；完成回调把取消错误写入 Err。
+// Cancel 取消当前执行：先立刻把状态标成「正在停止」并通知 UI，再取消 context。
 func (c *Console) Cancel() {
 	c.mu.Lock()
-	cancel := c.cancel
-	c.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	if !c.running || c.cancel == nil {
+		c.mu.Unlock()
+		return
 	}
+	c.canceling = true
+	cancel := c.cancel
+	pub := c.publish
+	c.mu.Unlock()
+	pub(func() {})
+	cancel()
+}
+
+// reportProgress 由驱动在扫描行时调用；节流后通知 UI，避免每行都重绘。
+func (c *Console) reportProgress(p engine.QueryProgress) {
+	now := time.Now()
+	c.mu.Lock()
+	if !c.running {
+		c.mu.Unlock()
+		return
+	}
+	if p.Rows == c.progRows && p.Bytes == c.progBytes {
+		c.mu.Unlock()
+		return
+	}
+	if p.Rows-c.progRows < 50 && now.Sub(c.progAt) < 200*time.Millisecond {
+		c.mu.Unlock()
+		return
+	}
+	c.progRows, c.progBytes, c.progAt = p.Rows, p.Bytes, now
+	pub := c.publish
+	c.mu.Unlock()
+	pub(func() {})
 }
 
 // Generation 返回当前执行轮次；用于判断“取消后是否已经换了新查询”。
@@ -159,9 +207,9 @@ func (c *Console) AbortIf(gen uint64, message string) bool {
 		return false
 	}
 	c.gen++
-	c.running, c.cancel = false, nil
+	c.running, c.canceling, c.cancel = false, false, nil
 	c.result, c.err = nil, message
-	c.dur = 0
+	c.dur, c.progRows, c.progBytes = 0, 0, 0
 	pub := c.publish
 	c.mu.Unlock()
 	pub(func() {})

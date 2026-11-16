@@ -580,3 +580,49 @@ func TestForceStopDropsSession(t *testing.T) {
 	}
 	close(sess.done)
 }
+
+type progressFake struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *progressFake) Open(context.Context) error { return nil }
+func (p *progressFake) Close() error               { return nil }
+func (p *progressFake) Caps() engine.Capabilities  { return 0 }
+func (p *progressFake) Cancel() bool               { return false }
+func (p *progressFake) RunStatement(ctx context.Context, _ string) (*engine.QueryResult, error) {
+	engine.ReportProgress(ctx, engine.QueryProgress{Rows: 123, Bytes: 2 << 20})
+	close(p.started)
+	<-p.release
+	return nil, context.Canceled
+}
+
+func TestResultPaneProgressAndCanceling(t *testing.T) {
+	a := newTestRoot()
+	p := &progressFake{started: make(chan struct{}), release: make(chan struct{})}
+	a.testSetSession("test", p)
+	if !a.con.Run(p, "SELECT slow") {
+		t.Fatal("run must start")
+	}
+	<-p.started
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	for _, want := range []string{"执行中", "已接收 123 行", "2.0 MB", "停止"} {
+		if !tt.HasText(want) {
+			t.Fatalf("progress missing %q: %q", want, tt.Texts())
+		}
+	}
+	if err := tt.Click("停止"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("正在停止") {
+		t.Fatalf("canceling state missing: %q", tt.Texts())
+	}
+	for _, text := range tt.Texts() {
+		if text == "停止" {
+			t.Fatalf("stop button should disappear while canceling: %q", tt.Texts())
+		}
+	}
+	close(p.release)
+}

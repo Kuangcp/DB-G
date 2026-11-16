@@ -199,6 +199,9 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 			}
 		}
 		out.Rows = append(out.Rows, append([]any(nil), vals...))
+		if len(out.Rows) == 1 || len(out.Rows)%64 == 0 {
+			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
+		}
 		if total > engine.ResultBudgetBytes() {
 			out.Truncated = true
 			break

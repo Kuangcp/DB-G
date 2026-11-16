@@ -174,3 +174,37 @@ func TestAbortIfInvalidatesStuckRun(t *testing.T) {
 		t.Fatalf("stale result must be ignored: %+v %q", c.Result(), c.Err())
 	}
 }
+
+type progressSession struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *progressSession) Open(context.Context) error { return nil }
+func (p *progressSession) Close() error               { return nil }
+func (p *progressSession) Caps() engine.Capabilities  { return 0 }
+func (p *progressSession) Cancel() bool               { return false }
+func (p *progressSession) RunStatement(ctx context.Context, _ string) (*engine.QueryResult, error) {
+	engine.ReportProgress(ctx, engine.QueryProgress{Rows: 7, Bytes: 2048})
+	close(p.started)
+	<-p.release
+	return nil, context.Canceled
+}
+
+func TestProgressAndCancelingState(t *testing.T) {
+	p := &progressSession{started: make(chan struct{}), release: make(chan struct{})}
+	c := NewConsole()
+	if !c.Run(p, "SELECT slow") {
+		t.Fatal("run must start")
+	}
+	<-p.started
+	if rows, bytes := c.Progress(); rows != 7 || bytes != 2048 {
+		t.Fatalf("progress: %d %d", rows, bytes)
+	}
+	c.Cancel()
+	if !c.Canceling() {
+		t.Fatal("cancel must be visible immediately")
+	}
+	close(p.release)
+	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
+}
