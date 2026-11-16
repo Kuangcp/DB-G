@@ -602,6 +602,15 @@ func (a *root) appearanceSection(c *ui.Context) {
 		ui.Text(c, a.themeHexErr).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
 	}
 
+	// 渲染方式：与外观一起保存，下次启动生效。
+	gpu := !prefs.SoftwareRender
+	if ui.Checkbox(c, &gpu, "启用 GPU 渲染").Radius(cr).Changed() {
+		prefs.SoftwareRender = !gpu
+		a.setThemePrefs(prefs)
+	}
+	ui.Text(c, "关闭后使用 CPU 光栅化，重启 db-g 生效；可规避部分 Linux/X11 驱动的黑屏闪烁。").
+		FontSize(11).TextColor(c.Theme().TextMuted)
+
 	// 密度 / 圆角 / 字号
 	ui.Text(c, "密度").FontSize(12).TextColor(c.Theme().TextMuted)
 	density := densityIndex(prefs.Density)

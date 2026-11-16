@@ -9,7 +9,7 @@ import (
 
 func TestThemePrefsRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "theme.json")
-	want := ThemePrefs{Mode: ThemeModeDark, Scheme: ThemeSchemeDefault, Accent: "#7c3aed", Density: ThemeDensityCompact, Radius: 8, FontSize: 15}
+	want := ThemePrefs{Mode: ThemeModeDark, Scheme: ThemeSchemeDefault, Accent: "#7c3aed", Density: ThemeDensityCompact, Radius: 8, FontSize: 15, SoftwareRender: true}
 	if err := SaveThemePrefs(path, want); err != nil {
 		t.Fatal(err)
 	}

@@ -31,6 +31,8 @@ type ThemePrefs struct {
 	// CustomLight/CustomDark 只在 Scheme == "custom" 时生效；均为空时沿用默认配色。
 	CustomLight ThemePalette `json:"customLight,omitempty"`
 	CustomDark  ThemePalette `json:"customDark,omitempty"`
+	// SoftwareRender 关闭 mygo 的 GPU 渲染，改用 CPU 光栅化；重启后生效。
+	SoftwareRender bool `json:"softwareRender,omitempty"`
 }
 
 // 外观设置的可选范围与默认值。
@@ -122,6 +124,7 @@ func NormalizeThemePalette(p ThemePalette, label string) (ThemePalette, []string
 // 返回的 prefs 一定是可直接持久化的规范值。
 func (p ThemePrefs) Normalize() (ThemePrefs, []string) {
 	out := DefaultThemePrefs()
+	out.SoftwareRender = p.SoftwareRender
 	var warn []string
 	switch strings.ToLower(strings.TrimSpace(p.Mode)) {
 	case "", ThemeModeSystem:

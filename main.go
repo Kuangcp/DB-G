@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -54,6 +55,16 @@ func openPathsFromArgs(args []string, workingDir string) []string {
 		}
 	}
 	return files
+}
+
+// applySoftwareRender turns mygo's GPU renderer off when the appearance
+// setting asks for it. mygo reads MYGO_GPU when it makes the first frame's
+// renderer, so setting it before Run is enough; the choice applies on the
+// next launch, as a window keeps the renderer it made.
+func applySoftwareRender(software bool) {
+	if software {
+		_ = os.Setenv("MYGO_GPU", "0")
+	}
 }
 
 func main() {
@@ -108,6 +119,7 @@ func main() {
 	secondPending = nil
 	r.SetAppIconPNG(appIconPNG)
 	themePrefs, _ := app.LoadThemePrefs(app.DefaultThemePrefsPath())
+	applySoftwareRender(themePrefs.SoftwareRender)
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:           app.DisplayName,

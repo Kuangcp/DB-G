@@ -281,7 +281,7 @@ func TestAppearanceSectionControls(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.themePath = filepath.Join(t.TempDir(), "theme.json")
 	tt := openSettingsSection(t, a, "外观")
-	for _, want := range []string{"跟随系统", "浅色", "深色", "强调色", "密度", "预览", "恢复默认", "导出主题…", "导入主题…"} {
+	for _, want := range []string{"跟随系统", "浅色", "深色", "强调色", "密度", "预览", "恢复默认", "导出主题…", "导入主题…", "启用 GPU 渲染"} {
 		if !tt.HasText(want) {
 			t.Fatalf("appearance section missing %q: %q", want, tt.Texts())
 		}
@@ -307,6 +307,16 @@ func TestAppearanceSectionControls(t *testing.T) {
 	}
 	if a.themePrefs.Density != app.ThemeDensityCompact {
 		t.Fatalf("density: %+v", a.themePrefs)
+	}
+	if err := tt.Click("启用 GPU 渲染"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.themePrefs.SoftwareRender {
+		t.Fatalf("GPU switch did not turn off rendering: %+v", a.themePrefs)
+	}
+	if got, _ := app.LoadThemePrefs(a.themePath); !got.SoftwareRender {
+		t.Fatalf("persisted software render: %+v", got)
 	}
 }
 

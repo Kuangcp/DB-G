@@ -127,7 +127,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | SQL 历史 | `history/<connectionID>.jsonl` | 每个数据源一个文件；到 6000 条惰性裁剪到 5000 条，面板只展示最近 100 条 |
 | 日志 | `logs/YYYY-MM/YYYY-MM-DD_N.log` | 纯文本（时间/级别/标签/消息/kv），一次启动一个文件，0600 |
 | 全局字体（编辑区/结果区/控制台标签/功能界面） | `fonts.json` | `app.FontPrefs`，改完即时生效；控制台标签字号也在这里；启动时把旧 `editor.json` 自动迁移过来 |
-| 外观设置（模式/强调色/密度/圆角/字号） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好 |
+| 外观设置（模式/强调色/密度/圆角/字号/GPU 渲染） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好；关闭 GPU 时 `main` 在首帧前设 `MYGO_GPU=0`，重启生效 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
 | AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
