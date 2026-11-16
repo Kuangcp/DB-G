@@ -873,6 +873,8 @@ func (a *root) view(c *ui.Context) {
 						}
 						if a.resultsHidden {
 							ui.Column(c).Grow(1).Children(editor)
+							// 结果区隐藏时状态栏仍然常驻在窗口底部。
+							a.resultFooter(c)
 						} else {
 							ui.SplitVerticalPercent(c, &a.editorPercent, editor, func() {
 								a.resultPane(c)

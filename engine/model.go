@@ -1,5 +1,7 @@
 package engine
 
+import "time"
+
 // QueryResult 是一次语句执行的结果：查询结果集，或无结果集语句的受影响行数。
 type QueryResult struct {
 	Columns []string
@@ -10,4 +12,8 @@ type QueryResult struct {
 	Truncated   bool
 	IsQuery     bool
 	Affected    int64
+	// ExecDuration 是驱动把语句交给数据库到拿到首批结果/执行完成的时间；
+	// FetchDuration 是随后读取结果行的时间（不含执行排队）。
+	ExecDuration  time.Duration
+	FetchDuration time.Duration
 }

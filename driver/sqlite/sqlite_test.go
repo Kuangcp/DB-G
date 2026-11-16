@@ -502,3 +502,25 @@ func TestQueryReportsProgress(t *testing.T) {
 		t.Fatalf("progress not reported: calls=%d last=%+v", calls, last)
 	}
 }
+
+func TestQueryReportsTimings(t *testing.T) {
+	s := newMemSession(t)
+	ctx := context.Background()
+	if _, err := s.RunStatement(ctx, "CREATE TABLE t (id INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.RunStatement(ctx, "SELECT 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExecDuration <= 0 {
+		t.Fatalf("exec duration: %v", res.ExecDuration)
+	}
+	if res.FetchDuration < 0 {
+		t.Fatalf("fetch duration: %v", res.FetchDuration)
+	}
+	ddl, err := s.RunStatement(ctx, "CREATE TABLE t2 (id INTEGER)")
+	if err != nil || ddl.ExecDuration <= 0 {
+		t.Fatalf("ddl timing: %+v %v", ddl, err)
+	}
+}

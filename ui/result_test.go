@@ -626,3 +626,23 @@ func TestResultPaneProgressAndCanceling(t *testing.T) {
 	}
 	close(p.release)
 }
+
+func TestResultFooterPersistentAndTiming(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	tt := runEditQuery(t, a, "SELECT id, name FROM users")
+	if timing := a.runtimeTiming(); !strings.Contains(timing, "耗时") || !strings.Contains(timing, "执行") || !strings.Contains(timing, "读取") {
+		t.Fatalf("timing text: %q", timing)
+	}
+	if !tt.HasText("数据库") {
+		t.Fatalf("footer missing: %q", tt.Texts())
+	}
+	a.resultsHidden = true
+	tt.Frame()
+	if !tt.HasText("数据库") || !tt.HasText("耗时") {
+		t.Fatalf("footer must stay when results are hidden: %q", tt.Texts())
+	}
+}

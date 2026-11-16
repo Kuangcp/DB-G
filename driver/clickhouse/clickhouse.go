@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"db-g/engine"
 
@@ -152,20 +153,23 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return nil, err
 	}
+	execStart := time.Now()
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		if res, eerr := s.db.ExecContext(ctx, query); eerr == nil {
 			n, _ := res.RowsAffected()
-			return &engine.QueryResult{Affected: n}, nil
+			return &engine.QueryResult{Affected: n, ExecDuration: time.Since(execStart)}, nil
 		}
 		return nil, err
 	}
+	execDur := time.Since(execStart)
+	fetchStart := time.Now()
 	defer rows.Close()
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
-	out := &engine.QueryResult{Columns: cols, IsQuery: true}
+	out := &engine.QueryResult{Columns: cols, IsQuery: true, ExecDuration: execDur}
 	vals := make([]any, len(cols))
 	ptrs := make([]any, len(cols))
 	for i := range vals {
@@ -210,6 +214,7 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	out.FetchDuration = time.Since(fetchStart)
 	return out, nil
 }
 

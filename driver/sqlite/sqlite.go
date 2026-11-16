@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"db-g/engine"
 
@@ -108,6 +109,7 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	if isQueryLike(query) {
 		return s.query(ctx, query)
 	}
+	execStart := time.Now()
 	res, err := s.db.ExecContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -116,7 +118,7 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	if err != nil {
 		n = 0
 	}
-	return &engine.QueryResult{Affected: n}, nil
+	return &engine.QueryResult{Affected: n, ExecDuration: time.Since(execStart)}, nil
 }
 
 func isQueryLike(q string) bool {
@@ -142,16 +144,19 @@ func (s *session) Explain(ctx context.Context, query string, opts engine.Explain
 }
 
 func (s *session) query(ctx context.Context, query string) (*engine.QueryResult, error) {
+	execStart := time.Now()
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
+	execDur := time.Since(execStart)
+	fetchStart := time.Now()
 	defer rows.Close()
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, err
 	}
-	out := &engine.QueryResult{Columns: cols, IsQuery: true}
+	out := &engine.QueryResult{Columns: cols, IsQuery: true, ExecDuration: execDur}
 	total := 0
 	for rows.Next() {
 		if len(out.Rows) == rowLimit {
@@ -196,6 +201,7 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	out.FetchDuration = time.Since(fetchStart)
 	return out, nil
 }
 

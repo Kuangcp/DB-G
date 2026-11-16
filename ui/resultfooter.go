@@ -1,15 +1,51 @@
 package ui
 
 import (
+	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
 )
 
-// resultFooter 是结果区底栏：当前数据库、版本与数据源标签。
-// 内容只读，始终贴在结果区最底部。
+// runtimeTiming 返回当前结果 tab 的最近一次执行耗时；执行中/未执行返回空串。
+func (a *root) runtimeTiming() string {
+	rt := a.currentRuntime()
+	if rt == nil || rt.Running() {
+		return ""
+	}
+	total := rt.Dur()
+	res := rt.Result()
+	if total <= 0 && res == nil {
+		return ""
+	}
+	if res != nil && res.IsQuery && res.ExecDuration > 0 {
+		return fmt.Sprintf("耗时 %s（执行 %s · 读取 %s）",
+			formatDuration(total), formatDuration(res.ExecDuration), formatDuration(res.FetchDuration))
+	}
+	if total <= 0 {
+		return ""
+	}
+	return "耗时 " + formatDuration(total)
+}
+
+func formatDuration(d time.Duration) string {
+	switch {
+	case d <= 0:
+		return "0ms"
+	case d < time.Millisecond:
+		return fmt.Sprintf("%dµs", d.Microseconds())
+	case d < time.Second:
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	default:
+		return fmt.Sprintf("%.2fs", d.Seconds())
+	}
+}
+
+// resultFooter 是主窗口底栏：当前数据库、版本、数据源标签与最近一次执行耗时。
+// 内容只读，常驻在主区域最底部。
 func (a *root) resultFooter(c *ui.Context) {
 	t := c.Theme()
 	ui.Box(c).Height(1).FillWidth().Background(t.Border)
@@ -49,6 +85,9 @@ func (a *root) resultFooter(c *ui.Context) {
 			tagChip(c, tag)
 		}
 		ui.Spacer(c)
+		if timing := a.runtimeTiming(); timing != "" {
+			ui.Text(c, timing).FontSize(11.5).TextColor(t.TextMuted).SingleLine()
+		}
 		if !a.connected(connID) {
 			ui.Text(c, "未连接").FontSize(11).TextColor(t.TextMuted)
 		}

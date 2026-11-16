@@ -187,6 +187,7 @@ func (a *root) planPane(c *ui.Context) {
 			ui.Text(c, "原始计划").FontSize(11).TextColor(t.TextMuted)
 			a.withResultFont(ui.Text(c, ps.raw).Font("monospace"))
 		}
+		a.resultFooter(c)
 	})
 }
 
