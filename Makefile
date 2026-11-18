@@ -1,4 +1,4 @@
-.PHONY: run build release install test vet
+.PHONY: run build release localRelease install test vet
 
 # 发布版本号：有 tag 用 tag（v1.0.0），否则 git describe / dev
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -21,8 +21,18 @@ release:
 	CGO_ENABLED=0 MYGO_LDFLAGS="-X db-g/app.buildVersion=$(VERSION) -X db-g/app.releaseBuild=1 -X db-g/app.updateBuild=1" \
 		go tool mygo build -platform linux/amd64,windows/amd64
 
+# 本地发布构建：装到配置目录供自举启动用；version 文件格式与 app.InstallSelf 一致：
+# [db-g] / build=10203 / version=1.2.3。build 只取 x.y.z（dev/commit hash 记 0）。
+CONFIG_DIR ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/db-g
 localRelease:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o ~/.config/db-g/bin/db-g .
+	@mkdir -p "$(CONFIG_DIR)/bin"
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o "$(CONFIG_DIR)/bin/db-g" .
+	@ver="$(VERSION)"; ver="$${ver#v}"; base="$${ver%%-*}"; \
+	build=$$(printf '%s\n' "$$base" | awk -F. 'NF==3 && $$1 ~ /^[0-9]+$$/ && $$2 ~ /^[0-9]+$$/ && $$3 ~ /^[0-9]+$$/ && $$2 <= 99 && $$3 <= 99 { printf "%d", $$1*10000+$$2*100+$$3; next } { printf "0" }'); \
+	printf '[db-g]\nbuild=%s\nversion=%s\n' "$$build" "$$ver" > "$(CONFIG_DIR)/version.tmp"; \
+	chmod 0644 "$(CONFIG_DIR)/version.tmp"; \
+	mv "$(CONFIG_DIR)/version.tmp" "$(CONFIG_DIR)/version"
+	@printf 'installed %s -> %s\n' "$(VERSION)" "$(CONFIG_DIR)"
 
 install:
 	go1.27 install -ldflags "$(DEV_LDFLAGS)"

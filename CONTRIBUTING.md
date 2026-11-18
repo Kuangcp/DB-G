@@ -14,6 +14,10 @@ make test && make vet
 # Linux x64 发布构建
 make build
 
+# 本地发布构建：装到 ~/.config/db-g/bin/db-g，并写同目录 version
+# （[db-g] / build=10203 / version=1.2.3；XDG_CONFIG_HOME 优先）
+make localRelease
+
 # Windows / Linux 双平台发布
 make release          # dist/ 下产出两个静态二进制
 ```
