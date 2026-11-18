@@ -79,6 +79,11 @@ MYGO_UPDATER_PRIVATE_KEY="$(cat ~/.config/db-g/update-keys/mygo-update.key)" \
 | `update-linux-amd64.json` / `update-windows-amd64.json` | 签名更新清单，应用从这里检查新版本 |
 | `install.sh` / `install.ps1` / `SHA256SUMS` / `PKGBUILD` | 安装与校验辅助文件 |
 
+Linux 的 `install.sh` 由 `packaging/install.sh` 在 CI 里替换 mygo 默认脚本后生成：安装到当前用户
+`~/.config/db-g/bin/db-g`（`XDG_CONFIG_HOME` 优先），desktop 写 `~/.local/share/applications/db-g.desktop`，
+图标写 `~/.local/share/icons/db-g.png`，版本写 `~/.config/db-g/version`；`--uninstall` 只删这些
+安装文件，保留连接库与控制台。CI 会用本地归档在临时 HOME 里跑一次安装/卸载校验。
+
 应用启动后由 `plugins/updater/native` 在后台检查新版本；发现更新时显示原生更新窗口，
 确认后下载、校验签名、替换文件并在下次启动进入新版本。开发构建与包管理器安装的版本会明确报告
 更新不可用。
