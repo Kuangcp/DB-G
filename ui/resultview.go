@@ -9,8 +9,8 @@ import (
 	"db-g/engine"
 )
 
-// fetchMoreSQL 把一条 SELECT/WITH 语句包成派生表再分页；不是单条查询时返回 false。
-func fetchMoreSQL(sql string, offset, limit int) (string, bool) {
+// pageBody 返回可被派生表包裹的原始 SELECT/WITH 正文；其他语句不可分页。
+func pageBody(sql string) (string, bool) {
 	stmts := app.SplitStatements(sql)
 	if len(stmts) != 1 {
 		return "", false
@@ -20,7 +20,29 @@ func fetchMoreSQL(sql string, offset, limit int) (string, bool) {
 	if head != "SELECT" && head != "WITH" {
 		return "", false
 	}
+	return body, true
+}
+
+// pageSQL 把一条 SELECT/WITH 语句包成派生表再取某一页。
+func pageSQL(sql string, offset, limit int) (string, bool) {
+	body, ok := pageBody(sql)
+	if !ok {
+		return "", false
+	}
 	return fmt.Sprintf("SELECT * FROM (%s) AS dbg LIMIT %d OFFSET %d", body, limit, offset), true
+}
+
+// pageCountSQL 生成统计原始查询总行数的语句；ClickHouse 用 count()。
+func pageCountSQL(kind, sql string) (string, bool) {
+	body, ok := pageBody(sql)
+	if !ok {
+		return "", false
+	}
+	fn := "COUNT(*)"
+	if kind == "clickhouse" {
+		fn = "count()"
+	}
+	return fmt.Sprintf("SELECT %s FROM (%s) AS dbg_count", fn, body), true
 }
 
 func firstWord(s string) string {

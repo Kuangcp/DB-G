@@ -131,7 +131,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
 | AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
-| 结果加载预算 | `results.json` | `app.ResultPrefs`；结果集大小上限（MB，默认 8），设置页「结果」可改，驱动读取结果时按它截断 |
+| 结果加载预算/分页 | `results.json` | `app.ResultPrefs`；结果集大小上限（MB，默认 8）与每页行数（默认 500，50–5000），设置页「结果」可改；驱动按页大小读取并置 `HasMore`，UI 用派生表 `LIMIT/OFFSET` 翻页 |
 | 控制台自动保存 | `console.json` | `app.ConsolePrefs`；正文停止输入后的保存延迟（秒，默认 5，范围 1-60），设置页「控制台」可改 |
 | Git 同步配置 | `sync.json` | `app.SyncPrefs`；仓库地址、分支、SSH 私钥、KCV、已确认的敏感扫描指纹、上次同步时间 |
 | Git 同步密钥 | `sync.key` | 32 字节 AES-256，0600；只在本机，绝不进仓库；丢失后仓库连接无法解密 |

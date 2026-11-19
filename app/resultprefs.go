@@ -12,17 +12,23 @@ import (
 type ResultPrefs struct {
 	// BudgetMB 是结果集文本/字节总量上限（MB）；超过后停止加载并标记截断。
 	BudgetMB int `json:"budgetMB"`
+	// PageSize 是单页最多读取的行数；也是分页控件的每页行数。
+	PageSize int `json:"pageSize"`
 }
 
 const (
 	DefaultResultBudgetMB = engine.DefaultResultBudgetMB
 	MinResultBudgetMB     = engine.MinResultBudgetMB
 	MaxResultBudgetMB     = engine.MaxResultBudgetMB
+
+	DefaultResultPageSize = engine.DefaultPageSize
+	MinResultPageSize     = 50
+	MaxResultPageSize     = 5000
 )
 
 // DefaultResultPrefs 返回默认结果设置：8 MB。
 func DefaultResultPrefs() ResultPrefs {
-	return ResultPrefs{BudgetMB: DefaultResultBudgetMB}
+	return ResultPrefs{BudgetMB: DefaultResultBudgetMB, PageSize: DefaultResultPageSize}
 }
 
 // NormalizeResultPrefs 把缺省/越界的预算回退到默认值或允许范围。
@@ -35,6 +41,15 @@ func NormalizeResultPrefs(p ResultPrefs) ResultPrefs {
 	}
 	if p.BudgetMB > MaxResultBudgetMB {
 		p.BudgetMB = MaxResultBudgetMB
+	}
+	if p.PageSize == 0 {
+		p.PageSize = DefaultResultPageSize
+	}
+	if p.PageSize < MinResultPageSize {
+		p.PageSize = MinResultPageSize
+	}
+	if p.PageSize > MaxResultPageSize {
+		p.PageSize = MaxResultPageSize
 	}
 	return p
 }

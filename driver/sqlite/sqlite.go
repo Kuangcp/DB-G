@@ -17,10 +17,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const (
-	rowLimit     = 500
-	maxCellBytes = 1 << 20
-)
+const maxCellBytes = 1 << 20
 
 func init() {
 	engine.Register("sqlite", openSession)
@@ -158,9 +155,10 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 	}
 	out := &engine.QueryResult{Columns: cols, IsQuery: true, ExecDuration: execDur}
 	total := 0
+	limit := engine.PageSize(ctx)
 	for rows.Next() {
-		if len(out.Rows) == rowLimit {
-			out.Truncated = true
+		if len(out.Rows) >= limit {
+			out.HasMore = true
 			break
 		}
 		vals := make([]any, len(cols))

@@ -18,10 +18,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-const (
-	rowLimit     = 500
-	maxCellBytes = 1 << 20
-)
+const maxCellBytes = 1 << 20
 
 func init() { engine.Register("postgres", openSession) }
 
@@ -162,13 +159,14 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 		ptrs[i] = &vals[i]
 	}
 	total := 0
+	limit := engine.PageSize(ctx)
 	for rows.Next() {
+		if len(out.Rows) >= limit {
+			out.HasMore = true
+			break
+		}
 		if err := rows.Scan(ptrs...); err != nil {
 			return nil, err
-		}
-		if len(out.Rows) == rowLimit {
-			out.Truncated = true
-			break
 		}
 		for i, v := range vals {
 			switch t := v.(type) {

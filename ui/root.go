@@ -179,7 +179,7 @@ type root struct {
 	activeStmt          int
 	lastExecSQL         string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
 	resView             *resultView
-	fetchStates         map[string]fetchState // runtimeID → 分页状态
+	pageStates          map[string]*pageState // runtimeID → 分页状态
 	resultRow           int
 	resultSel           ui.Selection[int]   // 结果表选中的单元格块（按显示行号）
 	lastResult          *engine.QueryResult // 上次渲染的结果指针（换结果时清空选区）
@@ -293,7 +293,7 @@ func newRoot(text string) *root {
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.resView = newResultView()
-	a.fetchStates = map[string]fetchState{}
+	a.pageStates = map[string]*pageState{}
 	engine.SetResultBudgetMB(app.DefaultResultBudgetMB)
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
@@ -416,10 +416,18 @@ func (a *root) runtime(id string) *app.Console {
 	return c
 }
 
-// fetchState 是一个结果的分页状态：已加载行数、是否还有更多。
-type fetchState struct {
-	loaded int
-	more   bool
+// pageState 是一个结果 tab 的分页状态。页大小在每次执行时从结果设置取。
+type pageState struct {
+	Page         int    // 0 基页码
+	Size         int    // 每页行数
+	Total        int64  // 已统计到的总行数
+	TotalKnown   bool   // 是否点过「统计总行数」
+	HasMore      bool   // 当前页之后还有行（未知总数时用于启用下一页）
+	BaseSQL      string // 原始 SQL，翻页时包成派生表
+	Loading      bool   // 正在加载某一页
+	CountLoading bool   // 正在统计总行数
+	PageRuntime  string // 翻页执行用的运行态 id
+	CountRuntime string // 统计执行用的运行态 id
 }
 
 // runtimeFor 返回某个运行态 id 的实例；空 id 用默认实例（scratch 执行/测试口）。

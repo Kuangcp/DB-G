@@ -374,7 +374,7 @@ func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 		t.Fatalf("default budget = %d", got)
 	}
 	tt := openSettingsSection(t, a, "结果")
-	for _, want := range []string{"结果大小预算", "MB", "恢复默认"} {
+	for _, want := range []string{"结果大小预算", "每页行数", "MB", "恢复默认"} {
 		if !tt.HasText(want) {
 			t.Fatalf("结果分区缺少 %q: %q", want, tt.Texts())
 		}

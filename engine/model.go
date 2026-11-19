@@ -16,4 +16,6 @@ type QueryResult struct {
 	// FetchDuration 是随后读取结果行的时间（不含执行排队）。
 	ExecDuration  time.Duration
 	FetchDuration time.Duration
+	// HasMore 表示驱动读满一页后数据库还有后续行（分页用，不是截断）。
+	HasMore bool
 }

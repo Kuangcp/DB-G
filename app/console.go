@@ -25,10 +25,28 @@ type Console struct {
 	progRows  int
 	progBytes int64
 	progAt    time.Time
+	pageSize  int
 }
 
 func NewConsole() *Console {
-	return &Console{publish: func(func()) {}}
+	return &Console{publish: func(func()) {}, pageSize: engine.DefaultPageSize}
+}
+
+// SetPageSize 设置本运行态执行语句时单页读取的行数。
+func (c *Console) SetPageSize(n int) {
+	if n <= 0 {
+		n = engine.DefaultPageSize
+	}
+	c.mu.Lock()
+	c.pageSize = n
+	c.mu.Unlock()
+}
+
+// PageSize 返回本运行态的每页行数。
+func (c *Console) PageSize() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pageSize
 }
 
 // SetOnDone 注册「一次执行结束」的回调（异步，主线程之外调用；用于日志/诊断）。
@@ -108,8 +126,9 @@ func (c *Console) RunTimeout(sess engine.Session, query string, timeout time.Dur
 		return false
 	}
 	c.gen++
-	gen := c.gen
+	gen, pageSize := c.gen, c.pageSize
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx = engine.WithPageSize(ctx, pageSize)
 	ctx = engine.WithProgress(ctx, c.reportProgress)
 	c.cancel = cancel
 	c.running, c.canceling, c.result, c.err = true, false, nil, ""

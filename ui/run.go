@@ -95,9 +95,21 @@ func (a *root) rekeyRuntime(oldID, newID string) {
 		a.consoles[newID] = c
 		delete(a.consoles, oldID)
 	}
-	if fs, ok := a.fetchStates[oldID]; ok {
-		a.fetchStates[newID] = fs
-		delete(a.fetchStates, oldID)
+	if ps, ok := a.pageStates[oldID]; ok {
+		if ps.PageRuntime == oldID+"#page" {
+			ps.PageRuntime = newID + "#page"
+		}
+		if ps.CountRuntime == oldID+"#count" {
+			ps.CountRuntime = newID + "#count"
+		}
+		a.pageStates[newID] = ps
+		delete(a.pageStates, oldID)
+	}
+	for _, suffix := range []string{"#page", "#count"} {
+		if c, ok := a.consoles[oldID+suffix]; ok {
+			a.consoles[newID+suffix] = c
+			delete(a.consoles, oldID+suffix)
+		}
 	}
 	if es, ok := a.editSets[oldID]; ok {
 		a.editSets[newID] = es
@@ -212,8 +224,11 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 	for _, run := range a.stmtRuns {
 		if owner[baseID(run.runtimeID)] {
 			a.discardEditState(run.runtimeID)
+			a.cancelPageRuntimes(run.runtimeID)
 			delete(a.consoles, run.runtimeID)
-			delete(a.fetchStates, run.runtimeID)
+			delete(a.pageStates, run.runtimeID)
+			delete(a.consoles, run.runtimeID+"#page")
+			delete(a.consoles, run.runtimeID+"#count")
 			continue
 		}
 		kept = append(kept, run)
@@ -343,6 +358,14 @@ func (a *root) anyRunRunning() bool {
 			return true
 		}
 	}
+	for _, ps := range a.pageStates {
+		if ps.PageRuntime != "" && a.runtimeFor(ps.PageRuntime).Running() {
+			return true
+		}
+		if ps.CountRuntime != "" && a.runtimeFor(ps.CountRuntime).Running() {
+			return true
+		}
+	}
 	return false
 }
 
@@ -368,6 +391,7 @@ func (a *root) rerunQuery(sql string) {
 		return
 	}
 	rtID := a.currentRuntimeID()
+	rt.SetPageSize(a.resultPrefs.PageSize)
 	a.lastExecSQL = sql
 	app.LogInfo("exec", "rerun", "conn", a.activeConnName(), "console", a.activeConsole, "sql", truncateLogSQL(sql))
 	rt.SetOnDone(a.rerunDone(rtID, sql))
@@ -393,7 +417,7 @@ func (a *root) rerunDone(rtID, sql string) func(*engine.QueryResult, string, tim
 			_ = a.history.Add(e)
 		}
 		rec := func() {
-			a.recordFetchState(rtID, res)
+			a.recordPageState(rtID, sql, res)
 			a.refreshStmtMarks()
 		}
 		if a.win != nil {
@@ -402,6 +426,15 @@ func (a *root) rerunDone(rtID, sql string) func(*engine.QueryResult, string, tim
 			return
 		}
 		rec()
+	}
+}
+
+// cancelPageRuntimes 取消某个结果 tab 正在跑的翻页/统计任务。
+func (a *root) cancelPageRuntimes(runtimeID string) {
+	for _, suffix := range []string{"#page", "#count"} {
+		if rt, ok := a.consoles[runtimeID+suffix]; ok && rt != nil {
+			rt.Cancel()
+		}
 	}
 }
 
@@ -417,7 +450,10 @@ func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 		}
 		// 丢弃的非 pinned 旧结果：连同编辑状态、分页缓存与 pin 专用运行态一起清理。
 		a.discardEditState(run.runtimeID)
-		delete(a.fetchStates, run.runtimeID)
+		a.cancelPageRuntimes(run.runtimeID)
+		delete(a.pageStates, run.runtimeID)
+		delete(a.consoles, run.runtimeID+"#page")
+		delete(a.consoles, run.runtimeID+"#count")
 		if strings.Contains(run.runtimeID, "#pin") {
 			delete(a.consoles, run.runtimeID)
 		}
@@ -450,6 +486,7 @@ func (a *root) startStmt(i int) {
 	app.LogInfo("exec", "start", "conn", a.activeConnName(), "console", a.activeConsole, "sql", truncateLogSQL(sql))
 	a.lastExecSQL = sql
 	rt := a.runtimeFor(a.stmtRuns[i].runtimeID)
+	rt.SetPageSize(a.resultPrefs.PageSize)
 	rt.SetOnDone(a.stmtDone(i))
 	sess := a.activeSession()
 	if sess == nil {
@@ -492,7 +529,7 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 			}
 			_ = a.history.Add(e)
 		}
-		rec := func() { a.recordFetchState(rtID, res) }
+		rec := func() { a.recordPageState(rtID, sql, res) }
 		if a.win != nil {
 			win := a.win
 			a.safeUpdate(win, rec)

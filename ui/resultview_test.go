@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-func TestFetchMoreSQL(t *testing.T) {
+func TestPageSQL(t *testing.T) {
 	cases := []struct {
 		sql  string
 		ok   bool
@@ -25,10 +25,16 @@ func TestFetchMoreSQL(t *testing.T) {
 		{"", false, ""},
 	}
 	for _, c := range cases {
-		got, ok := fetchMoreSQL(c.sql, 500, 100)
+		got, ok := pageSQL(c.sql, 500, 100)
 		if ok != c.ok || (ok && got != c.want) {
-			t.Fatalf("fetchMoreSQL(%q) = %q,%v want %q,%v", c.sql, got, ok, c.want, c.ok)
+			t.Fatalf("pageSQL(%q) = %q,%v want %q,%v", c.sql, got, ok, c.want, c.ok)
 		}
+	}
+	if got, ok := pageCountSQL("clickhouse", "SELECT 1"); !ok || got != "SELECT count() FROM (SELECT 1) AS dbg_count" {
+		t.Fatalf("clickhouse count: %q %v", got, ok)
+	}
+	if got, ok := pageCountSQL("sqlite", "SELECT 1;"); !ok || got != "SELECT COUNT(*) FROM (SELECT 1) AS dbg_count" {
+		t.Fatalf("sqlite count: %q %v", got, ok)
 	}
 }
 
@@ -78,7 +84,7 @@ func TestCompareCells(t *testing.T) {
 	}
 }
 
-func TestFetchMoreAppendsRows(t *testing.T) {
+func TestPageNavigationAndCount(t *testing.T) {
 	a := openForSelection(t)
 	if _, err := a.testSession(t).RunStatement(t.Context(), `CREATE TABLE big (id INTEGER PRIMARY KEY)`); err != nil {
 		t.Fatal(err)
@@ -95,27 +101,59 @@ func TestFetchMoreAppendsRows(t *testing.T) {
 	a.runSQL()
 	pollResult(t, a, tt)
 	tt.Frame()
-	if got := len(a.con.Result().Rows); got != 500 {
-		t.Fatalf("first page rows = %d", got)
+	ps := a.pageStates[a.currentRuntimeID()]
+	if got := len(a.con.Result().Rows); got != 500 || ps == nil || !ps.HasMore {
+		t.Fatalf("first page rows=%d state=%+v", got, ps)
 	}
-	if !a.canFetchMore() {
-		t.Fatal("400 more rows must be fetchable")
+	tt.Frame()
+	for _, want := range []string{"第 1 页", "每页 500 行"} {
+		if !tt.HasText(want) {
+			t.Fatalf("pager missing %q: %q", want, tt.Texts())
+		}
 	}
-	a.fetchMore()
+	if _, ok := tt.Find("统计总行数"); !ok {
+		t.Fatalf("count button missing: %q", tt.Texts())
+	}
+	if !a.canNextPage(ps) {
+		t.Fatal("next page must be available")
+	}
+	a.changePage(1)
+	waitPage(t, a, tt, func() bool {
+		return a.pageStates[a.currentRuntimeID()].Page == 1 && len(a.con.Result().Rows) == 100
+	})
+	ps = a.pageStates[a.currentRuntimeID()]
+	if ps.TotalKnown || ps.HasMore {
+		t.Fatalf("last page state: %+v", ps)
+	}
+	if a.canNextPage(ps) {
+		t.Fatal("next page must be disabled on the last page")
+	}
+	a.changePage(-1)
+	waitPage(t, a, tt, func() bool {
+		return a.pageStates[a.currentRuntimeID()].Page == 0 && len(a.con.Result().Rows) == 500
+	})
+	a.countRows()
+	waitPage(t, a, tt, func() bool {
+		ps := a.pageStates[a.currentRuntimeID()]
+		return ps != nil && ps.TotalKnown && ps.Total == 600
+	})
+	tt.Frame()
+	if !tt.HasText("共 600 行") || !tt.HasText("/ 2 页") {
+		t.Fatalf("total count missing: %q", tt.Texts())
+	}
+}
+
+func waitPage(t *testing.T, a *root, tt *ui.Tester, done func() bool) {
+	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		tt.Frame()
-		if len(a.con.Result().Rows) >= 600 {
-			break
+		if done() {
+			return
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
-	if got := len(a.con.Result().Rows); got != 600 {
-		t.Fatalf("after fetch more rows = %d", got)
-	}
-	if a.canFetchMore() {
-		t.Fatal("no more rows expected")
-	}
+	t.Fatal("page operation did not finish")
 }
 
 func TestDisplayToResultAfterSort(t *testing.T) {

@@ -19,6 +19,27 @@ func WithProgress(ctx context.Context, fn func(QueryProgress)) context.Context {
 	return context.WithValue(ctx, progressKey{}, fn)
 }
 
+type pageSizeKey struct{}
+
+// DefaultPageSize 是未指定时单页读取的行数。
+const DefaultPageSize = 500
+
+// WithPageSize 指定驱动本次语句最多读取的行数（分页大小）。
+func WithPageSize(ctx context.Context, n int) context.Context {
+	if n <= 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, pageSizeKey{}, n)
+}
+
+// PageSize 返回本次语句的分页大小；未指定时用 DefaultPageSize。
+func PageSize(ctx context.Context) int {
+	if n, ok := ctx.Value(pageSizeKey{}).(int); ok && n > 0 {
+		return n
+	}
+	return DefaultPageSize
+}
+
 // ReportProgress 上报当前已读取的行数/字节数；没有挂回调时忽略。
 func ReportProgress(ctx context.Context, p QueryProgress) {
 	if fn, ok := ctx.Value(progressKey{}).(func(QueryProgress)); ok && fn != nil {

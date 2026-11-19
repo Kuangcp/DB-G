@@ -145,9 +145,12 @@ func TestRefreshRerunsCurrentQueryOnly(t *testing.T) {
 		t.Fatalf("refresh icon missing for query result: %q", tt.Texts())
 	}
 	refresh, _ := tt.Find("重新执行此查询")
-	fetch, _ := tt.Find("取更多行")
-	if refresh.X >= fetch.X {
-		t.Fatalf("refresh must sit left of 取更多行: refresh=%v fetch=%v", refresh, fetch)
+	prev, ok := tt.Find("上一页")
+	if !ok {
+		t.Fatalf("pager missing: %q", tt.Texts())
+	}
+	if refresh.X >= prev.X {
+		t.Fatalf("refresh must sit left of pager: refresh=%v prev=%v", refresh, prev)
 	}
 
 	if _, err := a.activeSession().RunStatement(t.Context(), "INSERT INTO users (name) VALUES ('x')"); err != nil {

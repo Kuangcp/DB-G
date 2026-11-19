@@ -405,9 +405,10 @@ func (a *root) refreshResult(onDone func()) {
 	}
 	id := a.currentRuntimeID()
 	rt := a.runtimeFor(id)
+	rt.SetPageSize(a.resultPrefs.PageSize)
 	rt.SetOnDone(func(res *engine.QueryResult, errMsg string, dur time.Duration) {
 		apply := func() {
-			a.recordFetchState(id, res)
+			a.recordPageState(id, sql, res)
 			a.editKey = ""
 			a.refreshStmtMarks()
 			if onDone != nil {

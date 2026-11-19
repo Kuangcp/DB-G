@@ -83,8 +83,17 @@ func TestRowLimitAndTruncation(t *testing.T) {
 	if len(q.Rows) != 500 {
 		t.Fatalf("rows = %d, want 500", len(q.Rows))
 	}
-	if !q.Truncated {
-		t.Fatal("601 rows must mark Truncated")
+	if !q.HasMore || q.Truncated {
+		t.Fatalf("601 rows: HasMore=%v Truncated=%v, want more and not truncated", q.HasMore, q.Truncated)
+	}
+	// 分页大小由 context 传入，驱动不再硬编码。
+	ctx2 := engine.WithPageSize(context.Background(), 120)
+	q, err = s.RunStatement(ctx2, "SELECT i FROM big")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q.Rows) != 120 || !q.HasMore {
+		t.Fatalf("page size: rows=%d HasMore=%v", len(q.Rows), q.HasMore)
 	}
 }
 

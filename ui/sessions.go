@@ -250,6 +250,14 @@ func (a *root) stopActiveRuns() {
 	for _, run := range a.stmtRuns {
 		add(a.runtimeFor(run.runtimeID))
 	}
+	for _, ps := range a.pageStates {
+		if ps.PageRuntime != "" {
+			add(a.runtimeFor(ps.PageRuntime))
+		}
+		if ps.CountRuntime != "" {
+			add(a.runtimeFor(ps.CountRuntime))
+		}
+	}
 	add(a.currentRuntime())
 }
 
@@ -257,6 +265,14 @@ func (a *root) stopActiveRuns() {
 func (a *root) forceStopRuntime(rt *app.Console, gen uint64, connID string) {
 	if rt == nil || !rt.AbortIf(gen, "已强制停止：数据源无响应，连接已断开") {
 		return
+	}
+	for _, ps := range a.pageStates {
+		if ps.PageRuntime != "" && a.runtimeFor(ps.PageRuntime) == rt {
+			ps.Loading = false
+		}
+		if ps.CountRuntime != "" && a.runtimeFor(ps.CountRuntime) == rt {
+			ps.CountLoading = false
+		}
 	}
 	a.dropSession(connID, "cancel timeout")
 	a.consoleErr = "查询停止无响应，已断开数据源；重新执行会自动重连"

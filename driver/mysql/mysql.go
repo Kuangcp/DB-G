@@ -16,10 +16,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
-const (
-	rowLimit     = 500
-	maxCellBytes = 1 << 20
-)
+const maxCellBytes = 1 << 20
 
 func init() {
 	engine.Register("mysql", openSession)
@@ -189,9 +186,10 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 		}
 	}
 	total := 0
+	limit := engine.PageSize(ctx)
 	for rows.Next() {
-		if len(out.Rows) == rowLimit {
-			out.Truncated = true
+		if len(out.Rows) >= limit {
+			out.HasMore = true
 			break
 		}
 		vals := make([]any, len(cols))

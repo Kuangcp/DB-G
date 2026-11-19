@@ -675,9 +675,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 					a.rerunQuery(sql)
 				}
 			}
-			if iconButton(c, iconChevronDown, "取更多行", ui.Transparent).Disabled(!a.canFetchMore()).Clicked() {
-				a.fetchMore()
-			}
+			a.pageToolbar(c, r)
 			a.editToolbar(c, r)
 		}).Label("结果操作")
 		ui.Divider(c)
@@ -1082,49 +1080,133 @@ func runeWidth(r rune) int {
 	return 1
 }
 
-// canFetchMore 报告当前结果能否「取更多」：单条查询、驱动支持、还有更多行。
-func (a *root) canFetchMore() bool {
-	rt := a.currentRuntime()
-	r := rt.Result()
-	if r == nil || !r.IsQuery || rt.Running() || a.activeSession() == nil ||
-		!a.activeSession().Caps().Has(engine.CapFetchMore) {
-		return false
+// pageToolbar 渲染分页控件：上一页/下一页、每页行数与统计总行数。
+func (a *root) pageToolbar(c *ui.Context, r *engine.QueryResult) {
+	ps := a.pageStates[a.currentRuntimeID()]
+	if ps == nil || r == nil || !r.IsQuery {
+		return
 	}
-	if _, ok := fetchMoreSQL(a.lastExecSQL, 0, 1); !ok {
-		return false
+	busy := a.pageBusy(ps)
+	dirty := a.editSet().Count() > 0
+	disabled := busy || dirty
+	if ps.Loading {
+		ui.Spinner(c)
+		ui.Text(c, "加载中…").FontSize(11.5).TextColor(c.Theme().TextMuted)
 	}
-	st, ok := a.fetchStates[a.currentRuntimeID()]
-	return ok && st.more
+	if iconButton(c, iconChevronLeft, "上一页", ui.Transparent).
+		Disabled(disabled || ps.Page <= 0).Clicked() {
+		a.changePage(-1)
+	}
+	ui.Text(c, fmt.Sprintf("第 %d 页", ps.Page+1)).FontSize(12).TextColor(c.Theme().TextMuted)
+	if iconButton(c, iconChevronRight, "下一页", ui.Transparent).
+		Disabled(disabled || !a.canNextPage(ps)).Clicked() {
+		a.changePage(1)
+	}
+	pages := int64(1)
+	if ps.TotalKnown && ps.Total > 0 {
+		pages = (ps.Total + int64(ps.Size) - 1) / int64(ps.Size)
+	}
+	if ps.TotalKnown {
+		ui.Text(c, fmt.Sprintf("/ %d 页", pages)).FontSize(12).TextColor(c.Theme().TextMuted)
+	}
+	ui.Text(c, fmt.Sprintf("每页 %d 行", ps.Size)).FontSize(11.5).TextColor(c.Theme().TextMuted)
+	if ps.CountLoading {
+		ui.Spinner(c)
+		ui.Text(c, "统计中…").FontSize(11.5).TextColor(c.Theme().TextMuted)
+	} else if !ps.TotalKnown {
+		if iconButton(c, iconHash, "统计总行数", ui.Transparent).Disabled(busy).Clicked() {
+			a.countRows()
+		}
+	} else {
+		ui.Text(c, fmt.Sprintf("共 %d 行", ps.Total)).FontSize(11.5).TextColor(c.Theme().TextMuted)
+	}
 }
 
-// fetchMore 用派生表分页把后续行追加到当前结果（不重跑原 SQL 的第一页）。
-func (a *root) fetchMore() {
-	if !a.canFetchMore() {
-		return
+// pageBusy 报告分页/统计是否正在执行。
+func (a *root) pageBusy(ps *pageState) bool {
+	if ps == nil {
+		return false
 	}
+	if ps.Loading || ps.CountLoading {
+		return true
+	}
+	if ps.PageRuntime != "" && a.runtimeFor(ps.PageRuntime).Running() {
+		return true
+	}
+	return ps.CountRuntime != "" && a.runtimeFor(ps.CountRuntime).Running()
+}
+
+// canNextPage 报告是否还有下一页：未知总数时看驱动是否还有更多行。
+func (a *root) canNextPage(ps *pageState) bool {
+	if ps == nil || ps.Loading || ps.CountLoading {
+		return false
+	}
+	if ps.TotalKnown {
+		return int64(ps.Page+1)*int64(ps.Size) < ps.Total
+	}
+	return ps.HasMore
+}
+
+// changePage 加载上一页/下一页；成功后才替换当前结果行。
+func (a *root) changePage(delta int) {
 	id := a.currentRuntimeID()
-	st := a.fetchStates[id]
-	sql, ok := fetchMoreSQL(a.lastExecSQL, st.loaded, 500)
-	if !ok {
-		a.consoleErr = "取更多失败：当前语句不支持分页"
+	ps := a.pageStates[id]
+	base := a.currentRuntime()
+	if ps == nil || base == nil || a.pageBusy(ps) || a.activeSession() == nil {
 		return
 	}
-	base := a.currentRuntime()
-	more := a.runtimeFor(id + "#more")
-	more.SetOnDone(func(res *engine.QueryResult, errMsg string, dur time.Duration) {
+	if a.editSet().Count() > 0 {
+		a.consoleErr = "有未提交的改动，先提交或撤销后再翻页"
+		return
+	}
+	target := ps.Page + delta
+	if target < 0 {
+		return
+	}
+	if ps.TotalKnown && int64(target)*int64(ps.Size) >= ps.Total {
+		return
+	}
+	sql, ok := pageSQL(ps.BaseSQL, target*ps.Size, ps.Size)
+	if !ok {
+		a.consoleErr = "翻页失败：当前语句不支持分页"
+		return
+	}
+	expected := base.Result()
+	rtID := id + "#page"
+	rt := a.runtimeFor(rtID)
+	if rt.Running() {
+		return
+	}
+	ps.Loading, ps.PageRuntime = true, rtID
+	rt.SetPageSize(ps.Size)
+	rt.SetOnDone(func(res *engine.QueryResult, errMsg string, _ time.Duration) {
 		apply := func() {
+			ps.Loading = false
 			if errMsg != "" {
-				a.consoleErr = "取更多失败: " + errMsg
+				a.consoleErr = "翻页失败: " + errMsg
 				return
 			}
-			if res == nil || base.Result() == nil {
+			if a.pageStates[id] != ps || base.Result() != expected {
 				return
 			}
 			r := base.Result()
-			r.Rows = append(r.Rows, res.Rows...)
+			if res == nil || !res.IsQuery || r == nil {
+				a.consoleErr = "翻页失败：没有返回结果集"
+				return
+			}
+			r.Rows = res.Rows
 			r.Truncated = res.Truncated
-			a.fetchStates[id] = fetchState{loaded: len(r.Rows), more: res.Truncated && res.IsQuery}
-			a.resView.key = ""
+			r.HasMore = res.HasMore
+			r.ExecDuration = res.ExecDuration
+			r.FetchDuration = res.FetchDuration
+			ps.Page = target
+			ps.HasMore = res.HasMore && !res.Truncated
+			if a.currentRuntimeID() == id {
+				a.resView.clear()
+				a.resultRow = 0
+				a.stopInlineEdit()
+				a.editSet().Clear()
+			}
 		}
 		if a.win != nil {
 			win := a.win
@@ -1133,9 +1215,89 @@ func (a *root) fetchMore() {
 		}
 		apply()
 	})
-	if !more.Run(a.activeSession(), sql) {
-		a.consoleErr = "取更多失败：无法启动"
+	if !rt.RunTimeout(a.activeSession(), sql, a.queryTimeoutFor()) {
+		ps.Loading = false
+		a.consoleErr = "翻页失败：无法启动"
 	}
+}
+
+// countRows 用 COUNT(*) 包住原始查询统计总行数；显式点击才执行。
+func (a *root) countRows() {
+	id := a.currentRuntimeID()
+	ps := a.pageStates[id]
+	if ps == nil || ps.TotalKnown || a.pageBusy(ps) {
+		return
+	}
+	sql, ok := pageCountSQL(a.connKind(), ps.BaseSQL)
+	if !ok {
+		a.consoleErr = "统计总行数失败：当前语句不支持"
+		return
+	}
+	rtID := id + "#count"
+	rt := a.runtimeFor(rtID)
+	if rt.Running() {
+		return
+	}
+	ps.CountLoading, ps.CountRuntime = true, rtID
+	rt.SetPageSize(1)
+	rt.SetOnDone(func(res *engine.QueryResult, errMsg string, _ time.Duration) {
+		apply := func() {
+			if a.pageStates[id] != ps {
+				return
+			}
+			ps.CountLoading = false
+			if errMsg != "" {
+				a.consoleErr = "统计总行数失败: " + errMsg
+				return
+			}
+			n, ok := countResult(res)
+			if !ok {
+				a.consoleErr = "统计总行数失败：结果格式不正确"
+				return
+			}
+			ps.Total, ps.TotalKnown = n, true
+		}
+		if a.win != nil {
+			win := a.win
+			a.safeUpdate(win, apply)
+			return
+		}
+		apply()
+	})
+	if !rt.RunTimeout(a.activeSession(), sql, a.queryTimeoutFor()) {
+		ps.CountLoading = false
+		a.consoleErr = "统计总行数失败：无法启动"
+	}
+}
+
+func countResult(res *engine.QueryResult) (int64, bool) {
+	if res == nil || len(res.Rows) == 0 || len(res.Rows[0]) == 0 {
+		return 0, false
+	}
+	switch v := res.Rows[0][0].(type) {
+	case int64:
+		return v, true
+	case int:
+		return int64(v), true
+	case uint64:
+		if v > 1<<63-1 {
+			return 0, false
+		}
+		return int64(v), true
+	case float64:
+		return int64(v), v >= 0
+	case []byte:
+		var n int64
+		if _, err := fmt.Sscan(string(v), &n); err == nil && n >= 0 {
+			return n, true
+		}
+	case string:
+		var n int64
+		if _, err := fmt.Sscan(v, &n); err == nil && n >= 0 {
+			return n, true
+		}
+	}
+	return 0, false
 }
 
 // filterModal 渲染每列筛选输入。
@@ -1162,13 +1324,28 @@ func (a *root) filterModal(c *ui.Context) {
 	})
 }
 
-// recordFetchState 在语句执行成功后记录分页状态。
-func (a *root) recordFetchState(runtimeID string, res *engine.QueryResult) {
+// recordPageState 在语句执行成功后记录分页状态。
+func (a *root) recordPageState(runtimeID, sql string, res *engine.QueryResult) {
+	delete(a.pageStates, runtimeID)
 	if res == nil || !res.IsQuery {
-		delete(a.fetchStates, runtimeID)
 		return
 	}
-	a.fetchStates[runtimeID] = fetchState{loaded: len(res.Rows), more: res.Truncated}
+	size := a.resultPrefs.PageSize
+	if size <= 0 {
+		size = app.DefaultResultPageSize
+	}
+	if rt := a.runtimeFor(runtimeID); rt != nil {
+		if n := rt.PageSize(); n > 0 {
+			size = n
+		}
+	}
+	if _, ok := pageSQL(sql, 0, size); !ok {
+		return
+	}
+	a.pageStates[runtimeID] = &pageState{
+		Size: size, BaseSQL: sql,
+		HasMore: res.HasMore && !res.Truncated,
+	}
 	a.resView.key = ""
 }
 
@@ -1232,6 +1409,11 @@ func (a *root) exportCloseModal(c *ui.Context) {
 	})
 }
 
+// exportDefaultName 是导出保存框的默认文件名：YYYYMMDD-HHMM + 扩展名。
+func exportDefaultName(now time.Time, ext string) string {
+	return now.Format("20060102-1504") + ext
+}
+
 // pickExport 弹保存对话框（goroutine），选定后后台导出。
 func (a *root) pickExport(format string, full bool) {
 	win := a.win
@@ -1246,7 +1428,7 @@ func (a *root) pickExport(format string, full bool) {
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
 			Parent:      win,
 			Title:       "导出结果",
-			DefaultPath: "result" + ext,
+			DefaultPath: exportDefaultName(time.Now(), ext),
 		})
 		if err != nil || path == "" {
 			return
@@ -1295,7 +1477,7 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
 			Parent:      win,
 			Title:       "导出选区",
-			DefaultPath: "selection" + ext,
+			DefaultPath: exportDefaultName(time.Now(), ext),
 		})
 		if err != nil || path == "" {
 			return
@@ -1361,7 +1543,7 @@ func (a *root) exportTo(path, format string, full bool) (int, error) {
 func (a *root) exportToProgress(path, format string, full bool, progress func(int)) (int, error) {
 	kind := a.connKind()
 	table := ""
-	if _, ok := fetchMoreSQL(a.lastExecSQL, 0, 1); ok {
+	if _, ok := pageBody(a.lastExecSQL); ok {
 		if t, ok := a.rowTable(); ok {
 			table = t
 		}

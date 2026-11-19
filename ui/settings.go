@@ -219,8 +219,8 @@ func (a *root) resultSection(c *ui.Context) {
 			a.setResultPrefs(app.DefaultResultPrefs())
 		}
 	})
-	ui.Text(c, "超过预算后停止加载后续行，并在结果区显示「结果已截断」；最多返回 500 行。").FontSize(12).
-		TextColor(c.Theme().TextMuted)
+	ui.Text(c, "每页行数决定一次查询最多读多少行、以及翻页的步长；字节预算超出后当前页会标记截断。").
+		FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		mb := float64(a.resultPrefs.BudgetMB)
 		if ui.NumberInput(c, &mb, float64(app.MinResultBudgetMB), float64(app.MaxResultBudgetMB), 1).
@@ -232,8 +232,20 @@ func (a *root) resultSection(c *ui.Context) {
 		ui.Text(c, fmt.Sprintf("MB（当前 %d MB）", a.resultPrefs.BudgetMB)).FontSize(12).
 			TextColor(c.Theme().TextMuted)
 	})
-	ui.Text(c, "预算按结果集文本/二进制单元格的字节数累计；单个单元格另有 1 MiB 驱动上限。").FontSize(11).
-		TextColor(c.Theme().TextMuted)
+	ui.Text(c, "预算按结果集文本/二进制单元格的字节数累计；单个单元格另有 1 MiB 驱动上限。").
+		FontSize(11).TextColor(c.Theme().TextMuted)
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		size := float64(a.resultPrefs.PageSize)
+		if ui.NumberInput(c, &size, float64(app.MinResultPageSize), float64(app.MaxResultPageSize), 50).
+			Label("每页行数").Width(100).Radius(cr).Changed() {
+			p := a.resultPrefs
+			p.PageSize = int(size)
+			a.setResultPrefs(p)
+		}
+		ui.Text(c, fmt.Sprintf("行/页（当前 %d，%d–%d）",
+			a.resultPrefs.PageSize, app.MinResultPageSize, app.MaxResultPageSize)).
+			FontSize(12).TextColor(c.Theme().TextMuted)
+	})
 	if a.resultPrefsWarn != "" {
 		ui.Text(c, a.resultPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
 	}

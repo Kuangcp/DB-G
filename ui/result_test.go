@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -644,5 +645,15 @@ func TestResultFooterPersistentAndTiming(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("数据库") || !tt.HasText("耗时") {
 		t.Fatalf("footer must stay when results are hidden: %q", tt.Texts())
+	}
+}
+
+func TestExportDefaultName(t *testing.T) {
+	now := time.Date(2026, 11, 18, 9, 10, 59, 0, time.Local)
+	if got := exportDefaultName(now, ".json"); got != "20261118-0910.json" {
+		t.Fatalf("json name: %q", got)
+	}
+	if got := exportDefaultName(now, ".sql"); got != "20261118-0910.sql" {
+		t.Fatalf("sql name: %q", got)
 	}
 }
