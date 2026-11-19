@@ -147,7 +147,15 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	}
 	execDur := time.Since(execStart)
 	fetchStart := time.Now()
-	defer rows.Close()
+	// 读满一页后先取消再 Close：pgx 的 Rows.Close 会把剩余结果集一直读到
+	// CommandComplete，大结果集下会凭空卡好几秒。取消让驱动放弃未读数据。
+	cutOff := false
+	defer func() {
+		if cutOff {
+			cancel()
+		}
+		_ = rows.Close()
+	}()
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, err
@@ -162,7 +170,8 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	limit := engine.PageSize(ctx)
 	for rows.Next() {
 		if len(out.Rows) >= limit {
-			out.HasMore = true
+			out.HasMore, cutOff = true, true
+			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 			break
 		}
 		if err := rows.Scan(ptrs...); err != nil {
@@ -191,12 +200,16 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 		}
 		if total > engine.ResultBudgetBytes() {
-			out.Truncated = true
+			out.Truncated, cutOff = true, true
+			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 			break
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	// 主动掐断后 rows.Err() 必然是取消错误，别把它当成查询失败。
+	if !cutOff {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 	}
 	out.FetchDuration = time.Since(fetchStart)
 	return out, nil

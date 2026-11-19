@@ -166,6 +166,10 @@ func isQueryLike(q string) bool {
 }
 
 func (s *session) query(ctx context.Context, query string) (*engine.QueryResult, error) {
+	// 读满一页后先取消再 Close：go-sql-driver 的 Rows.Close 会 skipRows 把剩余
+	// 结果包全部读完（服务端有多少读多少），大结果集下会凭空卡好几秒。
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
 	execStart := time.Now()
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -173,7 +177,13 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 	}
 	execDur := time.Since(execStart)
 	fetchStart := time.Now()
-	defer rows.Close()
+	cutOff := false
+	defer func() {
+		if cutOff {
+			stop()
+		}
+		_ = rows.Close()
+	}()
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, err
@@ -189,7 +199,8 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 	limit := engine.PageSize(ctx)
 	for rows.Next() {
 		if len(out.Rows) >= limit {
-			out.HasMore = true
+			out.HasMore, cutOff = true, true
+			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 			break
 		}
 		vals := make([]any, len(cols))
@@ -223,12 +234,16 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 		}
 		if total > engine.ResultBudgetBytes() {
-			out.Truncated = true
+			out.Truncated, cutOff = true, true
+			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 			break
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	// 主动掐断后 rows.Err() 必然是取消错误，别把它当成查询失败。
+	if !cutOff {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 	}
 	out.FetchDuration = time.Since(fetchStart)
 	return out, nil

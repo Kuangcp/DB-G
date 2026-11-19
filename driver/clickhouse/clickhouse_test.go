@@ -1,10 +1,12 @@
 package clickhouse
 
 import (
+	"context"
 	"os"
 	"strconv"
 	"testing"
 
+	"db-g/driver/internal/pagetest"
 	"db-g/engine"
 )
 
@@ -55,5 +57,27 @@ func TestClickHouseIntegration(t *testing.T) {
 	defer s.Close()
 	if _, err := s.RunStatement(ctx, `SELECT 1`); err != nil {
 		t.Skipf("query failed: %v", err)
+	}
+}
+
+// TestPageDoesNotDrain 回归：读满一页后必须取消查询再 Close，否则
+// clickhouse-go 的 Rows.Close 会把剩余 stream 读完。
+func TestPageDoesNotDrain(t *testing.T) {
+	db, probe := pagetest.Open(5000)
+	t.Cleanup(func() { _ = db.Close() })
+	s := &session{db: db}
+	ctx := engine.WithPageSize(context.Background(), 10)
+	res, err := s.RunStatement(ctx, "SELECT id FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 10 || !res.HasMore {
+		t.Fatalf("rows=%d hasMore=%v", len(res.Rows), res.HasMore)
+	}
+	if !probe.CloseCanceled() {
+		t.Fatal("Close 前没有取消 context：剩余结果会被读完")
+	}
+	if n := probe.Drained(); n != 0 {
+		t.Fatalf("Close 排空了 %d 行，应当 0", n)
 	}
 }

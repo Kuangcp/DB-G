@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"db-g/driver/internal/pagetest"
 	"db-g/engine"
 
 	"github.com/go-sql-driver/mysql"
@@ -171,5 +172,46 @@ func TestOpenSessionMergesParams(t *testing.T) {
 func TestOpenSessionBadParams(t *testing.T) {
 	if _, err := openSession(engine.Profile{Kind: "mysql", Host: "h", Port: 3306, Params: "nope"}); err == nil {
 		t.Fatal("bad params must fail")
+	}
+}
+
+// TestQueryPageDoesNotDrain 回归：读满一页后必须取消查询再 Close。
+// go-sql-driver 的 Rows.Close 会 skipRows 把剩余结果包全读完，大表下表现为
+// 「执行 2ms、读取 3ms，总耗时 3s」，UI 进度停在页内的某个 64 的倍数。
+func TestQueryPageDoesNotDrain(t *testing.T) {
+	db, probe := pagetest.Open(5000)
+	t.Cleanup(func() { _ = db.Close() })
+	s := &session{db: db}
+	ctx := engine.WithPageSize(context.Background(), 10)
+	res, err := s.query(ctx, "SELECT id FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 10 || !res.HasMore {
+		t.Fatalf("rows=%d hasMore=%v", len(res.Rows), res.HasMore)
+	}
+	if !probe.CloseCanceled() {
+		t.Fatal("Close 前没有取消 context：剩余结果会被读完")
+	}
+	if n := probe.Drained(); n != 0 {
+		t.Fatalf("Close 排空了 %d 行，应当 0", n)
+	}
+}
+
+// TestQueryFullResultNotCanceled：结果不足一页时正常读完，不走取消路径。
+func TestQueryFullResultNotCanceled(t *testing.T) {
+	db, probe := pagetest.Open(5)
+	t.Cleanup(func() { _ = db.Close() })
+	s := &session{db: db}
+	ctx := engine.WithPageSize(context.Background(), 10)
+	res, err := s.query(ctx, "SELECT id FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 5 || res.HasMore {
+		t.Fatalf("rows=%d hasMore=%v", len(res.Rows), res.HasMore)
+	}
+	if probe.CloseCanceled() {
+		t.Fatal("结果已读完，不应该取消查询")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"testing"
 
+	"db-g/driver/internal/pagetest"
 	"db-g/engine"
 )
 
@@ -96,5 +97,27 @@ func TestOpenSessionMergesParams(t *testing.T) {
 func TestOpenSessionBadParams(t *testing.T) {
 	if _, err := openSession(engine.Profile{Kind: "postgres", Host: "h", Port: 1, Params: "nope"}); err == nil {
 		t.Fatal("bad params must fail")
+	}
+}
+
+// TestPageDoesNotDrain 回归：读满一页后必须取消查询再 Close，否则 pgx 的
+// ResultReader.Close 会把剩余结果一直读到 CommandComplete。
+func TestPageDoesNotDrain(t *testing.T) {
+	db, probe := pagetest.Open(5000)
+	t.Cleanup(func() { _ = db.Close() })
+	s := &session{db: db}
+	ctx := engine.WithPageSize(context.Background(), 10)
+	res, err := s.RunStatement(ctx, "SELECT id FROM t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 10 || !res.HasMore {
+		t.Fatalf("rows=%d hasMore=%v", len(res.Rows), res.HasMore)
+	}
+	if !probe.CloseCanceled() {
+		t.Fatal("Close 前没有取消 context：剩余结果会被读完")
+	}
+	if n := probe.Drained(); n != 0 {
+		t.Fatalf("Close 排空了 %d 行，应当 0", n)
 	}
 }
