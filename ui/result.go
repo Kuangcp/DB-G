@@ -181,7 +181,7 @@ func (a *root) resultPane(c *ui.Context) {
 const (
 	rowHeaderWidth = 56  // 行号列固定宽
 	minColumnWidth = 56  // 每列下限，避免空列挤成缝
-	maxColumnWidth = 320 // 每列上限（同时限制手动拖拽）
+	maxColumnWidth = 320 // 自动测量的初始宽度上限；手动拖拽不受此限制
 	charWidth      = 8   // 一个半角字符的估算宽度（DIP）
 	cellPad        = 24  // 单元格左右内边距
 )
@@ -657,7 +657,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			ID:       name,
 			Width:    widths[i],
 			MinWidth: minColumnWidth,
-			MaxWidth: maxColumnWidth,
+			// 不设 MaxWidth：初始宽度按内容封顶，但用户拖拽可以继续拉宽。
 		})
 	}
 	a.ensureEditState(r)
