@@ -12,8 +12,6 @@
 A database client built with Go + [mygo](https://github.com/egoist/mygo), modeled after [db-k](https://github.com/Kuangcp/DB-K).
 **See [`Roadmap.md`](Roadmap.md) for what is done and what comes next.**
 
-![](/docs/snapshots/Snipaste_2026-11-07_18-05-53.webp)
-
 ## Why DB-G
 
 **One executable, four data sources, keyboard all the way.**
@@ -26,6 +24,32 @@ DB-G is a local-first desktop database client: no runtime to install, no cloud, 
 - **Large catalogs stay smooth**: objects load page by page with a 24-hour disk cache; even tens of thousands of objects only query the page you need.
 - **Results you can work with**: pin results for comparison, edit cells and commit in a single transaction, inspect JSON as a tree, export to CSV / JSON / SQL INSERT.
 - **Your data stays local**: connection passwords are encrypted with AES-256-GCM on this machine, logs are redacted automatically, and there is no telemetry or account.
+
+## Screenshots
+
+<p align="center">
+  <a href="docs/snapshots/Snipaste_2026-11-19_00-45-07.png">
+    <img src="docs/snapshots/Snipaste_2026-11-19_00-45-07.png"
+         alt="DB-G main window: data source tree on the left, SQL editor in the center, result grid and database status bar below" width="100%">
+  </a>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/snapshots/Snipaste_2026-11-19_00-45-47.png">
+        <img src="docs/snapshots/Snipaste_2026-11-19_00-45-47.png"
+             alt="DB-G settings: appearance, fonts, AI assistant and sync sections" width="100%">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/snapshots/Snipaste_2026-11-19_00-46-04.png">
+        <img src="docs/snapshots/Snipaste_2026-11-19_00-46-04.png"
+             alt="DB-G AI assistant: right-side chat panel using the current connection and SQL context" width="100%">
+      </a>
+    </td>
+  </tr>
+</table>
 
 ## Download and run
 
