@@ -96,6 +96,23 @@ jobs:
           CGO_ENABLED: "0"
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: go tool mygo build -platform "${{ matrix.target }}"
+      - name: Install the project's Linux installer layout
+        if: matrix.target == 'linux/amd64'
+        shell: bash
+        run: |
+          set -eu
+          repo=$(jq -r '.updates.github' mygo.json)
+          key=$(jq -r '.updates.publicKey' mygo.json)
+          sed -e "s|__VERSION__|${RELEASE_VERSION}|g" \
+              -e "s|__GITHUB_REPO__|${repo}|g" \
+              -e "s|__PUBLIC_KEY__|${key}|g" \
+              packaging/install.sh > dist/linux-amd64/install.sh
+          chmod +x dist/linux-amd64/install.sh
+          sh -n dist/linux-amd64/install.sh
+          sum=$(sha256sum dist/linux-amd64/install.sh | awk '{print $1}')
+          awk -v sum="$sum" 'BEGIN{OFS="  "} $2=="install.sh" {$1=sum} {print}' \
+            dist/SHA256SUMS > dist/SHA256SUMS.tmp
+          mv dist/SHA256SUMS.tmp dist/SHA256SUMS
       - name: Verify the artifacts and the signed update manifest
         shell: bash
         run: |
@@ -117,6 +134,21 @@ jobs:
             got=$("$dir/db-g" -version)
             echo "$got"
             test "$got" = "DB-G $RELEASE_VERSION"
+            # 本地归档的安装路径必须与项目自举安装一致，且不写 root。
+            tmp=$(mktemp -d)
+            trap 'rm -rf "$tmp"' EXIT
+            HOME="$tmp" XDG_CONFIG_HOME="$tmp/.config" XDG_DATA_HOME="$tmp/.local/share" \
+              sh "$dir/install.sh" "$archive"
+            test -x "$tmp/.config/db-g/bin/db-g"
+            test -f "$tmp/.config/db-g/version"
+            grep -q "^build=" "$tmp/.config/db-g/version"
+            grep -q "^version=$RELEASE_VERSION$" "$tmp/.config/db-g/version"
+            grep -q "Exec=\"$tmp/.config/db-g/bin/db-g\"" "$tmp/.local/share/applications/db-g.desktop"
+            grep -q "Icon=$tmp/.local/share/icons/db-g.png" "$tmp/.local/share/applications/db-g.desktop"
+            test -f "$tmp/.local/share/icons/db-g.png"
+            HOME="$tmp" XDG_CONFIG_HOME="$tmp/.config" XDG_DATA_HOME="$tmp/.local/share" \
+              sh "$dir/install.sh" --uninstall
+            test ! -e "$tmp/.config/db-g/bin"
           else
             test -n "$(find "$dir" -maxdepth 1 -name 'db-g-setup-*.exe' -print -quit)"
             test -f "$dir/install.ps1"
