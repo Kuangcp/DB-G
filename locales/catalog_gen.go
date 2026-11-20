@@ -4426,6 +4426,16 @@ func (msgs Messages) TreeLoading() string {
 	return Catalog.Format(msgs.locale, "treeLoading", nil)
 }
 
+// TreeDatabase says "Database"
+// in the language the app shows.
+func TreeDatabase() string { return In(i18n.Locale()).TreeDatabase() }
+
+// TreeDatabase says "Database"
+// in the language of msgs.
+func (msgs Messages) TreeDatabase() string {
+	return Catalog.Format(msgs.locale, "treeDatabase", nil)
+}
+
 // TreePreviewData says "Preview Data"
 // in the language the app shows.
 func TreePreviewData() string { return In(i18n.Locale()).TreePreviewData() }

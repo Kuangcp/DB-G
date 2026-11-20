@@ -228,6 +228,58 @@ func TestObjectTreeRendersLeaves(t *testing.T) {
 	}
 }
 
+func TestObjectTreeConsoleAndDatabaseGroups(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := app.ConnProfile{Name: "lib", Kind: "sqlite", Path: seedConnFile(t)}
+	if err := a.store.Add(p); err != nil {
+		t.Fatal(err)
+	}
+	stored := a.store.List()[0]
+	a.testSetSession(stored.ID, treeFakeSession{objs: []engine.DBObject{
+		{Kind: engine.ObjectTable, Name: "users"},
+	}})
+	if _, err := a.consoleMgr().Create(stored.ID, "查询"); err != nil {
+		t.Fatal(err)
+	}
+	a.treeExpand[stored.ID] = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	// 控制台与数据库是数据源下的两个并列汇总。
+	if !tt.HasText("控制台") || !tt.HasText("查询") || !tt.HasText("数据库") {
+		t.Fatalf("console/database groups missing: %q", tt.Texts())
+	}
+	if !tt.HasText("表 (1)") {
+		t.Fatalf("database group must open by default: %q", tt.Texts())
+	}
+	if err := tt.Click("收起 数据库"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("表 (1)") || tt.HasText("users") {
+		t.Fatalf("collapsed database still shows objects: %q", tt.Texts())
+	}
+	if !tt.HasText("查询") {
+		t.Fatalf("collapsing database must not hide consoles: %q", tt.Texts())
+	}
+	if err := tt.Click("展开 数据库"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("表 (1)") {
+		t.Fatalf("database did not reopen: %q", tt.Texts())
+	}
+	if err := tt.Click("收起 控制台"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("查询") {
+		t.Fatalf("collapsed console group still shows rows: %q", tt.Texts())
+	}
+	if !tt.HasText("表 (1)") {
+		t.Fatalf("collapsing consoles must not hide database: %q", tt.Texts())
+	}
+}
+
 func TestObjectTreeErrorLine(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := app.ConnProfile{Name: "lib", Kind: "sqlite", Path: seedConnFile(t)}

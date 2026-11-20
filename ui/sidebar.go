@@ -225,6 +225,39 @@ func treeArrow(c *ui.Context, label string, open bool) ui.Element {
 	return b
 }
 
+// treeGroupRow 是对象树里的可折叠分组行：箭头 + 图标 + 文案 + 可选尾部控件。
+// 整行可点，箭头也能单独展开/收起。
+func treeGroupRow(c *ui.Context, label string, open *bool, depth int, icon *ui.SVG, iconColor ui.Color, trailing func()) ui.Element {
+	row := treeRowBase(c, label).PaddingStart(float32(4 + depth*folderIndent))
+	row.Children(func() {
+		arrow := locales.FolderExpand(label)
+		if *open {
+			arrow = locales.FolderCollapse(label)
+		}
+		if treeArrow(c, arrow, *open).Clicked() {
+			*open = !*open
+		}
+		if icon != nil {
+			ui.Icon(c, icon).FontSize(15).TextColor(iconColor)
+		}
+		ui.Text(c, label).SingleLine()
+		ui.Spacer(c)
+		if trailing != nil {
+			trailing()
+		}
+	})
+	if row.Clicked() {
+		*open = !*open
+	}
+	return row
+}
+
+// treeInfoRow 是树里的提示行（加载中/错误/已显示上限），不可折叠。
+func treeInfoRow(c *ui.Context, text string, depth int, color ui.Color) {
+	ui.Text(c, text).SingleLine().FontSize(12).TextColor(color).
+		PaddingStart(float32(4 + depth*folderIndent))
+}
+
 // treeDrag 是侧栏拖拽的值：kind 区分数据源和文件夹。
 type treeDrag struct{ kind, id string }
 
@@ -522,7 +555,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 	if expanded {
 		ui.Column(c).PaddingStart(float32((depth + 1) * folderIndent)).Children(func() {
 			a.consoleSection(c, p)
-			a.objectGroups(c, p)
+			a.databaseSection(c, p)
 		})
 	}
 }
@@ -564,15 +597,18 @@ func (a *root) duplicateConn(p app.ConnProfile) {
 	app.LogInfo("conn", "duplicate", "from", p.Name, "to", name, "folder", p.FolderID)
 }
 
-// consoleSection 列出该数据源的全部控制台（打开与否两种状态）并提供新建入口。
+// consoleSection 是数据源下的控制台汇总：展开后列出该数据源的全部控制台（打开与否两种状态）。
 func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 	m := a.consoleMgr()
 	if m == nil {
 		return
 	}
-	ui.Row(c).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.ConsoleSection()).FontSize(12).TextColor(c.Theme().TextMuted)
-		ui.Spacer(c)
+	recs := m.ConsolesOf(p.ID)
+	open := a.groupOpen(p.ID+"|consoles", true)
+	treeGroupRow(c, locales.ConsoleSection(), open, 0, iconTerminal, c.Theme().TextMuted, func() {
+		if !*open && len(recs) > 0 {
+			ui.Text(c, strconv.Itoa(len(recs))).FontSize(10.5).TextColor(c.Theme().TextMuted)
+		}
 		if iconButtonPlain(c, iconPlus, locales.ConsoleNew(), ui.Transparent).Clicked() {
 			rec, err := m.Create(p.ID, "")
 			if err != nil {
@@ -582,14 +618,27 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 			a.pendingActivate = rec.ID
 		}
 	})
-	for _, rec := range m.ConsolesOf(p.ID) {
-		a.consoleRow(c, rec, m.IsOpen(rec.ID))
+	if !*open {
+		return
+	}
+	for _, rec := range recs {
+		a.consoleRow(c, rec, m.IsOpen(rec.ID), 1)
 	}
 }
 
+// databaseSection 是数据源下的「数据库」汇总：展开后进入对象树（表/视图/索引）。
+func (a *root) databaseSection(c *ui.Context, p app.ConnProfile) {
+	open := a.groupOpen(p.ID+"|database", true)
+	treeGroupRow(c, locales.TreeDatabase(), open, 0, iconDatabase, c.Theme().TextMuted, nil)
+	if !*open {
+		return
+	}
+	a.objectGroups(c, p, 1)
+}
+
 // consoleRow 渲染一个控制台：已打开加粗，点击打开或激活，右键关闭/重命名/删除。
-func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
-	row := treeRowBase(c, locales.ConsoleRow(rec.Name))
+func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool, depth int) {
+	row := treeRowBase(c, locales.ConsoleRow(rec.Name)).PaddingStart(float32(4 + depth*folderIndent))
 	row.Children(func() {
 		dot := ui.Text(c, "●")
 		if isOpen {

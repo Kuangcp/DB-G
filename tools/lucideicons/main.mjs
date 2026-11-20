@@ -50,6 +50,11 @@ const icons = {
   iconSend:        "send",
   iconStop:        "circle-stop",
   iconPlan:        "git-fork",
+  iconDatabase:    "database",
+  iconTerminal:    "square-terminal",
+  iconTable:       "table",
+  iconView:        "view",
+  iconIndex:       "list-ordered",
 };
 
 // loadIcon 读一个图标的 __iconData；别名文件（只有 re-export）跟着跳过去。

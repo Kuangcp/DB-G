@@ -414,14 +414,14 @@ func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
 	}
 }
 
-func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
+func (a *root) objectGroups(c *ui.Context, p app.ConnProfile, depth int) {
 	base := objectTreeKey(p.ID, "")
 	if err := a.treeErr[base]; err != "" {
-		ui.Text(c, err).TextColor(c.Theme().Danger)
+		treeInfoRow(c, err, depth, c.Theme().Danger)
 		return
 	}
 	if a.metaCacheLoading[p.ID] {
-		ui.Text(c, locales.TreeLoadingMeta()).TextColor(c.Theme().TextMuted)
+		treeInfoRow(c, locales.TreeLoadingMeta(), depth, c.Theme().TextMuted)
 		return
 	}
 	if a.metaCacheStale[p.ID] && a.connected(p.ID) {
@@ -430,17 +430,15 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
 	// 多 schema 数据源：先列 schema，再在 schema 下列对象分组；
 	// 有磁盘缓存时即使还没连上也先把 schema 节点画出来。
 	if lister, ok := a.schemaLister(p); ok || len(a.treeSchemas[p.ID]) > 0 {
-		a.schemaTree(c, p, lister)
+		a.schemaTree(c, p, lister, depth)
 		return
 	}
 	a.ensureObjectCounts(p, "")
 	if err := a.treeErr[base]; err != "" {
-		ui.Text(c, err).TextColor(c.Theme().Danger)
+		treeInfoRow(c, err, depth, c.Theme().Danger)
 		return
 	}
-	ui.Tree(c, func() {
-		a.kindGroups(c, p, "")
-	})
+	a.kindGroups(c, p, "", depth)
 }
 
 // schemaLister 返回该连接当前会话的 SchemaLister（未连接/不支持时为 false）。
@@ -454,46 +452,58 @@ func (a *root) schemaLister(p app.ConnProfile) (engine.SchemaLister, bool) {
 }
 
 // schemaTree 渲染 schema 列表（懒加载）。
-func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.SchemaLister) {
+func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.SchemaLister, depth int) {
 	if a.treeSchemas == nil {
 		a.treeSchemas = map[string][]string{}
 	}
 	if _, ok := a.treeSchemas[p.ID]; !ok {
 		a.ensureSchemas(p)
 		if a.schemaLoading[p.ID] {
-			ui.Text(c, locales.TreeLoadingSchemas()).TextColor(c.Theme().TextMuted)
+			treeInfoRow(c, locales.TreeLoadingSchemas(), depth, c.Theme().TextMuted)
 			return
 		}
 		if lister == nil {
 			return
 		}
 	}
-	ui.Tree(c, func() {
-		for _, schema := range a.treeSchemas[p.ID] {
-			if a.searchFiltersObjects(p) && !a.schemaHasMatch(p.ID, schema) {
-				continue
-			}
-			key := p.ID + "|" + schema
-			base := objectTreeKey(p.ID, schema)
-			open := a.groupOpen(key+"|schema", false)
-			item := ui.TreeItem(c, "▣ "+schema, open, func() {
-				a.ensureObjectCounts(p, schema)
-				if err := a.treeErr[base]; err != "" {
-					ui.TreeItem(c, err, nil, nil)
-					return
-				}
-				a.kindGroups(c, p, schema)
-			})
-			if item.Clicked() {
-				a.setActiveSchema(p, schema)
-			}
+	for _, schema := range a.treeSchemas[p.ID] {
+		if a.searchFiltersObjects(p) && !a.schemaHasMatch(p.ID, schema) {
+			continue
 		}
-	})
+		key := p.ID + "|" + schema
+		base := objectTreeKey(p.ID, schema)
+		open := a.groupOpen(key+"|schema", false)
+		row := treeGroupRow(c, "▣ "+schema, open, depth, nil, c.Theme().TextMuted, nil)
+		if row.Clicked() {
+			a.setActiveSchema(p, schema)
+		}
+		if !*open {
+			continue
+		}
+		a.ensureObjectCounts(p, schema)
+		if err := a.treeErr[base]; err != "" {
+			treeInfoRow(c, err, depth+1, c.Theme().Danger)
+			continue
+		}
+		a.kindGroups(c, p, schema, depth+1)
+	}
+}
+
+// objectKindIcon 返回表/视图/索引分组的图标。
+func objectKindIcon(k engine.ObjectKind) *ui.SVG {
+	switch k {
+	case engine.ObjectTable:
+		return iconTable
+	case engine.ObjectView:
+		return iconView
+	default:
+		return iconIndex
+	}
 }
 
 // kindGroups 渲染某个 schema（或默认 schema，schema=""）下的对象分组。
 // 标题只显示计数，不拉正文；正文在组展开时按页加载。
-func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string) {
+func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string, depth int) {
 	base := objectTreeKey(p.ID, schema)
 	searching := a.searchFiltersObjects(p)
 	for _, g := range objectKinds {
@@ -514,18 +524,21 @@ func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string) {
 		}
 		open := a.groupOpen(base+"|"+kindKey(g.kind), false)
 		kind := g.kind
-		ui.TreeItem(c, label, open, func() {
-			a.ensureObjectPage(p, schema, kind)
-			a.objectLeaves(c, p, schema, base, kind)
-		})
+		treeGroupRow(c, label, open, depth, objectKindIcon(kind), c.Theme().TextMuted, nil)
+		if !*open {
+			continue
+		}
+		a.ensureObjectPage(p, schema, kind)
+		a.objectLeaves(c, p, schema, base, kind, depth+1)
 	}
 }
 
 // objectLeaves 渲染某组已加载的对象，以及加载中/失败/继续加载行。
-func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base string, kind engine.ObjectKind) {
+func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base string, kind engine.ObjectKind, depth int) {
+	t := c.Theme()
 	groupKey := objectGroupKey(base, kind)
 	if err := a.treeErr[groupKey]; err != "" {
-		ui.TreeItem(c, err, nil, nil)
+		treeInfoRow(c, err, depth, t.Danger)
 		return
 	}
 	var objs []engine.DBObject
@@ -543,12 +556,19 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 		objs = kept
 	}
 	if !searching && !a.objSearchActive() && len(objs) == 0 && (a.treeLoading[groupKey] || a.treeLoading[base+"|all"] || a.treeLoading[base+"|counts"]) {
-		ui.TreeItem(c, locales.TreeLoading(), nil, nil)
+		treeInfoRow(c, locales.TreeLoading(), depth, t.TextMuted)
 	}
 	for _, o := range objs {
 		obj := o
 		selKey := base + "|" + obj.Name
-		leaf := ui.TreeItem(c, obj.Name, nil, nil).Selected(a.treeSelected == selKey)
+		leaf := treeRowBase(c, obj.Name).PaddingStart(float32(4 + depth*folderIndent))
+		if a.treeSelected == selKey {
+			leaf.Background(t.Accent.Alpha(0.12))
+		}
+		leaf.Children(func() {
+			ui.Text(c, obj.Name).SingleLine()
+			ui.Spacer(c)
+		})
 		if leaf.Clicked() {
 			a.treeSelected = selKey
 			a.selConn, a.selObj, a.hasSelObj = p, obj, true
@@ -573,11 +593,16 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 	}
 	if total, ok := a.treeCountOf(base, kind); ok && len(objs) < total {
 		if len(objs) >= objectMaxLoaded {
-			ui.TreeItem(c, locales.TreeShownFirst(len(objs), total), nil, nil)
+			treeInfoRow(c, locales.TreeShownFirst(len(objs), total), depth, t.TextMuted)
 			return
 		}
 		label := locales.TreeLoadMore(len(objs), total)
-		if ui.TreeItem(c, label, nil, nil).Clicked() {
+		row := treeRowBase(c, label).PaddingStart(float32(4 + depth*folderIndent))
+		row.Children(func() {
+			ui.Text(c, label).SingleLine()
+			ui.Spacer(c)
+		})
+		if row.Clicked() {
 			a.loadObjectPage(p, schema, kind, false)
 		}
 	}
