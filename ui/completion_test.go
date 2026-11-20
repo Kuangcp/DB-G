@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	myeditor "github.com/egoist/mygo/ui/editor"
 
 	"db-g/app"
 	"db-g/engine"
@@ -395,5 +396,84 @@ func TestCompletionRelationPositionIgnoresFollowingStatement(t *testing.T) {
 	}
 	if hasText(texts, "bcol") {
 		t.Fatalf("following statement must not leak columns: %v", texts)
+	}
+}
+
+func TestAutomaticCompletionSkipsComments(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	a.ensureCatalog(prof.ID) // headless：同步加载，users 进入词表
+	rec, err := a.consoleMgr().Create(prof.ID, "注释补全")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+
+	request := func(text string, offset int, explicit bool) {
+		a.setActiveText(text)
+		n := len([]rune(text[:offset]))
+		a.code.SetSelection(n, n)
+		a.onCompletion(myeditor.CompletionRequest{
+			Offset: offset, Prefix: "us", Explicit: explicit,
+		})
+		tt.Frame()
+	}
+
+	// 普通语句里的单词照常补全。
+	request("SELECT us", len("SELECT us"), false)
+	if !tt.HasText("users") {
+		t.Fatalf("normal completion missing: %q", tt.Texts())
+	}
+	// -- 行注释与 /* */ 块注释里不弹自动补全。
+	request("SELECT 1 -- us", len("SELECT 1 -- us"), false)
+	if tt.HasText("users") {
+		t.Fatalf("line comment must not auto-complete: %q", tt.Texts())
+	}
+	request("SELECT /* us */ 1", len("SELECT /* us"), false)
+	if tt.HasText("users") {
+		t.Fatalf("block comment must not auto-complete: %q", tt.Texts())
+	}
+	// 显式 Ctrl+Space 仍然可以调出候选。
+	request("SELECT 1 -- us", len("SELECT 1 -- us"), true)
+	if !tt.HasText("users") {
+		t.Fatalf("explicit completion must work in comments: %q", tt.Texts())
+	}
+	// 字符串里的 -- 不是注释。
+	request("SELECT '-- x' AS us", len("SELECT '-- x' AS us"), false)
+	if !tt.HasText("users") {
+		t.Fatalf("string literal must not be treated as comment: %q", tt.Texts())
+	}
+}
+
+func TestSQLInComment(t *testing.T) {
+	cases := []struct {
+		name   string
+		text   string
+		offset int
+		kind   string
+		want   bool
+	}{
+		{"line", "SELECT 1 -- us", len("SELECT 1 -- us"), "sqlite", true},
+		{"line end", "SELECT 1 -- us\nSELECT 2", len("SELECT 1 -- us"), "sqlite", true},
+		{"after line", "SELECT 1 -- us\nSELECT 2", len("SELECT 1 -- us\nSELECT 2"), "sqlite", false},
+		{"block", "SELECT /* us */ 1", len("SELECT /* us"), "sqlite", true},
+		{"block closed", "SELECT /* us */ 1", len("SELECT /* us */ 1"), "sqlite", false},
+		{"unterminated block", "SELECT /* us", len("SELECT /* us"), "sqlite", true},
+		{"string", "SELECT '-- us'", len("SELECT '-- us'"), "sqlite", false},
+		{"quoted ident", "SELECT `-- us`", len("SELECT `-- us`"), "sqlite", false},
+		{"mysql hash", "SELECT 1 # us", len("SELECT 1 # us"), "mysql", true},
+		{"pg hash operator", "SELECT 1 # us", len("SELECT 1 # us"), "postgres", false},
+	}
+	for _, tc := range cases {
+		if got := sqlInComment(tc.text, tc.offset, tc.kind); got != tc.want {
+			t.Errorf("%s: sqlInComment(%q, %d, %s) = %v, want %v", tc.name, tc.text, tc.offset, tc.kind, got, tc.want)
+		}
 	}
 }

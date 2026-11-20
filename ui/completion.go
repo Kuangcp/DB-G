@@ -19,8 +19,76 @@ const completionTimeout = 5 * time.Second
 
 // onCompletion 是编辑器的补全回调：按光标上下文给候选（点号列 / 语句表列 / 目录 / 词表）。
 func (a *root) onCompletion(r myeditor.CompletionRequest) {
+	kind := a.connKindOf(a.activeConsoleConnID())
+	// 注释里不做自动补全；显式 Ctrl+Space 仍然可以调出候选。
+	if !r.Explicit && sqlInComment(a.code.Text(), r.Offset, kind) {
+		a.code.state.ShowCompletions(-1, nil)
+		return
+	}
 	items := a.completionItemsAt(r.Offset)
 	a.code.state.ShowCompletions(r.Offset-len(r.Prefix), items)
+}
+
+// sqlInComment 报告 offset 是否落在 SQL 注释（--、#、/* */）里。
+// 字符串与引号标识符里的注释记号不算注释；# 仅 MySQL 支持。
+func sqlInComment(text string, offset int, kind string) bool {
+	if offset > len(text) {
+		offset = len(text)
+	}
+	hashComments := kind == "mysql"
+	for i := 0; i < offset; {
+		switch {
+		case text[i] == '-' && i+1 < len(text) && text[i+1] == '-':
+			end := len(text)
+			if nl := strings.IndexByte(text[i:], '\n'); nl >= 0 {
+				end = i + nl
+			}
+			if offset > i && offset <= end {
+				return true
+			}
+			i = end
+		case hashComments && text[i] == '#':
+			end := len(text)
+			if nl := strings.IndexByte(text[i:], '\n'); nl >= 0 {
+				end = i + nl
+			}
+			if offset > i && offset <= end {
+				return true
+			}
+			i = end
+		case text[i] == '/' && i+1 < len(text) && text[i+1] == '*':
+			end := len(text)
+			if close := strings.Index(text[i+2:], "*/"); close >= 0 {
+				end = i + 2 + close + 2
+			}
+			if offset > i && (end == len(text) || offset < end) {
+				return true
+			}
+			i = end
+		case text[i] == '\'' || text[i] == '"' || text[i] == '`':
+			quote := text[i]
+			i++
+			for i < len(text) {
+				if text[i] == '\\' && quote != '`' && i+1 < len(text) {
+					i += 2
+					continue
+				}
+				if text[i] != quote {
+					i++
+					continue
+				}
+				if i+1 < len(text) && text[i+1] == quote {
+					i += 2 // 连写两个引号是转义
+					continue
+				}
+				i++
+				break
+			}
+		default:
+			i++
+		}
+	}
+	return false
 }
 
 // activeConsoleConnID 返回当前控制台的数据源 id（无控制台为空）。
@@ -336,6 +404,11 @@ func (a *root) retriggerCompletions() { a.requestRetrigger() }
 // 不会再问一次 onCompletion（目录就永远补不进去）。
 func (a *root) showCompletionsAtCursor() {
 	if a.win == nil && !a.code.state.Focused() {
+		return
+	}
+	kind := a.connKindOf(a.activeConsoleConnID())
+	if sqlInComment(a.code.Text(), a.code.state.Cursor(), kind) {
+		a.code.state.ShowCompletions(-1, nil)
 		return
 	}
 	a.code.state.ShowCompletions(-1, a.completionItemsAt(a.code.state.Cursor()))
