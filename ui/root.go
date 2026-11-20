@@ -213,6 +213,14 @@ type root struct {
 	ddlTitle            string
 	ddlText             string
 	ddlState            *myeditor.State // DDL 弹窗的只读高亮编辑器（惰性创建）
+	statsOpen           bool
+	statsLoading        bool
+	statsTitle          string
+	statsKind           string // 打开统计弹窗时数据源类型（决定 SQL 高亮方言）
+	stats               *engine.ObjectStats
+	statsErr            string
+	statsSQLOpen        bool
+	statsSQLState       *myeditor.State // 统计 SQL 的只读高亮编辑器（惰性创建）
 	historyOpen         bool
 	exportConfirm       bool
 	exportFormat        string
@@ -800,6 +808,7 @@ func (a *root) view(c *ui.Context) {
 		a.exportCloseModal(c)
 		a.historyPanel(c)
 		a.ddlPanel(c)
+		a.statsPanel(c)
 		a.editCellModal(c)
 		a.previewModal(c)
 		a.installModal(c)

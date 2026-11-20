@@ -583,6 +583,9 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 			if m.Item(locales.TreeViewDDL()).Chosen() {
 				a.showDDL(p, obj)
 			}
+			if obj.Kind == engine.ObjectTable && m.Item(locales.TreeViewStats()).Chosen() {
+				a.showStats(p, obj)
+			}
 			if m.Item(locales.TreeInsertName()).Chosen() {
 				a.code.Insert(obj.Name)
 			}

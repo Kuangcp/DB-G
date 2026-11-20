@@ -12,6 +12,7 @@ const (
 	CapColumns
 	CapExplain
 	CapExplainAnalyze
+	CapObjectStats
 )
 
 func (c Capabilities) Has(x Capabilities) bool { return c&x != 0 }

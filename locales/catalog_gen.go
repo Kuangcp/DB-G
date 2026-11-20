@@ -4456,6 +4456,432 @@ func (msgs Messages) TreeViewDDL() string {
 	return Catalog.Format(msgs.locale, "treeViewDDL", nil)
 }
 
+// TreeViewStats says "View Statistics"
+// in the language the app shows.
+func TreeViewStats() string { return In(i18n.Locale()).TreeViewStats() }
+
+// TreeViewStats says "View Statistics"
+// in the language of msgs.
+func (msgs Messages) TreeViewStats() string {
+	return Catalog.Format(msgs.locale, "treeViewStats", nil)
+}
+
+// StatsTitle says "Statistics: {name}"
+// in the language the app shows.
+func StatsTitle(name string) string { return In(i18n.Locale()).StatsTitle(name) }
+
+// StatsTitle says "Statistics: {name}"
+// in the language of msgs.
+func (msgs Messages) StatsTitle(name string) string {
+	return Catalog.Format(msgs.locale, "statsTitle", map[string]any{"name": name})
+}
+
+// StatsLoading says "Loading statistics…"
+// in the language the app shows.
+func StatsLoading() string { return In(i18n.Locale()).StatsLoading() }
+
+// StatsLoading says "Loading statistics…"
+// in the language of msgs.
+func (msgs Messages) StatsLoading() string {
+	return Catalog.Format(msgs.locale, "statsLoading", nil)
+}
+
+// StatsFailed says "Failed to load statistics: {err}"
+// in the language the app shows.
+func StatsFailed(err string) string { return In(i18n.Locale()).StatsFailed(err) }
+
+// StatsFailed says "Failed to load statistics: {err}"
+// in the language of msgs.
+func (msgs Messages) StatsFailed(err string) string {
+	return Catalog.Format(msgs.locale, "statsFailed", map[string]any{"err": err})
+}
+
+// StatsUnsupported says "This datasource does not support viewing statistics"
+// in the language the app shows.
+func StatsUnsupported() string { return In(i18n.Locale()).StatsUnsupported() }
+
+// StatsUnsupported says "This datasource does not support viewing statistics"
+// in the language of msgs.
+func (msgs Messages) StatsUnsupported() string {
+	return Catalog.Format(msgs.locale, "statsUnsupported", nil)
+}
+
+// StatsRows says "Rows"
+// in the language the app shows.
+func StatsRows() string { return In(i18n.Locale()).StatsRows() }
+
+// StatsRows says "Rows"
+// in the language of msgs.
+func (msgs Messages) StatsRows() string {
+	return Catalog.Format(msgs.locale, "statsRows", nil)
+}
+
+// StatsColumns says "Columns"
+// in the language the app shows.
+func StatsColumns() string { return In(i18n.Locale()).StatsColumns() }
+
+// StatsColumns says "Columns"
+// in the language of msgs.
+func (msgs Messages) StatsColumns() string {
+	return Catalog.Format(msgs.locale, "statsColumns", nil)
+}
+
+// StatsDataSize says "Data size"
+// in the language the app shows.
+func StatsDataSize() string { return In(i18n.Locale()).StatsDataSize() }
+
+// StatsDataSize says "Data size"
+// in the language of msgs.
+func (msgs Messages) StatsDataSize() string {
+	return Catalog.Format(msgs.locale, "statsDataSize", nil)
+}
+
+// StatsIndexSize says "Index size"
+// in the language the app shows.
+func StatsIndexSize() string { return In(i18n.Locale()).StatsIndexSize() }
+
+// StatsIndexSize says "Index size"
+// in the language of msgs.
+func (msgs Messages) StatsIndexSize() string {
+	return Catalog.Format(msgs.locale, "statsIndexSize", nil)
+}
+
+// StatsSQL says "Statistics SQL"
+// in the language the app shows.
+func StatsSQL() string { return In(i18n.Locale()).StatsSQL() }
+
+// StatsSQL says "Statistics SQL"
+// in the language of msgs.
+func (msgs Messages) StatsSQL() string {
+	return Catalog.Format(msgs.locale, "statsSQL", nil)
+}
+
+// StatsSQLCount says "{n} statement(s)"
+// in the language the app shows.
+func StatsSQLCount(n int) string { return In(i18n.Locale()).StatsSQLCount(n) }
+
+// StatsSQLCount says "{n} statement(s)"
+// in the language of msgs.
+func (msgs Messages) StatsSQLCount(n int) string {
+	return Catalog.Format(msgs.locale, "statsSQLCount", map[string]any{"n": n})
+}
+
+// StatsSQLEmpty says "No SQL"
+// in the language the app shows.
+func StatsSQLEmpty() string { return In(i18n.Locale()).StatsSQLEmpty() }
+
+// StatsSQLEmpty says "No SQL"
+// in the language of msgs.
+func (msgs Messages) StatsSQLEmpty() string {
+	return Catalog.Format(msgs.locale, "statsSQLEmpty", nil)
+}
+
+// StatsCopySQLTip says "Copy the statistics SQL; select part of the text and press Ctrl+C to copy only the selection"
+// in the language the app shows.
+func StatsCopySQLTip() string { return In(i18n.Locale()).StatsCopySQLTip() }
+
+// StatsCopySQLTip says "Copy the statistics SQL; select part of the text and press Ctrl+C to copy only the selection"
+// in the language of msgs.
+func (msgs Messages) StatsCopySQLTip() string {
+	return Catalog.Format(msgs.locale, "statsCopySQLTip", nil)
+}
+
+// StatSQLitePageSize says "Page size"
+// in the language the app shows.
+func StatSQLitePageSize() string { return In(i18n.Locale()).StatSQLitePageSize() }
+
+// StatSQLitePageSize says "Page size"
+// in the language of msgs.
+func (msgs Messages) StatSQLitePageSize() string {
+	return Catalog.Format(msgs.locale, "statSQLitePageSize", nil)
+}
+
+// StatSQLitePageCount says "Page count"
+// in the language the app shows.
+func StatSQLitePageCount() string { return In(i18n.Locale()).StatSQLitePageCount() }
+
+// StatSQLitePageCount says "Page count"
+// in the language of msgs.
+func (msgs Messages) StatSQLitePageCount() string {
+	return Catalog.Format(msgs.locale, "statSQLitePageCount", nil)
+}
+
+// StatSQLiteFreelist says "Free pages"
+// in the language the app shows.
+func StatSQLiteFreelist() string { return In(i18n.Locale()).StatSQLiteFreelist() }
+
+// StatSQLiteFreelist says "Free pages"
+// in the language of msgs.
+func (msgs Messages) StatSQLiteFreelist() string {
+	return Catalog.Format(msgs.locale, "statSQLiteFreelist", nil)
+}
+
+// StatSQLiteRootPage says "Root page"
+// in the language the app shows.
+func StatSQLiteRootPage() string { return In(i18n.Locale()).StatSQLiteRootPage() }
+
+// StatSQLiteRootPage says "Root page"
+// in the language of msgs.
+func (msgs Messages) StatSQLiteRootPage() string {
+	return Catalog.Format(msgs.locale, "statSQLiteRootPage", nil)
+}
+
+// StatMySQLEstimatedRows says "Estimated rows"
+// in the language the app shows.
+func StatMySQLEstimatedRows() string { return In(i18n.Locale()).StatMySQLEstimatedRows() }
+
+// StatMySQLEstimatedRows says "Estimated rows"
+// in the language of msgs.
+func (msgs Messages) StatMySQLEstimatedRows() string {
+	return Catalog.Format(msgs.locale, "statMySQLEstimatedRows", nil)
+}
+
+// StatMySQLEngine says "Storage engine"
+// in the language the app shows.
+func StatMySQLEngine() string { return In(i18n.Locale()).StatMySQLEngine() }
+
+// StatMySQLEngine says "Storage engine"
+// in the language of msgs.
+func (msgs Messages) StatMySQLEngine() string {
+	return Catalog.Format(msgs.locale, "statMySQLEngine", nil)
+}
+
+// StatMySQLCollation says "Collation"
+// in the language the app shows.
+func StatMySQLCollation() string { return In(i18n.Locale()).StatMySQLCollation() }
+
+// StatMySQLCollation says "Collation"
+// in the language of msgs.
+func (msgs Messages) StatMySQLCollation() string {
+	return Catalog.Format(msgs.locale, "statMySQLCollation", nil)
+}
+
+// StatMySQLAutoIncrement says "Auto increment"
+// in the language the app shows.
+func StatMySQLAutoIncrement() string { return In(i18n.Locale()).StatMySQLAutoIncrement() }
+
+// StatMySQLAutoIncrement says "Auto increment"
+// in the language of msgs.
+func (msgs Messages) StatMySQLAutoIncrement() string {
+	return Catalog.Format(msgs.locale, "statMySQLAutoIncrement", nil)
+}
+
+// StatMySQLRowFormat says "Row format"
+// in the language the app shows.
+func StatMySQLRowFormat() string { return In(i18n.Locale()).StatMySQLRowFormat() }
+
+// StatMySQLRowFormat says "Row format"
+// in the language of msgs.
+func (msgs Messages) StatMySQLRowFormat() string {
+	return Catalog.Format(msgs.locale, "statMySQLRowFormat", nil)
+}
+
+// StatMySQLComment says "Comment"
+// in the language the app shows.
+func StatMySQLComment() string { return In(i18n.Locale()).StatMySQLComment() }
+
+// StatMySQLComment says "Comment"
+// in the language of msgs.
+func (msgs Messages) StatMySQLComment() string {
+	return Catalog.Format(msgs.locale, "statMySQLComment", nil)
+}
+
+// StatMySQLCreateTime says "Created"
+// in the language the app shows.
+func StatMySQLCreateTime() string { return In(i18n.Locale()).StatMySQLCreateTime() }
+
+// StatMySQLCreateTime says "Created"
+// in the language of msgs.
+func (msgs Messages) StatMySQLCreateTime() string {
+	return Catalog.Format(msgs.locale, "statMySQLCreateTime", nil)
+}
+
+// StatMySQLUpdateTime says "Updated"
+// in the language the app shows.
+func StatMySQLUpdateTime() string { return In(i18n.Locale()).StatMySQLUpdateTime() }
+
+// StatMySQLUpdateTime says "Updated"
+// in the language of msgs.
+func (msgs Messages) StatMySQLUpdateTime() string {
+	return Catalog.Format(msgs.locale, "statMySQLUpdateTime", nil)
+}
+
+// StatPostgresTotalBytes says "Total size"
+// in the language the app shows.
+func StatPostgresTotalBytes() string { return In(i18n.Locale()).StatPostgresTotalBytes() }
+
+// StatPostgresTotalBytes says "Total size"
+// in the language of msgs.
+func (msgs Messages) StatPostgresTotalBytes() string {
+	return Catalog.Format(msgs.locale, "statPostgresTotalBytes", nil)
+}
+
+// StatPostgresLiveTuples says "Live tuples"
+// in the language the app shows.
+func StatPostgresLiveTuples() string { return In(i18n.Locale()).StatPostgresLiveTuples() }
+
+// StatPostgresLiveTuples says "Live tuples"
+// in the language of msgs.
+func (msgs Messages) StatPostgresLiveTuples() string {
+	return Catalog.Format(msgs.locale, "statPostgresLiveTuples", nil)
+}
+
+// StatPostgresDeadTuples says "Dead tuples"
+// in the language the app shows.
+func StatPostgresDeadTuples() string { return In(i18n.Locale()).StatPostgresDeadTuples() }
+
+// StatPostgresDeadTuples says "Dead tuples"
+// in the language of msgs.
+func (msgs Messages) StatPostgresDeadTuples() string {
+	return Catalog.Format(msgs.locale, "statPostgresDeadTuples", nil)
+}
+
+// StatPostgresLastVacuum says "Last vacuum"
+// in the language the app shows.
+func StatPostgresLastVacuum() string { return In(i18n.Locale()).StatPostgresLastVacuum() }
+
+// StatPostgresLastVacuum says "Last vacuum"
+// in the language of msgs.
+func (msgs Messages) StatPostgresLastVacuum() string {
+	return Catalog.Format(msgs.locale, "statPostgresLastVacuum", nil)
+}
+
+// StatPostgresLastAutovacuum says "Last autovacuum"
+// in the language the app shows.
+func StatPostgresLastAutovacuum() string { return In(i18n.Locale()).StatPostgresLastAutovacuum() }
+
+// StatPostgresLastAutovacuum says "Last autovacuum"
+// in the language of msgs.
+func (msgs Messages) StatPostgresLastAutovacuum() string {
+	return Catalog.Format(msgs.locale, "statPostgresLastAutovacuum", nil)
+}
+
+// StatPostgresLastAnalyze says "Last analyze"
+// in the language the app shows.
+func StatPostgresLastAnalyze() string { return In(i18n.Locale()).StatPostgresLastAnalyze() }
+
+// StatPostgresLastAnalyze says "Last analyze"
+// in the language of msgs.
+func (msgs Messages) StatPostgresLastAnalyze() string {
+	return Catalog.Format(msgs.locale, "statPostgresLastAnalyze", nil)
+}
+
+// StatPostgresLastAutoanalyze says "Last autoanalyze"
+// in the language the app shows.
+func StatPostgresLastAutoanalyze() string { return In(i18n.Locale()).StatPostgresLastAutoanalyze() }
+
+// StatPostgresLastAutoanalyze says "Last autoanalyze"
+// in the language of msgs.
+func (msgs Messages) StatPostgresLastAutoanalyze() string {
+	return Catalog.Format(msgs.locale, "statPostgresLastAutoanalyze", nil)
+}
+
+// StatClickHouseEngine says "Table engine"
+// in the language the app shows.
+func StatClickHouseEngine() string { return In(i18n.Locale()).StatClickHouseEngine() }
+
+// StatClickHouseEngine says "Table engine"
+// in the language of msgs.
+func (msgs Messages) StatClickHouseEngine() string {
+	return Catalog.Format(msgs.locale, "statClickHouseEngine", nil)
+}
+
+// StatClickHouseSortingKey says "Sorting key"
+// in the language the app shows.
+func StatClickHouseSortingKey() string { return In(i18n.Locale()).StatClickHouseSortingKey() }
+
+// StatClickHouseSortingKey says "Sorting key"
+// in the language of msgs.
+func (msgs Messages) StatClickHouseSortingKey() string {
+	return Catalog.Format(msgs.locale, "statClickHouseSortingKey", nil)
+}
+
+// StatClickHousePrimaryKey says "Primary key"
+// in the language the app shows.
+func StatClickHousePrimaryKey() string { return In(i18n.Locale()).StatClickHousePrimaryKey() }
+
+// StatClickHousePrimaryKey says "Primary key"
+// in the language of msgs.
+func (msgs Messages) StatClickHousePrimaryKey() string {
+	return Catalog.Format(msgs.locale, "statClickHousePrimaryKey", nil)
+}
+
+// StatClickHouseTotalRows says "Rows in system table"
+// in the language the app shows.
+func StatClickHouseTotalRows() string { return In(i18n.Locale()).StatClickHouseTotalRows() }
+
+// StatClickHouseTotalRows says "Rows in system table"
+// in the language of msgs.
+func (msgs Messages) StatClickHouseTotalRows() string {
+	return Catalog.Format(msgs.locale, "statClickHouseTotalRows", nil)
+}
+
+// StatClickHouseTotalBytes says "Total size"
+// in the language the app shows.
+func StatClickHouseTotalBytes() string { return In(i18n.Locale()).StatClickHouseTotalBytes() }
+
+// StatClickHouseTotalBytes says "Total size"
+// in the language of msgs.
+func (msgs Messages) StatClickHouseTotalBytes() string {
+	return Catalog.Format(msgs.locale, "statClickHouseTotalBytes", nil)
+}
+
+// StatClickHouseParts says "Active parts"
+// in the language the app shows.
+func StatClickHouseParts() string { return In(i18n.Locale()).StatClickHouseParts() }
+
+// StatClickHouseParts says "Active parts"
+// in the language of msgs.
+func (msgs Messages) StatClickHouseParts() string {
+	return Catalog.Format(msgs.locale, "statClickHouseParts", nil)
+}
+
+// StatClickHouseUncompressedBytes says "Uncompressed size"
+// in the language the app shows.
+func StatClickHouseUncompressedBytes() string {
+	return In(i18n.Locale()).StatClickHouseUncompressedBytes()
+}
+
+// StatClickHouseUncompressedBytes says "Uncompressed size"
+// in the language of msgs.
+func (msgs Messages) StatClickHouseUncompressedBytes() string {
+	return Catalog.Format(msgs.locale, "statClickHouseUncompressedBytes", nil)
+}
+
+// StatClickHousePrimaryKeyMemory says "Primary key in memory"
+// in the language the app shows.
+func StatClickHousePrimaryKeyMemory() string {
+	return In(i18n.Locale()).StatClickHousePrimaryKeyMemory()
+}
+
+// StatClickHousePrimaryKeyMemory says "Primary key in memory"
+// in the language of msgs.
+func (msgs Messages) StatClickHousePrimaryKeyMemory() string {
+	return Catalog.Format(msgs.locale, "statClickHousePrimaryKeyMemory", nil)
+}
+
+// StatClickHouseCompressionRatio says "Compression ratio"
+// in the language the app shows.
+func StatClickHouseCompressionRatio() string {
+	return In(i18n.Locale()).StatClickHouseCompressionRatio()
+}
+
+// StatClickHouseCompressionRatio says "Compression ratio"
+// in the language of msgs.
+func (msgs Messages) StatClickHouseCompressionRatio() string {
+	return Catalog.Format(msgs.locale, "statClickHouseCompressionRatio", nil)
+}
+
+// StatError says "Statistics query failed"
+// in the language the app shows.
+func StatError() string { return In(i18n.Locale()).StatError() }
+
+// StatError says "Statistics query failed"
+// in the language of msgs.
+func (msgs Messages) StatError() string {
+	return Catalog.Format(msgs.locale, "statError", nil)
+}
+
 // TreeInsertName says "Insert Name"
 // in the language the app shows.
 func TreeInsertName() string { return In(i18n.Locale()).TreeInsertName() }

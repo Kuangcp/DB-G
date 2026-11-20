@@ -61,7 +61,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapEditableResult | engine.CapExplain
+	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapObjectStats | engine.CapEditableResult | engine.CapExplain
 }
 
 // ServerInfo 返回数据库文件名与 SQLite 版本。
