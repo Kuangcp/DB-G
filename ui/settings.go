@@ -10,6 +10,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // settingsSection 是设置窗口左侧导航的一项。
@@ -21,16 +22,54 @@ type settingsSection struct {
 // settingsSections 是设置窗口的分区（顺序即导航顺序）。
 func (a *root) settingsSections() []settingsSection {
 	return []settingsSection{
-		{"外观", a.appearanceSection},
-		{"字体", a.fontSection},
-		{"结果", a.resultSection},
-		{"控制台", a.consolePrefsSection},
-		{"AI", a.aiSection},
-		{"快捷键", a.keymapSection},
-		{"连接档案", a.profilesSection},
-		{"同步", a.syncSection},
-		{"日志", a.logSection},
-		{"开发", a.devSection},
+		{locales.SettingsAppearance(), a.appearanceSection},
+		{locales.SettingsLanguage(), a.languageSection},
+		{locales.SettingsFonts(), a.fontSection},
+		{locales.SettingsResults(), a.resultSection},
+		{locales.SettingsConsole(), a.consolePrefsSection},
+		{locales.SettingsAI(), a.aiSection},
+		{locales.SettingsKeymap(), a.keymapSection},
+		{locales.SettingsProfiles(), a.profilesSection},
+		{locales.SettingsSync(), a.syncSection},
+		{locales.SettingsLogs(), a.logSection},
+		{locales.SettingsDev(), a.devSection},
+	}
+}
+
+// languageSection 是界面语言选择：跟随系统 / 简体中文 / English，切完立即生效。
+func (a *root) languageSection(c *ui.Context) {
+	cr := controlRadius(c)
+	ui.Text(c, locales.LanguageTitle()).Bold()
+	ui.Text(c, locales.LanguageHint()).FontSize(12).TextColor(c.Theme().TextMuted)
+	idx := 0
+	switch a.localePref {
+	case app.LocaleZhHans:
+		idx = 1
+	case app.LocaleEn:
+		idx = 2
+	}
+	if ui.Segmented(c, &idx,
+		locales.LanguageSystem(), locales.LanguageChinese(), locales.LanguageEnglish()).
+		Radius(cr).Changed() {
+		tag := []string{app.LocaleSystem, app.LocaleZhHans, app.LocaleEn}[idx]
+		a.setLocalePref(tag)
+	}
+	if a.localeWarn != "" {
+		ui.Text(c, a.localeWarn).FontSize(12).TextColor(c.Theme().Danger)
+	}
+}
+
+// setLocalePref 保存语言选择并让 mygo 立即切换；headless 测试不碰窗口。
+func (a *root) setLocalePref(tag string) {
+	prefs, warn := app.NormalizeLocalePrefs(app.LocalizationPrefs{Locale: tag})
+	a.localePref, a.localeWarn = prefs.Locale, warn
+	if a.localePrefsPath != "" {
+		if err := app.SaveLocalePrefs(a.localePrefsPath, prefs); err != nil {
+			a.localeWarn = "保存语言设置失败: " + err.Error()
+		}
+	}
+	if a.win != nil {
+		mygo.App.SetLocale(prefs.Locale)
 	}
 }
 
@@ -367,6 +406,7 @@ type settingsWin interface {
 	IsMaximized() bool
 	ToggleMaximize()
 	Close()
+	SetTitle(string)
 	SetBackgroundColor(string) error
 }
 
@@ -393,7 +433,7 @@ func (a *root) openSettings() {
 		open = a.newSettingsWindow
 	}
 	a.settingsWin = open(mygo.WindowOptions{
-		Title:           "设置 — " + app.DisplayName,
+		Title:           locales.SettingsTitle() + " — " + app.DisplayName,
 		Width:           760,
 		Height:          600,
 		StateKey:        "settings",

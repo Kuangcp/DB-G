@@ -1,0 +1,20 @@
+{
+  "@@locale": "zh-Hans",
+  "settingsAppearance": "外观",
+  "settingsTitle": "设置",
+  "settingsLanguage": "语言",
+  "settingsFonts": "字体",
+  "settingsResults": "结果",
+  "settingsConsole": "控制台",
+  "settingsAI": "AI",
+  "settingsKeymap": "快捷键",
+  "settingsProfiles": "连接档案",
+  "settingsSync": "同步",
+  "settingsLogs": "日志",
+  "settingsDev": "开发",
+  "languageTitle": "语言",
+  "languageHint": "修改即时生效。跟随系统时：中文系统用简体中文，其他语言用英文。",
+  "languageSystem": "跟随系统",
+  "languageChinese": "简体中文",
+  "languageEnglish": "English"
+}

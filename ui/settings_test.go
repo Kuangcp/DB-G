@@ -100,6 +100,7 @@ func (f *fakeSettingsWin) Minimize()                       {}
 func (f *fakeSettingsWin) IsMaximized() bool               { return false }
 func (f *fakeSettingsWin) ToggleMaximize()                 {}
 func (f *fakeSettingsWin) Close()                          {}
+func (f *fakeSettingsWin) SetTitle(string)                 {}
 func (f *fakeSettingsWin) SetBackgroundColor(string) error { return nil }
 
 func TestSettingsButtonOpensSingletonWindow(t *testing.T) {

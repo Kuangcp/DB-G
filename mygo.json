@@ -8,6 +8,7 @@
   "icon": "assets/icon-512.png",
   "main": ".",
   "out": "dist",
+  "i18n": { "dir": "locales", "source": "en" },
   "updates": {
     "publicKey": "e/kNn8TQumYowQufTGGqOVL6f2wKVJPGjHRyMV50LiQ=",
     "github": "Kuangcp/DB-G",

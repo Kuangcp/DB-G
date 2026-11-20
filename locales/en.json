@@ -1,0 +1,20 @@
+{
+  "@@locale": "en",
+  "settingsAppearance": "Appearance",
+  "settingsTitle": "Settings",
+  "settingsLanguage": "Language",
+  "settingsFonts": "Fonts",
+  "settingsResults": "Results",
+  "settingsConsole": "Console",
+  "settingsAI": "AI",
+  "settingsKeymap": "Shortcuts",
+  "settingsProfiles": "Profiles",
+  "settingsSync": "Sync",
+  "settingsLogs": "Logs",
+  "settingsDev": "Developer",
+  "languageTitle": "Language",
+  "languageHint": "Changes apply immediately. System follows the desktop language: Simplified Chinese on Chinese systems, English otherwise.",
+  "languageSystem": "System",
+  "languageChinese": "简体中文",
+  "languageEnglish": "English"
+}

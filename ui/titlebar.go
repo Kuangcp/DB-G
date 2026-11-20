@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // TitleBarHeight 是自绘标题栏的高度（DIP）：窗口内容顶部留出的一条，
@@ -54,7 +55,7 @@ func (a *root) settingsTitleBar(c *ui.Context) {
 	bar := ui.Row(c).Height(TitleBarHeight).FillWidth().Padding(0, 12).Gap(8).
 		AlignItems(ui.Center).DragWindow().Background(t.Surface)
 	bar.Children(func() {
-		ui.Text(c, "设置").Bold().FontSize(12.5)
+		ui.Text(c, locales.SettingsTitle()).Bold().FontSize(12.5)
 		ui.Text(c, app.DisplayName).FontSize(11).TextColor(t.TextMuted)
 		ui.Spacer(c)
 		ui.Box(c).Width(6)

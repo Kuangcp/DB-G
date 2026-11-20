@@ -100,6 +100,12 @@ func main() {
 		log.Printf("日志初始化失败: %v", err)
 	}
 	defer app.CloseLogs()
+	// 界面语言：locale.json 优先（"" = 跟随系统），在开窗前交给 mygo，控件与更新弹窗都跟随。
+	localePrefs, localeWarn := app.LoadLocalePrefs(app.DefaultLocalePrefsPath())
+	if localeWarn != "" {
+		app.LogWarn("startup", "load locale prefs failed", "err", localeWarn)
+	}
+	mygo.App.SetLocale(localePrefs.Locale)
 	// 原生更新窗口，不依赖 WebView；开发构建会自动报告更新不可用。
 	mygo.Use(updaterNative.Plugin)
 	// 主窗口的位置/大小记在配置目录；和连接库一样区分发布/开发构建。

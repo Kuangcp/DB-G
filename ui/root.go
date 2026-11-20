@@ -15,6 +15,7 @@ import (
 	"db-g/ai"
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 	"db-g/sync"
 )
 
@@ -79,6 +80,9 @@ type root struct {
 	paletteDark       app.ThemePalette // 自定义配色的深色草稿
 	paletteLoaded     bool             // 草稿是否已从 prefs 载入
 	paletteErr        string
+	localePref        string // 界面语言："" 跟随系统，或 en / zh-Hans
+	localePrefsPath   string // locale.json 的位置（空 = 不落盘）
+	localeWarn        string
 	aiPrefs           app.AIPrefs // AI 服务地址/模型/出网开关
 	aiPrefsPath       string      // ai.json 的位置（空 = 不落盘）
 	aiWarn            string
@@ -324,6 +328,10 @@ func newRootWithStore(storePath string) *root {
 	r.consolePrefs, r.consolePrefsWarn = app.LoadConsolePrefs(r.consolePrefsPath)
 	r.themePath = app.DefaultThemePrefsPath()
 	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
+	r.localePrefsPath = filepath.Join(filepath.Dir(storePath), "locale.json")
+	var localePrefs app.LocalizationPrefs
+	localePrefs, r.localeWarn = app.LoadLocalePrefs(r.localePrefsPath)
+	r.localePref = localePrefs.Locale
 	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
 	r.syncPrefsPath = filepath.Join(filepath.Dir(storePath), "sync.json")
 	r.syncPrefs, r.syncWarn = app.LoadSyncPrefs(r.syncPrefsPath)
@@ -685,6 +693,12 @@ func (a *root) Attach(win *mygo.Window) {
 	for _, c := range a.consoles {
 		c.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
 	}
+	// 语言切换后设置窗口的原生标题也要跟着变（标题栏文字每帧重建，不用管）。
+	mygo.App.OnLocaleChanged(func(string) {
+		if a.settingsWin != nil {
+			a.settingsWin.SetTitle(locales.SettingsTitle() + " — " + app.DisplayName)
+		}
+	})
 }
 
 // applyEditorLanguage 让编辑器的 SQL 高亮跟随当前数据源（MySQL 的 AUTO_INCREMENT 等）。
