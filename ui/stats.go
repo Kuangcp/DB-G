@@ -23,6 +23,10 @@ const (
 
 // showStats 取表的统计信息并弹窗（headless 同步，有窗口时后台 + Update）。
 func (a *root) showStats(p app.ConnProfile, o engine.DBObject) {
+	// 统计只对表开放：视图要展开成结果集才有行数，代价不可控。
+	if o.Kind != engine.ObjectTable {
+		return
+	}
 	if !a.connected(p.ID) {
 		if err := a.openConn(p); err != nil {
 			a.consoleErr = err.Error()

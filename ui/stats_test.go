@@ -124,3 +124,34 @@ func TestObjectStatsUnsupported(t *testing.T) {
 		t.Fatalf("stats error = %q", a.statsErr)
 	}
 }
+
+func TestObjectStatsOnlyForTables(t *testing.T) {
+	a, connID := seedStatsRoot(t)
+	rows, columns := int64(3), int64(2)
+	a.testSetSession(connID, statsFakeSession{
+		treeFakeSession: treeFakeSession{},
+		stats:           &engine.ObjectStats{Rows: &rows, Columns: &columns},
+	})
+	a.treeData[connID] = map[engine.ObjectKind][]engine.DBObject{
+		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "users"}},
+		engine.ObjectView:  {{Kind: engine.ObjectView, Name: "user_view"}},
+	}
+	a.treeCounts[connID] = map[engine.ObjectKind]int{
+		engine.ObjectTable: 1, engine.ObjectView: 1,
+	}
+	a.treeExpand[connID] = true
+	*a.groupOpenPtr(connID+"|"+kindKey(engine.ObjectView), false) = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.RightClick("user_view"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem("查看统计"); err == nil {
+		t.Fatal("views must not offer statistics")
+	}
+	p, _ := a.store.Get(connID)
+	a.showStats(p, engine.DBObject{Kind: engine.ObjectView, Name: "user_view"})
+	if a.statsOpen {
+		t.Fatal("showStats must reject views")
+	}
+}
