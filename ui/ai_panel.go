@@ -11,31 +11,32 @@ import (
 
 	"db-g/ai"
 	"db-g/app"
+	"db-g/locales"
 )
 
 // aiPanel 是右侧 AI 助手面板。
 func (a *root) aiPanel(c *ui.Context) {
 	st := &a.aiChat
 	t := c.Theme()
-	ui.Column(c).Fill().Background(t.Surface).Padding(8).Gap(6).Label("AI 面板").Children(func() {
+	ui.Column(c).Fill().Background(t.Surface).Padding(8).Gap(6).Label(locales.AiPanelLabel()).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 			iconChild(c, iconSparkles, t.Accent)
 			title := a.currentAIConversationTitle()
 			if title == "" {
-				title = "AI 助手"
+				title = locales.AiAssistant()
 			}
 			ui.Text(c, title).Bold().SingleLine()
 			if a.aiPrefs.Model != "" {
 				ui.Text(c, a.aiPrefs.Model).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			}
 			ui.Spacer(c)
-			if iconButtonPlain(c, iconHistory, "会话历史", t.TextMuted).Clicked() {
+			if iconButtonPlain(c, iconHistory, locales.AiHistory(), t.TextMuted).Clicked() {
 				st.showHistory = !st.showHistory
 			}
-			if iconButtonPlain(c, iconPlus, "新会话", t.TextMuted).Clicked() {
+			if iconButtonPlain(c, iconPlus, locales.AiNewConversation(), t.TextMuted).Clicked() {
 				a.resetAIChat()
 			}
-			if iconButtonPlain(c, iconClose, "关闭 AI 面板", t.TextMuted).Clicked() {
+			if iconButtonPlain(c, iconClose, locales.AiClosePanel(), t.TextMuted).Clicked() {
 				st.open = false
 			}
 		})
@@ -51,14 +52,14 @@ func (a *root) aiPanel(c *ui.Context) {
 		ui.Scroll(c).TrackScroll(&st.scroll).Grow(1).Children(func() {
 			ui.Column(c).FillWidth().Gap(10).Children(func() {
 				if len(st.messages) == 0 {
-					ui.Text(c, "问关于当前连接、表结构或 SQL 的问题。生成结果不会自动执行。").FontSize(12).
+					ui.Text(c, locales.AiEmptyHint()).FontSize(12).
 						TextColor(t.TextMuted)
 				}
 				for i := range st.messages {
 					a.aiMessage(c, &st.messages[i])
 				}
 				if st.streaming {
-					ui.Text(c, "生成中…").FontSize(11).TextColor(t.TextMuted)
+					ui.Text(c, locales.AiGenerating()).FontSize(11).TextColor(t.TextMuted)
 				}
 			})
 		})
@@ -68,7 +69,7 @@ func (a *root) aiPanel(c *ui.Context) {
 					ui.Text(c, st.lastCtx).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
 				}
 				ui.Spacer(c)
-				if ui.Button(c, "查看上下文").FontSize(10.5).Clicked() {
+				if ui.Button(c, locales.AiViewContext()).FontSize(10.5).Clicked() {
 					a.openAIDebug()
 				}
 			})
@@ -78,8 +79,8 @@ func (a *root) aiPanel(c *ui.Context) {
 		}
 		ui.TextArea(c, &st.input).
 			Lines(1, 6).
-			Placeholder("问点什么。Enter 换行，Ctrl+Enter 发送").
-			Label("AI 提问").
+			Placeholder(locales.AiInputPlaceholder()).
+			Label(locales.AiAskLabel()).
 			Bind(&st.inputRef).
 			OnTextKey(func(k ui.TextKey) bool {
 				if k.Key == ui.KeyEnter && k.Mods == ui.Ctrl {
@@ -90,10 +91,10 @@ func (a *root) aiPanel(c *ui.Context) {
 			})
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			if st.streaming {
-				if ui.Button(c, "停止").Clicked() {
+				if ui.Button(c, locales.AiStop()).Clicked() {
 					a.stopAI()
 				}
-			} else if ui.PrimaryButton(c, "发送").Disabled(st.input == "").Clicked() {
+			} else if ui.PrimaryButton(c, locales.AiSend()).Disabled(st.input == "").Clicked() {
 				a.sendAI()
 			}
 			ui.Spacer(c)
@@ -129,14 +130,14 @@ func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 		}
 		if m.done && m.text != "" {
 			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-				if iconButtonPlain(c, iconCopy, "复制", t.TextMuted).Clicked() {
+				if iconButtonPlain(c, iconCopy, locales.AiCopy(), t.TextMuted).Clicked() {
 					c.WriteClipboard(m.text)
 				}
 				if sql, ok := ai.ExtractSQL(m.text); ok {
-					if ui.Button(c, "插入 SQL").Clicked() {
+					if ui.Button(c, locales.AiInsertSQL()).Clicked() {
 						a.code.Insert(sql)
 					}
-					if ui.Button(c, "复制 SQL").Clicked() {
+					if ui.Button(c, locales.AiCopySQL()).Clicked() {
 						c.WriteClipboard(sql)
 					}
 				}
@@ -179,7 +180,7 @@ func (a *root) aiHistoryList(c *ui.Context) {
 		if title := app.AIConversationTitle(conv.Messages); title != "" {
 			return title
 		}
-		return "新会话"
+		return locales.AiNewConversation()
 	}
 	if q := strings.ToLower(strings.TrimSpace(st.historyQuery)); q != "" {
 		filtered := convs[:0]
@@ -201,8 +202,8 @@ func (a *root) aiHistoryList(c *ui.Context) {
 		st.historyLimit = len(convs)
 	}
 	ui.Column(c).FillWidth().Gap(3).Children(func() {
-		ui.Text(c, "会话历史").FontSize(11).Bold().TextColor(t.TextMuted)
-		if ui.TextInput(c, &st.historyQuery).Placeholder("搜索会话").FontSize(11.5).
+		ui.Text(c, locales.AiHistory()).FontSize(11).Bold().TextColor(t.TextMuted)
+		if ui.TextInput(c, &st.historyQuery).Placeholder(locales.AiSearchConversations()).FontSize(11.5).
 			Radius(t.Space(1)).Changed() {
 			st.historyLimit = 20
 			st.historyScroll.Y = 0
@@ -210,7 +211,7 @@ func (a *root) aiHistoryList(c *ui.Context) {
 		ui.Scroll(c).TrackScroll(&st.historyScroll).FillWidth().Height(180).Children(func() {
 			ui.Column(c).FillWidth().Gap(1).Children(func() {
 				if len(convs) == 0 {
-					ui.Text(c, "没有匹配的会话").FontSize(11).TextColor(t.TextMuted)
+					ui.Text(c, locales.AiNoMatches()).FontSize(11).TextColor(t.TextMuted)
 					return
 				}
 				limit := st.historyLimit
@@ -238,7 +239,7 @@ func (a *root) aiHistoryList(c *ui.Context) {
 					}
 				}
 				if limit < len(convs) {
-					ui.Text(c, "继续向下滚动加载更多…").FontSize(10.5).TextColor(t.TextMuted)
+					ui.Text(c, locales.AiLoadMoreHint()).FontSize(10.5).TextColor(t.TextMuted)
 				}
 			})
 		})

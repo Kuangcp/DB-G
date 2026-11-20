@@ -84,3 +84,35 @@ func TestI18nEnglishMainWindow(t *testing.T) {
 		}
 	}
 }
+
+func TestI18nEnglishAIPanelAndSync(t *testing.T) {
+	if os.Getenv("MYGO_LOCALE") != "en" {
+		t.Skip("run with MYGO_LOCALE=en")
+	}
+	a := newConsoleRoot(t)
+	a.aiChat.open = true
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	for _, want := range []string{"AI Panel", "Conversation History", "Send"} {
+		if !tt.HasText(want) {
+			t.Fatalf("english AI panel missing %q: %q", want, tt.Texts())
+		}
+	}
+	idx := -1
+	for i, sec := range a.settingsSections() {
+		if sec.label == "Sync" {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		t.Fatal("sync settings section missing")
+	}
+	a.settingsSection = idx
+	st := ui.NewTester(a.settingsView, 760, 600)
+	st.Frame()
+	for _, want := range []string{"Git Sync", "Sync Key", "Repository URL"} {
+		if !st.HasText(want) {
+			t.Fatalf("english sync settings missing %q: %q", want, st.Texts())
+		}
+	}
+}

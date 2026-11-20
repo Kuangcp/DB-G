@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 	lobe "db-g/ui/lobe"
 )
 
@@ -71,7 +72,7 @@ func (a *root) saveThemePrefs() {
 	if a.win == nil {
 		if err := app.SaveThemePrefs(path, prefs); err != nil {
 			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
-			a.themeWarn = "保存外观设置失败: " + err.Error()
+			a.themeWarn = locales.ThemeSaveFailed(err.Error())
 		}
 		return
 	}
@@ -84,7 +85,7 @@ func (a *root) saveThemePrefs() {
 		}
 		if err := app.SaveThemePrefs(path, prefs); err != nil {
 			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
-			a.safeUpdate(win, func() { a.themeWarn = "保存外观设置失败: " + err.Error() })
+			a.safeUpdate(win, func() { a.themeWarn = locales.ThemeSaveFailed(err.Error()) })
 		}
 	}()
 }

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 
 	"db-g/ai"
 	"db-g/app"
+	"db-g/locales"
 )
 
 // aiRewriteState 是「AI 改写选中 SQL」弹窗的状态。
@@ -35,7 +35,7 @@ func (a *root) openAIRewrite() {
 	if !hasSel || strings.TrimSpace(text[start:end]) == "" {
 		st, ok := app.StatementAt(text, a.code.state.Cursor())
 		if !ok || strings.TrimSpace(text[st.Start:st.End]) == "" {
-			a.consoleErr = "先选中要改写的 SQL"
+			a.consoleErr = locales.AiRewriteSelectFirst()
 			return
 		}
 		start, end = st.Start, st.End
@@ -51,7 +51,7 @@ func (a *root) startAIRewrite() {
 	st := &a.aiRewrite
 	instruction := strings.TrimSpace(st.instruction)
 	if instruction == "" {
-		st.err = "先写一句改写要求"
+		st.err = locales.AiRewriteNeedInstruction()
 		return
 	}
 	provider, err := a.aiProviderFor()
@@ -61,8 +61,8 @@ func (a *root) startAIRewrite() {
 	}
 	snap := a.aiSnapshot()
 	msgs := ai.BuildRewriteMessages(snap, st.target, instruction)
-	a.recordAIRequest("改写", a.aiModelName(),
-		aiContextNote(snap, fmt.Sprintf("待改写 %dB · 要求 %dB", len(st.target), len(instruction))), msgs)
+	a.recordAIRequest(locales.AiKindRewrite(), a.aiModelName(),
+		aiContextNote(snap, locales.AiRewriteStats(len(st.target), len(instruction))), msgs)
 	st.loading, st.err, st.result, st.diff = true, "", "", nil
 	ctx, cancel := context.WithCancel(context.Background())
 	st.seq++
@@ -128,7 +128,7 @@ func (a *root) finishAIRewrite(seq uint64, raw string, err error) {
 	}
 	fixed, ok := ai.ExtractSQL(raw)
 	if !ok || strings.TrimSpace(fixed) == "" {
-		st.err = "模型没有返回可用的 SQL 代码块"
+		st.err = locales.AiNoSQLBlock()
 		return
 	}
 	st.result = fixed
@@ -159,7 +159,7 @@ func (a *root) recordAIRewriteConversation() {
 		return
 	}
 	now := time.Now().UnixMilli()
-	title := "改写：" + truncateRunes(firstLine(instruction), 28)
+	title := locales.AiRewriteTitleFor(truncateRunes(firstLine(instruction), 28))
 	conv := app.AIConversation{
 		ID:        app.NewAIConversationID(),
 		Title:     title,
@@ -180,7 +180,7 @@ func (a *root) recordAIRewriteConversation() {
 
 // rewriteConversationUser 是写进 AI 历史里的用户消息；保留原文才看得出改了什么。
 func rewriteConversationUser(target, instruction string) string {
-	return "要求：" + instruction + "\n\n原文：\n```sql\n" + target + "\n```"
+	return locales.AiRewriteUserMessage(instruction, target)
 }
 
 // truncateRunes 截到 n 个字符并补省略号。
@@ -215,7 +215,7 @@ func (a *root) applyAIRewrite(appendMode bool) {
 	text := a.code.Text()
 	if a.code.Version() != st.version || st.start < 0 || st.end > len(text) ||
 		st.start > st.end || text[st.start:st.end] != st.target {
-		st.err = "原文已变化，请重新选择后再试"
+		st.err = locales.AiRewriteChanged()
 		return
 	}
 	if appendMode {
@@ -239,15 +239,15 @@ func (a *root) aiRewriteModal(c *ui.Context) {
 	t := c.Theme()
 	m := ui.Modal(c, &st.open, func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "AI 改写 SQL").Bold()
+			ui.Text(c, locales.AiRewriteTitle()).Bold()
 			ui.Spacer(c)
-			ui.Text(c, "生成结果不会自动执行；应用前可看 diff").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.AiRewriteHint()).FontSize(11).TextColor(t.TextMuted)
 		})
-		ui.Text(c, "Ctrl+Enter 发送指令；应用前不会改动正文").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, locales.AiRewriteSendHint()).FontSize(11).TextColor(t.TextMuted)
 		ui.TextArea(c, &st.instruction).
 			Lines(2, 4).
-			Placeholder("例如：改成参数化查询 / 只保留需要的列 / 加上时间范围过滤").
-			Label("改写要求").
+			Placeholder(locales.AiRewritePlaceholder()).
+			Label(locales.AiRewriteInstruction()).
 			AutoFocus().
 			OnTextKey(func(k ui.TextKey) bool {
 				if k.Key == ui.KeyEnter && k.Mods == ui.Ctrl {
@@ -256,15 +256,15 @@ func (a *root) aiRewriteModal(c *ui.Context) {
 				}
 				return false
 			})
-		ui.Text(c, "原文").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, locales.AiOriginal()).FontSize(11).TextColor(t.TextMuted)
 		ui.TextArea(c, &st.target).ReadOnly(true).Lines(4, 8).FillWidth()
 		switch {
 		case st.loading:
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Spinner(c)
-				ui.Text(c, "生成中…")
+				ui.Text(c, locales.AiGenerating())
 				ui.Spacer(c)
-				if ui.Button(c, "停止").Clicked() {
+				if ui.Button(c, locales.AiStop()).Clicked() {
 					a.stopAIRewrite()
 				}
 			})
@@ -272,19 +272,19 @@ func (a *root) aiRewriteModal(c *ui.Context) {
 			ui.Text(c, st.err).TextColor(t.Danger).FontSize(12).SingleLine().Tooltip(st.err)
 		}
 		if st.diff != nil {
-			ui.Text(c, "替换后的 diff").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.AiDiff()).FontSize(11).TextColor(t.TextMuted)
 			myeditor.DiffView(c, st.diff).Grow(1).FillWidth()
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.stopAIRewrite()
 				st.open = false
 			}
 			if st.result != "" && !st.loading {
-				if ui.Button(c, "追加到选区后").Clicked() {
+				if ui.Button(c, locales.AiAppendAfter()).Clicked() {
 					a.applyAIRewrite(true)
 				}
-				if ui.PrimaryButton(c, "替换选区").Clicked() {
+				if ui.PrimaryButton(c, locales.AiReplaceSelection()).Clicked() {
 					a.applyAIRewrite(false)
 				}
 			}

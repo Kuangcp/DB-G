@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"fmt"
+	"errors"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // extFile 是一个外部 .sql 控制台的磁盘一致性状态。
@@ -259,7 +260,7 @@ func (a *root) pickOpenSQLFiles() {
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
 			Parent: win,
-			Title:  "打开 SQL 文件",
+			Title:  locales.TopOpenSQLFile(),
 			Filters: []mygo.FileFilter{
 				{Name: "SQL", Extensions: []string{"sql"}},
 			},
@@ -288,7 +289,7 @@ func (a *root) activateExternalRecord(rec app.ConsoleRecord) {
 		a.initExternal(rec.ID, rec.FilePath)
 	}
 	if !a.activateConsole(rec.ID) {
-		a.extMsg = "打开控制台失败：" + rec.Name
+		a.extMsg = locales.ExtOpenFailed(rec.Name)
 	}
 }
 
@@ -305,7 +306,7 @@ func (a *root) bindExternal(connID string) {
 		}
 		rec, err := a.store.CreateExternalConsole(connID, filepath.Base(path), path)
 		if err != nil {
-			a.extMsg = "绑定失败：" + err.Error()
+			a.extMsg = locales.ExtBindFailed(err.Error())
 			continue
 		}
 		a.initExternal(rec.ID, path)
@@ -317,7 +318,7 @@ func (a *root) bindExternal(connID string) {
 	a.extPickPaths = nil
 	if last != "" {
 		if !a.activateConsole(last) {
-			a.extMsg = "打开控制台失败"
+			a.extMsg = locales.ExtOpenTitle()
 		}
 	}
 }
@@ -331,10 +332,10 @@ func (a *root) externalBanner(c *ui.Context) {
 	_ = rec
 	t := c.Theme()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		msg := "文件已在外部修改，自动保存已暂停"
+		msg := locales.ExtChangedPaused()
 		col := t.Danger
 		if st.missing {
-			msg = "文件已被删除，自动保存已暂停"
+			msg = locales.ExtDeletedPaused()
 		} else if !st.conflict {
 			msg = ""
 		}
@@ -343,18 +344,18 @@ func (a *root) externalBanner(c *ui.Context) {
 		}
 		ui.Spacer(c)
 		if st.missing {
-			if ui.Button(c, "重新创建").Clicked() {
+			if ui.Button(c, locales.ExtRecreate()).Clicked() {
 				a.recreateExternal()
 			}
 		} else {
-			if ui.Button(c, "重新加载").Clicked() {
+			if ui.Button(c, locales.ExtReload()).Clicked() {
 				a.reloadExternal()
 			}
-			if ui.Button(c, "保留本地").Clicked() {
+			if ui.Button(c, locales.ExtKeepLocal()).Clicked() {
 				a.keepLocalExternal()
 			}
 		}
-		if ui.Button(c, "另存为…").Clicked() {
+		if ui.Button(c, locales.ExtSaveAs()).Clicked() {
 			a.pickExternalSaveAs()
 		}
 	})
@@ -367,36 +368,36 @@ func (a *root) externalResolveModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.extResolveOpen, func() {
-		ui.Text(c, "外部文件已变化").Bold()
+		ui.Text(c, locales.ExtChangedTitle()).Bold()
 		ui.Text(c, rec.FilePath).Font("monospace").FontSize(11).
 			TextColor(c.Theme().TextMuted).SingleLine().Tooltip(rec.FilePath)
-		ui.Text(c, "继续操作前请选择保留哪一侧；取消则保持当前缓冲不动。").
+		ui.Text(c, locales.ExtChangedHint()).
 			FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.extResolveOpen = false
 			}
 			if st.missing {
-				if ui.PrimaryButton(c, "另存为…").Clicked() {
+				if ui.PrimaryButton(c, locales.ExtSaveAs()).Clicked() {
 					a.extResolveOpen = false
 					a.pickExternalSaveAs()
 				}
-				if ui.Button(c, "重新创建").Clicked() {
+				if ui.Button(c, locales.ExtRecreate()).Clicked() {
 					a.extResolveOpen = false
 					a.recreateExternal()
 				}
 				return
 			}
-			if ui.Button(c, "重新加载").Clicked() {
+			if ui.Button(c, locales.ExtReload()).Clicked() {
 				a.extResolveOpen = false
 				a.reloadExternal()
 			}
-			if ui.Button(c, "保留本地").Clicked() {
+			if ui.Button(c, locales.ExtKeepLocal()).Clicked() {
 				a.extResolveOpen = false
 				a.keepLocalExternal()
 			}
-			if ui.PrimaryButton(c, "另存为…").Clicked() {
+			if ui.PrimaryButton(c, locales.ExtSaveAs()).Clicked() {
 				a.extResolveOpen = false
 				a.pickExternalSaveAs()
 			}
@@ -407,19 +408,19 @@ func (a *root) externalResolveModal(c *ui.Context) {
 // externalPickerModal 让拖入的新文件选择数据源。
 func (a *root) externalPickerModal(c *ui.Context) {
 	ui.Modal(c, &a.extPickOpen, func() {
-		ui.Text(c, "选择数据源").Bold()
+		ui.Text(c, locales.ExtChooseDatasource()).Bold()
 		names := make([]string, 0, len(a.extPickPaths))
 		for _, p := range a.extPickPaths {
 			names = append(names, filepath.Base(p))
 		}
-		ui.Text(c, "绑定到数据源："+strings.Join(names, "、")).FontSize(12).
+		ui.Text(c, locales.ExtBindTo(strings.Join(names, locales.ListSeparator()))).FontSize(12).
 			TextColor(c.Theme().TextMuted).SingleLine().Tooltip(strings.Join(a.extPickPaths, "\n"))
 		ui.Scroll(c).Height(220).Children(func() {
 			if a.store == nil {
 				return
 			}
 			if len(a.store.List()) == 0 {
-				ui.Text(c, "还没有数据源，请先新建连接").FontSize(12).TextColor(c.Theme().TextMuted)
+				ui.Text(c, locales.ExtNoDatasources()).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 			for _, p := range a.store.List() {
 				if sideNavRow(c, kindLabel(p.Kind)+" · "+p.Name, connKindIcon(p.Kind), connKindColor(p.Kind), false).Clicked() {
@@ -429,7 +430,7 @@ func (a *root) externalPickerModal(c *ui.Context) {
 		})
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.extPickOpen = false
 				a.extPickPaths = nil
 			}
@@ -445,7 +446,7 @@ func (a *root) pickExternalSaveAs() {
 	}
 	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
 		Parent:      a.win,
-		Title:       "另存 SQL 文件",
+		Title:       locales.ExtSaveSQLAs(),
 		DefaultPath: filepath.Base(rec.FilePath),
 		Filters:     []mygo.FileFilter{{Name: "SQL", Extensions: []string{"sql"}}},
 	})
@@ -456,11 +457,11 @@ func (a *root) pickExternalSaveAs() {
 		path += ".sql"
 	}
 	if err := a.rebindExternal(rec.ID, path); err != nil {
-		a.extMsg = "另存失败：" + err.Error()
+		a.extMsg = locales.ExtSaveAsFailed(err.Error())
 		return
 	}
 	app.LogInfo("external", "save as", "console", rec.ID, "path", path)
-	a.extMsg = "已另存为 " + path
+	a.extMsg = locales.ExtSavedAs(path)
 }
 
 // rebindExternal 把缓冲写到 newPath 并把控制台改绑过去（测试直接调用）。
@@ -470,7 +471,7 @@ func (a *root) rebindExternal(id, newPath string) error {
 		return err
 	}
 	if other, ok := a.store.GetConsoleByFilePath(norm); ok && other.ID != id {
-		return fmt.Errorf("该文件已绑定到控制台 %s", other.Name)
+		return errors.New(locales.ExtBoundTo(other.Name))
 	}
 	text := a.localText(id)
 	if err := app.WriteExternalSQL(norm, text); err != nil {
@@ -502,7 +503,7 @@ func (a *root) reloadExternal() {
 	text, err := app.ReadExternalSQL(rec.FilePath)
 	if err != nil {
 		st.missing = true
-		a.extMsg = "读取失败：" + err.Error()
+		a.extMsg = locales.ExtReadFailed(err.Error())
 		return
 	}
 	m := a.consoleMgr()
@@ -531,7 +532,7 @@ func (a *root) keepLocalExternal() {
 	m.SetSavePaused(rec.ID, false)
 	if err := m.FlushForce(rec.ID); err != nil {
 		m.SetSavePaused(rec.ID, true)
-		a.extMsg = "保存失败：" + err.Error()
+		a.extMsg = locales.ExtSaveFailed(err.Error())
 		return
 	}
 	text := a.localText(rec.ID)
@@ -549,7 +550,7 @@ func (a *root) recreateExternal() {
 	}
 	text := a.localText(rec.ID)
 	if err := app.WriteExternalSQL(rec.FilePath, text); err != nil {
-		a.extMsg = "重新创建失败：" + err.Error()
+		a.extMsg = locales.ExtRecreateFailed(err.Error())
 		return
 	}
 	m := a.consoleMgr()
@@ -609,7 +610,7 @@ func (a *root) externalFlushFailed(err error) bool {
 		return false
 	}
 	a.ensureExternal(rec.ID)
-	a.extMsg = "保存失败：" + err.Error()
+	a.extMsg = locales.ExtSaveFailed(err.Error())
 	a.externalBlocked()
 	return true
 }

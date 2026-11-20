@@ -12,6 +12,7 @@ import (
 	"db-g/ai/plan"
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // planState 是执行计划结果区的状态。
@@ -50,29 +51,29 @@ func (a *root) runExplain(analyze bool) {
 	}
 	sql, ok := a.explainSQL()
 	if !ok {
-		a.consoleErr = "没有可分析的 SQL"
+		a.consoleErr = locales.PlanNoSQL()
 		return
 	}
 	if analyze {
 		switch strings.ToUpper(firstWord(sql)) {
 		case "SELECT", "WITH":
 		default:
-			a.consoleErr = "EXPLAIN ANALYZE 只允许 SELECT/WITH"
+			a.consoleErr = locales.PlanAnalyzeSelectOnly()
 			return
 		}
 	}
 	sess := a.activeSession()
 	if sess == nil {
-		a.consoleErr = "请先连接数据源"
+		a.consoleErr = locales.ResultConnectFirst()
 		return
 	}
 	if analyze && !sess.Caps().Has(engine.CapExplainAnalyze) {
-		a.consoleErr = "当前数据源不支持 EXPLAIN ANALYZE"
+		a.consoleErr = locales.PlanAnalyzeUnsupported()
 		return
 	}
 	pe, ok := sess.(engine.PlanExplainer)
 	if !ok || !sess.Caps().Has(engine.CapExplain) {
-		a.consoleErr = "当前数据源不支持执行计划"
+		a.consoleErr = locales.PlanUnsupported()
 		return
 	}
 	kind := ""
@@ -144,7 +145,7 @@ func (a *root) planPane(c *ui.Context) {
 	ps := &a.plan
 	ui.Column(c).Fill().Gap(6).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "执行计划").Bold()
+			ui.Text(c, locales.TopExecPlan()).Bold()
 			if ps.kind != "" {
 				ui.Badge(c, ps.kind)
 			}
@@ -153,14 +154,14 @@ func (a *root) planPane(c *ui.Context) {
 			}
 			ui.Spacer(c)
 			if !ps.loading && len(ps.nodes) > 0 {
-				if ui.Button(c, "AI 诊断").Clicked() {
+				if ui.Button(c, locales.PlanAIDiagnose()).Clicked() {
 					a.diagnosePlan()
 				}
-				if a.planAnalyzeSupported() && ui.Button(c, "ANALYZE 重跑").Clicked() {
+				if a.planAnalyzeSupported() && ui.Button(c, locales.PlanAnalyzeRerun()).Clicked() {
 					ps.confirm = true
 				}
 			}
-			if ui.Button(c, "关闭").Clicked() {
+			if ui.Button(c, locales.CommonClose()).Clicked() {
 				ps.open = false
 			}
 		})
@@ -168,10 +169,10 @@ func (a *root) planPane(c *ui.Context) {
 		case ps.loading:
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Spinner(c)
-				ui.Text(c, "分析中…")
+				ui.Text(c, locales.PlanAnalyzing())
 			})
 		case ps.err != "":
-			ui.Text(c, "计划解析失败").Bold().TextColor(t.Danger)
+			ui.Text(c, locales.PlanParseFailed()).Bold().TextColor(t.Danger)
 			a.withResultFont(ui.Text(c, ps.err).TextColor(t.Danger).Font("monospace"))
 		}
 		if len(ps.nodes) > 0 {
@@ -184,7 +185,7 @@ func (a *root) planPane(c *ui.Context) {
 				})
 			})
 		} else if ps.raw != "" && !ps.loading {
-			ui.Text(c, "原始计划").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.PlanRaw()).FontSize(11).TextColor(t.TextMuted)
 			a.withResultFont(ui.Text(c, ps.raw).Font("monospace"))
 		}
 	})
@@ -256,16 +257,16 @@ func (a *root) planConfirmModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.plan.confirm, func() {
-		ui.Text(c, "执行 EXPLAIN ANALYZE？").Bold()
-		ui.Text(c, "ANALYZE 会真实执行当前 SELECT，可能较慢；只对 SELECT/WITH 开放。").
+		ui.Text(c, locales.PlanAnalyzeTitle()).Bold()
+		ui.Text(c, locales.PlanAnalyzeHint()).
 			FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Text(c, a.plan.sql).Font("monospace").FontSize(11).SingleLine().Tooltip(a.plan.sql)
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.plan.confirm = false
 			}
-			if ui.PrimaryButton(c, "执行 ANALYZE").Clicked() {
+			if ui.PrimaryButton(c, locales.PlanRunAnalyze()).Clicked() {
 				a.plan.confirm = false
 				a.runExplain(true)
 			}
@@ -281,8 +282,8 @@ func (a *root) diagnosePlan() {
 	snap := a.aiSnapshot()
 	msgs := ai.BuildPlanMessages(snap, plan.Text(a.plan.nodes), a.plan.analyze)
 	a.aiChat.open = true
-	a.aiChat.lastCtx = "上下文：当前连接 + 执行计划"
-	if err := a.startAIRequest("执行计划", aiContextNote(snap, fmt.Sprintf("计划文本 %dB", len(plan.Text(a.plan.nodes)))), "诊断执行计划", msgs); err != nil {
+	a.aiChat.lastCtx = locales.PlanContext()
+	if err := a.startAIRequest(locales.TopExecPlan(), aiContextNote(snap, locales.PlanTextBytes(len(plan.Text(a.plan.nodes)))), locales.PlanDiagnoseAsk(), msgs); err != nil {
 		a.aiChat.err = err.Error()
 	}
 }

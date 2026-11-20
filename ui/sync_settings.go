@@ -12,6 +12,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 	"db-g/sync"
 )
 
@@ -19,110 +20,110 @@ import (
 func (a *root) syncSection(c *ui.Context) {
 	t := c.Theme()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "Git 同步").Bold()
+		ui.Text(c, locales.SyncTitle()).Bold()
 		ui.Spacer(c)
-		ui.Text(c, "连接信息加密，控制台 SQL 明文").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, locales.SyncHint()).FontSize(11).TextColor(t.TextMuted)
 	})
 
-	ui.Text(c, "仓库地址").FontSize(12).TextColor(t.TextMuted)
+	ui.Text(c, locales.SyncRepo()).FontSize(12).TextColor(t.TextMuted)
 	if ui.TextInput(c, &a.syncPrefs.RepoURL).
 		Placeholder("git@github.com:me/db-g-sync.git").
-		Label("同步仓库地址").
+		Label(locales.SyncRepoLabel()).
 		Changed() {
 		a.saveSyncPrefs()
 	}
 	ui.Row(c).Gap(8).Children(func() {
 		ui.Column(c).Grow(1).Gap(4).Children(func() {
-			ui.Text(c, "分支").FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, locales.SyncBranch()).FontSize(12).TextColor(t.TextMuted)
 			if ui.TextInput(c, &a.syncPrefs.Branch).
 				Placeholder("main").
-				Label("同步分支").
+				Label(locales.SyncBranchLabel()).
 				Changed() {
 				a.saveSyncPrefs()
 			}
 		})
 		ui.Column(c).Grow(2).Gap(4).Children(func() {
-			ui.Text(c, "SSH 私钥（留空使用系统 ssh 配置 / agent）").FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, locales.SyncSSHKey()).FontSize(12).TextColor(t.TextMuted)
 			if ui.TextInput(c, &a.syncPrefs.SSHKeyPath).
 				Placeholder("~/.ssh/id_ed25519").
-				Label("SSH 私钥路径").
+				Label(locales.SyncSSHKeyLabel()).
 				Changed() {
 				a.saveSyncPrefs()
 			}
 		})
 	})
 	workTree := app.SyncWorkTree(a.syncPrefsPath)
-	ui.Text(c, "同步目录："+workTree).FontSize(11).
-		TextColor(t.TextMuted).SingleLine().Tooltip("固定在本机配置目录，不随仓库走")
+	ui.Text(c, locales.SyncDir(workTree)).FontSize(11).
+		TextColor(t.TextMuted).SingleLine().Tooltip(locales.SyncDirHint())
 	if _, err := os.Stat(filepath.Join(workTree, ".git")); err != nil {
-		ui.Text(c, "首次点「拉取」会 clone 仓库、检出配置分支并导入数据；本地改动请先「提交并推送」。").
+		ui.Text(c, locales.SyncFirstPullHint()).
 			FontSize(11).TextColor(t.Warning)
 	} else {
-		ui.Text(c, "拉取会以远端为准覆盖本地配置；本地改动请先「提交并推送」。").
+		ui.Text(c, locales.SyncPullOverwriteHint()).
 			FontSize(11).TextColor(t.TextMuted)
 	}
 
 	ui.Divider(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "同步密钥").FontSize(12).TextColor(t.TextMuted)
+		ui.Text(c, locales.SyncKey()).FontSize(12).TextColor(t.TextMuted)
 		if a.syncKeySet {
-			ui.Text(c, "● 已配置").FontSize(12).TextColor(t.Success)
+			ui.Text(c, locales.SyncKeyConfigured()).FontSize(12).TextColor(t.Success)
 			if a.syncKeyKCV != "" {
 				ui.Text(c, "KCV "+a.syncKeyKCV).FontSize(11).TextColor(t.TextMuted)
 			}
 		} else {
-			ui.Text(c, "○ 未配置").FontSize(12).TextColor(t.Warning)
+			ui.Text(c, locales.SyncKeyMissing()).FontSize(12).TextColor(t.Warning)
 		}
 		ui.Spacer(c)
 		if a.syncKeySet {
-			if ui.Button(c, "复制密钥").Clicked() {
+			if ui.Button(c, locales.SyncCopyKey()).Clicked() {
 				if key, ok := app.LoadSyncKey(a.syncPrefsPath); ok {
 					c.WriteClipboard(sync.KeyString(key))
-					a.syncResult = "已复制同步密钥（请妥善保存）"
+					a.syncResult = locales.SyncKeyCopied()
 				}
 			}
-			if ui.Button(c, "导入密钥").Clicked() {
+			if ui.Button(c, locales.SyncImportKey()).Clicked() {
 				a.openSyncKeyModal(false)
 			}
-			if ui.Button(c, "清除").Clicked() {
+			if ui.Button(c, locales.SyncClear()).Clicked() {
 				if err := app.ClearSyncKey(a.syncPrefsPath); err != nil {
-					a.syncWarn = "清除密钥失败：" + err.Error()
+					a.syncWarn = locales.SyncClearKeyFailed(err.Error())
 				} else {
 					a.syncKeySet, a.syncKeyKCV = false, ""
-					a.syncResult = "已清除本机同步密钥"
+					a.syncResult = locales.SyncKeyCleared()
 				}
 			}
 		} else {
-			if ui.Button(c, "导入密钥").Clicked() {
+			if ui.Button(c, locales.SyncImportKey()).Clicked() {
 				a.openSyncKeyModal(false)
 			}
-			if ui.PrimaryButton(c, "生成密钥").Clicked() {
+			if ui.PrimaryButton(c, locales.SyncGenerateKey()).Clicked() {
 				a.generateSyncKey()
 			}
 		}
 	})
-	ui.Text(c, "第一台设备生成并备份密钥；后续设备必须导入同一把密钥，否则仓库里的连接无法解密。").
+	ui.Text(c, locales.SyncKeyAdvice()).
 		FontSize(11).TextColor(t.TextMuted)
-	ui.Text(c, "密钥只保存在本机，控制台 SQL 不加密。").
+	ui.Text(c, locales.SyncKeyLocalHint()).
 		FontSize(11).TextColor(t.TextMuted)
 
 	ui.Divider(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c, "拉取").Disabled(a.syncBusy || strings.TrimSpace(a.syncPrefs.RepoURL) == "").
+		if ui.PrimaryButton(c, locales.SyncPull()).Disabled(a.syncBusy || strings.TrimSpace(a.syncPrefs.RepoURL) == "").
 			Clicked() {
 			a.startSync("pull")
 		}
-		if ui.Button(c, "提交并推送").Disabled(a.syncBusy || strings.TrimSpace(a.syncPrefs.RepoURL) == "").
+		if ui.Button(c, locales.SyncCommitPush()).Disabled(a.syncBusy || strings.TrimSpace(a.syncPrefs.RepoURL) == "").
 			Clicked() {
 			a.startSync("push")
 		}
 		if a.syncBusy {
 			ui.Spinner(c)
-			ui.Text(c, "同步中…").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.SyncRunning()).FontSize(11).TextColor(t.TextMuted)
 		}
 		ui.Spacer(c)
 		if a.syncPrefs.LastSyncAt > 0 {
-			ui.Text(c, "上次同步 "+time.UnixMilli(a.syncPrefs.LastSyncAt).Format("01-02 15:04")).
+			ui.Text(c, locales.SyncLast(time.UnixMilli(a.syncPrefs.LastSyncAt).Format("01-02 15:04"))).
 				FontSize(11).TextColor(t.TextMuted)
 		}
 	})
@@ -132,7 +133,7 @@ func (a *root) syncSection(c *ui.Context) {
 	if a.syncWarn != "" {
 		ui.Text(c, a.syncWarn).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.syncWarn)
 	}
-	ui.Text(c, "传输用系统 git：需要本机已安装 git 并能用现有 SSH 私钥访问仓库。").
+	ui.Text(c, locales.SyncTransportHint()).
 		FontSize(11).TextColor(t.TextMuted)
 }
 
@@ -142,7 +143,7 @@ func (a *root) saveSyncPrefs() {
 		prefs.Branch = "main"
 	}
 	if err := app.SaveSyncPrefs(a.syncPrefsPath, prefs); err != nil {
-		a.syncWarn = "保存同步配置失败：" + err.Error()
+		a.syncWarn = locales.SyncSaveFailed(err.Error())
 	}
 }
 
@@ -171,12 +172,12 @@ func (a *root) startSync(kind string) {
 		return
 	}
 	if strings.TrimSpace(a.syncPrefs.RepoURL) == "" {
-		a.syncWarn = "请先填写仓库地址"
+		a.syncWarn = locales.SyncRepoRequired()
 		return
 	}
 	a.saveSyncPrefs()
 	if err := a.flushActive(); err != nil {
-		a.syncWarn = "保存当前控制台失败，已取消同步：" + err.Error()
+		a.syncWarn = locales.SyncSaveConsoleFailed(err.Error())
 		return
 	}
 	if m := a.consoleMgr(); m != nil {
@@ -185,7 +186,7 @@ func (a *root) startSync(kind string) {
 	a.syncBusy = true
 	a.syncPendingKind = kind
 	a.updateSettingsWindow()
-	a.syncWarn, a.syncResult = "", "同步中…"
+	a.syncWarn, a.syncResult = "", locales.SyncRunning()
 	svc := a.syncService()
 	run := func() app.SyncOutcome {
 		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
@@ -260,11 +261,11 @@ func (a *root) generateSyncKey() {
 	a.saveSyncPrefs()
 	key, err := sync.NewKey()
 	if err != nil {
-		a.syncWarn = "生成同步密钥失败：" + err.Error()
+		a.syncWarn = locales.SyncGenKeyFailed(err.Error())
 		return
 	}
 	if err := a.syncService().SaveKey(key); err != nil {
-		a.syncWarn = "保存同步密钥失败：" + err.Error()
+		a.syncWarn = locales.SyncSaveKeyFailed(err.Error())
 		return
 	}
 	a.syncKeySet = true
@@ -272,7 +273,7 @@ func (a *root) generateSyncKey() {
 	a.syncKeyOpen = false
 	a.reloadSyncPrefs()
 	a.updateSettingsWindow()
-	a.syncResult = "已生成同步密钥；请点「复制密钥」保存备份"
+	a.syncResult = locales.SyncKeyGenerated()
 	a.rerunSync()
 }
 
@@ -284,11 +285,11 @@ func (a *root) importSyncKey() {
 		return
 	}
 	if a.syncKeyRepoKCV != "" && !sync.KCVEqual(sync.KCV(key), a.syncKeyRepoKCV) {
-		a.syncKeyErr = "密钥与仓库 KCV 不匹配，请确认导入的是同一把密钥"
+		a.syncKeyErr = locales.SyncKeyKCVBad()
 		return
 	}
 	if err := a.syncService().SaveKey(key); err != nil {
-		a.syncKeyErr = "保存同步密钥失败：" + err.Error()
+		a.syncKeyErr = locales.SyncSaveKeyFailed(err.Error())
 		return
 	}
 	a.syncKeySet = true
@@ -297,7 +298,7 @@ func (a *root) importSyncKey() {
 	a.syncKeyInput = ""
 	a.reloadSyncPrefs()
 	a.updateSettingsWindow()
-	a.syncResult = "同步密钥已导入"
+	a.syncResult = locales.SyncKeyImported()
 	a.rerunSync()
 }
 
@@ -317,20 +318,20 @@ func (a *root) syncKeyModal(c *ui.Context) {
 	}
 	t := c.Theme()
 	m := ui.Modal(c, &a.syncKeyOpen, func() {
-		ui.Text(c, "同步密钥").Bold()
+		ui.Text(c, locales.SyncKeyTitle()).Bold()
 		if a.syncKeyImportOnly {
-			ui.Text(c, "仓库已有加密数据，只能导入同一把密钥；不能在这里新建密钥。").
+			ui.Text(c, locales.SyncKeyRemoteHasData()).
 				FontSize(12).TextColor(t.Danger)
 		} else {
-			ui.Text(c, "仓库还没有加密数据：可以生成新密钥，或导入已有密钥。").
+			ui.Text(c, locales.SyncKeyRemoteEmpty()).
 				FontSize(12).TextColor(t.TextMuted)
 		}
 		if a.syncKeyRepoKCV != "" {
-			ui.Text(c, "仓库 KCV："+a.syncKeyRepoKCV).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.SyncRepoKCV(a.syncKeyRepoKCV)).FontSize(11).TextColor(t.TextMuted)
 		}
 		ui.TextInput(c, &a.syncKeyInput).
-			Placeholder("粘贴 32 字节密钥的 base64 或 64 位十六进制").
-			Label("同步密钥").
+			Placeholder(locales.SyncKeyPlaceholder()).
+			Label(locales.SyncKeyTitle()).
 			Password().
 			AutoFocus().
 			OnTextKey(func(k ui.TextKey) bool {
@@ -344,16 +345,16 @@ func (a *root) syncKeyModal(c *ui.Context) {
 			ui.Text(c, a.syncKeyErr).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.syncKeyErr)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.syncKeyOpen = false
 				a.syncPendingKind = ""
 			}
 			if !a.syncKeyImportOnly {
-				if ui.Button(c, "生成新密钥").Clicked() {
+				if ui.Button(c, locales.SyncGenerateNew()).Clicked() {
 					a.generateSyncKey()
 				}
 			}
-			if ui.PrimaryButton(c, "导入").Clicked() {
+			if ui.PrimaryButton(c, locales.SyncImport()).Clicked() {
 				a.importSyncKey()
 			}
 		})
@@ -370,8 +371,8 @@ func (a *root) syncFindingsModal(c *ui.Context) {
 	}
 	t := c.Theme()
 	ui.Modal(c, &a.syncFindingsOpen, func() {
-		ui.Text(c, "提交前发现疑似明文凭据").Bold()
-		ui.Text(c, "控制台 SQL 会以明文进入仓库；确认这些不是真实密码后再继续。").
+		ui.Text(c, locales.SyncFindingsTitle()).Bold()
+		ui.Text(c, locales.SyncFindingsHint()).
 			FontSize(12).TextColor(t.Warning)
 		ui.Scroll(c).Height(300).Children(func() {
 			for _, f := range a.syncFindings {
@@ -384,18 +385,18 @@ func (a *root) syncFindingsModal(c *ui.Context) {
 			}
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消提交").Clicked() {
+			if ui.Button(c, locales.SyncCancelCommit()).Clicked() {
 				a.syncFindingsOpen = false
 				a.syncFindings = nil
 				a.syncPendingKind = ""
 			}
-			if ui.PrimaryButton(c, "仍然提交").Clicked() {
+			if ui.PrimaryButton(c, locales.SyncCommitAnyway()).Clicked() {
 				ids := make([]string, 0, len(a.syncFindings))
 				for _, f := range a.syncFindings {
 					ids = append(ids, f.Fingerprint)
 				}
 				if err := a.syncService().AcceptFindings(ids); err != nil {
-					a.syncWarn = "保存确认记录失败：" + err.Error()
+					a.syncWarn = locales.SyncSaveConfirmFailed(err.Error())
 					return
 				}
 				a.reloadSyncPrefs()
@@ -409,13 +410,13 @@ func (a *root) syncFindingsModal(c *ui.Context) {
 
 func secretRuleLabel(f app.SecretFinding) string {
 	name := map[string]string{
-		"private-key":     "私钥",
-		"url-credentials": "URL 凭据",
-		"cli-password":    "命令行密码",
-		"ddl-password":    "账号密码",
-		"known-key":       "密钥前缀",
-		"assignment":      "赋值字段",
-		"insert-secret":   "INSERT 敏感列",
+		"private-key":     locales.SyncFindingPrivateKey(),
+		"url-credentials": locales.SyncFindingURLCreds(),
+		"cli-password":    locales.SyncFindingCLIPassword(),
+		"ddl-password":    locales.SyncFindingDDLPassword(),
+		"known-key":       locales.SyncFindingKeyPrefix(),
+		"assignment":      locales.SyncFindingAssignment(),
+		"insert-secret":   locales.SyncFindingInsertColumn(),
 	}[f.Rule]
 	if name == "" {
 		name = f.Rule
@@ -423,5 +424,5 @@ func secretRuleLabel(f app.SecretFinding) string {
 	if f.Severity == "high" {
 		return name
 	}
-	return name + "（中）"
+	return locales.SyncFindingMedium(name)
 }

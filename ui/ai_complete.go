@@ -2,13 +2,13 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	myeditor "github.com/egoist/mygo/ui/editor"
 
 	"db-g/ai"
 	"db-g/app"
+	"db-g/locales"
 )
 
 // aiCompletionState 是一次内联补全请求的状态。
@@ -50,8 +50,8 @@ func (a *root) requestAICompletion() {
 	st.suggestion = ""
 	st.loading = true
 	msgs := ai.BuildCompletionMessages(snap, text[:offset], text[offset:])
-	a.recordAIRequest("补全", a.aiModelName(),
-		aiContextNote(snap, fmt.Sprintf("光标前 %dB · 光标后 %dB", offset, len(text)-offset)), msgs)
+	a.recordAIRequest(locales.AiKindComplete(), a.aiModelName(),
+		aiContextNote(snap, locales.AiCursorStats(offset, len(text)-offset)), msgs)
 	ctx, cancel := context.WithCancel(context.Background())
 	st.cancel = cancel
 	req := ai.Request{
@@ -146,7 +146,7 @@ func (a *root) showAICompletion(seq uint64) {
 		Detail:        "AI",
 		Kind:          myeditor.CompletionSnippet,
 		FilterText:    st.prefix,
-		Documentation: "AI 补全（Alt+\\）",
+		Documentation: locales.AiCompleteDoc(),
 	}
 	start := st.offset - len(st.prefix)
 	a.code.state.ShowCompletions(start, append([]myeditor.Completion{item}, items...))

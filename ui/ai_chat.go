@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"db-g/ai"
 	"db-g/app"
+	"db-g/locales"
 )
 
 // aiChatMessage 是 AI 面板里的一条消息。
@@ -60,7 +60,7 @@ func (a *root) aiProviderFor() (ai.Provider, error) {
 		base = app.DefaultAIBaseURL
 	}
 	if strings.TrimSpace(a.aiPrefs.Model) == "" {
-		return nil, errors.New("请先在设置 → AI 中填写模型名")
+		return nil, errors.New(locales.AiModelMissing())
 	}
 	return ai.NewOpenAIProvider(ai.OpenAIConfig{
 		BaseURL: base,
@@ -135,8 +135,8 @@ func (a *root) sendAI() {
 	snap := a.aiSnapshot()
 	msgs := ai.BuildMessages(snap, q)
 	tables, cols, rows := snap.Summary()
-	a.aiChat.lastCtx = fmt.Sprintf("上下文：%d 张表 / %d 列 / %d 行样本", tables, cols, rows)
-	if err := a.startAIRequest("对话", aiContextNote(snap, ""), q, msgs); err != nil {
+	a.aiChat.lastCtx = locales.AiContextStats(tables, cols, rows)
+	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(snap, ""), q, msgs); err != nil {
 		a.aiChat.err = err.Error()
 		return
 	}
@@ -146,7 +146,7 @@ func (a *root) sendAI() {
 // startAIRequest 追加一轮消息并发起流式请求；kind 只用于「最近 AI 请求」查看器。
 func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) error {
 	if a.aiChat.streaming {
-		return errors.New("正在生成，请先停止")
+		return errors.New(locales.AiAlreadyStreaming())
 	}
 	if a.aiChat.convID == "" {
 		a.newAIConversation()
@@ -305,7 +305,7 @@ func (a *root) stopAI() {
 		msg := &a.aiChat.messages[n-1]
 		if msg.role == "assistant" && !msg.done {
 			msg.done = true
-			msg.err = "已停止"
+			msg.err = locales.AiStopped()
 		}
 	}
 	a.saveAIChat()
@@ -357,7 +357,7 @@ func (a *root) ensureAIChatStore() bool {
 		// 旧工作区还有未落盘的消息：先写回旧文件，再切到新工作区。
 		a.syncAIChat()
 		if err := app.SaveAIConversations(a.aiChat.storePath, a.aiChat.store); err != nil {
-			a.aiWarn = "保存 AI 会话失败：" + err.Error()
+			a.aiWarn = locales.AiSaveConversationFailed(err.Error())
 		}
 	}
 	store, warn := app.LoadAIConversations(path)
@@ -459,7 +459,7 @@ func (a *root) syncAIChat() {
 	}
 	changed := !sameAIMessageList(conv.Messages, next)
 	conv.Messages = next
-	if conv.Title == "" || conv.Title == "新会话" {
+	if conv.Title == "" || conv.Title == "新会话" || conv.Title == locales.AiNewConversation() {
 		if title := app.AIConversationTitle(conv.Messages); title != "" {
 			conv.Title = title
 		}
@@ -493,7 +493,7 @@ func (a *root) saveAIChat() {
 	}
 	a.syncAIChat()
 	if err := app.SaveAIConversations(path, a.aiChat.store); err != nil {
-		a.aiWarn = "保存 AI 会话失败：" + err.Error()
+		a.aiWarn = locales.AiSaveConversationFailed(err.Error())
 	}
 }
 
@@ -564,7 +564,7 @@ func (a *root) saveAIPrefs() {
 		return
 	}
 	if err := app.SaveAIPrefs(a.aiPrefsPath, a.vault, a.aiPrefs); err != nil {
-		a.aiWarn = "保存 AI 配置失败：" + err.Error()
+		a.aiWarn = locales.AiSaveConfigFailed(err.Error())
 		return
 	}
 	a.aiWarn = ""

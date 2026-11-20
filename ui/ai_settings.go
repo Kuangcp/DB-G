@@ -10,6 +10,7 @@ import (
 
 	"db-g/ai"
 	"db-g/app"
+	"db-g/locales"
 )
 
 // aiModelsTimeout 是 /models 请求的超时；失败就退回手动输入模型名。
@@ -19,24 +20,24 @@ const aiModelsTimeout = 8 * time.Second
 func (a *root) aiSection(c *ui.Context) {
 	cr := controlRadius(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "AI 助手").Bold()
+		ui.Text(c, locales.AiAssistant()).Bold()
 		ui.Spacer(c)
-		ui.Text(c, "默认本地 Ollama，也可填任意 OpenAI 兼容服务").FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.AiSettingsHint()).FontSize(11).TextColor(c.Theme().TextMuted)
 	})
 
-	ui.Text(c, "服务地址").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.AiBaseURL()).FontSize(12).TextColor(c.Theme().TextMuted)
 	if ui.TextInput(c, &a.aiPrefs.BaseURL).
 		Placeholder(app.DefaultAIBaseURL).
-		Label("AI 服务地址").
+		Label(locales.AiBaseURLLabel()).
 		Radius(cr).
 		Changed() {
 		a.saveAIPrefs()
 		a.invalidateAIModels()
 	}
-	ui.Text(c, "Ollama 填 http://127.0.0.1:11434/v1；OpenAI/DeepSeek 填对应 /v1 地址。").FontSize(11).
+	ui.Text(c, locales.AiBaseURLHint()).FontSize(11).
 		TextColor(c.Theme().TextMuted)
 
-	ui.Text(c, "API Key（本地 Ollama 可留空）").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.AiAPIKey()).FontSize(12).TextColor(c.Theme().TextMuted)
 	if ui.TextInput(c, &a.aiPrefs.APIKey).
 		Placeholder("sk-…").
 		Label("AI API Key").
@@ -46,25 +47,25 @@ func (a *root) aiSection(c *ui.Context) {
 		a.saveAIPrefs()
 		a.invalidateAIModels()
 	}
-	ui.Text(c, "密钥用本机 secret.key 加密后写入 ai.json，不会进入日志。").FontSize(11).
+	ui.Text(c, locales.AiAPIKeyHint()).FontSize(11).
 		TextColor(c.Theme().TextMuted)
 
 	// 地址与密钥就绪后自动拉一次模型列表；失败/未返回时保留手动输入。
 	a.maybeFetchAIModels()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "模型").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.AiModel()).FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Spacer(c)
 		switch {
 		case a.aiModelsLoading:
 			ui.Spinner(c)
-			ui.Text(c, "正在获取模型列表…").FontSize(11).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.AiModelsLoading()).FontSize(11).TextColor(c.Theme().TextMuted)
 		case a.aiModelsErr != "":
-			ui.Text(c, "获取失败，可手动输入").FontSize(11).TextColor(c.Theme().Warning).
+			ui.Text(c, locales.AiModelsFailed()).FontSize(11).TextColor(c.Theme().Warning).
 				SingleLine().Tooltip(a.aiModelsErr)
 		case len(a.aiModels) > 0:
-			ui.Text(c, "可直接选择").FontSize(11).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.AiModelsReady()).FontSize(11).TextColor(c.Theme().TextMuted)
 		}
-		if iconButtonPlain(c, iconRefresh, "获取模型列表", ui.Transparent).
+		if iconButtonPlain(c, iconRefresh, locales.AiFetchModels(), ui.Transparent).
 			Disabled(a.aiModelsLoading || strings.TrimSpace(a.aiPrefs.BaseURL) == "").Clicked() {
 			a.fetchAIModels()
 		}
@@ -72,34 +73,34 @@ func (a *root) aiSection(c *ui.Context) {
 	options := a.aiModelOptions()
 	if len(options) > 0 {
 		if ui.Combobox(c, &a.aiPrefs.Model, options).
-			Placeholder("选择模型").
-			Label("AI 模型").
+			Placeholder(locales.AiSelectModel()).
+			Label(locales.AiModelLabel()).
 			Radius(cr).
 			Fill().
 			Changed() {
 			a.saveAIPrefs()
 		}
 	} else if ui.TextInput(c, &a.aiPrefs.Model).
-		Placeholder("例如 qwen2.5-coder:7b / deepseek-chat").
-		Label("AI 模型").
+		Placeholder(locales.AiModelPlaceholder()).
+		Label(locales.AiModelLabel()).
 		Radius(cr).
 		Changed() {
 		a.saveAIPrefs()
 	}
 
 	ui.Divider(c)
-	ui.Text(c, "默认只把表结构和当前 SQL 发给模型；下面三项按需开启。").FontSize(12).
+	ui.Text(c, locales.AiPrivacyHint()).FontSize(12).
 		TextColor(c.Theme().TextMuted)
-	if ui.Checkbox(c, &a.aiPrefs.AllowHistory, "允许发送最近查询历史").Changed() {
+	if ui.Checkbox(c, &a.aiPrefs.AllowHistory, locales.AiAllowHistory()).Changed() {
 		a.saveAIPrefs()
 	}
-	if ui.Checkbox(c, &a.aiPrefs.AllowErrorLogs, "允许发送最近执行错误").Changed() {
+	if ui.Checkbox(c, &a.aiPrefs.AllowErrorLogs, locales.AiAllowErrors()).Changed() {
 		a.saveAIPrefs()
 	}
-	if ui.Checkbox(c, &a.aiPrefs.AllowSampleRows, "允许发送表样本行（第一期尚未采集）").Changed() {
+	if ui.Checkbox(c, &a.aiPrefs.AllowSampleRows, locales.AiAllowSamples()).Changed() {
 		a.saveAIPrefs()
 	}
-	if ui.Checkbox(c, &a.aiPrefs.AITitle, "用 AI 生成会话标题（额外一次调用，默认关）").Changed() {
+	if ui.Checkbox(c, &a.aiPrefs.AITitle, locales.AiAutoTitle()).Changed() {
 		a.saveAIPrefs()
 	}
 	if a.aiWarn != "" {
@@ -160,7 +161,7 @@ func (a *root) aiModelOptions() []string {
 func (a *root) fetchAIModels() {
 	base := strings.TrimSpace(a.aiPrefs.BaseURL)
 	if base == "" {
-		a.aiModelsErr = "请先填写服务地址"
+		a.aiModelsErr = locales.AiBaseURLRequired()
 		return
 	}
 	key := a.aiModelsFingerprint()
@@ -190,7 +191,7 @@ func (a *root) fetchAIModels() {
 		}
 		a.aiModels, a.aiModelsErr = models, ""
 		if len(models) == 0 {
-			a.aiModelsErr = "服务未返回模型列表"
+			a.aiModelsErr = locales.AiNoModelsReturned()
 		}
 	}
 	if a.win == nil {

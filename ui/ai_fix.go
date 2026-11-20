@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -10,6 +9,7 @@ import (
 
 	"db-g/ai"
 	"db-g/app"
+	"db-g/locales"
 )
 
 // aiFixState 是 SQL 错误修复弹窗的状态。
@@ -48,8 +48,8 @@ func (a *root) fixErrorSQL() {
 	}
 	snap := a.aiSnapshot()
 	msgs := ai.BuildFixMessages(snap, sql, errText)
-	a.recordAIRequest("修复", a.aiModelName(),
-		aiContextNote(snap, fmt.Sprintf("失败 SQL %dB · 错误 %dB", len(sql), len(errText))), msgs)
+	a.recordAIRequest(locales.AiKindFix(), a.aiModelName(),
+		aiContextNote(snap, locales.AiFailureStats(len(sql), len(errText))), msgs)
 	a.aiFix = aiFixState{open: true, loading: true, original: sql}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiFix.seq++
@@ -118,7 +118,7 @@ func (a *root) finishAIFix(seq uint64, raw string, err error) {
 	}
 	fixed, ok := ai.ExtractSQL(raw)
 	if !ok || strings.TrimSpace(fixed) == "" {
-		a.aiFix.err = "模型没有返回可用的 SQL 代码块"
+		a.aiFix.err = locales.AiNoSQLBlock()
 		return
 	}
 	a.aiFix.fixed = fixed
@@ -155,7 +155,7 @@ func (a *root) applyAIFix(run bool) {
 		return
 	}
 	if !a.replaceStatement(a.aiFix.original, a.aiFix.fixed) {
-		a.aiFix.err = "原语句已被修改，未应用修复"
+		a.aiFix.err = locales.AiSourceChanged()
 		return
 	}
 	a.aiFix.open = false
@@ -200,14 +200,14 @@ func (a *root) aiFixModal(c *ui.Context) {
 	}
 	t := c.Theme()
 	m := ui.Modal(c, &a.aiFix.open, func() {
-		ui.Text(c, "AI 修复 SQL").Bold()
+		ui.Text(c, locales.AiFixTitle()).Bold()
 		switch {
 		case a.aiFix.loading:
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Spinner(c)
-				ui.Text(c, "生成修复建议…")
+				ui.Text(c, locales.AiFixGenerating())
 				ui.Spacer(c)
-				if ui.Button(c, "停止").Clicked() {
+				if ui.Button(c, locales.AiStop()).Clicked() {
 					a.stopAIFix()
 				}
 			})
@@ -218,15 +218,15 @@ func (a *root) aiFixModal(c *ui.Context) {
 			myeditor.DiffView(c, a.aiFix.diff).Grow(1).FillWidth()
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.stopAIFix()
 				a.aiFix.open = false
 			}
 			if a.aiFix.fixed != "" {
-				if ui.Button(c, "应用修复").Clicked() {
+				if ui.Button(c, locales.AiApplyFix()).Clicked() {
 					a.applyAIFix(false)
 				}
-				if ui.PrimaryButton(c, "应用并执行").Clicked() {
+				if ui.PrimaryButton(c, locales.AiApplyRun()).Clicked() {
 					a.applyAIFix(true)
 				}
 			}

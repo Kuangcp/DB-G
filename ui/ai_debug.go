@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/ai"
+	"db-g/locales"
 )
 
 // maxAIDebugEntries 是内存里保留的最近 AI 请求数；只用于排查上下文，不落盘。
@@ -79,21 +80,21 @@ func aiContextNote(snap ai.ContextSnapshot, extra string) string {
 		}
 	}
 	var parts []string
-	parts = append(parts, fmt.Sprintf("表 %d · 列 %d", tables, cols))
+	parts = append(parts, locales.AiDebugTablesCols(tables, cols))
 	if empty > 0 {
-		parts = append(parts, fmt.Sprintf("无列信息 %d", empty))
+		parts = append(parts, locales.AiDebugEmptyColumns(empty))
 	}
 	if len(snap.History) > 0 {
-		parts = append(parts, fmt.Sprintf("历史 %d", len(snap.History)))
+		parts = append(parts, locales.AiDebugHistory(len(snap.History)))
 	}
 	if len(snap.Errors) > 0 {
-		parts = append(parts, fmt.Sprintf("错误 %d", len(snap.Errors)))
+		parts = append(parts, locales.AiDebugErrors(len(snap.Errors)))
 	}
 	if s := strings.TrimSpace(snap.ActiveSQL); s != "" {
-		parts = append(parts, fmt.Sprintf("当前 SQL %dB", len(s)))
+		parts = append(parts, locales.AiDebugSQLBytes(len(s)))
 	}
 	if s := strings.TrimSpace(snap.Selection); s != "" {
-		parts = append(parts, fmt.Sprintf("选区 %dB", len(s)))
+		parts = append(parts, locales.AiDebugSelectionBytes(len(s)))
 	}
 	if extra != "" {
 		parts = append(parts, extra)
@@ -105,7 +106,7 @@ func aiContextNote(snap ai.ContextSnapshot, extra string) string {
 func (a *root) openAIDebug() {
 	a.aiDebug.open = true
 	if len(a.aiDebug.entries) == 0 {
-		a.aiDebug.body = "还没有发过 AI 请求。"
+		a.aiDebug.body = locales.AiDebugEmpty()
 		return
 	}
 	a.aiDebug.sel = 0
@@ -123,10 +124,10 @@ func (a *root) selectAIDebug(idx int) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s · %s · ~%d tokens\n", e.Kind, e.At.Format("2006-01-02 15:04:05"), e.Tokens)
 	if e.Model != "" {
-		fmt.Fprintf(&b, "模型：%s\n", e.Model)
+		fmt.Fprintf(&b, "%s\n", locales.AiDebugModel(e.Model))
 	}
 	if e.Note != "" {
-		fmt.Fprintf(&b, "上下文：%s\n", e.Note)
+		fmt.Fprintf(&b, "%s\n", locales.AiDebugContext(e.Note))
 	}
 	for i, m := range e.Messages {
 		fmt.Fprintf(&b, "\n===== [%d] %s · ~%d tokens =====\n%s\n", i+1, m.Role, ai.EstimateTokens(m.Content), m.Content)
@@ -143,8 +144,8 @@ func (a *root) aiDebugModal(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &st.open, func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, "最近 AI 请求").Bold()
-			ui.Text(c, "只保存在内存；日志与磁盘都不写提示词正文").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.AiDebugTitle()).Bold()
+			ui.Text(c, locales.AiDebugHint()).FontSize(11).TextColor(t.TextMuted)
 		})
 		if len(st.entries) == 0 {
 			ui.Spacer(c)
@@ -159,16 +160,16 @@ func (a *root) aiDebugModal(c *ui.Context) {
 					}
 				}
 				ui.Spacer(c)
-				ui.Text(c, "估算 token ≠ 模型 tokenizer").FontSize(10.5).TextColor(t.TextMuted)
+				ui.Text(c, locales.AiDebugTokenHint()).FontSize(10.5).TextColor(t.TextMuted)
 			})
 			ui.Box(c).Width(1).FillHeight().Background(t.Border)
 			ui.Column(c).Grow(1).FillHeight().Gap(6).Children(func() {
 				ui.TextArea(c, &st.body).ReadOnly(true).Lines(20, 30).Grow(1).FillWidth()
 				ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-					if ui.Button(c, "复制全文").Clicked() {
+					if ui.Button(c, locales.AiDebugCopyAll()).Clicked() {
 						c.WriteClipboard(st.body)
 					}
-					if ui.Button(c, "关闭").Clicked() {
+					if ui.Button(c, locales.CommonClose()).Clicked() {
 						st.open = false
 					}
 				})
