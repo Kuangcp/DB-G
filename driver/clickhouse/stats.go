@@ -11,7 +11,7 @@ import (
 	"db-g/engine"
 )
 
-// ObjectStats 返回当前库中表的统计。
+// ObjectStats 返回当前库中表的统计；行数取 system.tables 的元数据。
 func (s *session) ObjectStats(ctx context.Context, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -37,19 +37,12 @@ func (s *session) objectStatsLocked(ctx context.Context, schema string, kind eng
 		return nil, err
 	}
 	stats := &engine.ObjectStats{}
+	litDB, litName := chLiteral(schema), chLiteral(name)
 	qualified := quoteIdent(name)
 	if schema != "" {
 		qualified = quoteIdent(schema) + "." + qualified
 	}
-	litDB, litName := chLiteral(schema), chLiteral(name)
-
-	rowsSQL := "SELECT toInt64(count()) FROM " + qualified
-	var rows int64
-	if err := s.db.QueryRowContext(ctx, rowsSQL).Scan(&rows); err != nil {
-		return nil, err
-	}
-	stats.Rows = &rows
-	stats.SQL = append(stats.SQL, rowsSQL)
+	stats.ExactRowsSQL = "SELECT count(*) FROM " + qualified
 
 	metaSQL := `SELECT engine, sorting_key, primary_key,
        toInt64(coalesce(total_rows, 0)), toInt64(coalesce(total_bytes, 0)),
@@ -84,6 +77,14 @@ WHERE active AND database = ` + litDB + ` AND table = ` + litName
 		return nil, err
 	}
 	stats.SQL = append(stats.SQL, partsSQL)
+	// system.tables.total_rows 是元数据里的总量，不触发整表扫描。
+	if totalRows.Valid {
+		n := totalRows.Int64
+		stats.Rows = &n
+	} else if partRows.Valid {
+		n := partRows.Int64
+		stats.Rows = &n
+	}
 	if dataBytes.Valid {
 		n := dataBytes.Int64
 		stats.DataBytes = &n
@@ -105,7 +106,6 @@ WHERE active AND database = ` + litDB + ` AND table = ` + litName
 	addStr("statClickHouseEngine", engineName)
 	addStr("statClickHouseSortingKey", sortingKey)
 	addStr("statClickHousePrimaryKey", primaryKey)
-	addInt("statClickHouseTotalRows", totalRows)
 	addInt("statClickHouseTotalBytes", totalBytes)
 	addInt("statClickHouseParts", parts)
 	addInt("statClickHouseUncompressedBytes", uncompressed)

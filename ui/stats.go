@@ -114,16 +114,22 @@ func joinStatsSQL(stats *engine.ObjectStats) string {
 	if stats == nil {
 		return ""
 	}
-	parts := make([]string, 0, len(stats.SQL))
-	for _, q := range stats.SQL {
+	parts := make([]string, 0, len(stats.SQL)+1)
+	add := func(q string) {
 		q = strings.TrimSpace(q)
 		if q == "" {
-			continue
+			return
 		}
 		if !strings.HasSuffix(q, ";") {
 			q += ";"
 		}
 		parts = append(parts, q)
+	}
+	for _, q := range stats.SQL {
+		add(q)
+	}
+	if stats.ExactRowsSQL != "" {
+		add("-- " + locales.StatsExactRowsNote() + "\n" + stats.ExactRowsSQL)
 	}
 	return strings.Join(parts, "\n\n")
 }
@@ -163,7 +169,11 @@ func (a *root) statsPanel(c *ui.Context) {
 				ic.TextColor(t.TextMuted)
 				ui.Text(c, locales.StatsSQL())
 				ui.Spacer(c)
-				if n := len(a.stats.SQL); n == 0 {
+				n := len(a.stats.SQL)
+				if a.stats.ExactRowsSQL != "" {
+					n++
+				}
+				if n == 0 {
 					ui.Text(c, locales.StatsSQLEmpty()).FontSize(11).TextColor(t.TextMuted)
 				} else {
 					ui.Text(c, locales.StatsSQLCount(n)).FontSize(11).TextColor(t.TextMuted)
@@ -220,9 +230,11 @@ func statsKV(c *ui.Context, label, value, tip string) {
 	t := c.Theme()
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Padding(t.Space(0.5), t.Space(0.5)).Children(func() {
 		ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(150).SingleLine()
-		v := ui.Text(c, value).SingleLine()
-		if tip != "" && tip != value {
-			v.Tooltip(tip)
+		if value != "" {
+			v := ui.Text(c, value).SingleLine()
+			if tip != "" && tip != value {
+				v.Tooltip(tip)
+			}
 		}
 		ui.Spacer(c)
 	})
@@ -273,8 +285,8 @@ func statLabel(key string) string {
 		return locales.StatSQLiteFreelist()
 	case "statSQLiteRootPage":
 		return locales.StatSQLiteRootPage()
-	case "statMySQLEstimatedRows":
-		return locales.StatMySQLEstimatedRows()
+	case "statSQLiteNoAnalyze":
+		return locales.StatSQLiteNoAnalyze()
 	case "statMySQLEngine":
 		return locales.StatMySQLEngine()
 	case "statMySQLCollation":
@@ -309,8 +321,6 @@ func statLabel(key string) string {
 		return locales.StatClickHouseSortingKey()
 	case "statClickHousePrimaryKey":
 		return locales.StatClickHousePrimaryKey()
-	case "statClickHouseTotalRows":
-		return locales.StatClickHouseTotalRows()
 	case "statClickHouseTotalBytes":
 		return locales.StatClickHouseTotalBytes()
 	case "statClickHouseParts":

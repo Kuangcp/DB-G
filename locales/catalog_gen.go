@@ -4506,11 +4506,11 @@ func (msgs Messages) StatsUnsupported() string {
 	return Catalog.Format(msgs.locale, "statsUnsupported", nil)
 }
 
-// StatsRows says "Rows"
+// StatsRows says "Rows (estimated)"
 // in the language the app shows.
 func StatsRows() string { return In(i18n.Locale()).StatsRows() }
 
-// StatsRows says "Rows"
+// StatsRows says "Rows (estimated)"
 // in the language of msgs.
 func (msgs Messages) StatsRows() string {
 	return Catalog.Format(msgs.locale, "statsRows", nil)
@@ -4576,6 +4576,16 @@ func (msgs Messages) StatsSQLEmpty() string {
 	return Catalog.Format(msgs.locale, "statsSQLEmpty", nil)
 }
 
+// StatsExactRowsNote says "Exact row count (not executed; may be slow on large tables)"
+// in the language the app shows.
+func StatsExactRowsNote() string { return In(i18n.Locale()).StatsExactRowsNote() }
+
+// StatsExactRowsNote says "Exact row count (not executed; may be slow on large tables)"
+// in the language of msgs.
+func (msgs Messages) StatsExactRowsNote() string {
+	return Catalog.Format(msgs.locale, "statsExactRowsNote", nil)
+}
+
 // StatsCopySQLTip says "Copy the statistics SQL; select part of the text and press Ctrl+C to copy only the selection"
 // in the language the app shows.
 func StatsCopySQLTip() string { return In(i18n.Locale()).StatsCopySQLTip() }
@@ -4626,14 +4636,14 @@ func (msgs Messages) StatSQLiteRootPage() string {
 	return Catalog.Format(msgs.locale, "statSQLiteRootPage", nil)
 }
 
-// StatMySQLEstimatedRows says "Estimated rows"
+// StatSQLiteNoAnalyze says "Run ANALYZE to estimate rows"
 // in the language the app shows.
-func StatMySQLEstimatedRows() string { return In(i18n.Locale()).StatMySQLEstimatedRows() }
+func StatSQLiteNoAnalyze() string { return In(i18n.Locale()).StatSQLiteNoAnalyze() }
 
-// StatMySQLEstimatedRows says "Estimated rows"
+// StatSQLiteNoAnalyze says "Run ANALYZE to estimate rows"
 // in the language of msgs.
-func (msgs Messages) StatMySQLEstimatedRows() string {
-	return Catalog.Format(msgs.locale, "statMySQLEstimatedRows", nil)
+func (msgs Messages) StatSQLiteNoAnalyze() string {
+	return Catalog.Format(msgs.locale, "statSQLiteNoAnalyze", nil)
 }
 
 // StatMySQLEngine says "Storage engine"
@@ -4804,16 +4814,6 @@ func StatClickHousePrimaryKey() string { return In(i18n.Locale()).StatClickHouse
 // in the language of msgs.
 func (msgs Messages) StatClickHousePrimaryKey() string {
 	return Catalog.Format(msgs.locale, "statClickHousePrimaryKey", nil)
-}
-
-// StatClickHouseTotalRows says "Rows in system table"
-// in the language the app shows.
-func StatClickHouseTotalRows() string { return In(i18n.Locale()).StatClickHouseTotalRows() }
-
-// StatClickHouseTotalRows says "Rows in system table"
-// in the language of msgs.
-func (msgs Messages) StatClickHouseTotalRows() string {
-	return Catalog.Format(msgs.locale, "statClickHouseTotalRows", nil)
 }
 
 // StatClickHouseTotalBytes says "Total size"

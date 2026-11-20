@@ -10,7 +10,7 @@ import (
 	"db-g/engine"
 )
 
-// ObjectStats 返回当前 schema 中表的统计。
+// ObjectStats 返回当前 schema 中表的统计；行数取 pg_class.reltuples 估算值。
 func (s *session) ObjectStats(ctx context.Context, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -42,14 +42,7 @@ func (s *session) objectStatsLocked(ctx context.Context, schema string, kind eng
 	rel := quoteIdent(schema) + "." + quoteIdent(name)
 	litSchema, litName := pgLiteral(schema), pgLiteral(name)
 	litRel := pgLiteral(rel)
-
-	rowsSQL := "SELECT count(*) FROM " + rel
-	var rows int64
-	if err := s.db.QueryRowContext(ctx, rowsSQL).Scan(&rows); err != nil {
-		return nil, err
-	}
-	stats.Rows = &rows
-	stats.SQL = append(stats.SQL, rowsSQL)
+	stats.ExactRowsSQL = "SELECT count(*) FROM " + rel
 
 	metaSQL := `SELECT
        (SELECT count(*) FROM information_schema.columns
@@ -57,17 +50,20 @@ func (s *session) objectStatsLocked(ctx context.Context, schema string, kind eng
        pg_table_size(` + litRel + `),
        pg_indexes_size(` + litRel + `),
        pg_total_relation_size(` + litRel + `),
+       (SELECT c.reltuples::bigint FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = ` + litSchema + ` AND c.relname = ` + litName + `),
        s.n_live_tup, s.n_dead_tup,
        s.last_vacuum, s.last_autovacuum, s.last_analyze, s.last_autoanalyze
 FROM (SELECT 1) AS one
 LEFT JOIN pg_stat_user_tables s
   ON s.schemaname = ` + litSchema + ` AND s.relname = ` + litName
 	var (
-		columns, dataBytes, indexBytes, totalBytes, liveTuples, deadTuples sql.NullInt64
-		lastVacuum, lastAutovacuum, lastAnalyze, lastAutoanalyze           sql.NullTime
+		columns, dataBytes, indexBytes, totalBytes, relTuples, liveTuples, deadTuples sql.NullInt64
+		lastVacuum, lastAutovacuum, lastAnalyze, lastAutoanalyze                      sql.NullTime
 	)
 	if err := s.db.QueryRowContext(ctx, metaSQL).Scan(
-		&columns, &dataBytes, &indexBytes, &totalBytes, &liveTuples, &deadTuples,
+		&columns, &dataBytes, &indexBytes, &totalBytes, &relTuples, &liveTuples, &deadTuples,
 		&lastVacuum, &lastAutovacuum, &lastAnalyze, &lastAutoanalyze,
 	); err != nil {
 		return nil, err
@@ -76,6 +72,14 @@ LEFT JOIN pg_stat_user_tables s
 	if columns.Valid {
 		n := columns.Int64
 		stats.Columns = &n
+	}
+	// reltuples 是 ANALYZE/自动统计给的估算值；未统计过（-1）时退回 n_live_tup。
+	if relTuples.Valid && relTuples.Int64 >= 0 {
+		n := relTuples.Int64
+		stats.Rows = &n
+	} else if liveTuples.Valid {
+		n := liveTuples.Int64
+		stats.Rows = &n
 	}
 	if dataBytes.Valid {
 		n := dataBytes.Int64

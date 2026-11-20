@@ -48,9 +48,9 @@ func TestObjectStatsModal(t *testing.T) {
 			Rows: &rows, Columns: &columns, DataBytes: &data, IndexBytes: &index,
 			Extra: []engine.ObjectStat{{Key: "statMySQLEngine", Value: "InnoDB"}},
 			SQL: []string{
-				"SELECT COUNT(*) FROM users",
-				"SELECT DATA_LENGTH, INDEX_LENGTH FROM information_schema.TABLES",
+				"SELECT TABLE_ROWS FROM information_schema.TABLES",
 			},
+			ExactRowsSQL: "SELECT COUNT(*) FROM users",
 		},
 	})
 	a.treeExpand[connID] = true
@@ -73,7 +73,7 @@ func TestObjectStatsModal(t *testing.T) {
 		}
 	}
 	// 统计 SQL 默认折叠，但复制按钮不受折叠影响。
-	if tt.HasText("SELECT COUNT(*) FROM users") {
+	if tt.HasText("SELECT COUNT(*) FROM users") || tt.HasText("精确行数（未执行，大表可能很慢）") {
 		t.Fatalf("statistics SQL must start collapsed: %q", tt.Texts())
 	}
 	if err := tt.Click("复制 SQL"); err != nil {
@@ -81,14 +81,15 @@ func TestObjectStatsModal(t *testing.T) {
 	}
 	tt.Frame()
 	if got := tt.Clipboard(); !strings.Contains(got, "SELECT COUNT(*) FROM users;") ||
-		!strings.Contains(got, "information_schema.TABLES;") {
+		!strings.Contains(got, "information_schema.TABLES;") ||
+		!strings.Contains(got, "精确行数（未执行，大表可能很慢）") {
 		t.Fatalf("clipboard = %q", got)
 	}
 	if err := tt.Click("统计 SQL"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.statsSQLOpen || !strings.Contains(a.statsSQLView().Buffer.String(), "SELECT COUNT(*) FROM users") {
+	if !a.statsSQLOpen || !strings.Contains(a.statsSQLView().Buffer.String(), "SELECT COUNT(*) FROM users") || !strings.Contains(a.statsSQLView().Buffer.String(), "精确行数") {
 		t.Fatalf("expanded statistics SQL missing: open=%v text=%q", a.statsSQLOpen, a.statsSQLView().Buffer.String())
 	}
 	// 关闭后不再渲染。

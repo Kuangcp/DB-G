@@ -10,7 +10,7 @@ import (
 	"db-g/engine"
 )
 
-// ObjectStats 返回当前库中表的统计。
+// ObjectStats 返回当前库中表的统计；行数取 information_schema 的估算值。
 func (s *session) ObjectStats(ctx context.Context, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -36,16 +36,8 @@ func (s *session) objectStatsLocked(ctx context.Context, schema string, kind eng
 		return nil, err
 	}
 	stats := &engine.ObjectStats{}
-	qualified := quoteIdent(schema) + "." + quoteIdent(name)
 	litSchema, litName := mysqlLiteral(schema), mysqlLiteral(name)
-
-	rowsSQL := "SELECT COUNT(*) FROM " + qualified
-	var rows int64
-	if err := s.db.QueryRowContext(ctx, rowsSQL).Scan(&rows); err != nil {
-		return nil, err
-	}
-	stats.Rows = &rows
-	stats.SQL = append(stats.SQL, rowsSQL)
+	stats.ExactRowsSQL = "SELECT COUNT(*) FROM " + quoteIdent(schema) + "." + quoteIdent(name)
 
 	metaSQL := `SELECT t.TABLE_ROWS, t.DATA_LENGTH, t.INDEX_LENGTH, t.ENGINE, t.TABLE_COLLATION,
        t.AUTO_INCREMENT, t.ROW_FORMAT, t.TABLE_COMMENT, t.CREATE_TIME, t.UPDATE_TIME,
@@ -68,6 +60,11 @@ WHERE t.TABLE_SCHEMA = ` + litSchema + ` AND t.TABLE_NAME = ` + litName
 	if columns.Valid {
 		n := columns.Int64
 		stats.Columns = &n
+	}
+	// TABLE_ROWS 是 InnoDB 的估算值；不再对大表执行 COUNT(*)。
+	if tableRows.Valid {
+		n := tableRows.Int64
+		stats.Rows = &n
 	}
 	if dataLen.Valid {
 		n := dataLen.Int64
@@ -92,7 +89,6 @@ WHERE t.TABLE_SCHEMA = ` + litSchema + ` AND t.TABLE_NAME = ` + litName
 			stats.Extra = append(stats.Extra, engine.ObjectStat{Key: key, Value: v.Time.Format("2006-01-02 15:04:05")})
 		}
 	}
-	addInt("statMySQLEstimatedRows", tableRows)
 	addStr("statMySQLEngine", engineName)
 	addStr("statMySQLCollation", collation)
 	addInt("statMySQLAutoIncrement", autoInc)

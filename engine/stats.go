@@ -17,6 +17,8 @@ type ObjectStats struct {
 	IndexBytes *int64
 	Extra      []ObjectStat
 	SQL        []string
+	// ExactRowsSQL 是精确行数语句：弹窗不执行，只随 SQL 面板展示，供用户自行复制执行。
+	ExactRowsSQL string
 }
 
 // ObjectStatter 是可选能力接口：返回表对象的统计信息（行数/列数/占用空间等）。

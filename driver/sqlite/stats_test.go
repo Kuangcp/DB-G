@@ -28,8 +28,11 @@ func TestObjectStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats.Rows == nil || *stats.Rows != 2 {
-		t.Fatalf("rows = %v", stats.Rows)
+	if stats.Rows != nil {
+		t.Fatalf("rows must stay unknown before ANALYZE: %v", *stats.Rows)
+	}
+	if !strings.Contains(stats.SQL[0], "sqlite_stat1") {
+		t.Fatalf("row estimate must use sqlite_stat1: %q", stats.SQL)
 	}
 	if stats.Columns == nil || *stats.Columns != 2 {
 		t.Fatalf("columns = %v", stats.Columns)
@@ -40,8 +43,24 @@ func TestObjectStats(t *testing.T) {
 	if stats.IndexBytes == nil || *stats.IndexBytes <= 0 {
 		t.Fatalf("index bytes = %v", stats.IndexBytes)
 	}
-	if len(stats.SQL) < 4 || !strings.Contains(stats.SQL[0], "COUNT(*)") {
-		t.Fatalf("sql = %q", stats.SQL)
+	if !strings.Contains(stats.ExactRowsSQL, "COUNT(*)") {
+		t.Fatalf("exact rows sql = %q", stats.ExactRowsSQL)
+	}
+	for _, q := range stats.SQL {
+		if strings.Contains(strings.ToUpper(q), `COUNT(*) FROM "T"`) {
+			t.Fatalf("statistics must not scan the table: %q", q)
+		}
+	}
+	// ANALYZE 之后 sqlite_stat1 才有估算值。
+	if _, err := s.RunStatement(ctx, "ANALYZE"); err != nil {
+		t.Fatal(err)
+	}
+	stats, err = statter.ObjectStats(ctx, engine.ObjectTable, "t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Rows == nil || *stats.Rows != 2 {
+		t.Fatalf("estimated rows after ANALYZE = %v", stats.Rows)
 	}
 	if _, err := statter.ObjectStats(ctx, engine.ObjectView, "t"); err == nil {
 		t.Fatal("non-table must be rejected")

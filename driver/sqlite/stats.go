@@ -10,7 +10,7 @@ import (
 	"db-g/engine"
 )
 
-// ObjectStats 返回表的行数、列数与占用空间；尺寸依赖 dbstat 虚拟表，
+// ObjectStats 返回表的估算行数、列数与占用空间；尺寸依赖 dbstat 虚拟表，
 // 编译时未开启时只跳过尺寸，其余统计照常返回。
 func (s *session) ObjectStats(ctx context.Context, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
 	return s.ObjectStatsIn(ctx, "", kind, name)
@@ -27,16 +27,21 @@ func (s *session) ObjectStatsIn(ctx context.Context, _ string, kind engine.Objec
 		return nil, errors.New("sqlite: 仅表支持查看统计")
 	}
 	stats := &engine.ObjectStats{}
-	table := quoteIdent(name)
 	lit := quoteLiteral(name)
+	stats.ExactRowsSQL = "SELECT COUNT(*) FROM " + quoteIdent(name)
 
-	rowsSQL := "SELECT COUNT(*) FROM " + table
-	var rows int64
-	if err := s.db.QueryRowContext(ctx, rowsSQL).Scan(&rows); err != nil {
-		return nil, err
-	}
-	stats.Rows = &rows
+	// 行数只用 sqlite_stat1 的估算值（最后一次 ANALYZE 的结果），不扫表。
+	rowsSQL := "SELECT stat FROM sqlite_stat1 WHERE tbl = " + lit + " LIMIT 1"
 	stats.SQL = append(stats.SQL, rowsSQL)
+	var stat sql.NullString
+	if err := s.db.QueryRowContext(ctx, rowsSQL).Scan(&stat); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "no such table") {
+			return nil, err
+		}
+		stats.Extra = append(stats.Extra, engine.ObjectStat{Key: "statSQLiteNoAnalyze", Value: ""})
+	} else if n, ok := sqliteRowEstimate(stat.String); ok {
+		stats.Rows = &n
+	}
 
 	metaSQL := "SELECT (SELECT page_size FROM pragma_page_size), " +
 		"(SELECT page_count FROM pragma_page_count), " +
@@ -81,6 +86,19 @@ func (s *session) ObjectStatsIn(ctx context.Context, _ string, kind engine.Objec
 		stats.SQL = append(stats.SQL, indexSQL)
 	}
 	return stats, nil
+}
+
+// sqliteRowEstimate 从 sqlite_stat1.stat 的第一个数字取出估算行数，例如 "1000 2 1"。
+func sqliteRowEstimate(stat string) (int64, bool) {
+	fields := strings.Fields(stat)
+	if len(fields) == 0 {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(fields[0], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // quoteLiteral 把字符串包成单引号字面量（统计弹窗里展示的 SQL 可直接复制执行）。
