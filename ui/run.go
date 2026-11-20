@@ -10,6 +10,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 func (a *root) openSQLite(path string) error {
@@ -270,7 +271,7 @@ func (a *root) runSQL() {
 		}
 		a.guardOpen, a.guardBlocked, a.guardRisks = true, blocked, risks
 		if blocked {
-			a.consoleErr = "已阻断高危 SQL：" + risks[0].Message
+			a.consoleErr = locales.RunGuardBlocked(risks[0].Message)
 			app.LogWarn("exec", "risky sql blocked", "rule", risks[0].Rule)
 		}
 		return
@@ -387,7 +388,7 @@ func (a *root) rerunQuery(sql string) {
 	}
 	sess := a.activeSession()
 	if sess == nil {
-		a.consoleErr = "请先连接数据源"
+		a.consoleErr = locales.ResultConnectFirst()
 		return
 	}
 	rtID := a.currentRuntimeID()
@@ -563,11 +564,11 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 func (a *root) ensureConsoleConn() error {
 	m := a.consoleMgr()
 	if m == nil {
-		return errors.New("控制台不可用")
+		return errors.New(locales.RunNoConsole())
 	}
 	rec, ok := m.Active()
 	if !ok {
-		return errors.New("没有激活的控制台")
+		return errors.New(locales.RunNoActiveConsole())
 	}
 	if a.connected(rec.ConnectionID) {
 		a.touchSession(rec.ConnectionID)
@@ -575,7 +576,7 @@ func (a *root) ensureConsoleConn() error {
 	}
 	p, ok := a.store.Get(rec.ConnectionID)
 	if !ok {
-		return errors.New("控制台的数据源已删除")
+		return errors.New(locales.RunConnDeleted())
 	}
 	return a.openConn(p)
 }

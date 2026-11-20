@@ -9,6 +9,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // maxOpenSessions 是同时保持连接的数据源个数上限；超过就按 LRU 关掉最久没用的。
@@ -139,7 +140,7 @@ func (a *root) loadServerInfo(connID string, sess engine.Session) {
 		if a.serverInfoErr == nil {
 			a.serverInfoErr = map[string]string{}
 		}
-		a.serverInfoErr[connID] = "该数据源不提供版本信息"
+		a.serverInfoErr[connID] = locales.SessionNoVersion()
 		return
 	}
 	if a.serverInfoSeq == nil {
@@ -263,7 +264,7 @@ func (a *root) stopActiveRuns() {
 
 // forceStopRuntime 是停止的兜底：驱动/网络卡死时不再等它，直接把结果作废并摘掉会话。
 func (a *root) forceStopRuntime(rt *app.Console, gen uint64, connID string) {
-	if rt == nil || !rt.AbortIf(gen, "已强制停止：数据源无响应，连接已断开") {
+	if rt == nil || !rt.AbortIf(gen, locales.SessionForceStopped()) {
 		return
 	}
 	for _, ps := range a.pageStates {
@@ -275,7 +276,7 @@ func (a *root) forceStopRuntime(rt *app.Console, gen uint64, connID string) {
 		}
 	}
 	a.dropSession(connID, "cancel timeout")
-	a.consoleErr = "查询停止无响应，已断开数据源；重新执行会自动重连"
+	a.consoleErr = locales.SessionStopUnresponsive()
 	app.LogWarn("exec", "cancel timeout", "conn", connID)
 }
 
@@ -380,9 +381,9 @@ func (a *root) connDot(c *ui.Context, connID string) {
 // 断开只关会话并保留已加载的树（下次展开时按 stale 重拉首页）。
 func (a *root) topBarConn(c *ui.Context, p app.ConnProfile) {
 	t := c.Theme()
-	row := ui.ButtonBase(c).Label("数据源 "+p.Name).Gap(4).AlignItems(ui.Center).
+	row := ui.ButtonBase(c).Label(locales.SessionDatasource(p.Name)).Gap(4).AlignItems(ui.Center).
 		Padding(t.Space(0.5), t.Space(0.75)).Radius(t.Space(1)).
-		Tooltip("双击连接 / 断开数据源")
+		Tooltip(locales.SessionConnectTip())
 	if row.Hovered() {
 		row.Background(t.SurfaceHover)
 	}

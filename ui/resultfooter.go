@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // resultFooterHeight 是状态栏固定高度（含底边分隔线），让布局不随内容抖动。
@@ -25,13 +26,13 @@ func (a *root) runtimeTiming() string {
 		return ""
 	}
 	if res != nil && res.IsQuery && res.ExecDuration > 0 {
-		return fmt.Sprintf("耗时 %s（执行 %s · 读取 %s）",
+		return locales.FooterTimingFull(
 			formatDuration(total), formatDuration(res.ExecDuration), formatDuration(res.FetchDuration))
 	}
 	if total <= 0 {
 		return ""
 	}
-	return "耗时 " + formatDuration(total)
+	return locales.FooterTiming(formatDuration(total))
 }
 
 func formatDuration(d time.Duration) string {
@@ -55,7 +56,7 @@ func (a *root) resultFooter(c *ui.Context) {
 	ui.Row(c).FillWidth().Height(resultFooterHeight-1).AlignItems(ui.Center).Gap(10).Padding(4, 0).Children(func() {
 		connID := a.activeConnID()
 		if connID == "" {
-			ui.Text(c, "未连接数据源").FontSize(11.5).TextColor(t.TextMuted)
+			ui.Text(c, locales.FooterNoDatasource()).FontSize(11.5).TextColor(t.TextMuted)
 			return
 		}
 		var p app.ConnProfile
@@ -71,18 +72,18 @@ func (a *root) resultFooter(c *ui.Context) {
 			}
 		}
 		if database != "" {
-			ui.Text(c, "数据库").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.FooterDatabase()).FontSize(11).TextColor(t.TextMuted)
 			ui.Text(c, database).FontSize(11.5).SingleLine()
 		}
 		switch {
 		case info.Version != "":
-			ui.Text(c, "版本").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.FooterVersion()).FontSize(11).TextColor(t.TextMuted)
 			ui.Text(c, info.Version).FontSize(11.5).SingleLine()
 		case a.serverInfoErr[connID] != "":
-			msg := ui.Text(c, "版本未知").FontSize(11).TextColor(t.TextMuted)
+			msg := ui.Text(c, locales.FooterVersionUnknown()).FontSize(11).TextColor(t.TextMuted)
 			msg.Tooltip(a.serverInfoErr[connID])
 		case a.connected(connID):
-			ui.Text(c, "版本读取中…").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.FooterVersionLoading()).FontSize(11).TextColor(t.TextMuted)
 		}
 		for _, tag := range p.Tags {
 			tagChip(c, tag)
@@ -92,7 +93,7 @@ func (a *root) resultFooter(c *ui.Context) {
 			ui.Text(c, timing).FontSize(11.5).TextColor(t.TextMuted).SingleLine()
 		}
 		if !a.connected(connID) {
-			ui.Text(c, "未连接").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.FooterNotConnected()).FontSize(11).TextColor(t.TextMuted)
 		}
 	})
 }

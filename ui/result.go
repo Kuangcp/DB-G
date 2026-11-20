@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // displayToResult 把显示顺序的行号换成结果行下标（排序/筛选后两者不同）。
@@ -128,27 +129,27 @@ func (a *root) resultPane(c *ui.Context) {
 				rows, bytes := rt.Progress()
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Spinner(c)
-					status := "执行中…"
+					status := locales.ResultRunning()
 					if rt.Canceling() {
-						status = "正在停止…"
+						status = locales.ResultCanceling()
 					}
 					ui.Text(c, status)
 					if rows > 0 {
-						detail := fmt.Sprintf("已接收 %d 行", rows)
+						detail := locales.ResultReceivedRows(rows)
 						if bytes > 0 {
 							detail += " · " + humanBytes(bytes)
 						}
 						ui.Text(c, detail).FontSize(12).TextColor(c.Theme().TextMuted)
 					}
-					if !rt.Canceling() && ui.Button(c, "停止").Clicked() {
+					if !rt.Canceling() && ui.Button(c, locales.ResultStop()).Clicked() {
 						a.stopActiveRuns()
 					}
 				})
 			case a.currentRuntime().Err() != "":
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "执行失败").Bold()
+					ui.Text(c, locales.ResultFailed()).Bold()
 					ui.Spacer(c)
-					if ui.Button(c, "AI 修复").Clicked() {
+					if ui.Button(c, locales.ResultAIFix()).Clicked() {
 						a.fixErrorSQL()
 					}
 				})
@@ -156,21 +157,21 @@ func (a *root) resultPane(c *ui.Context) {
 			case a.currentRuntime().Result() != nil:
 				r := a.currentRuntime().Result()
 				if !r.IsQuery {
-					ui.Textf(c, "OK — %d 行受影响", r.Affected)
+					ui.Text(c, locales.ResultAffected(int(r.Affected)))
 					return
 				}
 				if r.Truncated {
-					ui.Badge(c, fmt.Sprintf("结果已截断：超过 500 行或 %dMB 大小预算", engine.ResultBudgetBytes()>>20))
+					ui.Badge(c, locales.ResultTruncated(engine.ResultBudgetBytes()>>20))
 				}
 				a.resultTable(c, r)
 			default:
 				switch {
 				case a.activeSession() == nil:
-					ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
+					ui.Text(c, locales.ResultConnectFirst()).TextColor(c.Theme().TextMuted)
 				case true:
-					ui.Text(c, "Ctrl+Enter 执行光标所在语句（选中则只跑选区）").TextColor(c.Theme().TextMuted)
+					ui.Text(c, locales.ResultRunHint()).TextColor(c.Theme().TextMuted)
 				default:
-					ui.Text(c, "Ctrl+Enter 执行选中 SQL").TextColor(c.Theme().TextMuted)
+					ui.Text(c, locales.ResultRunSelectionHint()).TextColor(c.Theme().TextMuted)
 				}
 			}
 		})
@@ -196,15 +197,15 @@ func (a *root) stmtTabs(c *ui.Context) {
 				run := a.stmtRuns[i]
 				rt := a.runtimeFor(run.runtimeID)
 				active := i == a.activeStmt
-				label := fmt.Sprintf("结果 %d", run.tabNo)
-				state := "成功"
+				label := locales.ResultTab(run.tabNo)
+				state := locales.ResultStateSuccess()
 				switch {
 				case !run.started:
-					state = "未执行"
+					state = locales.ResultStateNotRun()
 				case rt.Running():
-					state = "执行中"
+					state = locales.ResultStateRunning()
 				case rt.Err() != "":
-					state = "失败"
+					state = locales.ResultStateFailed()
 				}
 				btn := ui.ButtonBase(c).Label(label+" · "+state).Gap(4).
 					Padding(2, 7).Radius(t.Space(1.25))
@@ -228,9 +229,9 @@ func (a *root) stmtTabs(c *ui.Context) {
 					}
 					// 结束时用状态点代替文案：绿=成功，红=失败；未执行/执行中仍显示文字。
 					switch state {
-					case "未执行", "执行中":
+					case locales.ResultStateNotRun(), locales.ResultStateRunning():
 						ui.Text(c, "· "+state).FontSize(11).TextColor(t.TextMuted)
-					case "失败":
+					case locales.ResultStateFailed():
 						dot := ui.Text(c, "●").FontSize(10).TextColor(t.Danger)
 						if err := rt.Err(); err != "" {
 							dot.Tooltip(err)
@@ -400,7 +401,7 @@ func (a *root) fitCellModal(text string, isJSON bool) {
 func (a *root) cellModalGrip(c *ui.Context) {
 	a.cellModalSize()
 	grip := ui.Box(c).Absolute().Right(2).Bottom(2).Size(18, 18).Cursor(ui.CursorResizeNWSE).
-		Label("调整弹窗大小").Tooltip("拖拽调整弹窗大小")
+		Label(locales.CellViewerResize()).Tooltip(locales.CellViewerResizeTip())
 	col := c.Theme().TextMuted
 	if grip.Hovered() || grip.Pressed() {
 		col = c.Theme().Accent
@@ -424,26 +425,26 @@ func (a *root) viewerToolbar(c *ui.Context) {
 		ui.Text(c, a.cellViewTitle).Bold().SingleLine()
 		ui.Spacer(c)
 		if a.cellViewJSONOK {
-			if iconButtonPlain(c, iconCollapseAll, "收起全部层级到第一层", ui.Transparent).Clicked() {
+			if iconButtonPlain(c, iconCollapseAll, locales.JsonCollapseAll(), ui.Transparent).Clicked() {
 				a.collapseAllJSON()
 			}
-			if iconButtonPlain(c, iconExpandAll, "展开全部层级", ui.Transparent).Clicked() {
+			if iconButtonPlain(c, iconExpandAll, locales.JsonExpandAll(), ui.Transparent).Clicked() {
 				a.expandAllJSON()
 			}
 		} else {
-			label := "自动折行：开（点击关闭）"
+			label := locales.JsonWrapOn()
 			col := c.Theme().Accent
 			if !a.cellViewWrap {
-				label, col = "自动折行：关（点击开启）", ui.Transparent
+				label, col = locales.JsonWrapOff(), ui.Transparent
 			}
 			if iconButtonPlain(c, iconWrapText, label, col).Clicked() {
 				a.cellViewWrap = !a.cellViewWrap
 			}
 		}
-		if iconButtonPlain(c, iconCopy, "复制原文", ui.Transparent).Tooltip("复制完整原文（未折叠的 JSON 文本）").Clicked() {
+		if iconButtonPlain(c, iconCopy, locales.JsonCopyRaw(), ui.Transparent).Tooltip(locales.JsonCopyRawTip()).Clicked() {
 			c.WriteClipboard(a.cellViewText)
 		}
-		if iconButtonPlain(c, iconClose, "关闭", ui.Transparent).Clicked() {
+		if iconButtonPlain(c, iconClose, locales.CommonClose(), ui.Transparent).Clicked() {
 			a.cellViewOpen = false
 		}
 	})
@@ -553,7 +554,7 @@ func (a *root) cellViewer(c *ui.Context) {
 // jsonTree 递归渲染 JSON 节点；path 是折叠状态的键。
 func (a *root) jsonTree(c *ui.Context, path string, v any, depth int, nodes *int) {
 	if *nodes >= jsonNodeLimit {
-		ui.Text(c, "…节点过多，只显示前 "+strconv.Itoa(jsonNodeLimit)+" 个").TextColor(c.Theme().TextMuted).FontSize(12)
+		ui.Text(c, locales.JsonTooManyNodes(jsonNodeLimit)).TextColor(c.Theme().TextMuted).FontSize(12)
 		return
 	}
 	switch t := v.(type) {
@@ -589,9 +590,9 @@ func (a *root) jsonEntry(c *ui.Context, path, key string, v any, depth int, node
 	}
 	if kids != nil || list != nil {
 		open := !a.cellViewCollapsed[path]
-		label := "展开：" + key
+		label := locales.JsonExpandKey(key)
 		if open {
-			label = "收起：" + key
+			label = locales.JsonCollapseKey(key)
 		}
 		indent.Gap(4).AlignItems(ui.Center).Children(func() {
 			btn := ui.ButtonBase(c).Label(label).Padding(t.Space(0.5)).Radius(t.Space(0.75))
@@ -612,9 +613,9 @@ func (a *root) jsonEntry(c *ui.Context, path, key string, v any, depth int, node
 				}
 			}
 			ui.Text(c, key).FontSize(12.5).Bold()
-			summary := fmt.Sprintf("{ %d 项 }", len(kids))
+			summary := locales.JsonObjectSummary(len(kids))
 			if list != nil {
-				summary = fmt.Sprintf("[ %d 项 ]", len(list))
+				summary = locales.JsonArraySummary(len(list))
 			}
 			ui.Text(c, summary).FontSize(11.5).TextColor(t.TextMuted)
 		})
@@ -670,47 +671,47 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Toolbar(c, func() {
 			if sql, ok := a.rerunnableSQL(); ok {
-				if iconButton(c, iconRefresh, "重新执行此查询", ui.Transparent).
+				if iconButton(c, iconRefresh, locales.ResultRerun(), ui.Transparent).
 					Disabled(a.anyRunRunning() || a.activeSession() == nil).Clicked() {
 					a.rerunQuery(sql)
 				}
 			}
 			a.pageToolbar(c, r)
 			a.editToolbar(c, r)
-		}).Label("结果操作")
+		}).Label(locales.ResultActions())
 		ui.Divider(c)
 		a.pinButton(c)
-		iconButtonPlain(c, iconDownload, "导出…", ui.Transparent).Disabled(a.exportBusy).Menu(func(m *ui.Menu) {
-			if m.Item("当前结果 CSV").Chosen() {
+		iconButtonPlain(c, iconDownload, locales.ExportMenu(), ui.Transparent).Disabled(a.exportBusy).Menu(func(m *ui.Menu) {
+			if m.Item(locales.ExportCurrentCSV()).Chosen() {
 				a.pickExport("csv", false)
 			}
-			if m.Item("当前结果 JSON").Chosen() {
+			if m.Item(locales.ExportCurrentJSON()).Chosen() {
 				a.pickExport("json", false)
 			}
-			if m.Item("当前结果 SQL INSERT").Chosen() {
+			if m.Item(locales.ExportCurrentInsert()).Chosen() {
 				a.pickExport("insert", false)
 			}
 			full := a.canStream()
-			if it := m.Item("全量 CSV（流式，重新执行查询）"); it.Disabled(!full).Chosen() {
+			if it := m.Item(locales.ExportFullCSV()); it.Disabled(!full).Chosen() {
 				a.confirmFullExport("csv")
 			}
-			if it := m.Item("全量 JSON（流式，重新执行查询）"); it.Disabled(!full).Chosen() {
+			if it := m.Item(locales.ExportFullJSON()); it.Disabled(!full).Chosen() {
 				a.confirmFullExport("json")
 			}
 		})
 		if a.exportBusy {
 			ui.Spinner(c)
-			label := "正在导出 " + strings.ToUpper(a.exportFormat) + "，请勿关闭应用"
+			label := locales.ExportRunning(strings.ToUpper(a.exportFormat))
 			if a.exportFull {
-				label = "正在全量导出 " + strings.ToUpper(a.exportFormat) + "，请勿关闭应用"
+				label = locales.ExportFullRunning(strings.ToUpper(a.exportFormat))
 			}
 			if n := a.exportRows.Load(); n > 0 {
-				label += fmt.Sprintf(" · 已写 %d 行", n)
+				label += locales.ExportWritten(int(n))
 			}
 			ui.Text(c, label).FontSize(12).TextColor(c.Theme().Accent).SingleLine()
 		} else if a.exportStatus != "" {
 			ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
-			if iconButtonPlain(c, iconClose, "清除导出提示", ui.Transparent).Clicked() {
+			if iconButtonPlain(c, iconClose, locales.ExportClearTip(), ui.Transparent).Clicked() {
 				a.exportStatus = ""
 			}
 		}
@@ -718,9 +719,8 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
 		}
 		if n := len(a.resView.filters); n > 0 {
-			ui.Text(c, fmt.Sprintf("筛选 %d 列", n)).FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.FilterColumns(n)).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
-		//ui.Text(c, "右键表头排序/筛选；右键单元格/选区复制与导出").FontSize(12).TextColor(c.Theme().TextMuted)
 	})
 
 	a.resultState.HeaderMenu = func(m *ui.Menu, col int) {
@@ -728,20 +728,20 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			return
 		}
 		idx := col - 1
-		if m.Item("升序").Chosen() {
+		if m.Item(locales.SortAsc()).Chosen() {
 			a.resView.sortBy(r, idx, false)
 		}
-		if m.Item("降序").Chosen() {
+		if m.Item(locales.SortDesc()).Chosen() {
 			a.resView.sortBy(r, idx, true)
 		}
-		if m.Item("清除排序").Chosen() {
+		if m.Item(locales.SortClear()).Chosen() {
 			a.resView.sortBy(r, -1, false)
 		}
-		if m.Item("筛选…").Chosen() {
+		if m.Item(locales.FilterMenu()).Chosen() {
 			a.filterOpen, a.filterCol, a.filterText = true, idx, a.resView.filters[idx]
 		}
 		if _, has := a.resView.filters[idx]; has {
-			if m.Item("清除本列筛选").Chosen() {
+			if m.Item(locales.FilterClearColumn()).Chosen() {
 				a.resView.clearFilter(idx)
 			}
 		}
@@ -779,17 +779,17 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		if displayRow >= dataRows {
 			insIdx := displayRow - dataRows
 			if a.editPlan != nil && dataCol >= 0 && dataCol < len(a.editPlan.Columns) && dataCol < len(a.editPlan.Nullable) {
-				if m.Item("编辑单元格…").Chosen() {
+				if m.Item(locales.EditCellMenu()).Chosen() {
 					a.beginEditAt(r, -1-insIdx, dataCol)
 				}
-				if a.editPlan.Nullable[dataCol] && m.Item("设为 NULL").Chosen() {
+				if a.editPlan.Nullable[dataCol] && m.Item(locales.SetNull()).Chosen() {
 					a.setCellEdit(-1-insIdx, dataCol, nil)
 				}
-				if _, ok := a.editSet().Inserts[insIdx][dataCol]; ok && m.Item("还原本格").Chosen() {
+				if _, ok := a.editSet().Inserts[insIdx][dataCol]; ok && m.Item(locales.RestoreCell()).Chosen() {
 					a.editSet().ClearInsertCell(insIdx, dataCol)
 				}
 			}
-			if m.Item("删除新增行").Chosen() {
+			if m.Item(locales.DeleteInsertedRow()).Chosen() {
 				a.removeInsertRow(r, insIdx)
 			}
 			return
@@ -799,14 +799,14 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			return
 		}
 		if dataCol >= 0 && dataCol < len(r.Columns) {
-			if m.Item("复制单元格").Chosen() {
+			if m.Item(locales.CopyCell()).Chosen() {
 				c.WriteClipboard(cellStringFor(kind, r, dataCol, r.Rows[row][dataCol]))
 			}
 		}
-		if m.Item("复制本行").Chosen() {
+		if m.Item(locales.CopyRow()).Chosen() {
 			c.WriteClipboard(rowsTSVFor(kind, r, []int{row}, dataCols(r), false))
 		}
-		if it := m.Item("复制本行 → INSERT"); it.Chosen() {
+		if it := m.Item(locales.CopyRowInsert()); it.Chosen() {
 			if table, ok := a.rowTable(); ok {
 				c.WriteClipboard(insertSQLFor(kind, table, r.Columns, r.ColumnTypes, r.Rows[row]))
 			}
@@ -814,19 +814,19 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			_ = table
 		}
 		if rows, cols, multi := a.resultSelection(r); multi {
-			m.Submenu("复制选区", func(sm *ui.Menu) {
-				if sm.Item("TSV").Chosen() {
+			m.Submenu(locales.CopySelection(), func(sm *ui.Menu) {
+				if sm.Item(locales.CopySelectionTSV()).Chosen() {
 					c.WriteClipboard(rowsTSVFor(kind, r, rows, cols, false))
 				}
-				if sm.Item("TSV（含表头）").Chosen() {
+				if sm.Item(locales.CopySelectionTSVHeader()).Chosen() {
 					c.WriteClipboard(rowsTSVFor(kind, r, rows, cols, true))
 				}
-				if sm.Item("CSV").Chosen() {
+				if sm.Item(locales.CopySelectionCSV()).Chosen() {
 					c.WriteClipboard(blockCSV(kind, r, rows, cols, false))
 				}
 			})
 			_, hasTable := a.rowTable()
-			m.Submenu("导出选区", func(sm *ui.Menu) {
+			m.Submenu(locales.ExportSelection(), func(sm *ui.Menu) {
 				if sm.Item("CSV…").Chosen() {
 					a.pickExportSelection("csv", rows, cols)
 				}
@@ -838,30 +838,30 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 				}
 			})
 		}
-		if dataCol >= 0 && m.Item("查看完整内容").Chosen() {
+		if dataCol >= 0 && m.Item(locales.ViewFullContent()).Chosen() {
 			a.openCellViewer(r, row, dataCol)
 		}
 		if a.editPlan != nil && dataCol >= 0 {
-			if it := m.Item("编辑单元格…"); it.Disabled(!a.editPlan.Editable[dataCol]).Chosen() {
+			if it := m.Item(locales.EditCellMenu()); it.Disabled(!a.editPlan.Editable[dataCol]).Chosen() {
 				a.editCellRow, a.editCellCol = row, dataCol
 				a.editCellText = editTextFor(kind, r, dataCol, a.editCellValue(row, dataCol))
 				a.editCellOpen = true
 			}
-			if a.editPlan.Editable[dataCol] && m.Item("设为 NULL").Chosen() {
+			if a.editPlan.Editable[dataCol] && m.Item(locales.SetNull()).Chosen() {
 				a.setCellEdit(row, dataCol, nil)
 			}
 			if _, has := a.editSet().Cells[app.CellKey{Row: row, Col: dataCol}]; has {
-				if m.Item("还原本格").Chosen() {
+				if m.Item(locales.RestoreCell()).Chosen() {
 					a.editSet().ClearCell(row, dataCol)
 				}
 			}
 		}
 		if a.editPlan != nil {
 			if a.editSet().Deletes[row] {
-				if m.Item("还原本行").Chosen() {
+				if m.Item(locales.RestoreRow()).Chosen() {
 					a.clearRowEdit(row)
 				}
-			} else if m.Item("删除本行").Chosen() {
+			} else if m.Item(locales.DeleteRow()).Chosen() {
 				a.deleteRow(row)
 			}
 		}
@@ -958,10 +958,10 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 // pinButton 显示钉住按钮：当前结果已钉住时图标上强调色，再点一次取消。
 func (a *root) pinButton(c *ui.Context) {
 	pinned := len(a.stmtRuns) > 0 && a.activeStmt < len(a.stmtRuns) && a.stmtRuns[a.activeStmt].pinned
-	label := "钉住结果"
+	label := locales.PinResult()
 	col := ui.Transparent
 	if pinned {
-		label = "取消钉住"
+		label = locales.UnpinResult()
 		col = c.Theme().Accent
 	}
 	if iconButtonPlain(c, iconPin, label, col).Clicked() {
@@ -1091,14 +1091,14 @@ func (a *root) pageToolbar(c *ui.Context, r *engine.QueryResult) {
 	disabled := busy || dirty
 	if ps.Loading {
 		ui.Spinner(c)
-		ui.Text(c, "加载中…").FontSize(11.5).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.PagingLoading()).FontSize(11.5).TextColor(c.Theme().TextMuted)
 	}
-	if iconButton(c, iconChevronLeft, "上一页", ui.Transparent).
+	if iconButton(c, iconChevronLeft, locales.PagingPrev(), ui.Transparent).
 		Disabled(disabled || ps.Page <= 0).Clicked() {
 		a.changePage(-1)
 	}
-	ui.Text(c, fmt.Sprintf("第 %d 页", ps.Page+1)).FontSize(12).TextColor(c.Theme().TextMuted)
-	if iconButton(c, iconChevronRight, "下一页", ui.Transparent).
+	ui.Text(c, locales.PagingPage(ps.Page+1)).FontSize(12).TextColor(c.Theme().TextMuted)
+	if iconButton(c, iconChevronRight, locales.PagingNext(), ui.Transparent).
 		Disabled(disabled || !a.canNextPage(ps)).Clicked() {
 		a.changePage(1)
 	}
@@ -1107,18 +1107,18 @@ func (a *root) pageToolbar(c *ui.Context, r *engine.QueryResult) {
 		pages = (ps.Total + int64(ps.Size) - 1) / int64(ps.Size)
 	}
 	if ps.TotalKnown {
-		ui.Text(c, fmt.Sprintf("/ %d 页", pages)).FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.PagingPages(int(pages))).FontSize(12).TextColor(c.Theme().TextMuted)
 	}
-	ui.Text(c, fmt.Sprintf("每页 %d 行", ps.Size)).FontSize(11.5).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.PagingPerPage(ps.Size)).FontSize(11.5).TextColor(c.Theme().TextMuted)
 	if ps.CountLoading {
 		ui.Spinner(c)
-		ui.Text(c, "统计中…").FontSize(11.5).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.PagingCounting()).FontSize(11.5).TextColor(c.Theme().TextMuted)
 	} else if !ps.TotalKnown {
-		if iconButton(c, iconHash, "统计总行数", ui.Transparent).Disabled(busy).Clicked() {
+		if iconButton(c, iconHash, locales.PagingCountRows(), ui.Transparent).Disabled(busy).Clicked() {
 			a.countRows()
 		}
 	} else {
-		ui.Text(c, fmt.Sprintf("共 %d 行", ps.Total)).FontSize(11.5).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.PagingTotal(int(ps.Total))).FontSize(11.5).TextColor(c.Theme().TextMuted)
 	}
 }
 
@@ -1156,7 +1156,7 @@ func (a *root) changePage(delta int) {
 		return
 	}
 	if a.editSet().Count() > 0 {
-		a.consoleErr = "有未提交的改动，先提交或撤销后再翻页"
+		a.consoleErr = locales.PageDirty()
 		return
 	}
 	target := ps.Page + delta
@@ -1168,7 +1168,7 @@ func (a *root) changePage(delta int) {
 	}
 	sql, ok := pageSQL(ps.BaseSQL, target*ps.Size, ps.Size)
 	if !ok {
-		a.consoleErr = "翻页失败：当前语句不支持分页"
+		a.consoleErr = locales.PageUnsupported()
 		return
 	}
 	expected := base.Result()
@@ -1183,7 +1183,7 @@ func (a *root) changePage(delta int) {
 		apply := func() {
 			ps.Loading = false
 			if errMsg != "" {
-				a.consoleErr = "翻页失败: " + errMsg
+				a.consoleErr = locales.PageFailed(errMsg)
 				return
 			}
 			if a.pageStates[id] != ps || base.Result() != expected {
@@ -1191,7 +1191,7 @@ func (a *root) changePage(delta int) {
 			}
 			r := base.Result()
 			if res == nil || !res.IsQuery || r == nil {
-				a.consoleErr = "翻页失败：没有返回结果集"
+				a.consoleErr = locales.PageNoResult()
 				return
 			}
 			r.Rows = res.Rows
@@ -1217,7 +1217,7 @@ func (a *root) changePage(delta int) {
 	})
 	if !rt.RunTimeout(a.activeSession(), sql, a.queryTimeoutFor()) {
 		ps.Loading = false
-		a.consoleErr = "翻页失败：无法启动"
+		a.consoleErr = locales.PageStartFailed()
 	}
 }
 
@@ -1230,7 +1230,7 @@ func (a *root) countRows() {
 	}
 	sql, ok := pageCountSQL(a.connKind(), ps.BaseSQL)
 	if !ok {
-		a.consoleErr = "统计总行数失败：当前语句不支持"
+		a.consoleErr = locales.CountUnsupported()
 		return
 	}
 	rtID := id + "#count"
@@ -1247,12 +1247,12 @@ func (a *root) countRows() {
 			}
 			ps.CountLoading = false
 			if errMsg != "" {
-				a.consoleErr = "统计总行数失败: " + errMsg
+				a.consoleErr = locales.CountFailed(errMsg)
 				return
 			}
 			n, ok := countResult(res)
 			if !ok {
-				a.consoleErr = "统计总行数失败：结果格式不正确"
+				a.consoleErr = locales.CountBadResult()
 				return
 			}
 			ps.Total, ps.TotalKnown = n, true
@@ -1266,7 +1266,7 @@ func (a *root) countRows() {
 	})
 	if !rt.RunTimeout(a.activeSession(), sql, a.queryTimeoutFor()) {
 		ps.CountLoading = false
-		a.consoleErr = "统计总行数失败：无法启动"
+		a.consoleErr = locales.CountStartFailed()
 	}
 }
 
@@ -1306,17 +1306,17 @@ func (a *root) filterModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.filterOpen, func() {
-		title := "筛选"
+		title := locales.FilterTitle()
 		if r := a.currentRuntime().Result(); r != nil && a.filterCol >= 0 && a.filterCol < len(r.Columns) {
-			title = "筛选：" + r.Columns[a.filterCol]
+			title = locales.FilterTitleColumn(r.Columns[a.filterCol])
 		}
 		ui.Text(c, title).Bold()
-		ui.TextInput(c, &a.filterText).Placeholder("包含…（留空清除）").AutoFocus()
+		ui.TextInput(c, &a.filterText).Placeholder(locales.FilterPlaceholder()).AutoFocus()
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.filterOpen = false
 			}
-			if ui.PrimaryButton(c, "应用").Clicked() {
+			if ui.PrimaryButton(c, locales.FilterApply()).Clicked() {
 				a.resView.setFilter(a.filterCol, a.filterText)
 				a.filterOpen = false
 			}
@@ -1371,13 +1371,13 @@ func (a *root) exportConfirmModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.exportConfirm, func() {
-		ui.Text(c, "全量导出（"+a.exportFormat+"）").Bold()
-		ui.Text(c, "会重新执行当前语句读取全部结果，数据可能与屏幕上略有差异。").TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.ExportFullTitle(a.exportFormat)).Bold()
+		ui.Text(c, locales.ExportFullHint()).TextColor(c.Theme().TextMuted)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.exportConfirm = false
 			}
-			if ui.PrimaryButton(c, "选择文件…").Clicked() {
+			if ui.PrimaryButton(c, locales.ExportChooseFile()).Clicked() {
 				format := a.exportFormat
 				a.exportConfirm = false
 				a.pickExport(format, true)
@@ -1392,13 +1392,13 @@ func (a *root) exportCloseModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.exportCloseConfirm, func() {
-		ui.Text(c, "正在导出，确定退出？").Bold()
-		ui.Text(c, "导出尚未完成，退出会中断并留下不完整的文件。").TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.ExportExitTitle()).Bold()
+		ui.Text(c, locales.ExportExitHint()).TextColor(c.Theme().TextMuted)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "继续导出").Clicked() {
+			if ui.Button(c, locales.ExportContinue()).Clicked() {
 				a.exportCloseConfirm = false
 			}
-			if ui.Button(c, "仍要退出").TextColor(c.Theme().Danger).Clicked() {
+			if ui.Button(c, locales.ExportExitAnyway()).TextColor(c.Theme().Danger).Clicked() {
 				a.exportCloseConfirm = false
 				a.exportBusy = false
 				if a.win != nil {
@@ -1427,7 +1427,7 @@ func (a *root) pickExport(format string, full bool) {
 		}
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
 			Parent:      win,
-			Title:       "导出结果",
+			Title:       locales.ExportDialogTitle(),
 			DefaultPath: exportDefaultName(time.Now(), ext),
 		})
 		if err != nil || path == "" {
@@ -1453,11 +1453,11 @@ func (a *root) pickExport(format string, full bool) {
 			a.exportBusy = false
 			a.exportCloseConfirm = false
 			if err != nil {
-				a.exportStatus = "导出失败: " + err.Error()
+				a.exportStatus = locales.ExportFailed(err.Error())
 				app.LogError("export", "failed", "path", path, "format", format, "err", err.Error())
 				return
 			}
-			a.exportStatus = fmt.Sprintf("已导出 %d 行 → %s", n, path)
+			a.exportStatus = locales.ExportDone(n, path)
 			app.LogInfo("export", "done", "path", path, "format", format, "rows", n, "full", full)
 		})
 	}()
@@ -1476,7 +1476,7 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 		}
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
 			Parent:      win,
-			Title:       "导出选区",
+			Title:       locales.ExportSelectionDialogTitle(),
 			DefaultPath: exportDefaultName(time.Now(), ext),
 		})
 		if err != nil || path == "" {
@@ -1495,11 +1495,11 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 			a.exportBusy = false
 			a.exportCloseConfirm = false
 			if err != nil {
-				a.exportStatus = "导出失败: " + err.Error()
+				a.exportStatus = locales.ExportFailed(err.Error())
 				app.LogError("export", "selection failed", "path", path, "format", format, "err", err.Error())
 				return
 			}
-			a.exportStatus = fmt.Sprintf("已导出选区 %d 行 → %s", n, path)
+			a.exportStatus = locales.ExportSelectionDone(n, path)
 			app.LogInfo("export", "selection done", "path", path, "format", format, "rows", n)
 		})
 	}()
@@ -1509,14 +1509,14 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 func (a *root) exportSelectionTo(path, format string, rows, cols []int) (int, error) {
 	r := a.currentRuntime().Result()
 	if r == nil || !r.IsQuery {
-		return 0, errors.New("没有可导出的查询结果")
+		return 0, errors.New(locales.ExportNoResult())
 	}
 	table := ""
 	if t, ok := a.rowTable(); ok {
 		table = t
 	}
 	if format == "insert" && table == "" {
-		return 0, errors.New("无法确定表名（多表查询），不能导出 INSERT")
+		return 0, errors.New(locales.ExportNoTable())
 	}
 	names := make([]string, len(cols))
 	for i, col := range cols {
@@ -1549,12 +1549,12 @@ func (a *root) exportToProgress(path, format string, full bool, progress func(in
 		}
 	}
 	if format == "insert" && table == "" {
-		return 0, errors.New("无法确定表名（多表查询），不能导出 INSERT")
+		return 0, errors.New(locales.ExportNoTable())
 	}
 	if full {
 		streamer, ok := a.activeSession().(engine.RowStreamer)
 		if !ok {
-			return 0, errors.New("当前数据源不支持流式导出")
+			return 0, errors.New(locales.ExportNoStream())
 		}
 		sql := a.lastExecSQL
 		written := 0
@@ -1580,7 +1580,7 @@ func (a *root) exportToProgress(path, format string, full bool, progress func(in
 	}
 	r := a.currentRuntime().Result()
 	if r == nil || !r.IsQuery {
-		return 0, errors.New("没有可导出的查询结果")
+		return 0, errors.New(locales.ExportNoResult())
 	}
 	rows := make([][]any, len(r.Rows))
 	copy(rows, r.Rows)

@@ -6,20 +6,21 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // themeSchemeOption 是设置界面里的一个配色方案选项。
 type themeSchemeOption struct {
 	key   string
-	label string
+	label func() string
 }
 
 var themeSchemeOptions = []themeSchemeOption{
-	{app.ThemeSchemeDefault, "默认"},
-	{app.ThemeSchemeOcean, "海洋"},
-	{app.ThemeSchemeForest, "森林"},
-	{app.ThemeSchemeWarm, "暖阳"},
-	{app.ThemeSchemeCustom, "自定义"},
+	{app.ThemeSchemeDefault, locales.ThemeSchemeDefault},
+	{app.ThemeSchemeOcean, locales.ThemeSchemeOcean},
+	{app.ThemeSchemeForest, locales.ThemeSchemeForest},
+	{app.ThemeSchemeWarm, locales.ThemeSchemeWarm},
+	{app.ThemeSchemeCustom, locales.ThemeSchemeCustom},
 }
 
 // themeSchemePalette 是一套配色方案在浅色/深色下的中性色覆盖。
@@ -163,7 +164,7 @@ func (a *root) applyPaletteDrafts(prefs app.ThemePrefs) {
 	for _, p := range []app.ThemePalette{a.paletteLight, a.paletteDark} {
 		for _, color := range []string{p.Background, p.Surface, p.Border, p.Text, p.TextMuted} {
 			if !app.ValidThemePaletteColor(color) {
-				a.paletteErr = "颜色格式应为 #rrggbb（留空沿用默认）"
+				a.paletteErr = locales.PaletteHexInvalid()
 				return
 			}
 		}

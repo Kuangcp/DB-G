@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // tabBar 渲染当前工作区的控制台标签、新建按钮与工作区切换器。
@@ -21,7 +22,7 @@ func (a *root) tabBar(c *ui.Context) {
 	for _, rec := range open {
 		counts[rec.ConnectionID]++
 	}
-	name := "无工作区"
+	name := locales.TabNoWorkspace()
 	if m != nil {
 		if ws, ok := m.ActiveWorkspace(); ok {
 			name = ws.Name
@@ -29,14 +30,14 @@ func (a *root) tabBar(c *ui.Context) {
 	}
 	ui.Row(c).AlignItems(ui.Center).Gap(6).FillWidth().Children(func() {
 		if len(open) == 0 {
-			ui.Text(c, "在左侧数据源下新建或打开控制台").TextColor(c.Theme().TextMuted).FontSize(a.tabFontSize()).SingleLine()
+			ui.Text(c, locales.TabEmptyHint()).TextColor(c.Theme().TextMuted).FontSize(a.tabFontSize()).SingleLine()
 			ui.Spacer(c)
 		} else {
 			ui.Toolbar(c, func() {
 				for _, rec := range open {
 					a.tab(c, rec, counts[rec.ConnectionID] > 1)
 				}
-			}).Padding(0).Grow(1).Label("控制台标签")
+			}).Padding(0).Grow(1).Label(locales.TabToolbarLabel())
 		}
 		// 新建控制台只从左侧数据源下的入口走，这里只留工作区切换器。
 		ui.Toolbar(c, func() {
@@ -92,7 +93,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 	btn.Children(func() {
 		if warn {
 			ui.Text(c, "⚠").FontSize(10).TextColor(t.Danger).
-				Tooltip("外部文件已修改或缺失，自动保存已暂停")
+				Tooltip(locales.TabExtWarnTooltip())
 		}
 		if dirty {
 			ui.Text(c, "●").FontSize(10).TextColor(t.Accent)
@@ -117,13 +118,13 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 	attachTabDrag(c, btn, rec.ID)
 	a.attachTabDrop(c, btn, rec)
 	btn.ContextMenu(func(menu *ui.Menu) {
-		if menu.Item("关闭").Chosen() {
+		if menu.Item(locales.TabMenuClose()).Chosen() {
 			a.pendingClose = rec.ID
 		}
-		if menu.Item("重命名…").Chosen() {
+		if menu.Item(locales.TabMenuRename()).Chosen() {
 			a.openModal("rename", rec.ID, rec.Name)
 		}
-		if menu.Item("删除…").Chosen() {
+		if menu.Item(locales.TabMenuDelete()).Chosen() {
 			a.openModal("delete", rec.ID, rec.Name)
 		}
 	})
@@ -140,7 +141,7 @@ func attachTabDrag(c *ui.Context, btn ui.Element, id string) {
 	}
 	btn.Drag(tabDrag{id: id})
 	if held {
-		btn.Cursor(ui.CursorGrab).Tooltip("按住 Ctrl 拖动：调整控制台顺序")
+		btn.Cursor(ui.CursorGrab).Tooltip(locales.TabDragTooltip())
 	}
 	if btn.Dragging() {
 		btn.Opacity(0.45)
@@ -262,12 +263,12 @@ func (a *root) closeConsole(id string) {
 	if a.externalHasLocalChanges(id) {
 		a.pendingActivate = id
 		a.extResolveOpen = true
-		a.extMsg = "该文件有未解决的外部修改，请先处理"
+		a.extMsg = locales.TabExtUnresolved()
 		return
 	}
 	wasActive := a.activeConsole == id
 	if err := m.CloseConsole(id); err != nil {
-		a.consoleErr = "关闭控制台失败: " + err.Error()
+		a.consoleErr = locales.TabCloseFailed(err.Error())
 		app.LogWarn("console", "close failed", "id", id, "err", err.Error())
 		return
 	}
@@ -313,13 +314,13 @@ func (a *root) workspaceMenu(menu *ui.Menu) {
 		}
 	}
 	menu.Separator()
-	if menu.Item("新建工作区…").Chosen() {
+	if menu.Item(locales.WsMenuNew()).Chosen() {
 		a.openModal("ws-new", "", "")
 	}
-	if menu.Item("重命名当前工作区…").Disabled(!hasActive).Chosen() {
+	if menu.Item(locales.WsMenuRenameCurrent()).Disabled(!hasActive).Chosen() {
 		a.openModal("ws-rename", active.ID, active.Name)
 	}
-	if menu.Item("删除当前工作区…").Disabled(!hasActive).Chosen() {
+	if menu.Item(locales.WsMenuDeleteCurrent()).Disabled(!hasActive).Chosen() {
 		a.openModal("ws-delete", active.ID, active.Name)
 	}
 }
@@ -343,31 +344,31 @@ func (a *root) tabModal(c *ui.Context) {
 	ui.Modal(c, &open, func() {
 		switch a.modalKind {
 		case "rename":
-			ui.Text(c, "重命名控制台").Bold()
-			ui.TextInput(c, &a.modalText).Placeholder("名称").AutoFocus()
+			ui.Text(c, locales.ModalRenameConsole()).Bold()
+			ui.TextInput(c, &a.modalText).Placeholder(locales.ModalName()).AutoFocus()
 			a.modalButtons(c, func() {
 				if strings.TrimSpace(a.modalText) == "" {
-					a.modalErr = "名称不能为空"
+					a.modalErr = locales.ModalNameEmpty()
 					return
 				}
 				if err := m.Rename(a.modalTarget, a.modalText); err != nil {
-					a.modalErr = "重命名失败: " + err.Error()
+					a.modalErr = locales.ModalRenameFailed(err.Error())
 					return
 				}
 				app.LogInfo("console", "rename", "id", a.modalTarget, "name", a.modalText)
 				a.modalKind = ""
 			})
 		case "delete":
-			ui.Text(c, "删除控制台「"+a.modalText+"」？").Bold()
-			hint := "将同时删除它的 .sql 文件，不可撤销"
+			ui.Text(c, locales.ModalDeleteConsole(a.modalText)).Bold()
+			hint := locales.ModalDeleteConsoleHint()
 			if rec, ok := a.store.GetConsole(a.modalTarget); ok && rec.External {
-				hint = "只解除绑定，磁盘上的原始 .sql 文件会保留"
+				hint = locales.ModalUnlinkConsoleHint()
 			}
 			ui.Text(c, hint).TextColor(c.Theme().TextMuted)
 			a.modalButtons(c, func() {
 				wasActive := a.activeConsole == a.modalTarget
 				if err := m.DeleteConsole(a.modalTarget); err != nil {
-					a.modalErr = "删除失败: " + err.Error()
+					a.modalErr = locales.ModalDeleteFailed(err.Error())
 					app.LogWarn("console", "delete failed", "id", a.modalTarget, "err", err.Error())
 					return
 				}
@@ -383,12 +384,12 @@ func (a *root) tabModal(c *ui.Context) {
 				}
 			})
 		case "ws-new":
-			ui.Text(c, "新建工作区").Bold()
-			ui.TextInput(c, &a.modalText).Placeholder("名称（留空为「默认」）").AutoFocus()
+			ui.Text(c, locales.ModalNewWorkspace()).Bold()
+			ui.TextInput(c, &a.modalText).Placeholder(locales.ModalWorkspaceNamePlaceholder()).AutoFocus()
 			a.modalButtons(c, func() {
 				ws, err := m.CreateWorkspace(a.modalText)
 				if err != nil {
-					a.modalErr = "新建工作区失败: " + err.Error()
+					a.modalErr = locales.ModalNewWorkspaceFailed(err.Error())
 					return
 				}
 				a.modalKind = ""
@@ -396,21 +397,21 @@ func (a *root) tabModal(c *ui.Context) {
 				_ = ws
 			})
 		case "ws-rename":
-			ui.Text(c, "重命名工作区").Bold()
-			ui.TextInput(c, &a.modalText).Placeholder("名称").AutoFocus()
+			ui.Text(c, locales.ModalRenameWorkspace()).Bold()
+			ui.TextInput(c, &a.modalText).Placeholder(locales.ModalName()).AutoFocus()
 			a.modalButtons(c, func() {
 				if err := m.RenameWorkspace(a.modalTarget, a.modalText); err != nil {
-					a.modalErr = "重命名失败: " + err.Error()
+					a.modalErr = locales.ModalRenameFailed(err.Error())
 					return
 				}
 				a.modalKind = ""
 			})
 		case "ws-delete":
-			ui.Text(c, "删除工作区「"+a.modalText+"」？").Bold()
-			ui.Text(c, "控制台与其 .sql 文件都会保留，可从侧栏重新打开").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.ModalDeleteWorkspace(a.modalText)).Bold()
+			ui.Text(c, locales.ModalDeleteWorkspaceHint()).TextColor(c.Theme().TextMuted)
 			a.modalButtons(c, func() {
 				if err := m.DeleteWorkspace(a.modalTarget); err != nil {
-					a.modalErr = "删除失败: " + err.Error()
+					a.modalErr = locales.ModalDeleteFailed(err.Error())
 					return
 				}
 				a.modalKind = ""
@@ -433,10 +434,10 @@ func (a *root) tabModal(c *ui.Context) {
 // modalButtons 渲染「取消 / 保存」两个按钮，保存时执行 save。
 func (a *root) modalButtons(c *ui.Context, save func()) {
 	ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-		if ui.Button(c, "取消").Clicked() {
+		if ui.Button(c, locales.CommonCancel()).Clicked() {
 			a.modalKind = ""
 		}
-		if ui.PrimaryButton(c, "保存").Clicked() {
+		if ui.PrimaryButton(c, locales.CommonSave()).Clicked() {
 			save()
 		}
 	})

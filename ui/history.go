@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // historyPanel 渲染 SQL 历史面板：当前数据源最近 100 条，可插入光标或复制。
@@ -24,21 +25,21 @@ func (a *root) historyPanel(c *ui.Context) {
 		path = a.history.Path(connID)
 	}
 	ui.Modal(c, &a.historyOpen, func() {
-		title := "SQL 历史"
+		title := locales.HistoryTitle()
 		if connID != "" {
-			title = fmt.Sprintf("SQL 历史 · %s（最近 %d 条）", a.activeConnName(), len(entries))
+			title = locales.HistoryTitleConn(a.activeConnName(), len(entries))
 		}
 		ui.Text(c, title).Bold().SingleLine()
 		if connID == "" {
-			ui.Text(c, "请先连接数据源").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.HistoryNoDatasource()).TextColor(c.Theme().TextMuted)
 		} else {
 			ui.Text(c, path).FontSize(11).TextColor(c.Theme().TextMuted).
-				SingleLine().Tooltip("完整历史（最多保留 5000 条）在这个文件里")
-			ui.Text(c, "面板只展示最近 100 条；全部记录直接打开上面的文件查看").
+				SingleLine().Tooltip(locales.HistoryFileTooltip())
+			ui.Text(c, locales.HistoryPanelHint()).
 				FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 		}
 		if len(entries) == 0 && connID != "" {
-			ui.Text(c, "这个数据源还没有执行记录").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.HistoryEmpty()).TextColor(c.Theme().TextMuted)
 		}
 		ui.Scroll(c).Height(360).Children(func() {
 			for _, e := range entries {
@@ -46,7 +47,7 @@ func (a *root) historyPanel(c *ui.Context) {
 			}
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.PrimaryButton(c, "关闭").Clicked() {
+			if ui.PrimaryButton(c, locales.CommonClose()).Clicked() {
 				a.historyOpen = false
 			}
 		})
@@ -71,11 +72,11 @@ func (a *root) historyRow(c *ui.Context, e app.HistoryEntry) {
 		}
 		ui.Text(c, fmt.Sprintf("%dms", e.DurMS)).FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Text(c, summary).FontSize(12).SingleLine().Grow(1)
-		if iconButtonPlain(c, iconInsert, "插入到光标", ui.Transparent).Clicked() {
+		if iconButtonPlain(c, iconInsert, locales.HistoryInsertAtCursor(), ui.Transparent).Clicked() {
 			a.code.Insert(e.SQL)
 			a.historyOpen = false
 		}
-		if iconButtonPlain(c, iconCopy, "复制 SQL", ui.Transparent).Clicked() {
+		if iconButtonPlain(c, iconCopy, locales.HistoryCopySQL(), ui.Transparent).Clicked() {
 			c.WriteClipboard(e.SQL)
 		}
 	})

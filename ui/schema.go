@@ -8,12 +8,13 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // schemaLabel 是下拉里给人看的目标名：MySQL/CK 是库名，PG 把库和 schema 都写出来。
 func schemaLabel(kind, database, schema string) string {
 	if schema == "" {
-		return "（默认）"
+		return locales.SchemaDefault()
 	}
 	if kind == "postgres" && database != "" {
 		return database + "." + schema
@@ -180,7 +181,7 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 			if a.connSchema[p.ID] == schema {
 				a.connSchema[p.ID] = prev
 			}
-			a.consoleErr = "切换 schema 失败: " + err.Error()
+			a.consoleErr = locales.SchemaSwitchFailed(err.Error())
 			app.LogWarn("conn", "schema switch failed", "conn", p.ID, "schema", schema, "err", err.Error())
 			return
 		}
@@ -224,7 +225,7 @@ func (a *root) schemaPicker(c *ui.Context) {
 	if len(schemas) == 0 {
 		a.ensureSchemas(p)
 		if a.schemaLoading[id] {
-			ui.Text(c, "加载库…").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.TreeLoadingSchemas()).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
 		return
 	}
@@ -237,7 +238,7 @@ func (a *root) schemaPicker(c *ui.Context) {
 	sel := shown
 	parts := ui.SelectBase(c, &sel)
 	parts.Trigger.Gap(4).Padding(4, 8).Radius(t.Space(1.5)).Border(1, t.Border).
-		Tooltip("切换当前库 / schema").Children(func() {
+		Tooltip(locales.SchemaSwitchTip()).Children(func() {
 		ui.Text(c, schemaLabel(p.Kind, p.Database, shown)).FontSize(12).SingleLine()
 		ui.Icon(c, iconChevronDown).FontSize(12).TextColor(t.TextMuted)
 	})

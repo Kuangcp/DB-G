@@ -70,3 +70,17 @@ func TestLanguageSectionRendersEnglish(t *testing.T) {
 		}
 	}
 }
+
+func TestI18nEnglishMainWindow(t *testing.T) {
+	if os.Getenv("MYGO_LOCALE") != "en" {
+		t.Skip("run with MYGO_LOCALE=en")
+	}
+	a := newConsoleRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	for _, want := range []string{"New Connection", "Run (Ctrl+Enter)", "No datasource connected"} {
+		if !tt.HasText(want) {
+			t.Fatalf("english main window missing %q: %q", want, tt.Texts())
+		}
+	}
+}

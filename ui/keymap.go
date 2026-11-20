@@ -9,6 +9,7 @@ import (
 	myeditor "github.com/egoist/mygo/ui/editor"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // chord 是一个按键组合：修饰键 + 主键（与 mygo 的快捷键模型一致）。
@@ -30,7 +31,7 @@ const (
 // mygo 的编辑命令）；否则由本包的 dispatchKeys 处理。
 type keyAction struct {
 	ID     string // 持久化用的键名，别随便改
-	Label  string
+	Label  func() string
 	Scope  keyScope
 	Def    []chord // 默认键位（空 = 默认不绑）
 	Cmd    myeditor.Command
@@ -42,33 +43,33 @@ type keyAction struct {
 // 注意 Ctrl+D / Ctrl+Y 顶掉了编辑器的默认键（Ctrl+D=选中下一个相同词、
 // Ctrl+Y=重做），这是用户明确要求的习惯：重做还有 Ctrl+Shift+Z。
 var keyActions = []keyAction{
-	{ID: "exec", Label: "执行（选区或当前语句）", Scope: scopeAlways,
+	{ID: "exec", Label: locales.KeyExec, Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyEnter}, {0, ui.KeyF5}}},
-	{ID: "save", Label: "保存控制台", Scope: scopeAlways,
+	{ID: "save", Label: locales.KeySaveConsole, Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyS}}},
-	{ID: "duplicateLine", Label: "复制当前行", Scope: scopeEditor, Cmd: myeditor.DuplicateLinesDown,
+	{ID: "duplicateLine", Label: locales.KeyDuplicateLine, Scope: scopeEditor, Cmd: myeditor.DuplicateLinesDown,
 		Def: []chord{{ui.Ctrl, ui.KeyY}}},
-	{ID: "deleteLine", Label: "删除当前行 / 选区", Scope: scopeEditor, Cmd: myeditor.DeleteLine,
+	{ID: "deleteLine", Label: locales.KeyDeleteLine, Scope: scopeEditor, Cmd: myeditor.DeleteLine,
 		Def: []chord{{ui.Ctrl, ui.KeyD}}},
-	{ID: "commentLine", Label: "注释/取消注释当前行", Scope: scopeEditor,
+	{ID: "commentLine", Label: locales.KeyCommentLine, Scope: scopeEditor,
 		Def: []chord{{ui.Ctrl, ui.KeySlash}}},
-	{ID: "format", Label: "格式化 SQL", Scope: scopeEditor,
+	{ID: "format", Label: locales.KeyFormat, Scope: scopeEditor,
 		Def: []chord{{ui.Ctrl | ui.Shift, ui.KeyF}}},
-	{ID: "copyCell", Label: "复制当前单元格", Scope: scopeNoEditor,
+	{ID: "copyCell", Label: locales.KeyCopyCell, Scope: scopeNoEditor,
 		Def: []chord{{ui.Ctrl, ui.KeyC}}},
-	{ID: "setNull", Label: "将选中单元格设为 NULL", Scope: scopeNoEditor,
+	{ID: "setNull", Label: locales.KeySetNull, Scope: scopeNoEditor,
 		Def: []chord{{ui.Ctrl | ui.Shift, ui.KeyN}}},
-	{ID: "nextConsole", Label: "切换到最近使用的控制台", Scope: scopeAlways,
+	{ID: "nextConsole", Label: locales.KeyNextConsole, Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyTab}}},
-	{ID: "toggleResults", Label: "显示/隐藏查询结果", Scope: scopeAlways,
+	{ID: "toggleResults", Label: locales.KeyToggleResults, Scope: scopeAlways,
 		Def: []chord{{ui.Alt, ui.KeyD}}},
-	{ID: "viewDDL", Label: "查看所选对象的 DDL", Scope: scopeAlways,
+	{ID: "viewDDL", Label: locales.KeyViewDDL, Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyQ}}},
-	{ID: "completion", Label: "SQL 补全", Scope: scopeEditor,
+	{ID: "completion", Label: locales.KeyCompletion, Scope: scopeEditor,
 		Def: []chord{{ui.Ctrl, ui.KeySpace}}},
-	{ID: "aiComplete", Label: "AI 补全", Scope: scopeEditor,
+	{ID: "aiComplete", Label: locales.KeyAIComplete, Scope: scopeEditor,
 		Def: []chord{{ui.Alt, ui.KeyBackslash}}},
-	{ID: "aiRewrite", Label: "AI 改写选中 SQL", Scope: scopeEditor,
+	{ID: "aiRewrite", Label: locales.KeyAIRewrite, Scope: scopeEditor,
 		Def: []chord{{ui.Ctrl, ui.KeyK}}},
 }
 
@@ -114,7 +115,7 @@ func (a *root) loadKeymap() string {
 		if raw, ok := saved[act.ID]; ok {
 			cs, err := parseChords(raw)
 			if err != nil {
-				warn = "快捷键 " + act.Label + " 无效（" + err.Error() + "），用默认值"
+				warn = locales.KeymapInvalid(act.Label(), err.Error())
 				a.chords[act.ID] = act.Def
 				continue
 			}
@@ -140,7 +141,7 @@ func (a *root) saveKeymap() {
 		return
 	}
 	if err := app.SaveKeymap(a.keymapPath, saved); err != nil {
-		a.consoleErr = "保存快捷键失败: " + err.Error()
+		a.consoleErr = locales.KeymapSaveFailed(err.Error())
 	}
 }
 
@@ -176,7 +177,7 @@ func (a *root) chordsFor(id string) []chord { return a.chords[id] }
 func (a *root) chordText(id string) string {
 	cs := a.chords[id]
 	if len(cs) == 0 {
-		return "未绑定"
+		return locales.KeymapUnbound()
 	}
 	return formatChords(cs)
 }
@@ -352,7 +353,7 @@ func parseKeyName(s string) (ui.Key, bool) {
 // errBadChord 是解析失败的统一错误。
 type chordError string
 
-func (e chordError) Error() string { return "无法识别的键位: " + string(e) }
+func (e chordError) Error() string { return locales.KeymapUnknownChord(string(e)) }
 
 func errBadChord(s string) error { return chordError(s) }
 

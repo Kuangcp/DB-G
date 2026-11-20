@@ -24,13 +24,21 @@ func TestCatalogsAligned(t *testing.T) {
 		}
 		want := placeholder.FindAllStringSubmatch(enText, -1)
 		got := placeholder.FindAllStringSubmatch(zhText, -1)
-		if len(want) != len(got) {
-			t.Errorf("%s placeholders differ: en=%v zh=%v", key, want, got)
-			continue
+		wantSet, gotSet := map[string]bool{}, map[string]bool{}
+		for _, m := range want {
+			wantSet[m[1]] = true
 		}
-		for i := range want {
-			if want[i][1] != got[i][1] {
-				t.Errorf("%s placeholder %d: en=%q zh=%q", key, i, want[i][1], got[i][1])
+		for _, m := range got {
+			gotSet[m[1]] = true
+		}
+		for name := range wantSet {
+			if !gotSet[name] {
+				t.Errorf("%s: zh missing placeholder %q", key, name)
+			}
+		}
+		for name := range gotSet {
+			if !wantSet[name] {
+				t.Errorf("%s: zh has extra placeholder %q", key, name)
 			}
 		}
 		if hasHan(enText) && !autonyms[key] {
@@ -53,7 +61,7 @@ func readCatalog(t *testing.T, name string) map[string]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var raw map[string]string
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
@@ -62,7 +70,9 @@ func readCatalog(t *testing.T, name string) map[string]string {
 		if len(k) > 0 && k[0] == '@' {
 			continue
 		}
-		out[k] = v
+		if s, ok := v.(string); ok {
+			out[k] = s
+		}
 	}
 	return out
 }

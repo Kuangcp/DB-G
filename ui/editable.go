@@ -13,6 +13,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // editStateKey 标识「当前结果」的可编辑状态；结果变了就重算。
@@ -61,11 +62,11 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	}
 	sess := a.activeSession()
 	if sess == nil || !sess.Caps().Has(engine.CapEditableResult) {
-		a.readonlyReason = "当前数据源不支持写操作"
+		a.readonlyReason = locales.EditReadonlyNoWrite()
 		return
 	}
 	if _, ok := sess.(engine.Transactional); !ok {
-		a.readonlyReason = "当前数据源不支持事务"
+		a.readonlyReason = locales.EditReadonlyNoTx()
 		return
 	}
 	rels := relationsIn(stmtScopeAt(a.lastExecSQL, 0))
@@ -76,12 +77,12 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		}
 	}
 	if len(seen) != 1 {
-		a.readonlyReason = "只有单表查询可编辑（JOIN/子查询结果只读）"
+		a.readonlyReason = locales.EditReadonlySingleTable()
 		return
 	}
 	for _, rel := range rels {
 		if rel.Table != "" && rel.Schema != "" {
-			a.readonlyReason = "跨 schema 的查询暂不支持写操作"
+			a.readonlyReason = locales.EditReadonlyCrossSchema()
 			return
 		}
 	}
@@ -97,7 +98,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		// headless（无窗口）下加载是同步的，这里再读一次即可立刻判定。
 		cols, all = a.catalog.getColumnsMany(scopeKey, []string{table})
 		if !all {
-			a.readonlyReason = "正在加载列信息，稍后再试"
+			a.readonlyReason = locales.EditReadonlyLoadingColumns()
 			a.editKey = "" // 列加载完成后重算
 			return
 		}
@@ -157,7 +158,7 @@ func (a *root) setSelectedNull(r *engine.QueryResult) {
 	}
 	if a.editPlan == nil {
 		if a.readonlyReason != "" {
-			a.consoleErr = "只读：" + a.readonlyReason
+			a.consoleErr = locales.EditReadonlyPrefix(a.readonlyReason)
 		}
 		return
 	}
@@ -207,9 +208,9 @@ func (a *root) setSelectedNull(r *engine.QueryResult) {
 	}
 	switch {
 	case nullCol != "":
-		a.consoleErr = "列 " + nullCol + " 不可为空"
+		a.consoleErr = locales.EditColumnNotNull(nullCol)
 	case readonly > 0:
-		a.consoleErr = "主键列不可设为 NULL"
+		a.consoleErr = locales.EditPkNotNull()
 	}
 }
 
@@ -289,7 +290,7 @@ func (a *root) previewEdits() ([]string, error) {
 	}
 	es := a.editSet()
 	if es.Count() == 0 {
-		return nil, errors.New("没有待提交的改动")
+		return nil, errors.New(locales.EditNothingToCommit())
 	}
 	return es.Preview(a.editPlan, a.rowsForPlan())
 }
@@ -306,11 +307,11 @@ func (a *root) applyEditsSync() error {
 		return err
 	}
 	if len(ops) == 0 {
-		return errors.New("没有实际改动（值与原来相同或行已被删除）")
+		return errors.New(locales.EditNoEffectiveChange())
 	}
 	txer, ok := a.activeSession().(engine.Transactional)
 	if !ok {
-		return errors.New("当前数据源不支持事务")
+		return errors.New(locales.EditReadonlyNoTx())
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -373,13 +374,13 @@ func (a *root) applyConfirmedEdits() {
 		a.editBusy = false
 		if err != nil {
 			a.setEditStatus("")
-			a.consoleErr = "提交失败（已回滚）：" + err.Error()
+			a.consoleErr = locales.EditCommitFailed(err.Error())
 			app.LogWarn("write", "commit failed", "err", err.Error())
 			return
 		}
 		a.consoleErr = ""
 		a.editKey = ""
-		a.refreshResult(func() { a.setEditStatus("提交成功") })
+		a.refreshResult(func() { a.setEditStatus(locales.EditCommitOK()) })
 	}
 	if a.win == nil {
 		done(a.applyEditsSync())
@@ -432,21 +433,21 @@ func (a *root) editCellModal(c *ui.Context) {
 	}
 	w, h := a.cellModalSize()
 	ui.Modal(c, &a.editCellOpen, func() {
-		pos := fmt.Sprintf("第 %d 行", a.editCellRow+1)
+		pos := locales.EditRowPos(a.editCellRow + 1)
 		if a.editCellRow < 0 {
-			pos = fmt.Sprintf("新增行 %d", -a.editCellRow)
+			pos = locales.EditNewRowPos(-a.editCellRow)
 		}
-		ui.Text(c, fmt.Sprintf("编辑 %s · %s", a.editPlan.Columns[a.editCellCol], pos)).Bold()
+		ui.Text(c, locales.EditCellTitle(a.editPlan.Columns[a.editCellCol], pos)).Bold()
 		ui.TextArea(c, &a.editCellText).AutoFocus().Grow(1)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.editCellOpen = false
 			}
-			if ui.Button(c, "设为 NULL").Clicked() {
+			if ui.Button(c, locales.SetNull()).Clicked() {
 				a.setCellEdit(a.editCellRow, a.editCellCol, nil)
 				a.editCellOpen = false
 			}
-			if ui.PrimaryButton(c, "保存").Clicked() {
+			if ui.PrimaryButton(c, locales.CommonSave()).Clicked() {
 				a.commitCellEdit(a.editCellRow, a.editCellCol, a.editCellText)
 				a.editCellOpen = false
 			}
@@ -461,15 +462,15 @@ func (a *root) previewModal(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.previewOpen, func() {
-		ui.Text(c, fmt.Sprintf("提交 %d 条改动（单事务，影响行数不符会整体回滚）", len(a.previewLines))).Bold()
+		ui.Text(c, locales.EditPreviewTitle(len(a.previewLines))).Bold()
 		ui.ScrollBoth(c).Height(320).Children(func() {
 			ui.Text(c, strings.Join(a.previewLines, "\n")).Font("monospace").FontSize(12)
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.previewOpen = false
 			}
-			if ui.PrimaryButton(c, "确认提交").Clicked() {
+			if ui.PrimaryButton(c, locales.EditConfirmCommit()).Clicked() {
 				a.applyConfirmedEdits()
 			}
 		})
@@ -506,25 +507,25 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 	n := es.Count()
 	editable := a.editPlan != nil
 	if editable {
-		if iconButton(c, iconSquarePen, "编辑当前格", ui.Transparent).Clicked() {
+		if iconButton(c, iconSquarePen, locales.EditCurrentCell(), ui.Transparent).Clicked() {
 			a.beginEditCurrent(r)
 		}
-		if iconButton(c, iconPlus, "新增行", ui.Transparent).Clicked() {
+		if iconButton(c, iconPlus, locales.EditAddRow(), ui.Transparent).Clicked() {
 			a.addInsertRow(r)
 		}
-		if iconButton(c, iconMinus, "删除当前行", c.Theme().Danger).
+		if iconButton(c, iconMinus, locales.EditDeleteRow(), c.Theme().Danger).
 			Disabled(len(a.rowsForPlan()) == 0 && len(es.Inserts) == 0).Clicked() {
 			a.deleteSelectedRow(r)
 		}
-		if iconButton(c, iconUndo, "撤销改动", ui.Transparent).Disabled(n == 0).Clicked() {
+		if iconButton(c, iconUndo, locales.EditUndoChanges(), ui.Transparent).Disabled(n == 0).Clicked() {
 			a.editSet().Clear()
 			a.editKey = ""
 		}
 	}
 	if editable {
-		label := "提交"
+		label := locales.EditCommit()
 		if n > 0 {
-			label = fmt.Sprintf("提交 (%d)", n)
+			label = locales.EditCommitN(n)
 		}
 		col := ui.Transparent
 		if n > 0 && !a.editBusy {
@@ -534,7 +535,7 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 			a.commitEdits()
 		}
 	} else if a.readonlyReason != "" {
-		ui.Text(c, "只读："+a.readonlyReason).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+		ui.Text(c, locales.EditReadonlyPrefix(a.readonlyReason)).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 	}
 }
 
@@ -560,12 +561,12 @@ func editTextFor(kind string, r *engine.QueryResult, col int, v any) string {
 func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Editable) {
 		if a.readonlyReason != "" {
-			a.consoleErr = "只读：" + a.readonlyReason
+			a.consoleErr = locales.EditReadonlyPrefix(a.readonlyReason)
 		}
 		return
 	}
 	if row >= 0 && !a.editPlan.Editable[col] {
-		a.consoleErr = "主键列不可编辑"
+		a.consoleErr = locales.EditPkReadonly()
 		return
 	}
 	kind := a.connKind()

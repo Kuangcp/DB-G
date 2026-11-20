@@ -33,18 +33,18 @@ func windowButtons(c *ui.Context, win titleWindow) {
 		return
 	}
 	t := c.Theme()
-	if iconButtonPlain(c, iconMinus, "最小化", t.TextMuted).Clicked() {
+	if iconButtonPlain(c, iconMinus, locales.WindowMinimize(), t.TextMuted).Clicked() {
 		win.Minimize()
 	}
 	maximized := win.IsMaximized()
-	icon, label := windowMaximizeIcon, "最大化"
+	icon, label := windowMaximizeIcon, locales.WindowMaximize()
 	if maximized {
-		icon, label = windowRestoreIcon, "还原"
+		icon, label = windowRestoreIcon, locales.WindowRestore()
 	}
 	if iconButtonPlain(c, icon, label, t.TextMuted).Clicked() {
 		win.ToggleMaximize()
 	}
-	if iconButtonPlain(c, iconClose, "关闭窗口", t.TextMuted).Clicked() {
+	if iconButtonPlain(c, iconClose, locales.WindowClose(), t.TextMuted).Clicked() {
 		win.Close()
 	}
 }
@@ -78,17 +78,17 @@ func (a *root) titleBar(c *ui.Context) {
 		ui.Text(c, app.DisplayName).Bold().FontSize(12.5)
 		ui.Spacer(c)
 		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
-			if iconButtonPlain(c, iconFolderOpen, "打开 SQL 文件", t.TextMuted).Clicked() {
+			if iconButtonPlain(c, iconFolderOpen, locales.TopOpenSQLFile(), t.TextMuted).Clicked() {
 				a.pickOpenSQLFiles()
 			}
-			if iconButtonPlain(c, iconHistory, "历史", t.TextMuted).Clicked() {
+			if iconButtonPlain(c, iconHistory, locales.TopHistory(), t.TextMuted).Clicked() {
 				a.historyOpen = true
 			}
 			aiColor := t.TextMuted
 			if a.aiChat.open {
 				aiColor = t.Accent
 			}
-			if iconButtonPlain(c, iconSparkles, "AI 助手", aiColor).Clicked() {
+			if iconButtonPlain(c, iconSparkles, locales.TopAIAssistant(), aiColor).Clicked() {
 				a.aiChat.open = !a.aiChat.open
 				if a.aiChat.open {
 					a.loadAIChat()
@@ -97,7 +97,7 @@ func (a *root) titleBar(c *ui.Context) {
 					a.stopAI()
 				}
 			}
-			if iconButtonPlain(c, iconSettings, "设置", t.TextMuted).Clicked() {
+			if iconButtonPlain(c, iconSettings, locales.SettingsTitle(), t.TextMuted).Clicked() {
 				a.requestSettings()
 			}
 		})

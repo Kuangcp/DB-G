@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // connTagDraft 是连接弹窗里一个已添加标签的编辑态。
@@ -117,22 +118,22 @@ func (a *root) tagSuggestions() []app.ConnTag {
 // tagColorSpec 是标签调色板的一项：Key 落盘，Label 给人看，Color 是实际颜色。
 type tagColorSpec struct {
 	Key   string
-	Label string
+	Label func() string
 	Color ui.Color
 }
 
 // tagColorSpecs 是固定调色板。颜色为中等明度，浅色/深色主题下都能辨认；
-// 标签只存 Key，主题切换不影响已保存的标签。
+// 标签只存 Key，主题切换不影响已保存的标签。Label 用函数以便切语言即时生效。
 var tagColorSpecs = []tagColorSpec{
-	{Key: "red", Label: "红", Color: ui.Hex("#e5484d")},
-	{Key: "orange", Label: "橙", Color: ui.Hex("#f76b15")},
-	{Key: "amber", Label: "金", Color: ui.Hex("#e5a50a")},
-	{Key: "green", Label: "绿", Color: ui.Hex("#30a46c")},
-	{Key: "teal", Label: "青", Color: ui.Hex("#12a594")},
-	{Key: "blue", Label: "蓝", Color: ui.Hex("#0091ff")},
-	{Key: "violet", Label: "紫", Color: ui.Hex("#8e4ec6")},
-	{Key: "pink", Label: "粉", Color: ui.Hex("#d6409f")},
-	{Key: "gray", Label: "灰", Color: ui.Hex("#8b8d98")},
+	{Key: "red", Label: locales.TagColorRed, Color: ui.Hex("#e5484d")},
+	{Key: "orange", Label: locales.TagColorOrange, Color: ui.Hex("#f76b15")},
+	{Key: "amber", Label: locales.TagColorAmber, Color: ui.Hex("#e5a50a")},
+	{Key: "green", Label: locales.TagColorGreen, Color: ui.Hex("#30a46c")},
+	{Key: "teal", Label: locales.TagColorTeal, Color: ui.Hex("#12a594")},
+	{Key: "blue", Label: locales.TagColorBlue, Color: ui.Hex("#0091ff")},
+	{Key: "violet", Label: locales.TagColorViolet, Color: ui.Hex("#8e4ec6")},
+	{Key: "pink", Label: locales.TagColorPink, Color: ui.Hex("#d6409f")},
+	{Key: "gray", Label: locales.TagColorGray, Color: ui.Hex("#8b8d98")},
 }
 
 func tagColorSpecOf(key string) tagColorSpec {
@@ -152,8 +153,8 @@ func tagColorSpecOf(key string) tagColorSpec {
 // tagColor 把落盘的调色板键换成颜色；未知键回落默认蓝。
 func tagColor(key string) ui.Color { return tagColorSpecOf(key).Color }
 
-// tagColorLabel 把落盘的调色板键换成中文色名。
-func tagColorLabel(key string) string { return tagColorSpecOf(key).Label }
+// tagColorLabel 把落盘的调色板键换成当前语言的色名。
+func tagColorLabel(key string) string { return tagColorSpecOf(key).Label() }
 
 // nextTagColor 返回调色板里的下一个键，用于点色块循环换色。
 func nextTagColor(key string) string {
@@ -198,7 +199,7 @@ func editTagChip(c *ui.Context, tag connTagDraft, remove func()) {
 		Children(func() {
 			ui.Text(c, "●").FontSize(8).TextColor(col)
 			ui.Text(c, tag.label).FontSize(11).TextColor(t.Text).SingleLine()
-			if iconButtonPlain(c, iconClose, "移除标签 "+tag.label, ui.Transparent).Clicked() {
+			if iconButtonPlain(c, iconClose, locales.TagRemove(tag.label), ui.Transparent).Clicked() {
 				remove()
 			}
 		})

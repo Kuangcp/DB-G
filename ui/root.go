@@ -255,7 +255,7 @@ type root struct {
 
 func newRoot(text string) *root {
 	a := &root{
-		code:             newCodeEditor("在左侧数据源下新建或打开控制台"),
+		code:             newCodeEditor(locales.TabEmptyHint()),
 		con:              app.NewConsole(),
 		editorPercent:    65,
 		sidebarWidth:     280,
@@ -340,7 +340,7 @@ func newRootWithStore(storePath string) *root {
 		r.syncKeyKCV = sync.KCV(key)
 	}
 	if vault, err := app.LoadVault(storePath); err != nil {
-		r.aiWarn = "AI 密钥不可用：" + err.Error()
+		r.aiWarn = locales.RootAiKeyUnavailable(err.Error())
 	} else {
 		r.vault = vault
 		prefs, warn := app.LoadAIPrefs(r.aiPrefsPath, vault)
@@ -715,7 +715,7 @@ func (a *root) View(c *ui.Context) {
 func (a *root) recoverPanic(where string) {
 	if r := recover(); r != nil {
 		app.LogError("panic", where, "err", fmt.Sprint(r), "stack", string(debug.Stack()))
-		a.consoleErr = "内部错误：" + fmt.Sprint(r)
+		a.consoleErr = locales.RootInternalError(fmt.Sprint(r))
 	}
 }
 
@@ -843,19 +843,19 @@ func (a *root) view(c *ui.Context) {
 								}
 							}
 							ui.Spacer(c)
-							if iconButton(c, iconPlay, "执行 (Ctrl+Enter)", c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+							if iconButton(c, iconPlay, locales.TopExec(), c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
 								a.execPending = true
 							}
-							if iconButton(c, iconPlan, "执行计划", ui.Transparent).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+							if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
 								a.runExplain(false)
 							}
 							if a.installNeed.NeedInstall {
-								label := "安装到应用列表"
+								label := locales.InstallTitle()
 								switch {
 								case a.installNeed.Upgrade:
-									label = "升级应用（" + a.installNeed.Running + "）"
+									label = locales.TopUpgradeApp(a.installNeed.Running)
 								case a.installNeed.Repair:
-									label = "修复应用菜单"
+									label = locales.InstallRepairTitle()
 								}
 								if iconButton(c, iconUpgrade, label, c.Theme().Accent).Clicked() {
 									a.installOpen = true
@@ -865,7 +865,7 @@ func (a *root) view(c *ui.Context) {
 							if a.installNote != "" {
 								ui.Text(c, a.installNote).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 							}
-						}).Label("操作")
+						}).Label(locales.TopActions())
 
 						// 标签条 + 工作区切换器
 						a.tabBar(c)
@@ -873,21 +873,21 @@ func (a *root) view(c *ui.Context) {
 						// 工具行：查找（编辑器自带查找栏；性能预设/信息在独立设置窗口里）
 						ui.Toolbar(c, func() {
 							ui.Spacer(c)
-							if iconButton(c, iconSearch, "查找 (Ctrl+F)", ui.Transparent).Clicked() {
+							if iconButton(c, iconSearch, locales.TopFind(), ui.Transparent).Clicked() {
 								a.code.Find()
 							}
-							if iconButton(c, iconFormat, "格式化 SQL", ui.Transparent).Clicked() {
+							if iconButton(c, iconFormat, locales.KeyFormat(), ui.Transparent).Clicked() {
 								a.formatActive()
 							}
-							if iconButton(c, iconSparkles, "AI 补全 (Alt+\\)", ui.Transparent).Clicked() {
+							if iconButton(c, iconSparkles, locales.TopAIComplete(), ui.Transparent).Clicked() {
 								a.requestAICompletion()
 							}
-						}).Label("编辑器工具")
+						}).Label(locales.TopEditorTools())
 
 						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
 						editor := func() {
 							a.externalBanner(c)
-							a.code.View(c).Label("编辑器")
+							a.code.View(c).Label(locales.TopEditor())
 							if a.execPending {
 								a.execPending = false
 								a.runSQL()

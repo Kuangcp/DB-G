@@ -65,7 +65,7 @@ func (a *root) setLocalePref(tag string) {
 	a.localePref, a.localeWarn = prefs.Locale, warn
 	if a.localePrefsPath != "" {
 		if err := app.SaveLocalePrefs(a.localePrefsPath, prefs); err != nil {
-			a.localeWarn = "保存语言设置失败: " + err.Error()
+			a.localeWarn = locales.SettingsSaveLocaleFailed(err.Error())
 		}
 	}
 	if a.win != nil {
@@ -114,9 +114,9 @@ func (a *root) settingsView(c *ui.Context) {
 func (a *root) fontSection(c *ui.Context) {
 	cr := controlRadius(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "字体").Bold()
+		ui.Text(c, locales.SettingsFontTitle()).Bold()
 		ui.Spacer(c)
-		if ui.Button(c, "恢复默认").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsRestoreDefaults()).Radius(cr).Clicked() {
 			a.fontPrefs = app.DefaultFontPrefs()
 			a.applyFontPrefs()
 			p := a.themePrefs
@@ -124,48 +124,48 @@ func (a *root) fontSection(c *ui.Context) {
 			a.setThemePrefs(p)
 		}
 	})
-	ui.Text(c, "编辑区、结果区、控制台标签、功能界面各用一套字体；修改即时生效并保存到 fonts.json，直接看主窗口即可。").FontSize(12).
+	ui.Text(c, locales.SettingsFontHint()).FontSize(12).
 		TextColor(c.Theme().TextMuted)
 
-	ui.Text(c, "编辑区").Bold()
+	ui.Text(c, locales.SettingsEditor()).Bold()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.NumberInput(c, &a.fontPrefs.Editor.Size, app.MinFontSize, app.MaxFontSize, 1).
-			Label("编辑区字号").Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsEditorFontSize()).Width(90).Radius(cr).Changed() {
 			a.applyFontPrefs()
 		}
 		ui.Text(c, fmt.Sprintf("%.0f pt", a.fontPrefs.Editor.Size)).FontSize(12).
 			TextColor(c.Theme().TextMuted)
 	})
-	ui.Text(c, "字体族（留空 = 系统等宽）").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsFontFamilyEditor()).FontSize(12).TextColor(c.Theme().TextMuted)
 	if ui.TextInput(c, &a.fontPrefs.Editor.Family).
-		Placeholder("例如 JetBrains Mono / Sarasa Mono SC").Radius(cr).Changed() {
+		Placeholder(locales.SettingsFontEditorPlaceholder()).Radius(cr).Changed() {
 		a.applyFontPrefs()
 	}
 	ui.Divider(c)
 
-	ui.Text(c, "结果区").Bold()
+	ui.Text(c, locales.SettingsResultsArea()).Bold()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.NumberInput(c, &a.fontPrefs.Result.Size, 0, app.MaxFontSize, 1).
-			Label("结果区字号").Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsResultFontSize()).Width(90).Radius(cr).Changed() {
 			a.applyFontPrefs()
 		}
 		ui.Text(c, fmt.Sprintf("%.0f pt", a.fontPrefs.Result.Size)).FontSize(12).
 			TextColor(c.Theme().TextMuted)
-		ui.Text(c, "0 = 跟随界面字号").FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.SettingsFollowUiFontSize()).FontSize(11).TextColor(c.Theme().TextMuted)
 	})
-	ui.Text(c, "字体族（留空 = 跟随功能界面）").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsFontFamilyResult()).FontSize(12).TextColor(c.Theme().TextMuted)
 	if ui.TextInput(c, &a.fontPrefs.Result.Family).
-		Placeholder("例如 JetBrains Mono / monospace").Radius(cr).Changed() {
+		Placeholder(locales.SettingsFontResultPlaceholder()).Radius(cr).Changed() {
 		a.applyFontPrefs()
 	}
 	ui.Divider(c)
 
-	ui.Text(c, "控制台标签").Bold()
-	ui.Text(c, "控制台标签栏的数据源名与控制台名字号；控制台名自动小 2pt。").FontSize(12).
+	ui.Text(c, locales.SettingsConsoleTabs()).Bold()
+	ui.Text(c, locales.SettingsConsoleTabsHint()).FontSize(12).
 		TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.NumberInput(c, &a.fontPrefs.TabSize, app.MinTabFontSize, app.MaxTabFontSize, 0.5).
-			Label("控制台标签字号").Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsTabFontSize()).Width(90).Radius(cr).Changed() {
 			a.applyFontPrefs()
 		}
 		ui.Text(c, fmt.Sprintf("%.1f pt", a.fontPrefs.TabSize)).FontSize(12).
@@ -174,22 +174,22 @@ func (a *root) fontSection(c *ui.Context) {
 
 	ui.Divider(c)
 
-	ui.Text(c, "功能界面").Bold()
-	ui.Text(c, "设置、控制台名、菜单、按钮等编辑区与结果区以外的文字。").FontSize(12).
+	ui.Text(c, locales.SettingsUiFont()).Bold()
+	ui.Text(c, locales.SettingsUiFontHint()).FontSize(12).
 		TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		size := float64(a.themePrefs.FontSize)
 		if ui.NumberInput(c, &size, app.DefaultThemeFontSize, app.MaxThemeFontSize, 1).
-			Label("界面字号").Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsUiFontSize()).Width(90).Radius(cr).Changed() {
 			p := a.themePrefs
 			p.FontSize = int(size)
 			a.setThemePrefs(p)
 		}
-		ui.Text(c, "0 = 跟随主题").FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.SettingsFollowTheme()).FontSize(11).TextColor(c.Theme().TextMuted)
 	})
-	ui.Text(c, "字体族（留空 = 系统 UI 字体）").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsFontFamilyUI()).FontSize(12).TextColor(c.Theme().TextMuted)
 	if ui.TextInput(c, &a.fontPrefs.UI).
-		Placeholder("例如 Noto Sans CJK SC").Radius(cr).Changed() {
+		Placeholder(locales.SettingsFontUiPlaceholder()).Radius(cr).Changed() {
 		a.applyFontPrefs()
 	}
 	if a.fontPrefsWarn != "" {
@@ -201,23 +201,23 @@ func (a *root) fontSection(c *ui.Context) {
 func (a *root) consolePrefsSection(c *ui.Context) {
 	cr := controlRadius(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "控制台").Bold()
+		ui.Text(c, locales.SettingsConsoleTitle()).Bold()
 		ui.Spacer(c)
-		if ui.Button(c, "恢复默认").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsRestoreDefaults()).Radius(cr).Clicked() {
 			a.setConsolePrefs(app.DefaultConsolePrefs())
 		}
 	})
-	ui.Text(c, "停止输入后自动保存正文的延迟；切换标签、执行、关闭窗口或退出时仍会立即保存。").
+	ui.Text(c, locales.SettingsConsoleSaveHint()).
 		FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		secs := float64(a.consolePrefs.SaveDelaySeconds)
 		if ui.NumberInput(c, &secs, float64(app.MinConsoleSaveDelaySeconds), float64(app.MaxConsoleSaveDelaySeconds), 1).
-			Label("自动保存延迟").Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsSaveDelay()).Width(90).Radius(cr).Changed() {
 			p := a.consolePrefs
 			p.SaveDelaySeconds = int(secs)
 			a.setConsolePrefs(p)
 		}
-		ui.Text(c, fmt.Sprintf("%d 秒", a.consolePrefs.SaveDelaySeconds)).FontSize(12).
+		ui.Text(c, locales.SettingsSeconds(a.consolePrefs.SaveDelaySeconds)).FontSize(12).
 			TextColor(c.Theme().TextMuted)
 	})
 	if a.consolePrefsWarn != "" {
@@ -234,7 +234,7 @@ func (a *root) setConsolePrefs(p app.ConsolePrefs) {
 		return
 	}
 	if err := app.SaveConsolePrefs(a.consolePrefsPath, p); err != nil {
-		a.consolePrefsWarn = "保存控制台设置失败: " + err.Error()
+		a.consolePrefsWarn = locales.SettingsSaveConsoleFailed(err.Error())
 	} else {
 		a.consolePrefsWarn = ""
 	}
@@ -252,36 +252,36 @@ func (a *root) applyConsolePrefs() {
 func (a *root) resultSection(c *ui.Context) {
 	cr := controlRadius(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "结果").Bold()
+		ui.Text(c, locales.SettingsResultsTitle()).Bold()
 		ui.Spacer(c)
-		if ui.Button(c, "恢复默认").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsRestoreDefaults()).Radius(cr).Clicked() {
 			a.setResultPrefs(app.DefaultResultPrefs())
 		}
 	})
-	ui.Text(c, "每页行数决定一次查询最多读多少行、以及翻页的步长；字节预算超出后当前页会标记截断。").
+	ui.Text(c, locales.SettingsPageSizeHint()).
 		FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		mb := float64(a.resultPrefs.BudgetMB)
 		if ui.NumberInput(c, &mb, float64(app.MinResultBudgetMB), float64(app.MaxResultBudgetMB), 1).
-			Label("结果大小预算").Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsBudget()).Width(90).Radius(cr).Changed() {
 			p := a.resultPrefs
 			p.BudgetMB = int(mb)
 			a.setResultPrefs(p)
 		}
-		ui.Text(c, fmt.Sprintf("MB（当前 %d MB）", a.resultPrefs.BudgetMB)).FontSize(12).
+		ui.Text(c, locales.SettingsBudgetValue(a.resultPrefs.BudgetMB)).FontSize(12).
 			TextColor(c.Theme().TextMuted)
 	})
-	ui.Text(c, "预算按结果集文本/二进制单元格的字节数累计；单个单元格另有 1 MiB 驱动上限。").
+	ui.Text(c, locales.SettingsBudgetHint()).
 		FontSize(11).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		size := float64(a.resultPrefs.PageSize)
 		if ui.NumberInput(c, &size, float64(app.MinResultPageSize), float64(app.MaxResultPageSize), 50).
-			Label("每页行数").Width(100).Radius(cr).Changed() {
+			Label(locales.SettingsRowsPerPage()).Width(100).Radius(cr).Changed() {
 			p := a.resultPrefs
 			p.PageSize = int(size)
 			a.setResultPrefs(p)
 		}
-		ui.Text(c, fmt.Sprintf("行/页（当前 %d，%d–%d）",
+		ui.Text(c, locales.SettingsRowsPerPageValue(
 			a.resultPrefs.PageSize, app.MinResultPageSize, app.MaxResultPageSize)).
 			FontSize(12).TextColor(c.Theme().TextMuted)
 	})
@@ -299,7 +299,7 @@ func (a *root) setResultPrefs(p app.ResultPrefs) {
 		return
 	}
 	if err := app.SaveResultPrefs(a.resultPrefsPath, p); err != nil {
-		a.resultPrefsWarn = "保存结果设置失败: " + err.Error()
+		a.resultPrefsWarn = locales.SettingsSaveResultFailed(err.Error())
 	} else {
 		a.resultPrefsWarn = ""
 	}
@@ -309,12 +309,12 @@ func (a *root) setResultPrefs(p app.ResultPrefs) {
 // logSection 显示日志目录与打开入口。
 func (a *root) logSection(c *ui.Context) {
 	cr := controlRadius(c)
-	ui.Text(c, "日志").Bold()
-	ui.Text(c, "一次启动一个文件，纯文本（时间 / 级别 / 标签 / 消息）。").FontSize(12).
+	ui.Text(c, locales.SettingsLogTitle()).Bold()
+	ui.Text(c, locales.SettingsLogHint()).FontSize(12).
 		TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, app.LogDir()).FontSize(12).SingleLine().Grow(1)
-		if ui.Button(c, "打开日志目录").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsOpenLogFolder()).Radius(cr).Clicked() {
 			mygo.Shell.ShowItemInFolder(app.LogDir())
 		}
 	})
@@ -324,18 +324,17 @@ func (a *root) logSection(c *ui.Context) {
 func (a *root) devSection(c *ui.Context) {
 	cr := controlRadius(c)
 	disabled := a.activeConsole == ""
-	ui.Text(c, "编辑器性能（开发用）").Bold()
-	ui.Text(c, fmt.Sprintf(
-		"行数=%d 字节=%d 版本=%d",
-		a.code.LineCount(), a.code.ByteLen(), a.code.Version(),
+	ui.Text(c, locales.SettingsDevPerf()).Bold()
+	ui.Text(c, locales.SettingsPerfStats(
+		a.code.LineCount(), a.code.ByteLen(), fmt.Sprint(a.code.Version()),
 	)).FontSize(12).SingleLine()
 	ui.Row(c).Gap(6).Children(func() {
-		if ui.Button(c, "刷新").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsRefresh()).Radius(cr).Clicked() {
 			a.updateSettingsWindow()
 		}
 	})
 
-	ui.Text(c, "预设（写入当前激活控制台并立即保存）").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsPresets()).FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(6).Children(func() {
 		for _, n := range []int{3_000, 12_000, 100_000} {
 			label := fmt.Sprintf("%dk", n/1_000)
@@ -345,14 +344,14 @@ func (a *root) devSection(c *ui.Context) {
 		}
 	})
 
-	ui.Text(c, "补全").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsCompletions()).FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(6).Children(func() {
-		if ui.Button(c, "刷新补全缓存").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsRefreshCompletions()).Radius(cr).Clicked() {
 			a.refreshCompletions()
 		}
 	})
 	if disabled {
-		ui.Text(c, "没有激活的控制台：预设不可用").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.SettingsNoActiveConsole()).FontSize(12).TextColor(c.Theme().TextMuted)
 	}
 	if a.consoleErr != "" {
 		ui.Text(c, a.consoleErr).TextColor(c.Theme().Danger).FontSize(12)
@@ -370,7 +369,7 @@ func (a *root) applyFontPrefs() {
 		return
 	}
 	if err := app.SaveFontPrefs(a.fontPrefsPath, a.fontPrefs); err != nil {
-		a.fontPrefsWarn = "保存字体设置失败: " + err.Error()
+		a.fontPrefsWarn = locales.SettingsSaveFontFailed(err.Error())
 	} else {
 		a.fontPrefsWarn = ""
 	}
@@ -474,17 +473,17 @@ func (a *root) updateSettingsWindow() {
 
 // 外观分区的强调色选项：值对应 app.ThemePrefs.Accent（空 = 主题/桌面强调色）。
 type themeAccentOption struct {
-	label string
+	label func() string
 	value string
 }
 
 var themeAccentOptions = []themeAccentOption{
-	{"默认", ""},
-	{"蓝", "blue"},
-	{"紫", "violet"},
-	{"绿", "green"},
-	{"橙", "orange"},
-	{"玫红", "rose"},
+	{locales.ThemeDefault, ""},
+	{locales.ThemeBlue, "blue"},
+	{locales.ThemeViolet, "violet"},
+	{locales.ThemeGreen, "green"},
+	{locales.ThemeOrange, "orange"},
+	{locales.ThemeRose, "rose"},
 }
 
 // modeIndex 把设置里的模式换成 Segmented 的下标。
@@ -534,27 +533,28 @@ func themeDensity(idx int) string {
 // paletteEditor 是自定义配色的五组颜色输入；留空沿用默认。
 func (a *root) paletteEditor(c *ui.Context, cr float32, prefs app.ThemePrefs) {
 	t := c.Theme()
-	ui.Text(c, "自定义配色（颜色留空则沿用默认）").FontSize(12).TextColor(t.TextMuted)
+	ui.Text(c, locales.SettingsCustomPalette()).FontSize(12).TextColor(t.TextMuted)
 	fields := []struct {
-		label       string
+		label       func() string
 		light, dark *string
 	}{
-		{"背景", &a.paletteLight.Background, &a.paletteDark.Background},
-		{"容器", &a.paletteLight.Surface, &a.paletteDark.Surface},
-		{"边框", &a.paletteLight.Border, &a.paletteDark.Border},
-		{"正文", &a.paletteLight.Text, &a.paletteDark.Text},
-		{"次要文字", &a.paletteLight.TextMuted, &a.paletteDark.TextMuted},
+		{locales.PaletteBackground, &a.paletteLight.Background, &a.paletteDark.Background},
+		{locales.PaletteSurface, &a.paletteLight.Surface, &a.paletteDark.Surface},
+		{locales.PaletteBorder, &a.paletteLight.Border, &a.paletteDark.Border},
+		{locales.PaletteText, &a.paletteLight.Text, &a.paletteDark.Text},
+		{locales.PaletteMutedText, &a.paletteLight.TextMuted, &a.paletteDark.TextMuted},
 	}
 	changed := false
 	for _, f := range fields {
 		f := f
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, f.label).Width(68).FontSize(12).TextColor(t.TextMuted)
-			if ui.TextInput(c, f.light).Placeholder("浅色 " + f.label).Label("浅色" + f.label).
+			name := f.label()
+			ui.Text(c, name).Width(68).FontSize(12).TextColor(t.TextMuted)
+			if ui.TextInput(c, f.light).Placeholder(locales.PaletteLightField(name)).Label(locales.PaletteLightField(name)).
 				Radius(cr).Fill().Changed() {
 				changed = true
 			}
-			if ui.TextInput(c, f.dark).Placeholder("深色 " + f.label).Label("深色" + f.label).
+			if ui.TextInput(c, f.dark).Placeholder(locales.PaletteDarkField(name)).Label(locales.PaletteDarkField(name)).
 				Radius(cr).Fill().Changed() {
 				changed = true
 			}
@@ -566,7 +566,7 @@ func (a *root) paletteEditor(c *ui.Context, cr float32, prefs app.ThemePrefs) {
 	if a.paletteErr != "" {
 		ui.Text(c, a.paletteErr).FontSize(12).TextColor(t.Danger).SingleLine()
 	}
-	if ui.Button(c, "从默认配色重置").Radius(cr).Clicked() {
+	if ui.Button(c, locales.SettingsResetPalette()).Radius(cr).Clicked() {
 		a.paletteLight, a.paletteDark = defaultCustomPalettes()
 		a.paletteErr = ""
 		a.applyPaletteDrafts(prefs)
@@ -577,23 +577,23 @@ func (a *root) paletteEditor(c *ui.Context, cr float32, prefs app.ThemePrefs) {
 func (a *root) appearanceSection(c *ui.Context) {
 	cr := controlRadius(c)
 	prefs := a.themePrefs
-	ui.Text(c, "外观").Bold()
-	ui.Text(c, "跟随系统时保留桌面深浅色、强调色与无障碍设置；修改即时生效。").FontSize(12).
+	ui.Text(c, locales.SettingsAppearance()).Bold()
+	ui.Text(c, locales.SettingsAppearanceHint()).FontSize(12).
 		TextColor(c.Theme().TextMuted)
 
 	// 模式
-	ui.Text(c, "主题").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsTheme()).FontSize(12).TextColor(c.Theme().TextMuted)
 	mode := modeIndex(prefs.Mode)
-	if ui.Segmented(c, &mode, "跟随系统", "浅色", "深色").Radius(cr).Changed() {
+	if ui.Segmented(c, &mode, locales.LanguageSystem(), locales.SettingsModeLight(), locales.SettingsModeDark()).Radius(cr).Changed() {
 		prefs.Mode = themeMode(mode)
 		a.setThemePrefs(prefs)
 	}
 
 	// 配色方案
-	ui.Text(c, "配色方案").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsScheme()).FontSize(12).TextColor(c.Theme().TextMuted)
 	schemeLabels := make([]string, len(themeSchemeOptions))
 	for i, opt := range themeSchemeOptions {
-		schemeLabels[i] = opt.label
+		schemeLabels[i] = opt.label()
 	}
 	scheme := themeSchemeIndex(prefs.Scheme)
 	if ui.Segmented(c, &scheme, schemeLabels...).Radius(cr).Changed() {
@@ -611,11 +611,11 @@ func (a *root) appearanceSection(c *ui.Context) {
 	}
 
 	// 强调色
-	ui.Text(c, "强调色").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsAccent()).FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		for _, opt := range themeAccentOptions {
 			opt := opt
-			sw := ui.ButtonBase(c).Label("强调色："+opt.label).Size(20, 20).Radius(10)
+			sw := ui.ButtonBase(c).Label(locales.SettingsAccentLabel(opt.label())).Size(20, 20).Radius(10)
 			if opt.value == "" {
 				sw.Background(c.Theme().Accent)
 			} else {
@@ -631,7 +631,7 @@ func (a *root) appearanceSection(c *ui.Context) {
 				a.setThemePrefs(prefs)
 			}
 		}
-		if ui.TextInput(c, &a.themeHex).Placeholder("#rrggbb").Label("自定义强调色").
+		if ui.TextInput(c, &a.themeHex).Placeholder("#rrggbb").Label(locales.SettingsCustomAccent()).
 			Width(110).Radius(cr).Changed() {
 			want := strings.ToLower(strings.TrimSpace(a.themeHex))
 			if want == "" {
@@ -642,13 +642,13 @@ func (a *root) appearanceSection(c *ui.Context) {
 				Mode: prefs.Mode, Accent: want, Density: prefs.Density,
 				Radius: prefs.Radius, FontSize: prefs.FontSize,
 			}).Normalize(); len(warn) > 0 {
-				a.themeHexErr = "颜色格式应为 #rrggbb"
+				a.themeHexErr = locales.SettingsHexError()
 			} else {
 				a.themeHexErr = ""
 				a.setThemePrefs(p)
 			}
 		}
-		ui.Text(c, "修改即应用").FontSize(11).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.SettingsApplies()).FontSize(11).TextColor(c.Theme().TextMuted)
 	})
 	if a.themeHexErr != "" {
 		ui.Text(c, a.themeHexErr).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
@@ -656,24 +656,26 @@ func (a *root) appearanceSection(c *ui.Context) {
 
 	// 渲染方式：与外观一起保存，下次启动生效。
 	gpu := !prefs.SoftwareRender
-	if ui.Checkbox(c, &gpu, "启用 GPU 渲染").Radius(cr).Changed() {
+	if ui.Checkbox(c, &gpu, locales.SettingsGpu()).Radius(cr).Changed() {
 		prefs.SoftwareRender = !gpu
 		a.setThemePrefs(prefs)
 	}
-	ui.Text(c, "关闭后使用 CPU 光栅化，重启 db-g 生效；可规避部分 Linux/X11 驱动的黑屏闪烁。").
+	ui.Text(c, locales.SettingsGpuHint()).
 		FontSize(11).TextColor(c.Theme().TextMuted)
 
 	// 密度 / 圆角 / 字号
-	ui.Text(c, "密度").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsDensity()).FontSize(12).TextColor(c.Theme().TextMuted)
 	density := densityIndex(prefs.Density)
-	if ui.Segmented(c, &density, "紧凑", "标准", "宽松").Radius(cr).Changed() {
+	if ui.Segmented(c, &density,
+		locales.SettingsDensityCompact(), locales.SettingsDensityNormal(), locales.SettingsDensityRoomy()).
+		Radius(cr).Changed() {
 		prefs.Density = themeDensity(density)
 		a.setThemePrefs(prefs)
 	}
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "圆角").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.SettingsRadius()).FontSize(12).TextColor(c.Theme().TextMuted)
 		radius := float64(prefs.Radius)
-		if ui.NumberInput(c, &radius, app.MinThemeRadius, app.MaxThemeRadius, 1).Label("圆角").
+		if ui.NumberInput(c, &radius, app.MinThemeRadius, app.MaxThemeRadius, 1).Label(locales.SettingsRadius()).
 			Width(90).Radius(cr).Changed() {
 			prefs.Radius = int(radius)
 			a.setThemePrefs(prefs)
@@ -681,32 +683,32 @@ func (a *root) appearanceSection(c *ui.Context) {
 	})
 
 	// 预览：直接使用当前主题（改动已经是全局的）。
-	ui.Text(c, "预览").FontSize(12).TextColor(c.Theme().TextMuted)
+	ui.Text(c, locales.SettingsPreview()).FontSize(12).TextColor(c.Theme().TextMuted)
 	ui.Box(c).FillWidth().Padding(12).Radius(c.Theme().Radius).
 		Background(c.Theme().Surface).Border(1, c.Theme().Border).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.PrimaryButton(c, "主按钮").Radius(cr)
-			ui.Button(c, "次按钮").Radius(cr)
-			ui.Badge(c, "徽标")
-			ui.Text(c, "次要文字").FontSize(12).TextColor(c.Theme().TextMuted)
+			ui.PrimaryButton(c, locales.SettingsPrimaryButton()).Radius(cr)
+			ui.Button(c, locales.SettingsSecondaryButton()).Radius(cr)
+			ui.Badge(c, locales.SettingsBadge())
+			ui.Text(c, locales.PaletteMutedText()).FontSize(12).TextColor(c.Theme().TextMuted)
 		})
 		ui.Row(c).Gap(6).Children(func() {
-			ui.Text(c, "选中行效果").Padding(4, 8).Radius(c.Theme().Radius).
+			ui.Text(c, locales.SettingsSelectedRow()).Padding(4, 8).Radius(c.Theme().Radius).
 				Background(c.Theme().Accent).TextColor(c.Theme().AccentText)
-			ui.Text(c, "普通行").Padding(4, 8).TextColor(c.Theme().Text)
+			ui.Text(c, locales.SettingsNormalRow()).Padding(4, 8).TextColor(c.Theme().Text)
 		})
 	})
 
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.Button(c, "恢复默认").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsRestoreDefaults()).Radius(cr).Clicked() {
 			a.themeHex, a.themeHexErr = "", ""
 			a.paletteLoaded, a.paletteErr = false, ""
 			a.setThemePrefs(app.DefaultThemePrefs())
 		}
-		if ui.Button(c, "导出主题…").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsExportTheme()).Radius(cr).Clicked() {
 			a.pickExportTheme()
 		}
-		if ui.Button(c, "导入主题…").Radius(cr).Clicked() {
+		if ui.Button(c, locales.SettingsImportTheme()).Radius(cr).Clicked() {
 			a.pickImportTheme()
 		}
 	})
@@ -730,7 +732,7 @@ func (a *root) importThemeFrom(path string) ([]string, error) {
 	a.paletteLoaded, a.paletteErr = false, ""
 	a.setThemePrefs(prefs)
 	if len(warn) > 0 {
-		a.themeWarn = "已导入（" + strings.Join(warn, "；") + "）"
+		a.themeWarn = locales.SettingsImported(strings.Join(warn, "；"))
 	}
 	app.LogInfo("startup", "theme imported", "path", path)
 	return warn, nil
@@ -744,7 +746,7 @@ func (a *root) pickExportTheme() {
 	}
 	go func() {
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
-			Parent: win, Title: "导出主题", DefaultPath: "db-g-theme.json",
+			Parent: win, Title: locales.SettingsExportThemeTitle(), DefaultPath: "db-g-theme.json",
 		})
 		if err != nil || path == "" {
 			return
@@ -752,10 +754,10 @@ func (a *root) pickExportTheme() {
 		err = a.exportThemeTo(path)
 		a.safeUpdate(win, func() {
 			if err != nil {
-				a.themeWarn = "导出主题失败: " + err.Error()
+				a.themeWarn = locales.SettingsExportFailed(err.Error())
 				return
 			}
-			a.themeWarn = "已导出主题 → " + path
+			a.themeWarn = locales.SettingsExported(path)
 		})
 	}()
 }
@@ -767,14 +769,14 @@ func (a *root) pickImportTheme() {
 		return
 	}
 	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: win, Title: "导入主题"})
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: win, Title: locales.SettingsImportThemeTitle()})
 		if err != nil || len(paths) == 0 {
 			return
 		}
 		_, err = a.importThemeFrom(paths[0])
 		a.safeUpdate(win, func() {
 			if err != nil {
-				a.themeWarn = "导入主题失败: " + err.Error()
+				a.themeWarn = locales.SettingsImportFailed(err.Error())
 			}
 		})
 	}()

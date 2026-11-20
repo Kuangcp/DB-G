@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,15 +13,16 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 var objectKinds = []struct {
 	kind  engine.ObjectKind
-	label string
+	label func() string
 }{
-	{engine.ObjectTable, "表"},
-	{engine.ObjectView, "视图"},
-	{engine.ObjectIndex, "索引"},
+	{engine.ObjectTable, locales.ObjectKindTable},
+	{engine.ObjectView, locales.ObjectKindView},
+	{engine.ObjectIndex, locales.ObjectKindIndex},
 }
 
 const (
@@ -156,7 +158,7 @@ func (a *root) loadAllObjectKinds(sess engine.Session, schema string) (map[engin
 	}
 	lister, ok := sess.(engine.ObjectLister)
 	if !ok || !sess.Caps().Has(engine.CapObjects) {
-		return nil, fmt.Errorf("该数据源不支持对象树")
+		return nil, errors.New(locales.TreeUnsupported())
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -253,7 +255,7 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 		return // 没连上就不画树（侧栏的圆点已经说明状态），不写「未连接」
 	}
 	if !sess.Caps().Has(engine.CapObjects) {
-		a.setTreeErr(base, "该数据源不支持对象树")
+		a.setTreeErr(base, locales.TreeUnsupported())
 		return
 	}
 	counter, ok := sess.(engine.ObjectCounter)
@@ -419,7 +421,7 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile) {
 		return
 	}
 	if a.metaCacheLoading[p.ID] {
-		ui.Text(c, "加载元数据…").TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.TreeLoadingMeta()).TextColor(c.Theme().TextMuted)
 		return
 	}
 	if a.metaCacheStale[p.ID] && a.connected(p.ID) {
@@ -459,7 +461,7 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 	if _, ok := a.treeSchemas[p.ID]; !ok {
 		a.ensureSchemas(p)
 		if a.schemaLoading[p.ID] {
-			ui.Text(c, "加载库…").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.TreeLoadingSchemas()).TextColor(c.Theme().TextMuted)
 			return
 		}
 		if lister == nil {
@@ -495,7 +497,7 @@ func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string) {
 	base := objectTreeKey(p.ID, schema)
 	searching := a.searchFiltersObjects(p)
 	for _, g := range objectKinds {
-		label := g.label
+		label := g.label()
 		if searching {
 			n := 0
 			for _, o := range a.treeData[base][g.kind] {
@@ -506,9 +508,9 @@ func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string) {
 			if n == 0 {
 				continue
 			}
-			label = fmt.Sprintf("%s (%d)", g.label, n)
+			label = fmt.Sprintf("%s (%d)", g.label(), n)
 		} else if total, ok := a.treeCountOf(base, g.kind); ok {
-			label = fmt.Sprintf("%s (%d)", g.label, total)
+			label = fmt.Sprintf("%s (%d)", g.label(), total)
 		}
 		open := a.groupOpen(base+"|"+kindKey(g.kind), false)
 		kind := g.kind
@@ -541,7 +543,7 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 		objs = kept
 	}
 	if !searching && !a.objSearchActive() && len(objs) == 0 && (a.treeLoading[groupKey] || a.treeLoading[base+"|all"] || a.treeLoading[base+"|counts"]) {
-		ui.TreeItem(c, "加载中…", nil, nil)
+		ui.TreeItem(c, locales.TreeLoading(), nil, nil)
 	}
 	for _, o := range objs {
 		obj := o
@@ -555,13 +557,13 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 			a.previewObject(p, obj)
 		}
 		leaf.ContextMenu(func(m *ui.Menu) {
-			if m.Item("预览数据").Chosen() {
+			if m.Item(locales.TreePreviewData()).Chosen() {
 				a.previewObject(p, obj)
 			}
-			if m.Item("查看 DDL").Chosen() {
+			if m.Item(locales.TreeViewDDL()).Chosen() {
 				a.showDDL(p, obj)
 			}
-			if m.Item("插入名称").Chosen() {
+			if m.Item(locales.TreeInsertName()).Chosen() {
 				a.code.Insert(obj.Name)
 			}
 		})
@@ -571,10 +573,10 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 	}
 	if total, ok := a.treeCountOf(base, kind); ok && len(objs) < total {
 		if len(objs) >= objectMaxLoaded {
-			ui.TreeItem(c, fmt.Sprintf("已显示前 %d 个，共 %d 个", len(objs), total), nil, nil)
+			ui.TreeItem(c, locales.TreeShownFirst(len(objs), total), nil, nil)
 			return
 		}
-		label := fmt.Sprintf("继续加载（已 %d / 共 %d）", len(objs), total)
+		label := locales.TreeLoadMore(len(objs), total)
 		if ui.TreeItem(c, label, nil, nil).Clicked() {
 			a.loadObjectPage(p, schema, kind, false)
 		}
@@ -611,9 +613,9 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 		a.pendingAppend = sql
 		return
 	}
-	rec, err := m.Create(p.ID, "预览 "+o.Name)
+	rec, err := m.Create(p.ID, locales.TreePreviewConsole(o.Name))
 	if err != nil {
-		a.consoleErr = "新建预览控制台失败: " + err.Error()
+		a.consoleErr = locales.TreePreviewFailed(err.Error())
 		return
 	}
 	a.pendingActivate = rec.ID
@@ -633,7 +635,7 @@ func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 		lister, hasDDL := sess.(engine.ObjectDDLer)
 		scoped, hasScoped := sess.(engine.SchemaObjectDDLer)
 		if sess == nil || !sess.Caps().Has(engine.CapObjectDDL) || (!hasDDL && !hasScoped) {
-			a.setDDLNote(o.Name, "该数据源不支持查看 DDL")
+			a.setDDLNote(o.Name, locales.TreeDDLUnsupported())
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -647,7 +649,7 @@ func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 		}
 		apply := func() {
 			if err != nil {
-				a.setDDLNote(o.Name, "读取 DDL 失败: "+err.Error())
+				a.setDDLNote(o.Name, locales.TreeDDLFailed(err.Error()))
 				app.LogWarn("ddl", "load failed", "object", o.Name, "err", err.Error())
 				return
 			}
@@ -806,14 +808,14 @@ func (a *root) ddlPanel(c *ui.Context) {
 		return
 	}
 	ui.Modal(c, &a.ddlOpen, func() {
-		ui.Text(c, "DDL："+a.ddlTitle).Bold().SingleLine()
+		ui.Text(c, locales.TreeDDLTitle(a.ddlTitle)).Bold().SingleLine()
 		myeditor.View(c, a.ddlViewState()).FillWidth().Height(ddlPanelHeight - 110)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "复制全部").Tooltip("复制整段 DDL；先在正文里选中部分再 Ctrl+C 只复制选区").
+			if ui.Button(c, locales.TreeCopyAll()).Tooltip(locales.TreeCopyAllTip()).
 				Clicked() {
 				c.WriteClipboard(a.ddlState.Buffer.String())
 			}
-			if ui.PrimaryButton(c, "关闭").Clicked() {
+			if ui.PrimaryButton(c, locales.CommonClose()).Clicked() {
 				a.ddlOpen = false
 			}
 		})

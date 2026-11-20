@@ -6,6 +6,8 @@ import (
 	"sync"
 
 	myeditor "github.com/egoist/mygo/ui/editor"
+
+	"db-g/locales"
 )
 
 // sqlDialect 是某个数据源相对通用 SQL 多出来的词：高亮与补全都用它。
@@ -152,11 +154,11 @@ func sqlWordItemsForKind(kind string) []myeditor.Completion {
 				continue
 			}
 			seen[form] = true
-			detail := "关键字"
+			detail := locales.CompletionKeyword()
 			if kind == myeditor.CompletionType {
-				detail = "类型"
+				detail = locales.CompletionType()
 			} else if kind == myeditor.CompletionFunction {
-				detail = "函数"
+				detail = locales.CompletionFunction()
 			}
 			out = append(out, myeditor.Completion{Label: form, Detail: detail, Kind: kind})
 		}

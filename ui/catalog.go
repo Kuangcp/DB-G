@@ -10,6 +10,7 @@ import (
 	myeditor "github.com/egoist/mygo/ui/editor"
 
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // catalogTTL 是表/视图目录的缓存寿命；重连与「刷新补全缓存」会立即失效。
@@ -226,7 +227,7 @@ func buildColumnItems(cols []engine.Column, kind string) []myeditor.Completion {
 		seen[col.Name] = true
 		detail := col.Type
 		if detail == "" {
-			detail = "列"
+			detail = locales.CompletionColumn()
 		}
 		out = append(out, myeditor.Completion{Label: col.Name, Detail: detail, Kind: myeditor.CompletionField})
 	}
@@ -250,8 +251,8 @@ func buildCatalogItems(tables, views []string, kind string) []myeditor.Completio
 			out = append(out, myeditor.Completion{Label: n, Detail: detail, Kind: kind})
 		}
 	}
-	add(tables, "表", myeditor.CompletionModule)
-	add(views, "视图", myeditor.CompletionType)
+	add(tables, locales.CompletionTable(), myeditor.CompletionModule)
+	add(views, locales.CompletionView(), myeditor.CompletionType)
 	return out
 }
 
@@ -298,7 +299,7 @@ func buildStatementItems(rels []string, cols [][]engine.Column, kind string) []m
 		for _, col := range sorted {
 			detail := col.Type
 			if detail == "" {
-				detail = "列"
+				detail = locales.CompletionColumn()
 			}
 			if multi {
 				detail = rel + " · " + detail

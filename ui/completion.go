@@ -11,6 +11,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // completionTimeout 限住一次目录枚举，避免慢库拖住补全。
@@ -189,7 +190,7 @@ func objectsOfIn(sess engine.Session, schema string) (tables, views []string, er
 func (a *root) loadCatalog(connID string) (tables, views []string, err error) {
 	sess := a.sessionFor(connID)
 	if sess == nil {
-		return nil, nil, errors.New("连接未打开")
+		return nil, nil, errors.New(locales.CompletionConnClosed())
 	}
 	_, schema := a.completionScope(connID)
 	return objectsOfIn(sess, schema)

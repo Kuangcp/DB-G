@@ -3,6 +3,8 @@ package ui
 import (
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
+
+	"db-g/locales"
 )
 
 // dispatchKeys 在每帧开头统一处理窗口级快捷键。
@@ -136,7 +138,7 @@ func keymapHint(a *root) string {
 		return ""
 	}
 	if act, ok := actionByID(a.captureAction); ok {
-		return "按下 " + act.Label + " 的新组合（Esc 取消）"
+		return locales.KeymapRecordingHint(act.Label())
 	}
 	return ""
 }

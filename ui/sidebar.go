@@ -2,7 +2,6 @@ package ui
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -11,44 +10,45 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 func (a *root) sidebar(c *ui.Context) {
 	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 		ui.Toolbar(c, func() {
-			if iconButton(c, iconPlug, "新建连接", ui.Transparent).Clicked() {
+			if iconButton(c, iconPlug, locales.SidebarNewConn(), ui.Transparent).Clicked() {
 				a.openNewConnForm("")
 			}
-			if iconButton(c, iconFolderPlus, "新建文件夹", ui.Transparent).Clicked() {
+			if iconButton(c, iconFolderPlus, locales.SidebarNewFolder(), ui.Transparent).Clicked() {
 				a.openFolderModal("new", "", "")
 			}
-			if iconButton(c, iconRefresh, "重载对象树（不连接数据源）", ui.Transparent).Clicked() {
+			if iconButton(c, iconRefresh, locales.SidebarReloadTree(), ui.Transparent).Clicked() {
 				a.reloadTree()
 			}
 			ui.Spacer(c)
-		}).Label("数据源操作")
+		}).Label(locales.SidebarDatasourceActions())
 		if a.store == nil {
-			ui.Text(c, "左上角「新建连接」开始").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.SidebarStartHint()).TextColor(c.Theme().TextMuted)
 			a.connModal(c)
 			a.folderModal(c)
 			return
 		}
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			ui.TextInput(c, &a.objSearch).Placeholder("搜索表/视图…").Label("搜索对象").Fill()
+			ui.TextInput(c, &a.objSearch).Placeholder(locales.SidebarSearchPlaceholder()).Label(locales.SidebarSearchObjects()).Fill()
 			if a.objSearch != "" {
-				if iconButtonPlain(c, iconClose, "清除搜索", ui.Transparent).Clicked() {
+				if iconButtonPlain(c, iconClose, locales.SidebarClearSearch(), ui.Transparent).Clicked() {
 					a.objSearch = ""
 				}
 			}
 		})
 		if a.objSearchActive() {
-			ui.Text(c, "搜索仅覆盖已加载的对象").FontSize(11.5).TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.SidebarSearchLoadedOnly()).FontSize(11.5).TextColor(c.Theme().TextMuted)
 		}
 		if w := a.store.Warning(); w != "" {
 			ui.Text(c, w).TextColor(c.Theme().Danger)
 		}
 		if len(a.store.List()) == 0 && len(a.store.Folders()) == 0 {
-			ui.Text(c, "左上角「新建连接」开始").TextColor(c.Theme().TextMuted)
+			ui.Text(c, locales.SidebarStartHint()).TextColor(c.Theme().TextMuted)
 		}
 		ui.Scroll(c).Grow(1).Children(func() {
 			a.connTree(c)
@@ -242,7 +242,7 @@ func attachTreeDrag(c *ui.Context, row ui.Element, v treeDrag) {
 	}
 	row.Drag(v)
 	if held {
-		row.Cursor(ui.CursorGrab).Tooltip("按住 Ctrl 拖动：上下排序，拖到文件夹中间移入")
+		row.Cursor(ui.CursorGrab).Tooltip(locales.SidebarTreeDragTip())
 	}
 	if row.Dragging() {
 		row.Opacity(0.45)
@@ -407,13 +407,13 @@ func (a *root) attachTreeDrop(c *ui.Context, row ui.Element, targetKind, targetI
 
 func (a *root) folderRow(c *ui.Context, f app.ConnFolder, depth int, idx *connTreeIndex) {
 	collapsed := a.folderCollapsed[f.ID] && !a.objSearchActive()
-	row := treeRowBase(c, "文件夹 "+f.Name).PaddingStart(float32(4 + depth*folderIndent))
+	row := treeRowBase(c, locales.FolderRow(f.Name)).PaddingStart(float32(4 + depth*folderIndent))
 	row.Children(func() {
 		var label string
 		if collapsed {
-			label = "展开 " + f.Name
+			label = locales.FolderExpand(f.Name)
 		} else {
-			label = "收起 " + f.Name
+			label = locales.FolderCollapse(f.Name)
 		}
 		if treeArrow(c, label, !collapsed).Clicked() {
 			a.toggleFolder(f.ID)
@@ -433,16 +433,16 @@ func (a *root) folderRow(c *ui.Context, f app.ConnFolder, depth int, idx *connTr
 		a.toggleFolder(f.ID)
 	}
 	row.ContextMenu(func(menu *ui.Menu) {
-		if menu.Item("新建子文件夹…").Chosen() {
+		if menu.Item(locales.FolderMenuNew()).Chosen() {
 			a.openFolderModal("new", f.ID, "")
 		}
-		if menu.Item("在此新建连接…").Chosen() {
+		if menu.Item(locales.FolderMenuNewConn()).Chosen() {
 			a.openNewConnForm(f.ID)
 		}
-		if menu.Item("重命名…").Chosen() {
+		if menu.Item(locales.TabMenuRename()).Chosen() {
 			a.openFolderModal("rename", f.ID, f.Name)
 		}
-		if menu.Item("删除…").Chosen() {
+		if menu.Item(locales.TabMenuDelete()).Chosen() {
 			a.openFolderModal("delete", f.ID, f.Name)
 		}
 	})
@@ -463,13 +463,13 @@ func (a *root) toggleFolder(id string) {
 func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTreeIndex) {
 	live := a.connected(p.ID)
 	expanded := a.treeExpand[p.ID] || a.objSearchActive()
-	row := treeRowBase(c, "连接 "+p.Name).PaddingStart(float32(4 + depth*folderIndent))
+	row := treeRowBase(c, locales.ConnRow(p.Name)).PaddingStart(float32(4 + depth*folderIndent))
 	row.Children(func() {
 		var label string
 		if expanded {
-			label = "收起 " + p.Name
+			label = locales.ConnCollapse(p.Name)
 		} else {
-			label = "展开 " + p.Name
+			label = locales.ConnExpand(p.Name)
 		}
 		if treeArrow(c, label, expanded).Clicked() {
 			a.toggleExpandConn(p)
@@ -483,7 +483,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 		}
 		ui.Spacer(c)
 		a.connDot(c, p.ID)
-		if iconButtonPlain(c, iconSquarePen, "编辑连接", ui.Transparent).Clicked() {
+		if iconButtonPlain(c, iconSquarePen, locales.ConnEdit(), ui.Transparent).Clicked() {
 			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
 			a.connFormKind = p.Kind
 			a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
@@ -505,11 +505,11 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 	})
 	// 复制数据源 / 删除连接是低频且易误触的操作：放右键菜单，不占行内位置。
 	row.ContextMenu(func(menu *ui.Menu) {
-		if menu.Item("复制数据源").Chosen() {
+		if menu.Item(locales.ConnMenuDuplicate()).Chosen() {
 			a.duplicateConn(p)
 		}
 		menu.Separator()
-		if menu.Item("删除连接…").Chosen() {
+		if menu.Item(locales.ConnMenuDelete()).Chosen() {
 			a.connDeleting, a.connDeleteOpen = p.ID, true
 		}
 	})
@@ -531,16 +531,16 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 // 只落盘一次（Add 内部生成新 ID）。
 func (a *root) duplicateConn(p app.ConnProfile) {
 	if a.store == nil {
-		a.connErr = "复制失败：连接库不可用"
+		a.connErr = locales.ConnDupStoreUnavailable()
 		return
 	}
 	taken := make(map[string]bool)
 	for _, q := range a.store.List() {
 		taken[q.Name] = true
 	}
-	name := "副本：" + p.Name
+	name := locales.ConnDupName(p.Name)
 	for i := 1; taken[name]; i++ {
-		name = fmt.Sprintf("%s (副本%d)", p.Name, i)
+		name = locales.ConnDupNameN(p.Name, i)
 	}
 	cloned := app.ConnProfile{
 		Name:         name,
@@ -558,7 +558,7 @@ func (a *root) duplicateConn(p app.ConnProfile) {
 		Tags:         p.Tags,
 	}
 	if err := a.store.Add(cloned); err != nil {
-		a.connErr = "复制失败：" + err.Error()
+		a.connErr = locales.ConnDupFailed(err.Error())
 		return
 	}
 	app.LogInfo("conn", "duplicate", "from", p.Name, "to", name, "folder", p.FolderID)
@@ -571,12 +571,12 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 		return
 	}
 	ui.Row(c).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "控制台").FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.ConsoleSection()).FontSize(12).TextColor(c.Theme().TextMuted)
 		ui.Spacer(c)
-		if iconButtonPlain(c, iconPlus, "新建控制台", ui.Transparent).Clicked() {
+		if iconButtonPlain(c, iconPlus, locales.ConsoleNew(), ui.Transparent).Clicked() {
 			rec, err := m.Create(p.ID, "")
 			if err != nil {
-				a.consoleErr = "新建控制台失败: " + err.Error()
+				a.consoleErr = locales.ConsoleCreateFailed(err.Error())
 				return
 			}
 			a.pendingActivate = rec.ID
@@ -589,7 +589,7 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 
 // consoleRow 渲染一个控制台：已打开加粗，点击打开或激活，右键关闭/重命名/删除。
 func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
-	row := treeRowBase(c, "控制台 "+rec.Name)
+	row := treeRowBase(c, locales.ConsoleRow(rec.Name))
 	row.Children(func() {
 		dot := ui.Text(c, "●")
 		if isOpen {
@@ -609,13 +609,13 @@ func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool) {
 		a.pendingActivate = rec.ID
 	}
 	row.ContextMenu(func(menu *ui.Menu) {
-		if menu.Item("关闭").Disabled(!isOpen).Chosen() {
+		if menu.Item(locales.TabMenuClose()).Disabled(!isOpen).Chosen() {
 			a.pendingClose = rec.ID
 		}
-		if menu.Item("重命名…").Chosen() {
+		if menu.Item(locales.TabMenuRename()).Chosen() {
 			a.openModal("rename", rec.ID, rec.Name)
 		}
-		if menu.Item("删除…").Chosen() {
+		if menu.Item(locales.TabMenuDelete()).Chosen() {
 			a.openModal("delete", rec.ID, rec.Name)
 		}
 	})
@@ -634,9 +634,9 @@ func (a *root) connModal(c *ui.Context) {
 	}
 	ui.Modal(c, &a.connFormOpen, func() {
 		radius := controlRadius(c)
-		title := "新建连接"
+		title := locales.ConnModalNew()
 		if a.connFormID != "" {
-			title = "编辑连接"
+			title = locales.ConnModalEdit()
 		}
 		ui.Text(c, title).Bold()
 		// 左右布局：左侧数据源列表（无按钮外观、行间分隔线、选中高亮），右侧表单。
@@ -649,30 +649,30 @@ func (a *root) connModal(c *ui.Context) {
 			})
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
 			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
-				ui.Text(c, kindLabel(a.connFormKind)+" 连接").Bold()
-				ui.TextInput(c, &a.connFormName).Placeholder("名称").Radius(radius).AutoFocus()
+				ui.Text(c, locales.ConnFormTitle(kindLabel(a.connFormKind))).Bold()
+				ui.TextInput(c, &a.connFormName).Placeholder(locales.ConnFormName()).Radius(radius).AutoFocus()
 				if a.store != nil && len(a.store.Folders()) > 0 {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, "位置").FontSize(12).TextColor(c.Theme().TextMuted)
+						ui.Text(c, locales.ConnFormLocation()).FontSize(12).TextColor(c.Theme().TextMuted)
 						a.folderSelect(c)
 						ui.Spacer(c)
 					})
 				}
 				if a.connFormKind != "sqlite" {
-					ui.TextInput(c, &a.connFormDB).Placeholder("数据库（可选）").Radius(radius)
+					ui.TextInput(c, &a.connFormDB).Placeholder(locales.ConnFormDatabase()).Radius(radius)
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormHost).Placeholder("主机").Radius(radius).Fill()
-						ui.TextInput(c, &a.connFormPort).Placeholder("端口").Radius(radius)
+						ui.TextInput(c, &a.connFormHost).Placeholder(locales.ConnFormHost()).Radius(radius).Fill()
+						ui.TextInput(c, &a.connFormPort).Placeholder(locales.ConnFormPort()).Radius(radius)
 					})
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormUser).Placeholder("用户").Radius(radius).Fill()
-						ui.TextInput(c, &a.connFormPass).Placeholder("密码").Radius(radius).Password()
+						ui.TextInput(c, &a.connFormUser).Placeholder(locales.ConnFormUser()).Radius(radius).Fill()
+						ui.TextInput(c, &a.connFormPass).Placeholder(locales.ConnFormPassword()).Radius(radius).Password()
 					})
 					if a.connFormKind == "clickhouse" {
 						// 协议决定 DSN 的 scheme，也决定默认端口：native 9000、
 						// HTTP 8123、HTTPS 8443。填错端口会握手失败。
 						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-							ui.Text(c, "协议").FontSize(12).TextColor(c.Theme().TextMuted)
+							ui.Text(c, locales.ConnFormProtocol()).FontSize(12).TextColor(c.Theme().TextMuted)
 							if ui.Segmented(c, &a.connProto, "Native", "HTTP", "HTTPS").Radius(radius).Changed() {
 								a.applyConnProto()
 							}
@@ -682,37 +682,37 @@ func (a *root) connModal(c *ui.Context) {
 					ui.TextInput(c, &a.connFormParams).Placeholder(paramsPlaceholder(a.connFormKind)).Radius(radius)
 				} else {
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormPath).Placeholder("SQLite 文件路径").Radius(radius).Fill()
-						if ui.Button(c, "浏览…").Radius(radius).Clicked() {
+						ui.TextInput(c, &a.connFormPath).Placeholder(locales.ConnFormSqlitePath()).Radius(radius).Fill()
+						if ui.Button(c, locales.ConnFormBrowse()).Radius(radius).Clicked() {
 							a.browsePath()
 						}
 					})
 				}
 				ui.TextInput(c, &a.connFormTimeout).
-					Placeholder("查询超时（秒，空或 0 = 默认 30）").Radius(radius)
+					Placeholder(locales.ConnFormTimeout()).Radius(radius)
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					full := len(a.connFormTags) >= app.MaxConnTags
-					ui.Text(c, "标签").FontSize(12).TextColor(c.Theme().TextMuted).
-						Tooltip("最多 3 个标签")
+					ui.Text(c, locales.ConnFormTags()).FontSize(12).TextColor(c.Theme().TextMuted).
+						Tooltip(locales.ConnFormTagsMax())
 					swatch := ui.Button(c, "●").FontSize(13).TextColor(tagColor(a.connFormTagColor)).
 						Radius(radius).Padding(2, 8).Disabled(full)
-					swatch.Tooltip("新标签颜色：" + tagColorLabel(a.connFormTagColor) + "（点击切换）")
+					swatch.Tooltip(locales.ConnFormTagColor(tagColorLabel(a.connFormTagColor)))
 					if swatch.Clicked() {
 						a.connFormTagColor = nextTagColor(a.connFormTagColor)
 					}
-					placeholder := "输入标签后 Enter 添加，可搜索已有标签"
+					placeholder := locales.ConnFormTagPlaceholder()
 					if full {
-						placeholder = "最多 3 个标签，先移除一个"
+						placeholder = locales.ConnFormTagsFullPlaceholder()
 					}
 					cb := ui.ComboboxBase(c, &a.connFormTagInput)
 					cb.Input.Placeholder(placeholder).Radius(radius).Fill().
-						Label("添加标签").AutoComplete(ui.AutoCompleteList).Disabled(full)
+						Label(locales.ConnFormAddTag()).AutoComplete(ui.AutoCompleteList).Disabled(full)
 					cb.Popup(func(panel ui.Element) {
 						theme := c.Theme()
 						panel.Padding(4).Radius(radius).Background(theme.Background).Border(1, theme.Border)
 						suggestions := a.tagSuggestions()
 						if len(suggestions) == 0 {
-							ui.Text(c, "没有可用的已有标签").FontSize(11.5).
+							ui.Text(c, locales.ConnFormNoTags()).FontSize(11.5).
 								TextColor(theme.TextMuted).Padding(4, 8)
 							return
 						}
@@ -744,7 +744,7 @@ func (a *root) connModal(c *ui.Context) {
 						a.removeConnFormTag(removed)
 					}
 				})
-				ui.Checkbox(c, &a.connFormGuard, "高危 SQL 直接阻断（默认只提醒）")
+				ui.Checkbox(c, &a.connFormGuard, locales.ConnFormBlockGuard())
 
 				if a.connFormErr != "" {
 					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
@@ -761,24 +761,24 @@ func (a *root) connModal(c *ui.Context) {
 				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					if a.connTestBusy {
-						if ui.Button(c, "取消测试").Radius(radius).Clicked() {
+						if ui.Button(c, locales.ConnFormCancelTest()).Radius(radius).Clicked() {
 							a.cancelConnTest()
 						}
 						ui.Spacer(c)
 						return
 					}
-					if ui.Button(c, "测试连接").Radius(radius).Clicked() {
+					if ui.Button(c, locales.ConnFormTest()).Radius(radius).Clicked() {
 						a.testConnForm()
 					}
-					if ui.Button(c, "复制").Radius(radius).Tooltip("把连接信息按 key: value 复制到剪贴板（含明文密码）").
+					if ui.Button(c, locales.ConnFormCopy()).Radius(radius).Tooltip(locales.ConnFormCopyTip()).
 						Clicked() {
 						a.copyConnForm(c)
 					}
 					ui.Spacer(c)
-					if ui.Button(c, "取消").Radius(radius).Clicked() {
+					if ui.Button(c, locales.CommonCancel()).Radius(radius).Clicked() {
 						a.connFormOpen = false
 					}
-					if ui.PrimaryButton(c, "保存").Radius(radius).Clicked() {
+					if ui.PrimaryButton(c, locales.CommonSave()).Radius(radius).Clicked() {
 						a.saveConnForm()
 					}
 				})
@@ -857,19 +857,19 @@ func (a *root) deleteModal(c *ui.Context) {
 		}
 	}
 	ui.Modal(c, &a.connDeleteOpen, func() {
-		ui.Text(c, "删除连接「"+name+"」？").Bold()
-		ui.Text(c, "仅移除配置，不删除数据库文件").TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.ConnDeleteTitle(name)).Bold()
+		ui.Text(c, locales.ConnDeleteHint()).TextColor(c.Theme().TextMuted)
 		if m := a.consoleMgr(); m != nil {
 			if n := len(m.ConsolesOf(a.connDeleting)); n > 0 {
-				ui.Text(c, fmt.Sprintf("将同时删除该数据源的 %d 个控制台及其 .sql 文件", n)).
+				ui.Text(c, locales.ConnDeleteConsoles(n)).
 					TextColor(c.Theme().Danger)
 			}
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.connDeleteOpen = false
 			}
-			if ui.Button(c, "删除").Clicked() {
+			if ui.Button(c, locales.ConnDeleteButton()).Clicked() {
 				a.removeConn(a.connDeleting)
 				a.connDeleting, a.connDeleteOpen = "", false
 			}
@@ -885,10 +885,10 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 	if t := strings.TrimSpace(a.connFormTimeout); t != "" {
 		n, err := strconv.Atoi(t)
 		if err != nil {
-			return p, errQueryTimeout
+			return p, errQueryTimeout()
 		}
 		if n < 0 || n > 86400 {
-			return p, errors.New("查询超时需在 0–86400 秒")
+			return p, errors.New(locales.ConnTimeoutRange())
 		}
 		sec = n
 	}
@@ -904,7 +904,7 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 	}
 	port, err := strconv.Atoi(portText)
 	if err != nil {
-		return p, errPort
+		return p, errPort()
 	}
 	p.Host = a.connFormHost
 	p.Port = port
@@ -972,18 +972,18 @@ func (a *root) applyConnProto() {
 func paramsPlaceholder(kind string) string {
 	switch kind {
 	case "mysql":
-		return "连接参数（可选）：tls=true&parseTime=true"
+		return locales.ParamsMySQL()
 	case "postgres":
-		return "连接参数（可选）：sslmode=require"
+		return locales.ParamsPostgres()
 	case "clickhouse":
-		return "连接参数（可选）：compress=0&secure=false"
+		return locales.ParamsClickHouse()
 	}
-	return "连接参数（可选）：key=value"
+	return locales.ParamsDefault()
 }
 
 func (a *root) saveConnForm() {
 	if a.store == nil {
-		a.connFormErr = "连接库不可用"
+		a.connFormErr = locales.ConnStoreUnavailable()
 		return
 	}
 	p, err := a.connFormProfile()
@@ -1024,7 +1024,7 @@ func (a *root) browsePath() {
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
 			Parent: win,
-			Title:  "选择 SQLite 数据库",
+			Title:  locales.ChooseSQLiteDatabase(),
 			Filters: []mygo.FileFilter{
 				{Name: "SQLite", Extensions: []string{"db", "sqlite", "sqlite3"}},
 			},
@@ -1096,33 +1096,33 @@ func (a *root) folderModal(c *ui.Context) {
 	ui.Modal(c, &open, func() {
 		switch a.folderModalKind {
 		case "new":
-			title := "新建文件夹"
+			title := locales.FolderModalNew()
 			if a.folderModalTarget != "" {
-				title = "新建子文件夹"
+				title = locales.FolderModalNewSub()
 			}
 			ui.Text(c, title).Bold()
-			ui.TextInput(c, &a.folderModalText).Placeholder("文件夹名称").AutoFocus()
+			ui.TextInput(c, &a.folderModalText).Placeholder(locales.FolderNamePlaceholder()).AutoFocus()
 		case "rename":
-			ui.Text(c, "重命名文件夹").Bold()
-			ui.TextInput(c, &a.folderModalText).Placeholder("文件夹名称").AutoFocus()
+			ui.Text(c, locales.FolderRename()).Bold()
+			ui.TextInput(c, &a.folderModalText).Placeholder(locales.FolderNamePlaceholder()).AutoFocus()
 		case "delete":
 			conns, folders := a.folderContentCounts(a.folderModalTarget)
-			ui.Text(c, "删除文件夹「"+a.folderModalText+"」？").Bold()
-			ui.Text(c, fmt.Sprintf("其中 %d 个连接和 %d 个子文件夹将移到上一级；连接配置不会删除。", conns, folders)).
+			ui.Text(c, locales.FolderDeleteTitle(a.folderModalText)).Bold()
+			ui.Text(c, locales.FolderDeleteHint(conns, folders)).
 				TextColor(c.Theme().TextMuted)
 		}
 		if a.folderModalErr != "" {
 			ui.Text(c, a.folderModalErr).TextColor(c.Theme().Danger)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if ui.Button(c, "取消").Clicked() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.folderModalKind = ""
 			}
 			if a.folderModalKind == "delete" {
-				btn := ui.Button(c, "删除").TextColor(c.Theme().Danger)
+				btn := ui.Button(c, locales.ConnDeleteButton()).TextColor(c.Theme().Danger)
 				if btn.Clicked() {
 					if err := a.store.DeleteFolder(a.folderModalTarget); err != nil {
-						a.folderModalErr = "删除失败: " + err.Error()
+						a.folderModalErr = locales.ModalDeleteFailed(err.Error())
 						return
 					}
 					delete(a.folderCollapsed, a.folderModalTarget)
@@ -1131,24 +1131,24 @@ func (a *root) folderModal(c *ui.Context) {
 				}
 				return
 			}
-			if ui.PrimaryButton(c, "保存").Clicked() {
+			if ui.PrimaryButton(c, locales.CommonSave()).Clicked() {
 				name := strings.TrimSpace(a.folderModalText)
 				if name == "" {
-					a.folderModalErr = "名称不能为空"
+					a.folderModalErr = locales.ModalNameEmpty()
 					return
 				}
 				switch a.folderModalKind {
 				case "new":
 					f, err := a.store.AddFolder(name, a.folderModalTarget)
 					if err != nil {
-						a.folderModalErr = "新建失败: " + err.Error()
+						a.folderModalErr = locales.FolderCreateFailed(err.Error())
 						return
 					}
 					delete(a.folderCollapsed, a.folderModalTarget) // 父级展开，新文件夹可见
 					app.LogInfo("conn", "folder added", "id", f.ID, "name", f.Name, "parent", f.ParentID)
 				case "rename":
 					if err := a.store.RenameFolder(a.folderModalTarget, name); err != nil {
-						a.folderModalErr = "重命名失败: " + err.Error()
+						a.folderModalErr = locales.ModalRenameFailed(err.Error())
 						return
 					}
 					app.LogInfo("conn", "folder renamed", "id", a.folderModalTarget, "name", name)
@@ -1193,12 +1193,12 @@ func folderOptions(folders []app.ConnFolder) []folderChoice {
 
 func (a *root) folderLabel(id string) string {
 	if id == "" || a.store == nil {
-		return "根目录"
+		return locales.FolderRoot()
 	}
 	if path := app.FolderPath(a.store.Folders(), id); path != "" {
 		return path
 	}
-	return "根目录"
+	return locales.FolderRoot()
 }
 
 // folderSelect 是连接弹窗里的文件夹选择器：直接绑定 folder ID，避免标签映射。
@@ -1219,7 +1219,7 @@ func (a *root) folderSelect(c *ui.Context) {
 			}
 			it.Children(func() { ui.Text(c, label).SingleLine() })
 		}
-		item("", "根目录")
+		item("", locales.FolderRoot())
 		if a.store != nil {
 			for _, o := range folderOptions(a.store.Folders()) {
 				item(o.id, o.label)
