@@ -5,7 +5,7 @@
 怎么写看这里。**
 
 db-g 是 Go + [mygo](https://github.com/egoist/mygo) 的数据库客户端，对标 db-k（Kotlin + Compose Desktop）。
-界面文案一律中文；不做 i18n。
+用户可见文案走 `locales` catalog（见「国际化」一节），源语言 `en`、中文翻译 `zh-Hans`；不再硬编码中文。
 
 ## Agent harness规约
 - 如果需要使用到 subagent 需要有reviewer 以及多个需要切换模型来调用的场景下，请继续使用当前使用的模型，不要自己做选择去换模型，否则可能用到很贵的模型 消耗很多钱。
@@ -128,6 +128,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 日志 | `logs/YYYY-MM/YYYY-MM-DD_N.log` | 纯文本（时间/级别/标签/消息/kv），一次启动一个文件，0600 |
 | 全局字体（编辑区/结果区/控制台标签/功能界面） | `fonts.json` | `app.FontPrefs`，改完即时生效；控制台标签字号也在这里；启动时把旧 `editor.json` 自动迁移过来 |
 | 外观设置（模式/强调色/密度/圆角/字号/GPU 渲染） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好；关闭 GPU 时 `main` 在首帧前设 `MYGO_GPU=0`，重启生效 |
+| 界面语言 | `locale.json` | `app.LocalizationPrefs`；`""` 跟随系统、`en`、`zh-Hans`；启动时 `mygo.App.SetLocale`，切换即时生效 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
 | AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
 | AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
@@ -162,14 +163,32 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 
 左右布局：左侧分区导航 + 右侧内容 + 左下角版本号（`app.Version()`，`db-g -version` 也能看）。
 
-- 分区在 `ui/settings.go` 的 `settingsSections()`：外观 / 字体 / 结果 / 控制台 / AI / 快捷键 / 连接档案 / 日志 / 开发。
-  新增一个分区 = 加一行 `{标签, 构建函数}`，右侧内容自动可滚。
+- 分区在 `ui/settings.go` 的 `settingsSections()`：外观 / 语言 / 字体 / 结果 / 控制台 / AI / 快捷键 /
+  连接档案 / 同步 / 日志 / 开发。新增一个分区 = 加一行 `{标签, 构建函数}`，右侧内容自动可滚；
+  标签取 `locales.Settings*()`。
 - 导航行用 `ui/navrow.go` 的 `sideNavRow()`：无按钮外观、行底 1px 分隔线、选中 accent 浅底 +
   加粗。连接弹窗左侧的数据源列表用的是同一个（`connKindRow`），新增侧边列表照这个来。
 - 字体设置（编辑区/结果区/控制台标签/功能界面）改完立即 `applyFontPrefs()`：编辑区写
   `code.state.Font`；结果区由 `withResultFont()` 套在表格/长文本上；控制台标签由
   `tabFontSize()` 读取字号；功能界面写 `Theme.Font`（字号仍是外观里的「界面字号」）。
   全部落盘到 `fonts.json`；设置页不再放预览框，改完直接看主窗口。
+
+## 国际化（★ 必读）
+
+- 目录：`locales/en.json`（**源语言，必须完整**）+ `locales/zh-Hans.json`（中文翻译）。
+  `mygo.json` 的 `i18n = {dir: "locales", source: "en"}`；`go tool mygo generate` 生成
+  `locales/catalog_gen.go`（提交进仓库，`go build`/`go test` 不依赖 CLI）。
+- 新文案：先在 `en.json` 加 key 与英文，再补 `zh-Hans.json` 中文；UI 里调用生成的
+  `locales.Xxx()`，禁止硬编码中文。带参数的用 ICU 模板（`{n, plural, ...}`、`{n, number}`），
+  在源目录用 `@key.placeholders` 标类型。
+- 包级标签表（`keyActions`、`themeSchemeOptions`、`connKinds` 等）**不能存死文案**：
+  存 `func() string` 或 key，渲染时取；否则切语言要重启。
+- 语言偏好：`locale.json`（`app.LocalizationPrefs`，`""` = 跟随系统）。设置窗口「语言」分区
+  调 `App.SetLocale` 即时生效；不要在 headless 路径读 `App.Locale/ChosenLocale`（会等主线程卡死）。
+- 测试：`ui` 包的 `TestMain` 固定 `MYGO_LOCALE=zh-Hans`，现有中文断言不动；英文用例单独
+  `MYGO_LOCALE=en go test ./ui -run TestI18nEnglish`。目录一致性测试在 `locales/catalog_test.go`。
+- **不翻译**：日志、驱动/数据库服务端错误（原样展示，不二次包装）、SQL/标识符/数据、持久化枚举 ID。
+  更新弹窗由 mygo 自己按 `App.Locale()` 取文案，不要另写一套。
 
 ## UI 约定（★ 必读）
 
