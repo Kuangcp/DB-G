@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"db-g/locales"
 )
 
 // DefaultAIBaseURL 是本地 Ollama 的 OpenAI-compatible 地址。
@@ -47,10 +49,10 @@ func LoadAIPrefs(path string, vault *Vault) (AIPrefs, string) {
 		if errors.Is(err, os.ErrNotExist) {
 			return prefs, ""
 		}
-		return prefs, "读取 AI 配置失败：" + err.Error()
+		return prefs, locales.AppAIReadFailed(err.Error())
 	}
 	if err := json.Unmarshal(data, &prefs); err != nil {
-		return DefaultAIPrefs(), "AI 配置格式错误：" + err.Error()
+		return DefaultAIPrefs(), locales.AppAICorrupt(err.Error())
 	}
 	if prefs.BaseURL == "" {
 		prefs.BaseURL = DefaultAIBaseURL
@@ -58,7 +60,7 @@ func LoadAIPrefs(path string, vault *Vault) (AIPrefs, string) {
 	if prefs.APIKeyEnc != "" {
 		key, err := vault.Decrypt(prefs.APIKeyEnc)
 		if err != nil {
-			return prefs, "AI API Key 解密失败：" + err.Error()
+			return prefs, locales.AppAIKeyDecryptFailed(err.Error())
 		}
 		prefs.APIKey = key
 	}

@@ -3,22 +3,23 @@ package app
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"db-g/locales"
 )
 
 // MaxExternalSQLSize 是外部 .sql 文件的大小上限；超过直接拒绝，避免把编辑器拖死。
 const MaxExternalSQLSize = 8 << 20 // 8 MiB
 
 var (
-	ErrExternalTooBig = fmt.Errorf("SQL 文件超过 %d MiB", MaxExternalSQLSize>>20)
-	ErrNotSQLFile     = errors.New("只支持 .sql 文件")
-	ErrNotTextSQL     = errors.New("不是文本 SQL 文件")
+	ErrExternalTooBig = newLocaleError(func() string { return locales.AppExternalTooBig(MaxExternalSQLSize >> 20) })
+	ErrNotSQLFile     = newLocaleError(func() string { return locales.AppExternalOnlySQL() })
+	ErrNotTextSQL     = newLocaleError(func() string { return locales.AppExternalNotText() })
 )
 
 // IsSQLFile 报告路径是否以 .sql 结尾（大小写不敏感）。
@@ -38,7 +39,7 @@ func CheckExternalSQL(path string) (string, error) {
 	info, err := os.Stat(norm)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("文件不存在: %s", norm)
+			return "", errors.New(locales.AppExternalFileMissing(norm))
 		}
 		return "", err
 	}

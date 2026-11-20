@@ -6,10 +6,11 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"db-g/locales"
 )
 
 const secretKeyLen = 32 // AES-256
@@ -55,7 +56,7 @@ func (v *Vault) Encrypt(plain string) (string, error) {
 		return "", nil
 	}
 	if v == nil || len(v.key) != secretKeyLen {
-		return "", errors.New("密钥不可用")
+		return "", errors.New(locales.AppCryptKeyUnavailable())
 	}
 	block, err := aes.NewCipher(v.key)
 	if err != nil {
@@ -79,11 +80,11 @@ func (v *Vault) Decrypt(s string) (string, error) {
 		return s, nil
 	}
 	if v == nil || len(v.key) != secretKeyLen {
-		return "", errors.New("密钥不可用")
+		return "", errors.New(locales.AppCryptKeyUnavailable())
 	}
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(s, "enc:v1:"))
 	if err != nil {
-		return "", fmt.Errorf("密文损坏: %w", err)
+		return "", errors.New(locales.AppCryptCorrupt(err.Error()))
 	}
 	block, err := aes.NewCipher(v.key)
 	if err != nil {
@@ -94,12 +95,12 @@ func (v *Vault) Decrypt(s string) (string, error) {
 		return "", err
 	}
 	if len(raw) < gcm.NonceSize() {
-		return "", errors.New("密文损坏")
+		return "", errors.New(locales.AppCryptCorruptPlain())
 	}
 	nonce, body := raw[:gcm.NonceSize()], raw[gcm.NonceSize():]
 	plain, err := gcm.Open(nil, nonce, body, nil)
 	if err != nil {
-		return "", errors.New("无法解密（密钥已变更？）")
+		return "", errors.New(locales.AppCryptUndecryptable())
 	}
 	return string(plain), nil
 }

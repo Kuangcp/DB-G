@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"db-g/locales"
 	"db-g/sync"
 )
 
@@ -47,10 +48,10 @@ func LoadSyncPrefs(path string) (SyncPrefs, string) {
 		if errors.Is(err, os.ErrNotExist) {
 			return prefs, ""
 		}
-		return prefs, "读取同步配置失败：" + err.Error()
+		return prefs, locales.AppSyncPrefsReadFailed(err.Error())
 	}
 	if err := json.Unmarshal(data, &prefs); err != nil {
-		return DefaultSyncPrefs(), "同步配置格式错误：" + err.Error()
+		return DefaultSyncPrefs(), locales.AppSyncPrefsCorrupt(err.Error())
 	}
 	if strings.TrimSpace(prefs.Branch) == "" {
 		prefs.Branch = "main"

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/egoist/mygo/i18n"
 )
 
 func TestLocalePrefsDefaults(t *testing.T) {
@@ -68,5 +70,19 @@ func TestLoadLocalePrefsMissingAndBroken(t *testing.T) {
 	p, warn = LoadLocalePrefs(path)
 	if p.Locale != "" || warn == "" {
 		t.Fatalf("broken = %+v warn=%q", p, warn)
+	}
+}
+
+func TestAppErrorsFollowLanguage(t *testing.T) {
+	prevLang := "zh-Hans"
+	i18n.SetLocaleFunc(func() string { return prevLang })
+	t.Cleanup(func() { i18n.SetLocaleFunc(func() string { return prevLang }) })
+
+	if got := validateProfile(ConnProfile{Name: ""}).Error(); got != "连接名称不能为空" {
+		t.Fatalf("zh error = %q", got)
+	}
+	i18n.SetLocaleFunc(func() string { return "en" })
+	if got := validateProfile(ConnProfile{Name: ""}).Error(); got != "Connection name cannot be empty" {
+		t.Fatalf("en error = %q", got)
 	}
 }

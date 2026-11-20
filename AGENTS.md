@@ -44,7 +44,7 @@ main.go ──> ui ──> app ──> engine
 | `engine/` | **协议无关契约**：`Session` / `Capabilities` / `Profile` / `QueryResult` / `Params` | 只用标准库 |
 | `driver/<kind>/` | 各数据源实现（`sqlite` `mysql` `postgres` `clickhouse`），`init()` 里 `engine.Register` | `engine` + 驱动库，**禁止 import app/ui** |
 | `ai/` | **纯叶层**：Provider 接口、go-openai SDK 封装、上下文 DTO、提示词、检索、计划解析 | 标准库 + go-openai，**禁止 import ui/app/engine** |
-| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划、git 同步编排 | `engine`、`ai`、`sync`，**禁止 import ui / mygo** |
+| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划、git 同步编排 | `engine`、`ai`、`sync`、`locales`，**禁止 import ui / mygo** |
 | `sync/` | **纯叶层**：系统 git 封装、AES-GCM/KCV、仓库路径与 DTO、工作树读写 | 只用标准库 |
 | `ui/` | mygo 视图层（唯一 import mygo 的地方）：`root` 编排一切交互 | `ai`、`app`、`engine`、`mygo` |
 | `tools/` | 生成器（`genicon` 应用图标、`lucideicons` 图标代码），不是运行时代码 | 标准库 / mygo |
@@ -189,6 +189,9 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
   `MYGO_LOCALE=en go test ./ui -run TestI18nEnglish`。目录一致性测试在 `locales/catalog_test.go`。
 - **不翻译**：日志、驱动/数据库服务端错误（原样展示，不二次包装）、SQL/标识符/数据、持久化枚举 ID。
   更新弹窗由 mygo 自己按 `App.Locale()` 取文案，不要另写一套。
+- `app/` 的用户可见错误/警告可以用 `db-g/locales`（生成叶子包）；哨兵错误用 `app.localeError`
+  包一层，保住 `errors.Is` 的同一性。`ai/` 的提示词不走 catalog，由 `ContextSnapshot.Language`
+  要求模型跟随界面语言回答。
 
 ## UI 约定（★ 必读）
 

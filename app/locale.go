@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"db-g/locales"
 )
 
 // LocalizationPrefs 是界面语言偏好。
@@ -39,7 +41,7 @@ func NormalizeLocalePrefs(p LocalizationPrefs) (LocalizationPrefs, string) {
 	case lower == "zh" || lower == "zh-hans" || strings.HasPrefix(lower, "zh-hans-"):
 		return LocalizationPrefs{Locale: LocaleZhHans}, ""
 	}
-	return DefaultLocalePrefs(), "未知界面语言 " + tag + "，已改为跟随系统"
+	return DefaultLocalePrefs(), locales.AppLocaleUnknown(tag)
 }
 
 // DefaultLocalePrefsPath 返回语言偏好文件路径（与连接库同目录）。
@@ -54,11 +56,11 @@ func LoadLocalePrefs(path string) (LocalizationPrefs, string) {
 		if os.IsNotExist(err) {
 			return DefaultLocalePrefs(), ""
 		}
-		return DefaultLocalePrefs(), "读取语言设置失败: " + err.Error()
+		return DefaultLocalePrefs(), locales.AppLocaleReadFailed(err.Error())
 	}
 	p := DefaultLocalePrefs()
 	if err := json.Unmarshal(data, &p); err != nil {
-		return DefaultLocalePrefs(), "语言设置损坏，已用默认值: " + err.Error()
+		return DefaultLocalePrefs(), locales.AppLocaleCorrupt(err.Error())
 	}
 	prefs, warn := NormalizeLocalePrefs(p)
 	return prefs, warn

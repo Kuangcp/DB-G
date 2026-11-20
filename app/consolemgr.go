@@ -1,9 +1,10 @@
 package app
 
 import (
-	"errors"
 	"sync"
 	"time"
+
+	"db-g/locales"
 )
 
 // ConsoleManager 编排控制台的正文、脏标记、自动保存与光标记忆。
@@ -164,7 +165,7 @@ func (m *ConsoleManager) TouchVersion(id string, ver uint64) {
 }
 
 // ErrExternalChanged 表示外部文件在内存缓冲之外被修改，写入会覆盖别人的改动。
-var ErrExternalChanged = errors.New("外部文件已被修改")
+var ErrExternalChanged = newLocaleError(func() string { return locales.AppExternalChanged() })
 
 // externalSink 是 ConsoleFiles 的可选能力：区分外部文件控制台。
 type externalSink interface{ External(id string) bool }

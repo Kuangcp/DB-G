@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"db-g/locales"
 )
 
 // FontSpec 是一类区域的字体设置：字体族（逗号分隔回退）与字号。
@@ -70,10 +72,10 @@ func LoadFontPrefs(path string) (FontPrefs, string) {
 		if os.IsNotExist(err) {
 			return migrateLegacyEditorPrefs(path)
 		}
-		return prefs, "读取字体设置失败: " + err.Error()
+		return prefs, locales.AppFontReadFailed(err.Error())
 	}
 	if err := json.Unmarshal(data, &prefs); err != nil {
-		return DefaultFontPrefs(), "字体设置损坏，已用默认值: " + err.Error()
+		return DefaultFontPrefs(), locales.AppFontCorrupt(err.Error())
 	}
 	return NormalizeFontPrefs(prefs), ""
 }
@@ -99,7 +101,7 @@ func migrateLegacyEditorPrefs(path string) (FontPrefs, string) {
 	prefs.Editor = FontSpec{Family: legacy.FontFamily, Size: legacy.FontSize}
 	prefs = NormalizeFontPrefs(prefs)
 	if err := SaveFontPrefs(path, prefs); err != nil {
-		return prefs, "迁移编辑器字体设置失败: " + err.Error()
+		return prefs, locales.AppFontMigrateFailed(err.Error())
 	}
 	return prefs, ""
 }

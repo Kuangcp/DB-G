@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"db-g/locales"
 )
 
 // ColumnInfo 是表的一列元数据（可编辑判定用）。
@@ -28,8 +30,8 @@ type EditPlan struct {
 }
 
 var (
-	ErrNoPrimaryKey = errors.New("表没有主键，结果只读")
-	ErrColumnRange  = errors.New("结果列与表列不匹配，结果只读")
+	ErrNoPrimaryKey = newLocaleError(func() string { return locales.AppEditNoPrimaryKey() })
+	ErrColumnRange  = newLocaleError(func() string { return locales.AppEditColumnMismatch() })
 )
 
 // BuildEditPlan 判定结果能否写：单表、结果列都来自该表、主键列全部在结果里。
@@ -59,12 +61,12 @@ func BuildEditPlan(kind, table string, resultCols []string, tableCols []ColumnIn
 	for _, name := range resultCols {
 		key := strings.ToLower(name)
 		if seen[key] {
-			return nil, fmt.Errorf("%w：结果列 %q 重复", ErrColumnRange, name)
+			return nil, errors.New(locales.AppEditDuplicateColumn(ErrColumnRange.Error(), name))
 		}
 		seen[key] = true
 		col, ok := byName[key]
 		if !ok {
-			return nil, fmt.Errorf("%w：结果列 %q 不在表 %s 里（别名/表达式只读）", ErrColumnRange, name, table)
+			return nil, errors.New(locales.AppEditColumnMissing(ErrColumnRange.Error(), name, table))
 		}
 		plan.Editable = append(plan.Editable, !col.PrimaryKey)
 		plan.Nullable = append(plan.Nullable, col.Nullable)
@@ -78,7 +80,7 @@ func BuildEditPlan(kind, table string, resultCols []string, tableCols []ColumnIn
 			}
 		}
 		if idx < 0 {
-			return nil, fmt.Errorf("%w：结果里没有主键列 %q", ErrColumnRange, pk)
+			return nil, errors.New(locales.AppEditNoPrimaryKeyColumn(ErrColumnRange.Error(), pk))
 		}
 		plan.PKIdx = append(plan.PKIdx, idx)
 		plan.PKNames = append(plan.PKNames, pk)
@@ -229,7 +231,7 @@ func (e *EditSet) BuildOps(plan *EditPlan, rows [][]any) ([]Op, error) {
 			}
 		}
 		if len(cols) == 0 {
-			return nil, fmt.Errorf("新增行 %d 没有填任何值", i+1)
+			return nil, errors.New(locales.AppEditInsertEmpty(i + 1))
 		}
 		sort.Ints(cols)
 		names := make([]string, len(cols))
@@ -289,10 +291,10 @@ func ApplyOps(ctx context.Context, tx TxLike, ops []Op) error {
 	for i, op := range ops {
 		n, err := tx.Exec(ctx, op.SQL, op.Args...)
 		if err != nil {
-			return fmt.Errorf("第 %d 条失败: %w", i+1, err)
+			return errors.New(locales.AppEditRowFailed(i+1, err.Error()))
 		}
 		if op.Want > 0 && n != op.Want {
-			return fmt.Errorf("第 %d 条影响 %d 行（期望 %d），已回滚", i+1, n, op.Want)
+			return errors.New(locales.AppEditRowAffected(i+1, int(n), int(op.Want)))
 		}
 	}
 	return nil

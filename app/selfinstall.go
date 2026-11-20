@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"db-g/locales"
 )
 
 // releaseBuild 由发布构建用 -ldflags "-X db-g/app.releaseBuild=1" 打开。
@@ -116,38 +118,38 @@ func CheckInstall() InstallStatus {
 func InstallSelf(iconPNG []byte) (InstallStatus, error) {
 	st := CheckInstall()
 	if st.BinPath == "" {
-		return st, errors.New("无法确定配置目录")
+		return st, errors.New(locales.AppInstallNoConfigDir())
 	}
 	if st.DesktopPath == "" || st.IconPath == "" {
-		return st, errors.New("无法确定应用数据目录")
+		return st, errors.New(locales.AppInstallNoDataDir())
 	}
 	build, ok := ParseBuildNumber(Version())
 	if !ok {
-		return st, fmt.Errorf("版本号无法解析: %s", Version())
+		return st, errors.New(locales.AppInstallBadVersion(Version()))
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		return st, fmt.Errorf("无法定位当前程序: %w", err)
+		return st, errors.New(locales.AppInstallSelfPath(err.Error()))
 	}
 	if err := installBinary(exe, st.BinPath); err != nil {
-		return st, fmt.Errorf("复制程序失败: %w", err)
+		return st, errors.New(locales.AppInstallCopyFailed(err.Error()))
 	}
 	if len(iconPNG) == 0 {
-		return st, errors.New("缺少图标数据")
+		return st, errors.New(locales.AppInstallNoIcon())
 	}
 	if err := writeFileAtomic(st.IconPath, iconPNG, 0o644); err != nil {
-		return st, fmt.Errorf("写入图标失败: %w", err)
+		return st, errors.New(locales.AppInstallIconFailed(err.Error()))
 	}
 	if err := writeFileAtomic(st.DesktopPath, []byte(desktopEntry(st.BinPath, st.IconPath)), 0o644); err != nil {
-		return st, fmt.Errorf("写入应用菜单项失败: %w", err)
+		return st, errors.New(locales.AppInstallMenuFailed(err.Error()))
 	}
 	rec := InstalledVersion{Build: build, Display: strings.TrimPrefix(Version(), "v")}
 	if err := writeFileAtomic(st.VersionPath, []byte(versionFileContent(rec)), 0o644); err != nil {
-		return st, fmt.Errorf("写入版本文件失败: %w", err)
+		return st, errors.New(locales.AppInstallVersionFailed(err.Error()))
 	}
 	st = CheckInstall()
 	if st.NeedInstall {
-		return st, errors.New("安装后校验失败")
+		return st, errors.New(locales.AppInstallVerifyFailed())
 	}
 	return st, nil
 }
@@ -188,7 +190,7 @@ func loadVersionFile(path string) (InstalledVersion, error) {
 		case "build":
 			n, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil || n < 0 {
-				return InstalledVersion{}, fmt.Errorf("version 文件 build 非法: %q", value)
+				return InstalledVersion{}, errors.New(locales.AppInstallBadBuild(value))
 			}
 			rec.Build, hasBuild = n, true
 		case "version":
@@ -197,7 +199,7 @@ func loadVersionFile(path string) (InstalledVersion, error) {
 		}
 	}
 	if !hasBuild || !hasDisplay {
-		return InstalledVersion{}, errors.New("version 文件缺少 build/version 字段")
+		return InstalledVersion{}, errors.New(locales.AppInstallMissingFields())
 	}
 	return rec, nil
 }
@@ -209,7 +211,7 @@ func desktopEntry(execPath, iconPath string) string {
 		"Type=Application",
 		"Version=1.0",
 		"Name=DB-G",
-		"Comment=SQLite / MySQL / PostgreSQL / ClickHouse 数据库客户端",
+		"Comment=" + locales.AppInstallDesktopComment(),
 		"Exec=" + desktopExecQuote(execPath),
 		"Icon=" + iconPath,
 		"Terminal=false",

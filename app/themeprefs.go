@@ -3,11 +3,12 @@ package app
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"db-g/locales"
 )
 
 // ThemePalette 是一套自定义配色的中性色覆盖；空字段表示沿用 Lobe 主题。
@@ -106,17 +107,17 @@ func NormalizeThemePalette(p ThemePalette, label string) (ThemePalette, []string
 			return ""
 		}
 		if !accentHexPattern.MatchString(v) {
-			warn = append(warn, fmt.Sprintf("%s的%s %q 无效，已沿用默认", label, field, v))
+			warn = append(warn, locales.AppThemeFieldInvalid(label, field, v))
 			return ""
 		}
 		return v
 	}
 	return ThemePalette{
-		Background: norm(p.Background, "背景"),
-		Surface:    norm(p.Surface, "容器"),
-		Border:     norm(p.Border, "边框"),
-		Text:       norm(p.Text, "正文"),
-		TextMuted:  norm(p.TextMuted, "次要文字"),
+		Background: norm(p.Background, locales.AppPaletteBackground()),
+		Surface:    norm(p.Surface, locales.AppPaletteSurface()),
+		Border:     norm(p.Border, locales.AppPaletteBorder()),
+		Text:       norm(p.Text, locales.AppPaletteText()),
+		TextMuted:  norm(p.TextMuted, locales.AppPaletteMutedText()),
 	}, warn
 }
 
@@ -134,11 +135,11 @@ func (p ThemePrefs) Normalize() (ThemePrefs, []string) {
 	case ThemeModeDark:
 		out.Mode = ThemeModeDark
 	default:
-		warn = append(warn, fmt.Sprintf("未知主题模式 %q，已用跟随系统", p.Mode))
+		warn = append(warn, locales.AppThemeUnknownMode(p.Mode))
 	}
 	accent := strings.ToLower(strings.TrimSpace(p.Accent))
 	if !accentPresets[accent] && !accentHexPattern.MatchString(accent) {
-		warn = append(warn, fmt.Sprintf("强调色 %q 无效，已用默认", p.Accent))
+		warn = append(warn, locales.AppThemeBadAccent(p.Accent))
 		accent = ""
 	}
 	if accent == "default" {
@@ -150,14 +151,14 @@ func (p ThemePrefs) Normalize() (ThemePrefs, []string) {
 		scheme = ThemeSchemeDefault
 	}
 	if !themeSchemes[scheme] {
-		warn = append(warn, fmt.Sprintf("未知配色方案 %q，已用默认", p.Scheme))
+		warn = append(warn, locales.AppThemeUnknownScheme(p.Scheme))
 		scheme = ThemeSchemeDefault
 	}
 	out.Scheme = scheme
 	var pw []string
-	out.CustomLight, pw = NormalizeThemePalette(p.CustomLight, "浅色自定义配色")
+	out.CustomLight, pw = NormalizeThemePalette(p.CustomLight, locales.AppThemeLightPalette())
 	warn = append(warn, pw...)
-	out.CustomDark, pw = NormalizeThemePalette(p.CustomDark, "深色自定义配色")
+	out.CustomDark, pw = NormalizeThemePalette(p.CustomDark, locales.AppThemeDarkPalette())
 	warn = append(warn, pw...)
 	switch strings.ToLower(strings.TrimSpace(p.Density)) {
 	case "", ThemeDensityNormal:
@@ -167,16 +168,16 @@ func (p ThemePrefs) Normalize() (ThemePrefs, []string) {
 	case ThemeDensityRoomy:
 		out.Density = ThemeDensityRoomy
 	default:
-		warn = append(warn, fmt.Sprintf("未知密度 %q，已用标准", p.Density))
+		warn = append(warn, locales.AppThemeUnknownDensity(p.Density))
 	}
 	if p.Radius < MinThemeRadius || p.Radius > MaxThemeRadius {
-		warn = append(warn, fmt.Sprintf("圆角 %d 超出 %d–%d，已用默认", p.Radius, MinThemeRadius, MaxThemeRadius))
+		warn = append(warn, locales.AppThemeRadiusRange(p.Radius, MinThemeRadius, MaxThemeRadius))
 		out.Radius = DefaultThemeRadius
 	} else {
 		out.Radius = p.Radius
 	}
 	if p.FontSize != 0 && (p.FontSize < MinThemeFontSize || p.FontSize > MaxThemeFontSize) {
-		warn = append(warn, fmt.Sprintf("界面字号 %d 超出 %d–%d，已用默认", p.FontSize, MinThemeFontSize, MaxThemeFontSize))
+		warn = append(warn, locales.AppThemeFontRange(p.FontSize, MinThemeFontSize, MaxThemeFontSize))
 		out.FontSize = DefaultThemeFontSize
 	} else {
 		out.FontSize = p.FontSize
@@ -191,15 +192,15 @@ func LoadThemePrefs(path string) (ThemePrefs, string) {
 		if os.IsNotExist(err) {
 			return DefaultThemePrefs(), ""
 		}
-		return DefaultThemePrefs(), "读取外观设置失败: " + err.Error()
+		return DefaultThemePrefs(), locales.AppThemeReadFailed(err.Error())
 	}
 	p := DefaultThemePrefs()
 	if err := json.Unmarshal(data, &p); err != nil {
-		return DefaultThemePrefs(), "外观设置损坏，已用默认值: " + err.Error()
+		return DefaultThemePrefs(), locales.AppThemeCorrupt(err.Error())
 	}
 	prefs, warn := p.Normalize()
 	if len(warn) > 0 {
-		return prefs, "外观设置已修正: " + strings.Join(warn, "；")
+		return prefs, locales.AppThemeCorrected(strings.Join(warn, "；"))
 	}
 	return prefs, ""
 }
@@ -247,13 +248,13 @@ func ImportThemePrefs(path string) (ThemePrefs, []string, error) {
 	}
 	f := themeFile{ThemePrefs: DefaultThemePrefs()}
 	if err := json.Unmarshal(data, &f); err != nil {
-		return ThemePrefs{}, nil, errors.New("主题文件不是合法 JSON: " + err.Error())
+		return ThemePrefs{}, nil, errors.New(locales.AppThemeInvalidJSON(err.Error()))
 	}
 	if f.App != "" && f.App != themeFileApp {
-		return ThemePrefs{}, nil, fmt.Errorf("不是 db-g 主题文件（app=%q）", f.App)
+		return ThemePrefs{}, nil, errors.New(locales.AppThemeWrongApp(f.App))
 	}
 	if f.Version > themeFileVersion {
-		return ThemePrefs{}, nil, fmt.Errorf("主题文件版本 %d 高于支持的 %d", f.Version, themeFileVersion)
+		return ThemePrefs{}, nil, errors.New(locales.AppThemeVersionTooNew(f.Version, themeFileVersion))
 	}
 	prefs, warn := f.ThemePrefs.Normalize()
 	return prefs, warn, nil

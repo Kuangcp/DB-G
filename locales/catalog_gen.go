@@ -6809,3 +6809,1505 @@ func ThemeSaveFailed(err string) string { return In(i18n.Locale()).ThemeSaveFail
 func (msgs Messages) ThemeSaveFailed(err string) string {
 	return Catalog.Format(msgs.locale, "themeSaveFailed", map[string]any{"err": err})
 }
+
+// AppCryptKeyUnavailable says "Encryption key unavailable"
+// in the language the app shows.
+func AppCryptKeyUnavailable() string { return In(i18n.Locale()).AppCryptKeyUnavailable() }
+
+// AppCryptKeyUnavailable says "Encryption key unavailable"
+// in the language of msgs.
+func (msgs Messages) AppCryptKeyUnavailable() string {
+	return Catalog.Format(msgs.locale, "appCryptKeyUnavailable", nil)
+}
+
+// AppCryptCorrupt says "Ciphertext is corrupt: {err}"
+// in the language the app shows.
+func AppCryptCorrupt(err string) string { return In(i18n.Locale()).AppCryptCorrupt(err) }
+
+// AppCryptCorrupt says "Ciphertext is corrupt: {err}"
+// in the language of msgs.
+func (msgs Messages) AppCryptCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appCryptCorrupt", map[string]any{"err": err})
+}
+
+// AppCryptCorruptPlain says "Ciphertext is corrupt"
+// in the language the app shows.
+func AppCryptCorruptPlain() string { return In(i18n.Locale()).AppCryptCorruptPlain() }
+
+// AppCryptCorruptPlain says "Ciphertext is corrupt"
+// in the language of msgs.
+func (msgs Messages) AppCryptCorruptPlain() string {
+	return Catalog.Format(msgs.locale, "appCryptCorruptPlain", nil)
+}
+
+// AppCryptUndecryptable says "Cannot decrypt (the key may have changed?)"
+// in the language the app shows.
+func AppCryptUndecryptable() string { return In(i18n.Locale()).AppCryptUndecryptable() }
+
+// AppCryptUndecryptable says "Cannot decrypt (the key may have changed?)"
+// in the language of msgs.
+func (msgs Messages) AppCryptUndecryptable() string {
+	return Catalog.Format(msgs.locale, "appCryptUndecryptable", nil)
+}
+
+// AppConnWarnKeyUnavailable says "Encryption key unavailable; passwords cannot be saved: {err}"
+// in the language the app shows.
+func AppConnWarnKeyUnavailable(err string) string {
+	return In(i18n.Locale()).AppConnWarnKeyUnavailable(err)
+}
+
+// AppConnWarnKeyUnavailable says "Encryption key unavailable; passwords cannot be saved: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnWarnKeyUnavailable(err string) string {
+	return Catalog.Format(msgs.locale, "appConnWarnKeyUnavailable", map[string]any{"err": err})
+}
+
+// AppConnReadFailed says "Failed to read connection configuration: {err}"
+// in the language the app shows.
+func AppConnReadFailed(err string) string { return In(i18n.Locale()).AppConnReadFailed(err) }
+
+// AppConnReadFailed says "Failed to read connection configuration: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appConnReadFailed", map[string]any{"err": err})
+}
+
+// AppConnCorrupt says "Connection configuration is corrupt: {err}"
+// in the language the app shows.
+func AppConnCorrupt(err string) string { return In(i18n.Locale()).AppConnCorrupt(err) }
+
+// AppConnCorrupt says "Connection configuration is corrupt: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appConnCorrupt", map[string]any{"err": err})
+}
+
+// AppConnCorruptRenamed says "Connection configuration is corrupt; renamed to .bak"
+// in the language the app shows.
+func AppConnCorruptRenamed() string { return In(i18n.Locale()).AppConnCorruptRenamed() }
+
+// AppConnCorruptRenamed says "Connection configuration is corrupt; renamed to .bak"
+// in the language of msgs.
+func (msgs Messages) AppConnCorruptRenamed() string {
+	return Catalog.Format(msgs.locale, "appConnCorruptRenamed", nil)
+}
+
+// AppConnPasswordUndecryptable says "Cannot decrypt the password (key changed? re-enter it): {name}"
+// in the language the app shows.
+func AppConnPasswordUndecryptable(name string) string {
+	return In(i18n.Locale()).AppConnPasswordUndecryptable(name)
+}
+
+// AppConnPasswordUndecryptable says "Cannot decrypt the password (key changed? re-enter it): {name}"
+// in the language of msgs.
+func (msgs Messages) AppConnPasswordUndecryptable(name string) string {
+	return Catalog.Format(msgs.locale, "appConnPasswordUndecryptable", map[string]any{"name": name})
+}
+
+// AppConnRewrapFailed says "Failed to re-encrypt passwords: {err}"
+// in the language the app shows.
+func AppConnRewrapFailed(err string) string { return In(i18n.Locale()).AppConnRewrapFailed(err) }
+
+// AppConnRewrapFailed says "Failed to re-encrypt passwords: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnRewrapFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appConnRewrapFailed", map[string]any{"err": err})
+}
+
+// AppConnRefusePlaintext says "Encryption key unavailable; refusing to write the password in plain text"
+// in the language the app shows.
+func AppConnRefusePlaintext() string { return In(i18n.Locale()).AppConnRefusePlaintext() }
+
+// AppConnRefusePlaintext says "Encryption key unavailable; refusing to write the password in plain text"
+// in the language of msgs.
+func (msgs Messages) AppConnRefusePlaintext() string {
+	return Catalog.Format(msgs.locale, "appConnRefusePlaintext", nil)
+}
+
+// AppConnNameEmpty says "Connection name cannot be empty"
+// in the language the app shows.
+func AppConnNameEmpty() string { return In(i18n.Locale()).AppConnNameEmpty() }
+
+// AppConnNameEmpty says "Connection name cannot be empty"
+// in the language of msgs.
+func (msgs Messages) AppConnNameEmpty() string {
+	return Catalog.Format(msgs.locale, "appConnNameEmpty", nil)
+}
+
+// AppConnPathUnavailable says "Path unavailable: {err}"
+// in the language the app shows.
+func AppConnPathUnavailable(err string) string { return In(i18n.Locale()).AppConnPathUnavailable(err) }
+
+// AppConnPathUnavailable says "Path unavailable: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnPathUnavailable(err string) string {
+	return Catalog.Format(msgs.locale, "appConnPathUnavailable", map[string]any{"err": err})
+}
+
+// AppConnPathIsDir says "Path unavailable: it is a directory, not a database file"
+// in the language the app shows.
+func AppConnPathIsDir() string { return In(i18n.Locale()).AppConnPathIsDir() }
+
+// AppConnPathIsDir says "Path unavailable: it is a directory, not a database file"
+// in the language of msgs.
+func (msgs Messages) AppConnPathIsDir() string {
+	return Catalog.Format(msgs.locale, "appConnPathIsDir", nil)
+}
+
+// AppConnHostEmpty says "Host cannot be empty"
+// in the language the app shows.
+func AppConnHostEmpty() string { return In(i18n.Locale()).AppConnHostEmpty() }
+
+// AppConnHostEmpty says "Host cannot be empty"
+// in the language of msgs.
+func (msgs Messages) AppConnHostEmpty() string {
+	return Catalog.Format(msgs.locale, "appConnHostEmpty", nil)
+}
+
+// AppConnPortRange says "Port must be between 1 and 65535"
+// in the language the app shows.
+func AppConnPortRange() string { return In(i18n.Locale()).AppConnPortRange() }
+
+// AppConnPortRange says "Port must be between 1 and 65535"
+// in the language of msgs.
+func (msgs Messages) AppConnPortRange() string {
+	return Catalog.Format(msgs.locale, "appConnPortRange", nil)
+}
+
+// AppConnUnsupportedKind says "Unsupported datasource type: {kind}"
+// in the language the app shows.
+func AppConnUnsupportedKind(kind string) string {
+	return In(i18n.Locale()).AppConnUnsupportedKind(kind)
+}
+
+// AppConnUnsupportedKind says "Unsupported datasource type: {kind}"
+// in the language of msgs.
+func (msgs Messages) AppConnUnsupportedKind(kind string) string {
+	return Catalog.Format(msgs.locale, "appConnUnsupportedKind", map[string]any{"kind": kind})
+}
+
+// AppConnTimeoutRange says "Query timeout must be 0–86400 seconds"
+// in the language the app shows.
+func AppConnTimeoutRange() string { return In(i18n.Locale()).AppConnTimeoutRange() }
+
+// AppConnTimeoutRange says "Query timeout must be 0–86400 seconds"
+// in the language of msgs.
+func (msgs Messages) AppConnTimeoutRange() string {
+	return Catalog.Format(msgs.locale, "appConnTimeoutRange", nil)
+}
+
+// AppConnFolderMissing says "Folder not found: {id}"
+// in the language the app shows.
+func AppConnFolderMissing(id string) string { return In(i18n.Locale()).AppConnFolderMissing(id) }
+
+// AppConnFolderMissing says "Folder not found: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnFolderMissing(id string) string {
+	return Catalog.Format(msgs.locale, "appConnFolderMissing", map[string]any{"id": id})
+}
+
+// AppConnFolderParentMissing says "Parent folder not found: {id}"
+// in the language the app shows.
+func AppConnFolderParentMissing(id string) string {
+	return In(i18n.Locale()).AppConnFolderParentMissing(id)
+}
+
+// AppConnFolderParentMissing says "Parent folder not found: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnFolderParentMissing(id string) string {
+	return Catalog.Format(msgs.locale, "appConnFolderParentMissing", map[string]any{"id": id})
+}
+
+// AppConnFolderNameEmpty says "Folder name cannot be empty"
+// in the language the app shows.
+func AppConnFolderNameEmpty() string { return In(i18n.Locale()).AppConnFolderNameEmpty() }
+
+// AppConnFolderNameEmpty says "Folder name cannot be empty"
+// in the language of msgs.
+func (msgs Messages) AppConnFolderNameEmpty() string {
+	return Catalog.Format(msgs.locale, "appConnFolderNameEmpty", nil)
+}
+
+// AppConnFolderDuplicate says "A folder with the same name already exists here"
+// in the language the app shows.
+func AppConnFolderDuplicate() string { return In(i18n.Locale()).AppConnFolderDuplicate() }
+
+// AppConnFolderDuplicate says "A folder with the same name already exists here"
+// in the language of msgs.
+func (msgs Messages) AppConnFolderDuplicate() string {
+	return Catalog.Format(msgs.locale, "appConnFolderDuplicate", nil)
+}
+
+// AppConnFolderSelf says "Cannot move a folder into itself or its subfolders"
+// in the language the app shows.
+func AppConnFolderSelf() string { return In(i18n.Locale()).AppConnFolderSelf() }
+
+// AppConnFolderSelf says "Cannot move a folder into itself or its subfolders"
+// in the language of msgs.
+func (msgs Messages) AppConnFolderSelf() string {
+	return Catalog.Format(msgs.locale, "appConnFolderSelf", nil)
+}
+
+// AppConnFolderTargetMissing says "Target folder not found: {id}"
+// in the language the app shows.
+func AppConnFolderTargetMissing(id string) string {
+	return In(i18n.Locale()).AppConnFolderTargetMissing(id)
+}
+
+// AppConnFolderTargetMissing says "Target folder not found: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnFolderTargetMissing(id string) string {
+	return Catalog.Format(msgs.locale, "appConnFolderTargetMissing", map[string]any{"id": id})
+}
+
+// AppConnFolderNotSibling says "Target folder is not on the same level"
+// in the language the app shows.
+func AppConnFolderNotSibling() string { return In(i18n.Locale()).AppConnFolderNotSibling() }
+
+// AppConnFolderNotSibling says "Target folder is not on the same level"
+// in the language of msgs.
+func (msgs Messages) AppConnFolderNotSibling() string {
+	return Catalog.Format(msgs.locale, "appConnFolderNotSibling", nil)
+}
+
+// AppConnIDExists says "Connection ID already exists: {id}"
+// in the language the app shows.
+func AppConnIDExists(id string) string { return In(i18n.Locale()).AppConnIDExists(id) }
+
+// AppConnIDExists says "Connection ID already exists: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnIDExists(id string) string {
+	return Catalog.Format(msgs.locale, "appConnIDExists", map[string]any{"id": id})
+}
+
+// AppConnMissing says "Connection not found: {id}"
+// in the language the app shows.
+func AppConnMissing(id string) string { return In(i18n.Locale()).AppConnMissing(id) }
+
+// AppConnMissing says "Connection not found: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnMissing(id string) string {
+	return Catalog.Format(msgs.locale, "appConnMissing", map[string]any{"id": id})
+}
+
+// AppConnConsoleMissing says "Console not found: {id}"
+// in the language the app shows.
+func AppConnConsoleMissing(id string) string { return In(i18n.Locale()).AppConnConsoleMissing(id) }
+
+// AppConnConsoleMissing says "Console not found: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnConsoleMissing(id string) string {
+	return Catalog.Format(msgs.locale, "appConnConsoleMissing", map[string]any{"id": id})
+}
+
+// AppConnWorkspaceMissing says "Workspace not found: {id}"
+// in the language the app shows.
+func AppConnWorkspaceMissing(id string) string { return In(i18n.Locale()).AppConnWorkspaceMissing(id) }
+
+// AppConnWorkspaceMissing says "Workspace not found: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnWorkspaceMissing(id string) string {
+	return Catalog.Format(msgs.locale, "appConnWorkspaceMissing", map[string]any{"id": id})
+}
+
+// AppConnConsoleNotInWorkspace says "Console is not in the workspace: {id}"
+// in the language the app shows.
+func AppConnConsoleNotInWorkspace(id string) string {
+	return In(i18n.Locale()).AppConnConsoleNotInWorkspace(id)
+}
+
+// AppConnConsoleNotInWorkspace says "Console is not in the workspace: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnConsoleNotInWorkspace(id string) string {
+	return Catalog.Format(msgs.locale, "appConnConsoleNotInWorkspace", map[string]any{"id": id})
+}
+
+// AppConnTargetConsoleNotInWorkspace says "Target console is not in the workspace: {id}"
+// in the language the app shows.
+func AppConnTargetConsoleNotInWorkspace(id string) string {
+	return In(i18n.Locale()).AppConnTargetConsoleNotInWorkspace(id)
+}
+
+// AppConnTargetConsoleNotInWorkspace says "Target console is not in the workspace: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnTargetConsoleNotInWorkspace(id string) string {
+	return Catalog.Format(msgs.locale, "appConnTargetConsoleNotInWorkspace", map[string]any{"id": id})
+}
+
+// AppConnTargetConnMissing says "Target connection not found: {id}"
+// in the language the app shows.
+func AppConnTargetConnMissing(id string) string {
+	return In(i18n.Locale()).AppConnTargetConnMissing(id)
+}
+
+// AppConnTargetConnMissing says "Target connection not found: {id}"
+// in the language of msgs.
+func (msgs Messages) AppConnTargetConnMissing(id string) string {
+	return Catalog.Format(msgs.locale, "appConnTargetConnMissing", map[string]any{"id": id})
+}
+
+// AppConnTargetConnNotInFolder says "Target connection is not in that folder"
+// in the language the app shows.
+func AppConnTargetConnNotInFolder() string { return In(i18n.Locale()).AppConnTargetConnNotInFolder() }
+
+// AppConnTargetConnNotInFolder says "Target connection is not in that folder"
+// in the language of msgs.
+func (msgs Messages) AppConnTargetConnNotInFolder() string {
+	return Catalog.Format(msgs.locale, "appConnTargetConnNotInFolder", nil)
+}
+
+// AppConsoleDefaultName says "Console {n}"
+// in the language the app shows.
+func AppConsoleDefaultName(n int) string { return In(i18n.Locale()).AppConsoleDefaultName(n) }
+
+// AppConsoleDefaultName says "Console {n}"
+// in the language of msgs.
+func (msgs Messages) AppConsoleDefaultName(n int) string {
+	return Catalog.Format(msgs.locale, "appConsoleDefaultName", map[string]any{"n": n})
+}
+
+// AppWorkspaceDefault says "Default"
+// in the language the app shows.
+func AppWorkspaceDefault() string { return In(i18n.Locale()).AppWorkspaceDefault() }
+
+// AppWorkspaceDefault says "Default"
+// in the language of msgs.
+func (msgs Messages) AppWorkspaceDefault() string {
+	return Catalog.Format(msgs.locale, "appWorkspaceDefault", nil)
+}
+
+// AppConnSaveActiveFailed says "Failed to save the active connection: {err}"
+// in the language the app shows.
+func AppConnSaveActiveFailed(err string) string {
+	return In(i18n.Locale()).AppConnSaveActiveFailed(err)
+}
+
+// AppConnSaveActiveFailed says "Failed to save the active connection: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnSaveActiveFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appConnSaveActiveFailed", map[string]any{"err": err})
+}
+
+// AppConnSaveCursorFailed says "Failed to save the console cursor: {err}"
+// in the language the app shows.
+func AppConnSaveCursorFailed(err string) string {
+	return In(i18n.Locale()).AppConnSaveCursorFailed(err)
+}
+
+// AppConnSaveCursorFailed says "Failed to save the console cursor: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnSaveCursorFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appConnSaveCursorFailed", map[string]any{"err": err})
+}
+
+// AppConnSaveConsoleFailed says "Failed to save the console: {err}"
+// in the language the app shows.
+func AppConnSaveConsoleFailed(err string) string {
+	return In(i18n.Locale()).AppConnSaveConsoleFailed(err)
+}
+
+// AppConnSaveConsoleFailed says "Failed to save the console: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnSaveConsoleFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appConnSaveConsoleFailed", map[string]any{"err": err})
+}
+
+// AppConnSaveWorkspaceFailed says "Failed to save the active workspace: {err}"
+// in the language the app shows.
+func AppConnSaveWorkspaceFailed(err string) string {
+	return In(i18n.Locale()).AppConnSaveWorkspaceFailed(err)
+}
+
+// AppConnSaveWorkspaceFailed says "Failed to save the active workspace: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConnSaveWorkspaceFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appConnSaveWorkspaceFailed", map[string]any{"err": err})
+}
+
+// AppGuardNoWhere says "{head} has no WHERE clause; it may affect the whole table."
+// in the language the app shows.
+func AppGuardNoWhere(head string) string { return In(i18n.Locale()).AppGuardNoWhere(head) }
+
+// AppGuardNoWhere says "{head} has no WHERE clause; it may affect the whole table."
+// in the language of msgs.
+func (msgs Messages) AppGuardNoWhere(head string) string {
+	return Catalog.Format(msgs.locale, "appGuardNoWhere", map[string]any{"head": head})
+}
+
+// AppGuardTruthyWhere says "{head} has an always-true WHERE clause, which is equivalent to no filter."
+// in the language the app shows.
+func AppGuardTruthyWhere(head string) string { return In(i18n.Locale()).AppGuardTruthyWhere(head) }
+
+// AppGuardTruthyWhere says "{head} has an always-true WHERE clause, which is equivalent to no filter."
+// in the language of msgs.
+func (msgs Messages) AppGuardTruthyWhere(head string) string {
+	return Catalog.Format(msgs.locale, "appGuardTruthyWhere", map[string]any{"head": head})
+}
+
+// AppGuardDrop says "DROP deletes objects and is usually irreversible."
+// in the language the app shows.
+func AppGuardDrop() string { return In(i18n.Locale()).AppGuardDrop() }
+
+// AppGuardDrop says "DROP deletes objects and is usually irreversible."
+// in the language of msgs.
+func (msgs Messages) AppGuardDrop() string {
+	return Catalog.Format(msgs.locale, "appGuardDrop", nil)
+}
+
+// AppGuardTruncate says "TRUNCATE empties the whole table."
+// in the language the app shows.
+func AppGuardTruncate() string { return In(i18n.Locale()).AppGuardTruncate() }
+
+// AppGuardTruncate says "TRUNCATE empties the whole table."
+// in the language of msgs.
+func (msgs Messages) AppGuardTruncate() string {
+	return Catalog.Format(msgs.locale, "appGuardTruncate", nil)
+}
+
+// AppExternalTooBig says "SQL file exceeds {n} MiB"
+// in the language the app shows.
+func AppExternalTooBig(n int) string { return In(i18n.Locale()).AppExternalTooBig(n) }
+
+// AppExternalTooBig says "SQL file exceeds {n} MiB"
+// in the language of msgs.
+func (msgs Messages) AppExternalTooBig(n int) string {
+	return Catalog.Format(msgs.locale, "appExternalTooBig", map[string]any{"n": n})
+}
+
+// AppExternalOnlySQL says "Only .sql files are supported"
+// in the language the app shows.
+func AppExternalOnlySQL() string { return In(i18n.Locale()).AppExternalOnlySQL() }
+
+// AppExternalOnlySQL says "Only .sql files are supported"
+// in the language of msgs.
+func (msgs Messages) AppExternalOnlySQL() string {
+	return Catalog.Format(msgs.locale, "appExternalOnlySQL", nil)
+}
+
+// AppExternalNotText says "Not a text SQL file"
+// in the language the app shows.
+func AppExternalNotText() string { return In(i18n.Locale()).AppExternalNotText() }
+
+// AppExternalNotText says "Not a text SQL file"
+// in the language of msgs.
+func (msgs Messages) AppExternalNotText() string {
+	return Catalog.Format(msgs.locale, "appExternalNotText", nil)
+}
+
+// AppExternalFileMissing says "File not found: {path}"
+// in the language the app shows.
+func AppExternalFileMissing(path string) string {
+	return In(i18n.Locale()).AppExternalFileMissing(path)
+}
+
+// AppExternalFileMissing says "File not found: {path}"
+// in the language of msgs.
+func (msgs Messages) AppExternalFileMissing(path string) string {
+	return Catalog.Format(msgs.locale, "appExternalFileMissing", map[string]any{"path": path})
+}
+
+// AppConsoleTimeout says "Query timed out ({d}); canceled"
+// in the language the app shows.
+func AppConsoleTimeout(d string) string { return In(i18n.Locale()).AppConsoleTimeout(d) }
+
+// AppConsoleTimeout says "Query timed out ({d}); canceled"
+// in the language of msgs.
+func (msgs Messages) AppConsoleTimeout(d string) string {
+	return Catalog.Format(msgs.locale, "appConsoleTimeout", map[string]any{"d": d})
+}
+
+// AppExternalChanged says "The file changed externally"
+// in the language the app shows.
+func AppExternalChanged() string { return In(i18n.Locale()).AppExternalChanged() }
+
+// AppExternalChanged says "The file changed externally"
+// in the language of msgs.
+func (msgs Messages) AppExternalChanged() string {
+	return Catalog.Format(msgs.locale, "appExternalChanged", nil)
+}
+
+// AppProfileInvalid says "The imported file is not a valid connection profile: {err}"
+// in the language the app shows.
+func AppProfileInvalid(err string) string { return In(i18n.Locale()).AppProfileInvalid(err) }
+
+// AppProfileInvalid says "The imported file is not a valid connection profile: {err}"
+// in the language of msgs.
+func (msgs Messages) AppProfileInvalid(err string) string {
+	return Catalog.Format(msgs.locale, "appProfileInvalid", map[string]any{"err": err})
+}
+
+// AppThemeFieldInvalid says "{scope}: invalid {field} {value}; using the default"
+// in the language the app shows.
+func AppThemeFieldInvalid(scope string, field string, value string) string {
+	return In(i18n.Locale()).AppThemeFieldInvalid(scope, field, value)
+}
+
+// AppThemeFieldInvalid says "{scope}: invalid {field} {value}; using the default"
+// in the language of msgs.
+func (msgs Messages) AppThemeFieldInvalid(scope string, field string, value string) string {
+	return Catalog.Format(msgs.locale, "appThemeFieldInvalid", map[string]any{"scope": scope, "field": field, "value": value})
+}
+
+// AppThemeLightPalette says "light custom palette"
+// in the language the app shows.
+func AppThemeLightPalette() string { return In(i18n.Locale()).AppThemeLightPalette() }
+
+// AppThemeLightPalette says "light custom palette"
+// in the language of msgs.
+func (msgs Messages) AppThemeLightPalette() string {
+	return Catalog.Format(msgs.locale, "appThemeLightPalette", nil)
+}
+
+// AppThemeDarkPalette says "dark custom palette"
+// in the language the app shows.
+func AppThemeDarkPalette() string { return In(i18n.Locale()).AppThemeDarkPalette() }
+
+// AppThemeDarkPalette says "dark custom palette"
+// in the language of msgs.
+func (msgs Messages) AppThemeDarkPalette() string {
+	return Catalog.Format(msgs.locale, "appThemeDarkPalette", nil)
+}
+
+// AppThemeUnknownMode says "Unknown theme mode {mode}; using System"
+// in the language the app shows.
+func AppThemeUnknownMode(mode string) string { return In(i18n.Locale()).AppThemeUnknownMode(mode) }
+
+// AppThemeUnknownMode says "Unknown theme mode {mode}; using System"
+// in the language of msgs.
+func (msgs Messages) AppThemeUnknownMode(mode string) string {
+	return Catalog.Format(msgs.locale, "appThemeUnknownMode", map[string]any{"mode": mode})
+}
+
+// AppThemeBadAccent says "Invalid accent color {accent}; using the default"
+// in the language the app shows.
+func AppThemeBadAccent(accent string) string { return In(i18n.Locale()).AppThemeBadAccent(accent) }
+
+// AppThemeBadAccent says "Invalid accent color {accent}; using the default"
+// in the language of msgs.
+func (msgs Messages) AppThemeBadAccent(accent string) string {
+	return Catalog.Format(msgs.locale, "appThemeBadAccent", map[string]any{"accent": accent})
+}
+
+// AppThemeUnknownScheme says "Unknown color scheme {scheme}; using the default"
+// in the language the app shows.
+func AppThemeUnknownScheme(scheme string) string {
+	return In(i18n.Locale()).AppThemeUnknownScheme(scheme)
+}
+
+// AppThemeUnknownScheme says "Unknown color scheme {scheme}; using the default"
+// in the language of msgs.
+func (msgs Messages) AppThemeUnknownScheme(scheme string) string {
+	return Catalog.Format(msgs.locale, "appThemeUnknownScheme", map[string]any{"scheme": scheme})
+}
+
+// AppThemeUnknownDensity says "Unknown density {density}; using Normal"
+// in the language the app shows.
+func AppThemeUnknownDensity(density string) string {
+	return In(i18n.Locale()).AppThemeUnknownDensity(density)
+}
+
+// AppThemeUnknownDensity says "Unknown density {density}; using Normal"
+// in the language of msgs.
+func (msgs Messages) AppThemeUnknownDensity(density string) string {
+	return Catalog.Format(msgs.locale, "appThemeUnknownDensity", map[string]any{"density": density})
+}
+
+// AppThemeRadiusRange says "Corner radius {value} is outside {min}–{max}; using the default"
+// in the language the app shows.
+func AppThemeRadiusRange(value int, min int, max int) string {
+	return In(i18n.Locale()).AppThemeRadiusRange(value, min, max)
+}
+
+// AppThemeRadiusRange says "Corner radius {value} is outside {min}–{max}; using the default"
+// in the language of msgs.
+func (msgs Messages) AppThemeRadiusRange(value int, min int, max int) string {
+	return Catalog.Format(msgs.locale, "appThemeRadiusRange", map[string]any{"value": value, "min": min, "max": max})
+}
+
+// AppThemeFontRange says "Interface font size {value} is outside {min}–{max}; using the default"
+// in the language the app shows.
+func AppThemeFontRange(value int, min int, max int) string {
+	return In(i18n.Locale()).AppThemeFontRange(value, min, max)
+}
+
+// AppThemeFontRange says "Interface font size {value} is outside {min}–{max}; using the default"
+// in the language of msgs.
+func (msgs Messages) AppThemeFontRange(value int, min int, max int) string {
+	return Catalog.Format(msgs.locale, "appThemeFontRange", map[string]any{"value": value, "min": min, "max": max})
+}
+
+// AppThemeReadFailed says "Failed to read appearance settings: {err}"
+// in the language the app shows.
+func AppThemeReadFailed(err string) string { return In(i18n.Locale()).AppThemeReadFailed(err) }
+
+// AppThemeReadFailed says "Failed to read appearance settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppThemeReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appThemeReadFailed", map[string]any{"err": err})
+}
+
+// AppThemeCorrupt says "Appearance settings are corrupt; using defaults: {err}"
+// in the language the app shows.
+func AppThemeCorrupt(err string) string { return In(i18n.Locale()).AppThemeCorrupt(err) }
+
+// AppThemeCorrupt says "Appearance settings are corrupt; using defaults: {err}"
+// in the language of msgs.
+func (msgs Messages) AppThemeCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appThemeCorrupt", map[string]any{"err": err})
+}
+
+// AppThemeCorrected says "Appearance settings corrected: {warn}"
+// in the language the app shows.
+func AppThemeCorrected(warn string) string { return In(i18n.Locale()).AppThemeCorrected(warn) }
+
+// AppThemeCorrected says "Appearance settings corrected: {warn}"
+// in the language of msgs.
+func (msgs Messages) AppThemeCorrected(warn string) string {
+	return Catalog.Format(msgs.locale, "appThemeCorrected", map[string]any{"warn": warn})
+}
+
+// AppThemeInvalidJSON says "Theme file is not valid JSON: {err}"
+// in the language the app shows.
+func AppThemeInvalidJSON(err string) string { return In(i18n.Locale()).AppThemeInvalidJSON(err) }
+
+// AppThemeInvalidJSON says "Theme file is not valid JSON: {err}"
+// in the language of msgs.
+func (msgs Messages) AppThemeInvalidJSON(err string) string {
+	return Catalog.Format(msgs.locale, "appThemeInvalidJSON", map[string]any{"err": err})
+}
+
+// AppThemeWrongApp says "Not a db-g theme file (app={app})"
+// in the language the app shows.
+func AppThemeWrongApp(app string) string { return In(i18n.Locale()).AppThemeWrongApp(app) }
+
+// AppThemeWrongApp says "Not a db-g theme file (app={app})"
+// in the language of msgs.
+func (msgs Messages) AppThemeWrongApp(app string) string {
+	return Catalog.Format(msgs.locale, "appThemeWrongApp", map[string]any{"app": app})
+}
+
+// AppThemeVersionTooNew says "Theme file version {version} is newer than supported {max}"
+// in the language the app shows.
+func AppThemeVersionTooNew(version int, max int) string {
+	return In(i18n.Locale()).AppThemeVersionTooNew(version, max)
+}
+
+// AppThemeVersionTooNew says "Theme file version {version} is newer than supported {max}"
+// in the language of msgs.
+func (msgs Messages) AppThemeVersionTooNew(version int, max int) string {
+	return Catalog.Format(msgs.locale, "appThemeVersionTooNew", map[string]any{"version": version, "max": max})
+}
+
+// AppPaletteBackground says "Background"
+// in the language the app shows.
+func AppPaletteBackground() string { return In(i18n.Locale()).AppPaletteBackground() }
+
+// AppPaletteBackground says "Background"
+// in the language of msgs.
+func (msgs Messages) AppPaletteBackground() string {
+	return Catalog.Format(msgs.locale, "appPaletteBackground", nil)
+}
+
+// AppPaletteSurface says "Surface"
+// in the language the app shows.
+func AppPaletteSurface() string { return In(i18n.Locale()).AppPaletteSurface() }
+
+// AppPaletteSurface says "Surface"
+// in the language of msgs.
+func (msgs Messages) AppPaletteSurface() string {
+	return Catalog.Format(msgs.locale, "appPaletteSurface", nil)
+}
+
+// AppPaletteBorder says "Border"
+// in the language the app shows.
+func AppPaletteBorder() string { return In(i18n.Locale()).AppPaletteBorder() }
+
+// AppPaletteBorder says "Border"
+// in the language of msgs.
+func (msgs Messages) AppPaletteBorder() string {
+	return Catalog.Format(msgs.locale, "appPaletteBorder", nil)
+}
+
+// AppPaletteText says "Text"
+// in the language the app shows.
+func AppPaletteText() string { return In(i18n.Locale()).AppPaletteText() }
+
+// AppPaletteText says "Text"
+// in the language of msgs.
+func (msgs Messages) AppPaletteText() string {
+	return Catalog.Format(msgs.locale, "appPaletteText", nil)
+}
+
+// AppPaletteMutedText says "Muted text"
+// in the language the app shows.
+func AppPaletteMutedText() string { return In(i18n.Locale()).AppPaletteMutedText() }
+
+// AppPaletteMutedText says "Muted text"
+// in the language of msgs.
+func (msgs Messages) AppPaletteMutedText() string {
+	return Catalog.Format(msgs.locale, "appPaletteMutedText", nil)
+}
+
+// AppFontReadFailed says "Failed to read font settings: {err}"
+// in the language the app shows.
+func AppFontReadFailed(err string) string { return In(i18n.Locale()).AppFontReadFailed(err) }
+
+// AppFontReadFailed says "Failed to read font settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppFontReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appFontReadFailed", map[string]any{"err": err})
+}
+
+// AppFontCorrupt says "Font settings are corrupt; using defaults: {err}"
+// in the language the app shows.
+func AppFontCorrupt(err string) string { return In(i18n.Locale()).AppFontCorrupt(err) }
+
+// AppFontCorrupt says "Font settings are corrupt; using defaults: {err}"
+// in the language of msgs.
+func (msgs Messages) AppFontCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appFontCorrupt", map[string]any{"err": err})
+}
+
+// AppFontMigrateFailed says "Failed to migrate editor font settings: {err}"
+// in the language the app shows.
+func AppFontMigrateFailed(err string) string { return In(i18n.Locale()).AppFontMigrateFailed(err) }
+
+// AppFontMigrateFailed says "Failed to migrate editor font settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppFontMigrateFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appFontMigrateFailed", map[string]any{"err": err})
+}
+
+// AppResultReadFailed says "Failed to read result settings: {err}"
+// in the language the app shows.
+func AppResultReadFailed(err string) string { return In(i18n.Locale()).AppResultReadFailed(err) }
+
+// AppResultReadFailed says "Failed to read result settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppResultReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appResultReadFailed", map[string]any{"err": err})
+}
+
+// AppResultCorrupt says "Result settings are corrupt; using defaults: {err}"
+// in the language the app shows.
+func AppResultCorrupt(err string) string { return In(i18n.Locale()).AppResultCorrupt(err) }
+
+// AppResultCorrupt says "Result settings are corrupt; using defaults: {err}"
+// in the language of msgs.
+func (msgs Messages) AppResultCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appResultCorrupt", map[string]any{"err": err})
+}
+
+// AppKeymapReadFailed says "Failed to read shortcut settings: {err}"
+// in the language the app shows.
+func AppKeymapReadFailed(err string) string { return In(i18n.Locale()).AppKeymapReadFailed(err) }
+
+// AppKeymapReadFailed says "Failed to read shortcut settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppKeymapReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appKeymapReadFailed", map[string]any{"err": err})
+}
+
+// AppKeymapCorrupt says "Shortcut settings are corrupt; using defaults (the original file is kept)"
+// in the language the app shows.
+func AppKeymapCorrupt() string { return In(i18n.Locale()).AppKeymapCorrupt() }
+
+// AppKeymapCorrupt says "Shortcut settings are corrupt; using defaults (the original file is kept)"
+// in the language of msgs.
+func (msgs Messages) AppKeymapCorrupt() string {
+	return Catalog.Format(msgs.locale, "appKeymapCorrupt", nil)
+}
+
+// AppConsolePrefsReadFailed says "Failed to read console settings: {err}"
+// in the language the app shows.
+func AppConsolePrefsReadFailed(err string) string {
+	return In(i18n.Locale()).AppConsolePrefsReadFailed(err)
+}
+
+// AppConsolePrefsReadFailed says "Failed to read console settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConsolePrefsReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appConsolePrefsReadFailed", map[string]any{"err": err})
+}
+
+// AppConsolePrefsCorrupt says "Console settings are corrupt; using defaults: {err}"
+// in the language the app shows.
+func AppConsolePrefsCorrupt(err string) string { return In(i18n.Locale()).AppConsolePrefsCorrupt(err) }
+
+// AppConsolePrefsCorrupt says "Console settings are corrupt; using defaults: {err}"
+// in the language of msgs.
+func (msgs Messages) AppConsolePrefsCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appConsolePrefsCorrupt", map[string]any{"err": err})
+}
+
+// AppSyncPrefsReadFailed says "Failed to read sync settings: {err}"
+// in the language the app shows.
+func AppSyncPrefsReadFailed(err string) string { return In(i18n.Locale()).AppSyncPrefsReadFailed(err) }
+
+// AppSyncPrefsReadFailed says "Failed to read sync settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncPrefsReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncPrefsReadFailed", map[string]any{"err": err})
+}
+
+// AppSyncPrefsCorrupt says "Sync settings are corrupt: {err}"
+// in the language the app shows.
+func AppSyncPrefsCorrupt(err string) string { return In(i18n.Locale()).AppSyncPrefsCorrupt(err) }
+
+// AppSyncPrefsCorrupt says "Sync settings are corrupt: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncPrefsCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncPrefsCorrupt", map[string]any{"err": err})
+}
+
+// AppAIReadFailed says "Failed to read AI settings: {err}"
+// in the language the app shows.
+func AppAIReadFailed(err string) string { return In(i18n.Locale()).AppAIReadFailed(err) }
+
+// AppAIReadFailed says "Failed to read AI settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppAIReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appAIReadFailed", map[string]any{"err": err})
+}
+
+// AppAICorrupt says "AI settings are corrupt: {err}"
+// in the language the app shows.
+func AppAICorrupt(err string) string { return In(i18n.Locale()).AppAICorrupt(err) }
+
+// AppAICorrupt says "AI settings are corrupt: {err}"
+// in the language of msgs.
+func (msgs Messages) AppAICorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appAICorrupt", map[string]any{"err": err})
+}
+
+// AppAIKeyDecryptFailed says "Failed to decrypt the AI API key: {err}"
+// in the language the app shows.
+func AppAIKeyDecryptFailed(err string) string { return In(i18n.Locale()).AppAIKeyDecryptFailed(err) }
+
+// AppAIKeyDecryptFailed says "Failed to decrypt the AI API key: {err}"
+// in the language of msgs.
+func (msgs Messages) AppAIKeyDecryptFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appAIKeyDecryptFailed", map[string]any{"err": err})
+}
+
+// AppAIChatReadFailed says "Failed to read AI conversations: {err}"
+// in the language the app shows.
+func AppAIChatReadFailed(err string) string { return In(i18n.Locale()).AppAIChatReadFailed(err) }
+
+// AppAIChatReadFailed says "Failed to read AI conversations: {err}"
+// in the language of msgs.
+func (msgs Messages) AppAIChatReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appAIChatReadFailed", map[string]any{"err": err})
+}
+
+// AppAIChatCorrupt says "AI conversation format is invalid: {err}"
+// in the language the app shows.
+func AppAIChatCorrupt(err string) string { return In(i18n.Locale()).AppAIChatCorrupt(err) }
+
+// AppAIChatCorrupt says "AI conversation format is invalid: {err}"
+// in the language of msgs.
+func (msgs Messages) AppAIChatCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appAIChatCorrupt", map[string]any{"err": err})
+}
+
+// AppLocaleUnknown says "Unknown interface language {tag}; using System"
+// in the language the app shows.
+func AppLocaleUnknown(tag string) string { return In(i18n.Locale()).AppLocaleUnknown(tag) }
+
+// AppLocaleUnknown says "Unknown interface language {tag}; using System"
+// in the language of msgs.
+func (msgs Messages) AppLocaleUnknown(tag string) string {
+	return Catalog.Format(msgs.locale, "appLocaleUnknown", map[string]any{"tag": tag})
+}
+
+// AppLocaleReadFailed says "Failed to read language settings: {err}"
+// in the language the app shows.
+func AppLocaleReadFailed(err string) string { return In(i18n.Locale()).AppLocaleReadFailed(err) }
+
+// AppLocaleReadFailed says "Failed to read language settings: {err}"
+// in the language of msgs.
+func (msgs Messages) AppLocaleReadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appLocaleReadFailed", map[string]any{"err": err})
+}
+
+// AppLocaleCorrupt says "Language settings are corrupt; using defaults: {err}"
+// in the language the app shows.
+func AppLocaleCorrupt(err string) string { return In(i18n.Locale()).AppLocaleCorrupt(err) }
+
+// AppLocaleCorrupt says "Language settings are corrupt; using defaults: {err}"
+// in the language of msgs.
+func (msgs Messages) AppLocaleCorrupt(err string) string {
+	return Catalog.Format(msgs.locale, "appLocaleCorrupt", map[string]any{"err": err})
+}
+
+// AppInstallNoConfigDir says "Cannot determine the configuration directory"
+// in the language the app shows.
+func AppInstallNoConfigDir() string { return In(i18n.Locale()).AppInstallNoConfigDir() }
+
+// AppInstallNoConfigDir says "Cannot determine the configuration directory"
+// in the language of msgs.
+func (msgs Messages) AppInstallNoConfigDir() string {
+	return Catalog.Format(msgs.locale, "appInstallNoConfigDir", nil)
+}
+
+// AppInstallNoDataDir says "Cannot determine the application data directory"
+// in the language the app shows.
+func AppInstallNoDataDir() string { return In(i18n.Locale()).AppInstallNoDataDir() }
+
+// AppInstallNoDataDir says "Cannot determine the application data directory"
+// in the language of msgs.
+func (msgs Messages) AppInstallNoDataDir() string {
+	return Catalog.Format(msgs.locale, "appInstallNoDataDir", nil)
+}
+
+// AppInstallBadVersion says "Cannot parse the version: {version}"
+// in the language the app shows.
+func AppInstallBadVersion(version string) string {
+	return In(i18n.Locale()).AppInstallBadVersion(version)
+}
+
+// AppInstallBadVersion says "Cannot parse the version: {version}"
+// in the language of msgs.
+func (msgs Messages) AppInstallBadVersion(version string) string {
+	return Catalog.Format(msgs.locale, "appInstallBadVersion", map[string]any{"version": version})
+}
+
+// AppInstallSelfPath says "Cannot locate the current executable: {err}"
+// in the language the app shows.
+func AppInstallSelfPath(err string) string { return In(i18n.Locale()).AppInstallSelfPath(err) }
+
+// AppInstallSelfPath says "Cannot locate the current executable: {err}"
+// in the language of msgs.
+func (msgs Messages) AppInstallSelfPath(err string) string {
+	return Catalog.Format(msgs.locale, "appInstallSelfPath", map[string]any{"err": err})
+}
+
+// AppInstallCopyFailed says "Failed to copy the executable: {err}"
+// in the language the app shows.
+func AppInstallCopyFailed(err string) string { return In(i18n.Locale()).AppInstallCopyFailed(err) }
+
+// AppInstallCopyFailed says "Failed to copy the executable: {err}"
+// in the language of msgs.
+func (msgs Messages) AppInstallCopyFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appInstallCopyFailed", map[string]any{"err": err})
+}
+
+// AppInstallNoIcon says "Icon data is missing"
+// in the language the app shows.
+func AppInstallNoIcon() string { return In(i18n.Locale()).AppInstallNoIcon() }
+
+// AppInstallNoIcon says "Icon data is missing"
+// in the language of msgs.
+func (msgs Messages) AppInstallNoIcon() string {
+	return Catalog.Format(msgs.locale, "appInstallNoIcon", nil)
+}
+
+// AppInstallIconFailed says "Failed to write the icon: {err}"
+// in the language the app shows.
+func AppInstallIconFailed(err string) string { return In(i18n.Locale()).AppInstallIconFailed(err) }
+
+// AppInstallIconFailed says "Failed to write the icon: {err}"
+// in the language of msgs.
+func (msgs Messages) AppInstallIconFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appInstallIconFailed", map[string]any{"err": err})
+}
+
+// AppInstallMenuFailed says "Failed to write the app menu entry: {err}"
+// in the language the app shows.
+func AppInstallMenuFailed(err string) string { return In(i18n.Locale()).AppInstallMenuFailed(err) }
+
+// AppInstallMenuFailed says "Failed to write the app menu entry: {err}"
+// in the language of msgs.
+func (msgs Messages) AppInstallMenuFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appInstallMenuFailed", map[string]any{"err": err})
+}
+
+// AppInstallVersionFailed says "Failed to write the version file: {err}"
+// in the language the app shows.
+func AppInstallVersionFailed(err string) string {
+	return In(i18n.Locale()).AppInstallVersionFailed(err)
+}
+
+// AppInstallVersionFailed says "Failed to write the version file: {err}"
+// in the language of msgs.
+func (msgs Messages) AppInstallVersionFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appInstallVersionFailed", map[string]any{"err": err})
+}
+
+// AppInstallVerifyFailed says "Post-install verification failed"
+// in the language the app shows.
+func AppInstallVerifyFailed() string { return In(i18n.Locale()).AppInstallVerifyFailed() }
+
+// AppInstallVerifyFailed says "Post-install verification failed"
+// in the language of msgs.
+func (msgs Messages) AppInstallVerifyFailed() string {
+	return Catalog.Format(msgs.locale, "appInstallVerifyFailed", nil)
+}
+
+// AppInstallBadBuild says "version file has an invalid build: {value}"
+// in the language the app shows.
+func AppInstallBadBuild(value string) string { return In(i18n.Locale()).AppInstallBadBuild(value) }
+
+// AppInstallBadBuild says "version file has an invalid build: {value}"
+// in the language of msgs.
+func (msgs Messages) AppInstallBadBuild(value string) string {
+	return Catalog.Format(msgs.locale, "appInstallBadBuild", map[string]any{"value": value})
+}
+
+// AppInstallMissingFields says "version file is missing the build/version fields"
+// in the language the app shows.
+func AppInstallMissingFields() string { return In(i18n.Locale()).AppInstallMissingFields() }
+
+// AppInstallMissingFields says "version file is missing the build/version fields"
+// in the language of msgs.
+func (msgs Messages) AppInstallMissingFields() string {
+	return Catalog.Format(msgs.locale, "appInstallMissingFields", nil)
+}
+
+// AppInstallDesktopComment says "SQLite / MySQL / PostgreSQL / ClickHouse database client"
+// in the language the app shows.
+func AppInstallDesktopComment() string { return In(i18n.Locale()).AppInstallDesktopComment() }
+
+// AppInstallDesktopComment says "SQLite / MySQL / PostgreSQL / ClickHouse database client"
+// in the language of msgs.
+func (msgs Messages) AppInstallDesktopComment() string {
+	return Catalog.Format(msgs.locale, "appInstallDesktopComment", nil)
+}
+
+// AppSyncRepoRequired says "Enter the repository URL in Settings → Sync first"
+// in the language the app shows.
+func AppSyncRepoRequired() string { return In(i18n.Locale()).AppSyncRepoRequired() }
+
+// AppSyncRepoRequired says "Enter the repository URL in Settings → Sync first"
+// in the language of msgs.
+func (msgs Messages) AppSyncRepoRequired() string {
+	return Catalog.Format(msgs.locale, "appSyncRepoRequired", nil)
+}
+
+// AppGitMissing says "System git was not found; install git first"
+// in the language the app shows.
+func AppGitMissing() string { return In(i18n.Locale()).AppGitMissing() }
+
+// AppGitMissing says "System git was not found; install git first"
+// in the language of msgs.
+func (msgs Messages) AppGitMissing() string {
+	return Catalog.Format(msgs.locale, "appGitMissing", nil)
+}
+
+// AppSyncPrepareFailed says "Failed to prepare the sync repository: {err}"
+// in the language the app shows.
+func AppSyncPrepareFailed(err string) string { return In(i18n.Locale()).AppSyncPrepareFailed(err) }
+
+// AppSyncPrepareFailed says "Failed to prepare the sync repository: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncPrepareFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncPrepareFailed", map[string]any{"err": err})
+}
+
+// AppSyncNeedKey says "A sync key is required"
+// in the language the app shows.
+func AppSyncNeedKey() string { return In(i18n.Locale()).AppSyncNeedKey() }
+
+// AppSyncNeedKey says "A sync key is required"
+// in the language of msgs.
+func (msgs Messages) AppSyncNeedKey() string {
+	return Catalog.Format(msgs.locale, "appSyncNeedKey", nil)
+}
+
+// AppSyncKeyMismatch says "The sync key does not match the repository; import the correct sync.key"
+// in the language the app shows.
+func AppSyncKeyMismatch() string { return In(i18n.Locale()).AppSyncKeyMismatch() }
+
+// AppSyncKeyMismatch says "The sync key does not match the repository; import the correct sync.key"
+// in the language of msgs.
+func (msgs Messages) AppSyncKeyMismatch() string {
+	return Catalog.Format(msgs.locale, "appSyncKeyMismatch", nil)
+}
+
+// AppSyncVerifyKeyFailed says "Failed to verify the sync key: {err}"
+// in the language the app shows.
+func AppSyncVerifyKeyFailed(err string) string { return In(i18n.Locale()).AppSyncVerifyKeyFailed(err) }
+
+// AppSyncVerifyKeyFailed says "Failed to verify the sync key: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncVerifyKeyFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncVerifyKeyFailed", map[string]any{"err": err})
+}
+
+// AppSyncEmptyLocal says "Local connections are empty while the remote has data; push blocked to avoid clearing the repository"
+// in the language the app shows.
+func AppSyncEmptyLocal() string { return In(i18n.Locale()).AppSyncEmptyLocal() }
+
+// AppSyncEmptyLocal says "Local connections are empty while the remote has data; push blocked to avoid clearing the repository"
+// in the language of msgs.
+func (msgs Messages) AppSyncEmptyLocal() string {
+	return Catalog.Format(msgs.locale, "appSyncEmptyLocal", nil)
+}
+
+// AppSyncRemoteHasData says "The remote already has sync data; pull first, then commit local changes"
+// in the language the app shows.
+func AppSyncRemoteHasData() string { return In(i18n.Locale()).AppSyncRemoteHasData() }
+
+// AppSyncRemoteHasData says "The remote already has sync data; pull first, then commit local changes"
+// in the language of msgs.
+func (msgs Messages) AppSyncRemoteHasData() string {
+	return Catalog.Format(msgs.locale, "appSyncRemoteHasData", nil)
+}
+
+// AppSyncGenFilesFailed says "Failed to generate sync files: {err}"
+// in the language the app shows.
+func AppSyncGenFilesFailed(err string) string { return In(i18n.Locale()).AppSyncGenFilesFailed(err) }
+
+// AppSyncGenFilesFailed says "Failed to generate sync files: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncGenFilesFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncGenFilesFailed", map[string]any{"err": err})
+}
+
+// AppSyncFindings says "Found {n} suspected plaintext credentials"
+// in the language the app shows.
+func AppSyncFindings(n int) string { return In(i18n.Locale()).AppSyncFindings(n) }
+
+// AppSyncFindings says "Found {n} suspected plaintext credentials"
+// in the language of msgs.
+func (msgs Messages) AppSyncFindings(n int) string {
+	return Catalog.Format(msgs.locale, "appSyncFindings", map[string]any{"n": n})
+}
+
+// AppSyncWriteDirFailed says "Failed to write the sync directory: {err}"
+// in the language the app shows.
+func AppSyncWriteDirFailed(err string) string { return In(i18n.Locale()).AppSyncWriteDirFailed(err) }
+
+// AppSyncWriteDirFailed says "Failed to write the sync directory: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncWriteDirFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncWriteDirFailed", map[string]any{"err": err})
+}
+
+// AppSyncCommitFailed says "git commit failed: {err}"
+// in the language the app shows.
+func AppSyncCommitFailed(err string) string { return In(i18n.Locale()).AppSyncCommitFailed(err) }
+
+// AppSyncCommitFailed says "git commit failed: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncCommitFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncCommitFailed", map[string]any{"err": err})
+}
+
+// AppSyncWriteConsoleFailed says "Failed to write console {name}: {err}"
+// in the language the app shows.
+func AppSyncWriteConsoleFailed(name string, err string) string {
+	return In(i18n.Locale()).AppSyncWriteConsoleFailed(name, err)
+}
+
+// AppSyncWriteConsoleFailed says "Failed to write console {name}: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncWriteConsoleFailed(name string, err string) string {
+	return Catalog.Format(msgs.locale, "appSyncWriteConsoleFailed", map[string]any{"name": name, "err": err})
+}
+
+// AppSyncSSHAuthFailed says "SSH authentication failed: check the private key path, ssh-agent or repository permissions."
+// in the language the app shows.
+func AppSyncSSHAuthFailed() string { return In(i18n.Locale()).AppSyncSSHAuthFailed() }
+
+// AppSyncSSHAuthFailed says "SSH authentication failed: check the private key path, ssh-agent or repository permissions."
+// in the language of msgs.
+func (msgs Messages) AppSyncSSHAuthFailed() string {
+	return Catalog.Format(msgs.locale, "appSyncSSHAuthFailed", nil)
+}
+
+// AppSyncHostKey says "Host key not trusted: connect once with ssh manually and confirm the host key."
+// in the language the app shows.
+func AppSyncHostKey() string { return In(i18n.Locale()).AppSyncHostKey() }
+
+// AppSyncHostKey says "Host key not trusted: connect once with ssh manually and confirm the host key."
+// in the language of msgs.
+func (msgs Messages) AppSyncHostKey() string {
+	return Catalog.Format(msgs.locale, "appSyncHostKey", nil)
+}
+
+// AppSyncHTTPSAuthFailed says "HTTPS authentication failed: configure the system git credential helper."
+// in the language the app shows.
+func AppSyncHTTPSAuthFailed() string { return In(i18n.Locale()).AppSyncHTTPSAuthFailed() }
+
+// AppSyncHTTPSAuthFailed says "HTTPS authentication failed: configure the system git credential helper."
+// in the language of msgs.
+func (msgs Messages) AppSyncHTTPSAuthFailed() string {
+	return Catalog.Format(msgs.locale, "appSyncHTTPSAuthFailed", nil)
+}
+
+// AppSyncRemoteNewCommits says "The remote has new commits; pull before pushing"
+// in the language the app shows.
+func AppSyncRemoteNewCommits() string { return In(i18n.Locale()).AppSyncRemoteNewCommits() }
+
+// AppSyncRemoteNewCommits says "The remote has new commits; pull before pushing"
+// in the language of msgs.
+func (msgs Messages) AppSyncRemoteNewCommits() string {
+	return Catalog.Format(msgs.locale, "appSyncRemoteNewCommits", nil)
+}
+
+// AppSyncPushFailed says "Push failed: {err}"
+// in the language the app shows.
+func AppSyncPushFailed(err string) string { return In(i18n.Locale()).AppSyncPushFailed(err) }
+
+// AppSyncPushFailed says "Push failed: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncPushFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncPushFailed", map[string]any{"err": err})
+}
+
+// AppEditNoPrimaryKey says "The table has no primary key; the result is read-only"
+// in the language the app shows.
+func AppEditNoPrimaryKey() string { return In(i18n.Locale()).AppEditNoPrimaryKey() }
+
+// AppEditNoPrimaryKey says "The table has no primary key; the result is read-only"
+// in the language of msgs.
+func (msgs Messages) AppEditNoPrimaryKey() string {
+	return Catalog.Format(msgs.locale, "appEditNoPrimaryKey", nil)
+}
+
+// AppEditColumnMismatch says "Result columns do not match table columns; the result is read-only"
+// in the language the app shows.
+func AppEditColumnMismatch() string { return In(i18n.Locale()).AppEditColumnMismatch() }
+
+// AppEditColumnMismatch says "Result columns do not match table columns; the result is read-only"
+// in the language of msgs.
+func (msgs Messages) AppEditColumnMismatch() string {
+	return Catalog.Format(msgs.locale, "appEditColumnMismatch", nil)
+}
+
+// AppEditDuplicateColumn says "{err}: duplicate result column {col}"
+// in the language the app shows.
+func AppEditDuplicateColumn(err string, col string) string {
+	return In(i18n.Locale()).AppEditDuplicateColumn(err, col)
+}
+
+// AppEditDuplicateColumn says "{err}: duplicate result column {col}"
+// in the language of msgs.
+func (msgs Messages) AppEditDuplicateColumn(err string, col string) string {
+	return Catalog.Format(msgs.locale, "appEditDuplicateColumn", map[string]any{"err": err, "col": col})
+}
+
+// AppEditColumnMissing says "{err}: result column {col} is not in table {table} (aliases/expressions are read-only)"
+// in the language the app shows.
+func AppEditColumnMissing(err string, col string, table string) string {
+	return In(i18n.Locale()).AppEditColumnMissing(err, col, table)
+}
+
+// AppEditColumnMissing says "{err}: result column {col} is not in table {table} (aliases/expressions are read-only)"
+// in the language of msgs.
+func (msgs Messages) AppEditColumnMissing(err string, col string, table string) string {
+	return Catalog.Format(msgs.locale, "appEditColumnMissing", map[string]any{"err": err, "col": col, "table": table})
+}
+
+// AppEditNoPrimaryKeyColumn says "{err}: no primary key column in the result {col}"
+// in the language the app shows.
+func AppEditNoPrimaryKeyColumn(err string, col string) string {
+	return In(i18n.Locale()).AppEditNoPrimaryKeyColumn(err, col)
+}
+
+// AppEditNoPrimaryKeyColumn says "{err}: no primary key column in the result {col}"
+// in the language of msgs.
+func (msgs Messages) AppEditNoPrimaryKeyColumn(err string, col string) string {
+	return Catalog.Format(msgs.locale, "appEditNoPrimaryKeyColumn", map[string]any{"err": err, "col": col})
+}
+
+// AppEditInsertEmpty says "New row {n} has no values"
+// in the language the app shows.
+func AppEditInsertEmpty(n int) string { return In(i18n.Locale()).AppEditInsertEmpty(n) }
+
+// AppEditInsertEmpty says "New row {n} has no values"
+// in the language of msgs.
+func (msgs Messages) AppEditInsertEmpty(n int) string {
+	return Catalog.Format(msgs.locale, "appEditInsertEmpty", map[string]any{"n": n})
+}
+
+// AppEditRowFailed says "Row {n} failed: {err}"
+// in the language the app shows.
+func AppEditRowFailed(n int, err string) string { return In(i18n.Locale()).AppEditRowFailed(n, err) }
+
+// AppEditRowFailed says "Row {n} failed: {err}"
+// in the language of msgs.
+func (msgs Messages) AppEditRowFailed(n int, err string) string {
+	return Catalog.Format(msgs.locale, "appEditRowFailed", map[string]any{"n": n, "err": err})
+}
+
+// AppEditRowAffected says "Row {n} affected {got} rows (expected {want}); rolled back"
+// in the language the app shows.
+func AppEditRowAffected(n int, got int, want int) string {
+	return In(i18n.Locale()).AppEditRowAffected(n, got, want)
+}
+
+// AppEditRowAffected says "Row {n} affected {got} rows (expected {want}); rolled back"
+// in the language of msgs.
+func (msgs Messages) AppEditRowAffected(n int, got int, want int) string {
+	return Catalog.Format(msgs.locale, "appEditRowAffected", map[string]any{"n": n, "got": got, "want": want})
+}
+
+// AppSyncMergeConflict says "Failed to merge the remote (conflict); this commit was abandoned: {paths}"
+// in the language the app shows.
+func AppSyncMergeConflict(paths string) string { return In(i18n.Locale()).AppSyncMergeConflict(paths) }
+
+// AppSyncMergeConflict says "Failed to merge the remote (conflict); this commit was abandoned: {paths}"
+// in the language of msgs.
+func (msgs Messages) AppSyncMergeConflict(paths string) string {
+	return Catalog.Format(msgs.locale, "appSyncMergeConflict", map[string]any{"paths": paths})
+}
+
+// AppSyncMergeFailed says "Failed to merge the remote: {err}"
+// in the language the app shows.
+func AppSyncMergeFailed(err string) string { return In(i18n.Locale()).AppSyncMergeFailed(err) }
+
+// AppSyncMergeFailed says "Failed to merge the remote: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncMergeFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncMergeFailed", map[string]any{"err": err})
+}
+
+// AppSyncReadMergeFailed says "Failed to read the merge result: {err}"
+// in the language the app shows.
+func AppSyncReadMergeFailed(err string) string { return In(i18n.Locale()).AppSyncReadMergeFailed(err) }
+
+// AppSyncReadMergeFailed says "Failed to read the merge result: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncReadMergeFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncReadMergeFailed", map[string]any{"err": err})
+}
+
+// AppSyncImportMergeFailed says "Failed to import the merge result: {err}"
+// in the language the app shows.
+func AppSyncImportMergeFailed(err string) string {
+	return In(i18n.Locale()).AppSyncImportMergeFailed(err)
+}
+
+// AppSyncImportMergeFailed says "Failed to import the merge result: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncImportMergeFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncImportMergeFailed", map[string]any{"err": err})
+}
+
+// AppSyncCommitted says "Committed and pushed: {written} files written, {deleted} deleted"
+// in the language the app shows.
+func AppSyncCommitted(written int, deleted int) string {
+	return In(i18n.Locale()).AppSyncCommitted(written, deleted)
+}
+
+// AppSyncCommitted says "Committed and pushed: {written} files written, {deleted} deleted"
+// in the language of msgs.
+func (msgs Messages) AppSyncCommitted(written int, deleted int) string {
+	return Catalog.Format(msgs.locale, "appSyncCommitted", map[string]any{"written": written, "deleted": deleted})
+}
+
+// AppSyncCloned says "The remote repository was empty; cloned it and bound branch {branch}. Click Commit and Push."
+// in the language the app shows.
+func AppSyncCloned(branch string) string { return In(i18n.Locale()).AppSyncCloned(branch) }
+
+// AppSyncCloned says "The remote repository was empty; cloned it and bound branch {branch}. Click Commit and Push."
+// in the language of msgs.
+func (msgs Messages) AppSyncCloned(branch string) string {
+	return Catalog.Format(msgs.locale, "appSyncCloned", map[string]any{"branch": branch})
+}
+
+// AppSyncDirtyDir says "The sync directory has uncommitted changes; click Commit and Push first"
+// in the language the app shows.
+func AppSyncDirtyDir() string { return In(i18n.Locale()).AppSyncDirtyDir() }
+
+// AppSyncDirtyDir says "The sync directory has uncommitted changes; click Commit and Push first"
+// in the language of msgs.
+func (msgs Messages) AppSyncDirtyDir() string {
+	return Catalog.Format(msgs.locale, "appSyncDirtyDir", nil)
+}
+
+// AppSyncPullConflict says "Merge conflict; this pull was abandoned: {paths}"
+// in the language the app shows.
+func AppSyncPullConflict(paths string) string { return In(i18n.Locale()).AppSyncPullConflict(paths) }
+
+// AppSyncPullConflict says "Merge conflict; this pull was abandoned: {paths}"
+// in the language of msgs.
+func (msgs Messages) AppSyncPullConflict(paths string) string {
+	return Catalog.Format(msgs.locale, "appSyncPullConflict", map[string]any{"paths": paths})
+}
+
+// AppSyncPullFailed says "Pull failed: {err}"
+// in the language the app shows.
+func AppSyncPullFailed(err string) string { return In(i18n.Locale()).AppSyncPullFailed(err) }
+
+// AppSyncPullFailed says "Pull failed: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncPullFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncPullFailed", map[string]any{"err": err})
+}
+
+// AppSyncPulled says "Pulled and imported"
+// in the language the app shows.
+func AppSyncPulled() string { return In(i18n.Locale()).AppSyncPulled() }
+
+// AppSyncPulled says "Pulled and imported"
+// in the language of msgs.
+func (msgs Messages) AppSyncPulled() string {
+	return Catalog.Format(msgs.locale, "appSyncPulled", nil)
+}
+
+// AppSyncClonedImported says "Cloned the repository, checked out the branch and imported"
+// in the language the app shows.
+func AppSyncClonedImported() string { return In(i18n.Locale()).AppSyncClonedImported() }
+
+// AppSyncClonedImported says "Cloned the repository, checked out the branch and imported"
+// in the language of msgs.
+func (msgs Messages) AppSyncClonedImported() string {
+	return Catalog.Format(msgs.locale, "appSyncClonedImported", nil)
+}
+
+// AppSyncReadRepoFailed says "Failed to read repository data: {err}"
+// in the language the app shows.
+func AppSyncReadRepoFailed(err string) string { return In(i18n.Locale()).AppSyncReadRepoFailed(err) }
+
+// AppSyncReadRepoFailed says "Failed to read repository data: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncReadRepoFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncReadRepoFailed", map[string]any{"err": err})
+}
+
+// AppSyncImportLocalFailed says "Failed to import locally: {err}"
+// in the language the app shows.
+func AppSyncImportLocalFailed(err string) string {
+	return In(i18n.Locale()).AppSyncImportLocalFailed(err)
+}
+
+// AppSyncImportLocalFailed says "Failed to import locally: {err}"
+// in the language of msgs.
+func (msgs Messages) AppSyncImportLocalFailed(err string) string {
+	return Catalog.Format(msgs.locale, "appSyncImportLocalFailed", map[string]any{"err": err})
+}
+
+// AppSyncStats says "{prefix}: {conns} connections, {consoles} consoles from the remote ({skipped} skipped)"
+// in the language the app shows.
+func AppSyncStats(prefix string, conns int, consoles int, skipped int) string {
+	return In(i18n.Locale()).AppSyncStats(prefix, conns, consoles, skipped)
+}
+
+// AppSyncStats says "{prefix}: {conns} connections, {consoles} consoles from the remote ({skipped} skipped)"
+// in the language of msgs.
+func (msgs Messages) AppSyncStats(prefix string, conns int, consoles int, skipped int) string {
+	return Catalog.Format(msgs.locale, "appSyncStats", map[string]any{"prefix": prefix, "conns": conns, "consoles": consoles, "skipped": skipped})
+}
+
+// AppSyncPreserved says "; {n} local-only items were kept; click Commit and Push to keep both"
+// in the language the app shows.
+func AppSyncPreserved(n int) string { return In(i18n.Locale()).AppSyncPreserved(n) }
+
+// AppSyncPreserved says "; {n} local-only items were kept; click Commit and Push to keep both"
+// in the language of msgs.
+func (msgs Messages) AppSyncPreserved(n int) string {
+	return Catalog.Format(msgs.locale, "appSyncPreserved", map[string]any{"n": n})
+}
+
+// AiTitlePrompt says "Summarize this conversation in at most 6 English words. Output only the title itself, without quotes, punctuation or …"
+// in the language the app shows.
+func AiTitlePrompt() string { return In(i18n.Locale()).AiTitlePrompt() }
+
+// AiTitlePrompt says "Summarize this conversation in at most 6 English words. Output only the title itself, without quotes, punctuation or …"
+// in the language of msgs.
+func (msgs Messages) AiTitlePrompt() string {
+	return Catalog.Format(msgs.locale, "aiTitlePrompt", nil)
+}

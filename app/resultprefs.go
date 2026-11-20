@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // ResultPrefs 是查询结果的展示预算设置。
@@ -66,11 +67,11 @@ func LoadResultPrefs(path string) (ResultPrefs, string) {
 		if os.IsNotExist(err) {
 			return DefaultResultPrefs(), ""
 		}
-		return DefaultResultPrefs(), "读取结果设置失败: " + err.Error()
+		return DefaultResultPrefs(), locales.AppResultReadFailed(err.Error())
 	}
 	prefs := DefaultResultPrefs()
 	if err := json.Unmarshal(data, &prefs); err != nil {
-		return DefaultResultPrefs(), "结果设置损坏，已用默认值: " + err.Error()
+		return DefaultResultPrefs(), locales.AppResultCorrupt(err.Error())
 	}
 	return NormalizeResultPrefs(prefs), ""
 }

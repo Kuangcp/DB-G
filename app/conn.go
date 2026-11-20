@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"db-g/locales"
 )
 
 // ConnProfile 是一个持久化的数据源连接配置。
@@ -140,23 +141,23 @@ func LoadStore(path string) *ConnStore {
 	s := &ConnStore{path: path}
 	// 先准备密钥（缺失时生成）：即使配置文件还不存在，后续保存也要能加密。
 	if vault, verr := LoadVault(path); verr != nil {
-		s.warning = "密钥不可用，密码将无法保存: " + verr.Error()
+		s.warning = locales.AppConnWarnKeyUnavailable(verr.Error())
 	} else {
 		s.vault = vault
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			s.warning = "读取连接配置失败: " + err.Error()
+			s.warning = locales.AppConnReadFailed(err.Error())
 		}
 		return s
 	}
 	var file storeFile
 	if err := json.Unmarshal(data, &file); err != nil {
 		if rerr := os.Rename(path, path+".bak"); rerr != nil {
-			s.warning = "连接配置损坏: " + rerr.Error()
+			s.warning = locales.AppConnCorrupt(rerr.Error())
 		} else {
-			s.warning = "连接配置损坏，已改名为 .bak"
+			s.warning = locales.AppConnCorruptRenamed()
 		}
 		return s
 	}
@@ -185,7 +186,7 @@ func LoadStore(path string) *ConnStore {
 		plain, derr := vault.Decrypt(orig)
 		if derr != nil {
 			s.conns[i].Password = ""
-			s.warning = "无法解密连接密码（密钥已变更？请重新填写）: " + s.conns[i].Name
+			s.warning = locales.AppConnPasswordUndecryptable(s.conns[i].Name)
 			continue
 		}
 		s.conns[i].Password = plain
@@ -195,7 +196,7 @@ func LoadStore(path string) *ConnStore {
 	}
 	if migrate {
 		if err := s.save(); err != nil {
-			s.warning = "密码自动加密回写失败: " + err.Error()
+			s.warning = locales.AppConnRewrapFailed(err.Error())
 		}
 	}
 	return s
@@ -284,7 +285,7 @@ func (s *ConnStore) save() error {
 			continue
 		}
 		if s.vault == nil {
-			return errors.New("密钥不可用，拒绝以明文写入密码")
+			return errors.New(locales.AppConnRefusePlaintext())
 		}
 		enc, err := s.vault.Encrypt(conns[i].Password)
 		if err != nil {
@@ -352,29 +353,29 @@ func genID() (string, error) {
 
 func validateProfile(p ConnProfile) error {
 	if p.Name == "" {
-		return errors.New("连接名称不能为空")
+		return errors.New(locales.AppConnNameEmpty())
 	}
 	switch p.Kind {
 	case "sqlite":
 		fi, err := os.Stat(p.Path)
 		if err != nil {
-			return fmt.Errorf("路径不可用: %w", err)
+			return errors.New(locales.AppConnPathUnavailable(err.Error()))
 		}
 		if fi.IsDir() {
-			return errors.New("路径不可用: 是目录而非数据库文件")
+			return errors.New(locales.AppConnPathIsDir())
 		}
 	case "mysql", "postgres", "clickhouse":
 		if p.Host == "" {
-			return errors.New("主机不能为空")
+			return errors.New(locales.AppConnHostEmpty())
 		}
 		if p.Port < 1 || p.Port > 65535 {
-			return errors.New("端口必须在 1–65535")
+			return errors.New(locales.AppConnPortRange())
 		}
 	default:
-		return fmt.Errorf("不支持的数据源类型: %q", p.Kind)
+		return errors.New(locales.AppConnUnsupportedKind(p.Kind))
 	}
 	if p.QueryTimeout < 0 || p.QueryTimeout > 86400 {
-		return errors.New("查询超时需在 0–86400 秒")
+		return errors.New(locales.AppConnTimeoutRange())
 	}
 	return nil
 }
@@ -408,7 +409,7 @@ func (s *ConnStore) Add(p ConnProfile) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p.FolderID != "" && s.folderIndexLocked(p.FolderID) < 0 {
-		return fmt.Errorf("文件夹不存在: %s", p.FolderID)
+		return errors.New(locales.AppConnFolderMissing(p.FolderID))
 	}
 	if p.ID == "" {
 		id, err := genID()
@@ -419,7 +420,7 @@ func (s *ConnStore) Add(p ConnProfile) error {
 	}
 	for _, e := range s.conns {
 		if e.ID == p.ID {
-			return fmt.Errorf("连接 ID 已存在: %s", p.ID)
+			return errors.New(locales.AppConnIDExists(p.ID))
 		}
 	}
 	prev := s.snapshot()
@@ -440,7 +441,7 @@ func (s *ConnStore) Update(p ConnProfile) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p.FolderID != "" && s.folderIndexLocked(p.FolderID) < 0 {
-		return fmt.Errorf("文件夹不存在: %s", p.FolderID)
+		return errors.New(locales.AppConnFolderMissing(p.FolderID))
 	}
 	for i, e := range s.conns {
 		if e.ID == p.ID {
@@ -458,7 +459,7 @@ func (s *ConnStore) Update(p ConnProfile) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("连接不存在: %s", p.ID)
+	return errors.New(locales.AppConnMissing(p.ID))
 }
 
 // Remove 按 ID 删除连接，并级联删除它的控制台（含工作区成员与末次激活指针）；
@@ -492,22 +493,22 @@ func (s *ConnStore) Remove(id string) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("连接不存在: %s", id)
+	return errors.New(locales.AppConnMissing(id))
 }
 
 // AddFolder 新建文件夹；parentID 为空表示根级，同层级不允许重名。
 func (s *ConnStore) AddFolder(name, parentID string) (ConnFolder, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return ConnFolder{}, errors.New("文件夹名称不能为空")
+		return ConnFolder{}, errors.New(locales.AppConnFolderNameEmpty())
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if parentID != "" && s.folderIndexLocked(parentID) < 0 {
-		return ConnFolder{}, fmt.Errorf("父文件夹不存在: %s", parentID)
+		return ConnFolder{}, errors.New(locales.AppConnFolderParentMissing(parentID))
 	}
 	if s.folderNameTakenLocked(parentID, name, "") {
-		return ConnFolder{}, errors.New("同层级已有同名文件夹")
+		return ConnFolder{}, errors.New(locales.AppConnFolderDuplicate())
 	}
 	id, err := genID()
 	if err != nil {
@@ -527,16 +528,16 @@ func (s *ConnStore) AddFolder(name, parentID string) (ConnFolder, error) {
 func (s *ConnStore) RenameFolder(id, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return errors.New("文件夹名称不能为空")
+		return errors.New(locales.AppConnFolderNameEmpty())
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	idx := s.folderIndexLocked(id)
 	if idx < 0 {
-		return fmt.Errorf("文件夹不存在: %s", id)
+		return errors.New(locales.AppConnFolderMissing(id))
 	}
 	if s.folderNameTakenLocked(s.folders[idx].ParentID, name, id) {
-		return errors.New("同层级已有同名文件夹")
+		return errors.New(locales.AppConnFolderDuplicate())
 	}
 	prev := s.snapshot()
 	s.folders[idx].Name = name
@@ -554,7 +555,7 @@ func (s *ConnStore) DeleteFolder(id string) error {
 	defer s.mu.Unlock()
 	idx := s.folderIndexLocked(id)
 	if idx < 0 {
-		return fmt.Errorf("文件夹不存在: %s", id)
+		return errors.New(locales.AppConnFolderMissing(id))
 	}
 	parent := s.folders[idx].ParentID
 	prev := s.snapshot()
@@ -588,7 +589,7 @@ func (s *ConnStore) MoveConnectionTo(id, folderID, beforeID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if folderID != "" && s.folderIndexLocked(folderID) < 0 {
-		return fmt.Errorf("文件夹不存在: %s", folderID)
+		return errors.New(locales.AppConnFolderMissing(folderID))
 	}
 	idx := -1
 	for i := range s.conns {
@@ -598,7 +599,7 @@ func (s *ConnStore) MoveConnectionTo(id, folderID, beforeID string) error {
 		}
 	}
 	if idx < 0 {
-		return fmt.Errorf("连接不存在: %s", id)
+		return errors.New(locales.AppConnMissing(id))
 	}
 	if beforeID == id {
 		return nil
@@ -612,10 +613,10 @@ func (s *ConnStore) MoveConnectionTo(id, folderID, beforeID string) error {
 			}
 		}
 		if bi < 0 {
-			return fmt.Errorf("目标连接不存在: %s", beforeID)
+			return errors.New(locales.AppConnTargetConnMissing(beforeID))
 		}
 		if s.conns[bi].FolderID != folderID {
-			return errors.New("目标连接不在该文件夹")
+			return errors.New(locales.AppConnTargetConnNotInFolder())
 		}
 	}
 	prev := s.snapshot()
@@ -663,13 +664,13 @@ func (s *ConnStore) MoveFolderTo(id, parentID, beforeID string) error {
 	defer s.mu.Unlock()
 	idx := s.folderIndexLocked(id)
 	if idx < 0 {
-		return fmt.Errorf("文件夹不存在: %s", id)
+		return errors.New(locales.AppConnFolderMissing(id))
 	}
 	if parentID != "" && s.folderIndexLocked(parentID) < 0 {
-		return fmt.Errorf("父文件夹不存在: %s", parentID)
+		return errors.New(locales.AppConnFolderParentMissing(parentID))
 	}
 	if parentID != "" && s.folderDescendantLocked(id, parentID) {
-		return errors.New("不能把文件夹移进自身或其子文件夹")
+		return errors.New(locales.AppConnFolderSelf())
 	}
 	if beforeID == id {
 		return nil
@@ -677,10 +678,10 @@ func (s *ConnStore) MoveFolderTo(id, parentID, beforeID string) error {
 	if beforeID != "" {
 		bi := s.folderIndexLocked(beforeID)
 		if bi < 0 {
-			return fmt.Errorf("目标文件夹不存在: %s", beforeID)
+			return errors.New(locales.AppConnFolderTargetMissing(beforeID))
 		}
 		if s.folders[bi].ParentID != parentID {
-			return errors.New("目标文件夹不在同一层级")
+			return errors.New(locales.AppConnFolderNotSibling())
 		}
 	}
 	prev := s.snapshot()
@@ -767,7 +768,7 @@ func (s *ConnStore) SetActive(id string) {
 	s.activeID = id
 	if err := s.save(); err != nil {
 		s.activeID = prev
-		s.warning = "保存活动连接失败: " + err.Error()
+		s.warning = locales.AppConnSaveActiveFailed(err.Error())
 	}
 }
 
@@ -824,10 +825,10 @@ func (s *ConnStore) CreateConsole(connID, name string) (ConsoleRecord, error) {
 		}
 	}
 	if !found {
-		return ConsoleRecord{}, fmt.Errorf("连接不存在: %s", connID)
+		return ConsoleRecord{}, errors.New(locales.AppConnMissing(connID))
 	}
 	if name == "" {
-		name = fmt.Sprintf("控制台 %d", len(s.listConsolesLocked(connID))+1)
+		name = locales.AppConsoleDefaultName(len(s.listConsolesLocked(connID)) + 1)
 	}
 	id, err := genID()
 	if err != nil {
@@ -873,7 +874,7 @@ func (s *ConnStore) CreateExternalConsole(connID, name, path string) (ConsoleRec
 		}
 	}
 	if !found {
-		return ConsoleRecord{}, fmt.Errorf("连接不存在: %s", connID)
+		return ConsoleRecord{}, errors.New(locales.AppConnMissing(connID))
 	}
 	id, err := genID()
 	if err != nil {
@@ -922,7 +923,7 @@ func (s *ConnStore) RebindConsoleFile(id, path, name string) error {
 	defer s.mu.Unlock()
 	idx := s.consoleIndexLocked(id)
 	if idx < 0 {
-		return fmt.Errorf("控制台不存在: %s", id)
+		return errors.New(locales.AppConnConsoleMissing(id))
 	}
 	if name == "" {
 		name = filepath.Base(path)
@@ -940,7 +941,7 @@ func (s *ConnStore) CloseConsoleEverywhere(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.consoleIndexLocked(id) < 0 {
-		return fmt.Errorf("控制台不存在: %s", id)
+		return errors.New(locales.AppConnConsoleMissing(id))
 	}
 	prev := s.snapshot()
 	s.stripConsoleRefs(map[string]bool{id: true})
@@ -958,7 +959,7 @@ func (s *ConnStore) RenameConsole(id, name string) error {
 	defer s.mu.Unlock()
 	idx := s.consoleIndexLocked(id)
 	if idx < 0 {
-		return fmt.Errorf("控制台不存在: %s", id)
+		return errors.New(locales.AppConnConsoleMissing(id))
 	}
 	if name == "" {
 		name = s.consoles[idx].Name
@@ -976,7 +977,7 @@ func (s *ConnStore) DeleteConsole(id string) error {
 	defer s.mu.Unlock()
 	idx := s.consoleIndexLocked(id)
 	if idx < 0 {
-		return fmt.Errorf("控制台不存在: %s", id)
+		return errors.New(locales.AppConnConsoleMissing(id))
 	}
 	prev := s.snapshot()
 	s.consoles = append(append([]ConsoleRecord{}, s.consoles[:idx]...), s.consoles[idx+1:]...)
@@ -999,7 +1000,7 @@ func (s *ConnStore) SetConsoleCaret(id string, start, end int) {
 	if err := s.mutateConsoleLocked(idx, func(c *ConsoleRecord) {
 		c.CaretStart, c.CaretEnd = start, end
 	}); err != nil {
-		s.warning = "保存控制台光标失败: " + err.Error()
+		s.warning = locales.AppConnSaveCursorFailed(err.Error())
 	}
 }
 
@@ -1012,7 +1013,7 @@ func (s *ConnStore) TouchConsole(id string, at int64) {
 		return
 	}
 	if err := s.mutateConsoleLocked(idx, func(c *ConsoleRecord) { c.UpdatedAt = at }); err != nil {
-		s.warning = "保存控制台失败: " + err.Error()
+		s.warning = locales.AppConnSaveConsoleFailed(err.Error())
 	}
 }
 
@@ -1070,7 +1071,7 @@ func (s *ConnStore) CreateWorkspace(name string) (WorkspaceRecord, error) {
 	name = strings.TrimSpace(name)
 	auto := name == ""
 	if auto {
-		name = "默认"
+		name = locales.AppWorkspaceDefault()
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1105,13 +1106,13 @@ func (s *ConnStore) CreateWorkspace(name string) (WorkspaceRecord, error) {
 func (s *ConnStore) RenameWorkspace(id, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		name = "默认"
+		name = locales.AppWorkspaceDefault()
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	i := s.workspaceIndexLocked(id)
 	if i < 0 {
-		return fmt.Errorf("工作区不存在: %s", id)
+		return errors.New(locales.AppConnWorkspaceMissing(id))
 	}
 	prev := s.snapshot()
 	s.workspaces[i].Name = name
@@ -1129,7 +1130,7 @@ func (s *ConnStore) DeleteWorkspace(id string) error {
 	defer s.mu.Unlock()
 	i := s.workspaceIndexLocked(id)
 	if i < 0 {
-		return fmt.Errorf("工作区不存在: %s", id)
+		return errors.New(locales.AppConnWorkspaceMissing(id))
 	}
 	prev := s.snapshot()
 	s.workspaces = append(append([]WorkspaceRecord{}, s.workspaces[:i]...), s.workspaces[i+1:]...)
@@ -1149,10 +1150,10 @@ func (s *ConnStore) AddWorkspaceMember(wsID, consoleID string) error {
 	defer s.mu.Unlock()
 	i := s.workspaceIndexLocked(wsID)
 	if i < 0 {
-		return fmt.Errorf("工作区不存在: %s", wsID)
+		return errors.New(locales.AppConnWorkspaceMissing(wsID))
 	}
 	if s.consoleIndexLocked(consoleID) < 0 {
-		return fmt.Errorf("控制台不存在: %s", consoleID)
+		return errors.New(locales.AppConnConsoleMissing(consoleID))
 	}
 	for _, id := range s.workspaces[i].Members {
 		if id == consoleID {
@@ -1175,10 +1176,10 @@ func (s *ConnStore) MoveWorkspaceMember(wsID, consoleID, beforeID string) error 
 	defer s.mu.Unlock()
 	i := s.workspaceIndexLocked(wsID)
 	if i < 0 {
-		return fmt.Errorf("工作区不存在: %s", wsID)
+		return errors.New(locales.AppConnWorkspaceMissing(wsID))
 	}
 	if s.consoleIndexLocked(consoleID) < 0 {
-		return fmt.Errorf("控制台不存在: %s", consoleID)
+		return errors.New(locales.AppConnConsoleMissing(consoleID))
 	}
 	if beforeID == consoleID {
 		return nil
@@ -1192,7 +1193,7 @@ func (s *ConnStore) MoveWorkspaceMember(wsID, consoleID, beforeID string) error 
 		}
 	}
 	if from < 0 {
-		return fmt.Errorf("控制台不在工作区: %s", consoleID)
+		return errors.New(locales.AppConnConsoleNotInWorkspace(consoleID))
 	}
 	members := slices.Clone(ws.Members)
 	members = append(members[:from], members[from+1:]...)
@@ -1206,7 +1207,7 @@ func (s *ConnStore) MoveWorkspaceMember(wsID, consoleID, beforeID string) error 
 			}
 		}
 		if to < 0 {
-			return fmt.Errorf("目标控制台不在工作区: %s", beforeID)
+			return errors.New(locales.AppConnTargetConsoleNotInWorkspace(beforeID))
 		}
 	}
 	members = slices.Insert(members, to, consoleID)
@@ -1228,7 +1229,7 @@ func (s *ConnStore) RemoveWorkspaceMember(wsID, consoleID string) error {
 	defer s.mu.Unlock()
 	i := s.workspaceIndexLocked(wsID)
 	if i < 0 {
-		return fmt.Errorf("工作区不存在: %s", wsID)
+		return errors.New(locales.AppConnWorkspaceMissing(wsID))
 	}
 	prev := s.snapshot()
 	ws := &s.workspaces[i]
@@ -1255,7 +1256,7 @@ func (s *ConnStore) SetWorkspaceLastActive(wsID, consoleID string) error {
 	defer s.mu.Unlock()
 	i := s.workspaceIndexLocked(wsID)
 	if i < 0 {
-		return fmt.Errorf("工作区不存在: %s", wsID)
+		return errors.New(locales.AppConnWorkspaceMissing(wsID))
 	}
 	if s.workspaces[i].LastActiveConsoleID == consoleID {
 		return nil
@@ -1284,7 +1285,7 @@ func (s *ConnStore) SetActiveWorkspace(id string) {
 	s.activeWorkspaceID = id
 	if err := s.save(); err != nil {
 		s.activeWorkspaceID = prev
-		s.warning = "保存活动工作区失败: " + err.Error()
+		s.warning = locales.AppConnSaveWorkspaceFailed(err.Error())
 	}
 }
 

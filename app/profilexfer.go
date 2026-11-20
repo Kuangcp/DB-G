@@ -2,10 +2,13 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	"db-g/locales"
 )
 
 // ProfileBundle 是连接档案导出文件。
@@ -55,7 +58,7 @@ func ImportProfiles(path string, existing []ConnProfile) ([]ConnProfile, error) 
 	}
 	var bundle ProfileBundle
 	if err := json.Unmarshal(data, &bundle); err != nil {
-		return nil, fmt.Errorf("导入文件不是有效的连接档案: %w", err)
+		return nil, errors.New(locales.AppProfileInvalid(err.Error()))
 	}
 	known := map[string]bool{}
 	for _, p := range existing {

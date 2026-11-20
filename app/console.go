@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"db-g/engine"
+	"db-g/locales"
 )
 
 const queryTimeout = 30 * time.Second
@@ -170,7 +171,7 @@ func (c *Console) RunTimeout(sess engine.Session, query string, timeout time.Dur
 type TimeoutError struct{ Timeout time.Duration }
 
 func (e *TimeoutError) Error() string {
-	return "查询超时（" + e.Timeout.String() + "），已取消"
+	return locales.AppConsoleTimeout(e.Timeout.String())
 }
 
 // Cancel 取消当前执行：先立刻把状态标成「正在停止」并通知 UI，再取消 context。

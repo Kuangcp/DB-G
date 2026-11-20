@@ -1,13 +1,14 @@
 package app
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"db-g/locales"
 	"db-g/sync"
 )
 
@@ -117,7 +118,7 @@ func (s *SyncService) apply(tree sync.Snapshot) ([]ConsoleRecord, error) {
 		body := tc.Body
 		path := filepath.Join(s.Store.ConsolesDir(), tc.Meta.ConnectionID+"-"+tc.Meta.ID+".sql")
 		if err := writeSyncFile(path, []byte(body)); err != nil {
-			return nil, fmt.Errorf("写控制台 %s 失败: %w", tc.Meta.ID, err)
+			return nil, errors.New(locales.AppSyncWriteConsoleFailed(tc.Meta.ID, err.Error()))
 		}
 		rec := ConsoleRecord{
 			ID: tc.Meta.ID, ConnectionID: tc.Meta.ConnectionID, Name: tc.Meta.Name,
@@ -218,13 +219,13 @@ func gitMessage(err error) string {
 	switch {
 	case strings.Contains(lower, "permission denied (publickey)"),
 		strings.Contains(lower, "could not read from remote repository"):
-		hint = "SSH 认证失败：请检查私钥路径、ssh-agent 或仓库权限。"
+		hint = locales.AppSyncSSHAuthFailed()
 	case strings.Contains(lower, "host key verification failed"):
-		hint = "主机密钥未信任：请先用 ssh 手动连接一次并确认 host key。"
+		hint = locales.AppSyncHostKey()
 	case strings.Contains(lower, "could not read username"),
 		strings.Contains(lower, "authentication failed"),
 		strings.Contains(lower, "invalid username or password"):
-		hint = "HTTPS 认证失败：请配置系统 git credential helper。"
+		hint = locales.AppSyncHTTPSAuthFailed()
 	}
 	if hint != "" {
 		return hint + " " + truncateText(text, 300)
@@ -236,9 +237,9 @@ func pushMessage(err error) string {
 	text := strings.ToLower(err.Error())
 	if strings.Contains(text, "non-fast-forward") || strings.Contains(text, "fetch first") ||
 		strings.Contains(text, "rejected") || strings.Contains(text, "updates were rejected") {
-		return "远端有新提交，请先拉取后再提交"
+		return locales.AppSyncRemoteNewCommits()
 	}
-	return "推送失败：" + gitMessage(err)
+	return locales.AppSyncPushFailed(gitMessage(err))
 }
 
 func truncateText(s string, n int) string {

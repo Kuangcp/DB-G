@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"db-g/locales"
 )
 
 // AIMessageRecord 是持久化的 AI 消息；不保存上下文快照和样本行。
@@ -106,18 +108,18 @@ func LoadAIConversations(path string) (AIConversationStore, string) {
 		if errors.Is(err, os.ErrNotExist) {
 			return AIConversationStore{}, ""
 		}
-		return AIConversationStore{}, "读取 AI 会话失败：" + err.Error()
+		return AIConversationStore{}, locales.AppAIChatReadFailed(err.Error())
 	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return AIConversationStore{}, "AI 会话格式错误：" + err.Error()
+		return AIConversationStore{}, locales.AppAIChatCorrupt(err.Error())
 	}
 	if _, ok := raw["conversations"]; !ok {
 		var legacy struct {
 			Messages []AIMessageRecord `json:"messages"`
 		}
 		if err := json.Unmarshal(data, &legacy); err != nil {
-			return AIConversationStore{}, "AI 会话格式错误：" + err.Error()
+			return AIConversationStore{}, locales.AppAIChatCorrupt(err.Error())
 		}
 		if len(legacy.Messages) == 0 {
 			return AIConversationStore{}, ""
@@ -132,7 +134,7 @@ func LoadAIConversations(path string) (AIConversationStore, string) {
 	}
 	var store AIConversationStore
 	if err := json.Unmarshal(data, &store); err != nil {
-		return AIConversationStore{}, "AI 会话格式错误：" + err.Error()
+		return AIConversationStore{}, locales.AppAIChatCorrupt(err.Error())
 	}
 	store.Version = aiConversationVersion
 	seen := map[string]bool{}

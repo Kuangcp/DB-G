@@ -2,6 +2,8 @@ package app
 
 import (
 	"strings"
+
+	"db-g/locales"
 )
 
 // SQLRisk 是高危 SQL 检查结果；Level 2 表示默认就应重点提醒。
@@ -36,20 +38,20 @@ func checkStatementRisk(sql string) []SQLRisk {
 		if where < 0 {
 			return []SQLRisk{{
 				Level: 2, Rule: head + "-without-where",
-				Message: head + " 没有 WHERE 条件，可能影响整表。",
+				Message: locales.AppGuardNoWhere(head),
 			}}
 		}
 		rest := strings.TrimSpace(sql[toks[where].end:])
 		if isTautology(rest) {
 			return []SQLRisk{{
 				Level: 2, Rule: head + "-tautology",
-				Message: head + " 的 WHERE 条件是恒真条件，等同于没有过滤。",
+				Message: locales.AppGuardTruthyWhere(head),
 			}}
 		}
 	case "DROP":
-		return []SQLRisk{{Level: 2, Rule: "drop", Message: "DROP 会删除对象且通常不可恢复。"}}
+		return []SQLRisk{{Level: 2, Rule: "drop", Message: locales.AppGuardDrop()}}
 	case "TRUNCATE":
-		return []SQLRisk{{Level: 2, Rule: "truncate", Message: "TRUNCATE 会清空整张表。"}}
+		return []SQLRisk{{Level: 2, Rule: "truncate", Message: locales.AppGuardTruncate()}}
 	}
 	return nil
 }

@@ -71,6 +71,7 @@ func (a *root) aiProviderFor() (ai.Provider, error) {
 // aiSnapshot 组装一次请求的上下文；默认只带 schema 与当前 SQL。
 func (a *root) aiSnapshot() ai.ContextSnapshot {
 	var snap ai.ContextSnapshot
+	snap.Language = uiLocale()
 	connID := a.activeConnID()
 	if a.store != nil && connID != "" {
 		if p, ok := a.store.Get(connID); ok {
@@ -507,7 +508,7 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 		return
 	}
 	msgs := []ai.Message{
-		{Role: ai.RoleSystem, Content: "用不超过 12 个汉字概括这段对话的主题，只输出标题本身，不要引号、标点或解释。"},
+		{Role: ai.RoleSystem, Content: locales.AiTitlePrompt()},
 		{Role: ai.RoleUser, Content: firstMessage},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

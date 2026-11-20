@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"db-g/locales"
 )
 
 // ConsolePrefs 是控制台编辑体验设置。
@@ -49,11 +51,11 @@ func LoadConsolePrefs(path string) (ConsolePrefs, string) {
 		if os.IsNotExist(err) {
 			return DefaultConsolePrefs(), ""
 		}
-		return DefaultConsolePrefs(), "读取控制台设置失败: " + err.Error()
+		return DefaultConsolePrefs(), locales.AppConsolePrefsReadFailed(err.Error())
 	}
 	prefs := DefaultConsolePrefs()
 	if err := json.Unmarshal(data, &prefs); err != nil {
-		return DefaultConsolePrefs(), "控制台设置损坏，已用默认值: " + err.Error()
+		return DefaultConsolePrefs(), locales.AppConsolePrefsCorrupt(err.Error())
 	}
 	return NormalizeConsolePrefs(prefs), ""
 }

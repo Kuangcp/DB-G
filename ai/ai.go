@@ -110,6 +110,8 @@ type ContextSnapshot struct {
 	History    []HistoryItem
 	Errors     []ErrorItem
 	Samples    []TableSample
+	// Language 是界面语言（BCP 47 标签）；提示词据此要求模型用同语言回答。
+	Language string
 }
 
 // Summary 是给 UI 显示的上下文摘要。

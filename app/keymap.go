@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"db-g/locales"
 )
 
 // DefaultKeymapPath 返回快捷键配置路径（与连接库同目录）。
@@ -25,11 +27,11 @@ func LoadKeymap(path string) (map[string]string, string) {
 		if os.IsNotExist(err) {
 			return map[string]string{}, ""
 		}
-		return map[string]string{}, "读取快捷键配置失败: " + err.Error()
+		return map[string]string{}, locales.AppKeymapReadFailed(err.Error())
 	}
 	var f keymapFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		return map[string]string{}, "快捷键配置损坏，已用默认值（原文件保留）: " + err.Error()
+		return map[string]string{}, locales.AppKeymapCorrupt()
 	}
 	if f.Bindings == nil {
 		f.Bindings = map[string]string{}
