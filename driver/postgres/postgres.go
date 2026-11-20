@@ -468,6 +468,16 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 	if err != nil {
 		return "", err
 	}
+	// Ctrl+Q 不知道对象类型时按表来问；名字其实是视图就切到视图分支，
+	// 否则会用 information_schema.columns 拼出一个假的 CREATE TABLE。
+	if kind == engine.ObjectTable {
+		var typ string
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT table_type FROM information_schema.tables WHERE table_schema = $1 AND table_name = $2`,
+			schema, name).Scan(&typ); err == nil && typ == "VIEW" {
+			kind = engine.ObjectView
+		}
+	}
 	if kind == engine.ObjectView {
 		var def string
 		err := s.db.QueryRowContext(ctx,
@@ -476,7 +486,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 		if err != nil {
 			return "", err
 		}
-		return def + ";", nil
+		return strings.TrimRight(def, "; \t\n") + ";", nil
 	}
 	if kind != engine.ObjectTable {
 		return "", errors.New("postgres: 该对象不支持查看 DDL")

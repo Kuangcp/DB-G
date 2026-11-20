@@ -618,14 +618,24 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 	if err := rows.Scan(ptrs...); err != nil {
 		return "", err
 	}
-	// SHOW CREATE 的最后一列是 DDL 文本。
-	for i := len(vals) - 1; i >= 0; i-- {
-		switch t := vals[i].(type) {
-		case string:
-			return t, nil
-		case []byte:
-			return string(t), nil
+	// SHOW CREATE TABLE 是「Table, Create Table」，SHOW CREATE VIEW 是
+	// 「View, Create View, character_set_client, collation_connection」；
+	// 不能取最后一列，否则视图会拿到 collation_connection。
+	target := -1
+	for i, c := range cols {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(c)), "create ") {
+			target = i
+			break
 		}
+	}
+	if target < 0 {
+		target = len(vals) - 1
+	}
+	switch t := vals[target].(type) {
+	case string:
+		return t, nil
+	case []byte:
+		return string(t), nil
 	}
 	return "", fmt.Errorf("未找到 %s 的 DDL", name)
 }

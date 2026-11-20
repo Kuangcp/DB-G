@@ -376,6 +376,11 @@ func TestObjectDDL(t *testing.T) {
 	if err != nil || !strings.Contains(strings.ToUpper(ddl), "CREATE VIEW") {
 		t.Fatalf("view ddl: %q err=%v", ddl, err)
 	}
+	// Ctrl+Q 不认识类型时按表来问，也要能落到视图上。
+	ddl, err = lister.ObjectDDL(ctx, engine.ObjectTable, "ddl_v")
+	if err != nil || !strings.Contains(strings.ToUpper(ddl), "CREATE VIEW") {
+		t.Fatalf("view ddl via table kind: %q err=%v", ddl, err)
+	}
 	if _, err := lister.ObjectDDL(ctx, engine.ObjectTable, "nope"); err == nil {
 		t.Fatal("missing object must error")
 	}

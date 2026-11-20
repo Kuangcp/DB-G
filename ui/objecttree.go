@@ -735,26 +735,40 @@ func (a *root) viewDDLFromEditor() bool {
 	if _, ok := sess.(engine.ObjectDDLer); !ok || !sess.Caps().Has(engine.CapObjectDDL) {
 		return false
 	}
-	// 对象树已加载时先确认光标处的词确实是个表/视图，
+	// 对象树/补全目录已加载时先确认光标处的词确实是个表/视图，
 	// 免得把 select / 列名也当表名去查、弹一个「未找到」出来。
-	if known := a.knownObjects(p.ID); known != nil && !known[strings.ToLower(word)] {
-		return false
+	kind := engine.ObjectTable
+	if known := a.knownObjects(p.ID); known != nil {
+		k, ok := known[strings.ToLower(word)]
+		if !ok {
+			return false
+		}
+		kind = k
 	}
-	a.showDDL(p, engine.DBObject{Kind: engine.ObjectTable, Name: word, Schema: a.connSchema[p.ID]})
+	a.showDDL(p, engine.DBObject{Kind: kind, Name: word, Schema: a.connSchema[p.ID]})
 	return true
 }
 
-// knownObjects 返回该连接已加载的对象名（小写）；树还没加载时返回 nil。
-func (a *root) knownObjects(connID string) map[string]bool {
+// knownObjects 返回该连接已知的表/视图名（小写）与类型；
+// 树和补全目录都没加载时返回 nil。
+func (a *root) knownObjects(connID string) map[string]engine.ObjectKind {
 	key, _ := a.completionScope(connID)
-	m := a.treeData[key]
-	if m == nil {
-		return nil
+	out := map[string]engine.ObjectKind{}
+	if a.catalog != nil {
+		if tables, views, ok := a.catalog.objects(key); ok {
+			for _, n := range views {
+				out[strings.ToLower(n)] = engine.ObjectView
+			}
+			for _, n := range tables {
+				out[strings.ToLower(n)] = engine.ObjectTable
+			}
+		}
 	}
-	out := map[string]bool{}
-	for _, kind := range []engine.ObjectKind{engine.ObjectTable, engine.ObjectView} {
-		for _, o := range m[kind] {
-			out[strings.ToLower(o.Name)] = true
+	if m := a.treeData[key]; m != nil {
+		for _, kind := range []engine.ObjectKind{engine.ObjectTable, engine.ObjectView} {
+			for _, o := range m[kind] {
+				out[strings.ToLower(o.Name)] = kind
+			}
 		}
 	}
 	if len(out) == 0 {

@@ -129,6 +129,42 @@ func TestCtrlQFromEditorCaret(t *testing.T) {
 	}
 }
 
+// Ctrl+Q：光标处的词是视图时，按视图取 DDL，而不是当成表。
+func TestCtrlQFromEditorCaretOnView(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.testSession(t).RunStatement(t.Context(),
+		`CREATE VIEW user_view AS SELECT id FROM users`); err != nil {
+		t.Fatal(err)
+	}
+	a.ensureCatalog(prof.ID) // headless：同步把表/视图装进目录
+	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.mgr.Create(prof.ID, "t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate console")
+	}
+	a.hasSelObj = false
+	a.setActiveText("select * from user_view;")
+	a.setSelection(len([]rune("select * from user_vi")), len([]rune("select * from user_vi")))
+
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeyQ)
+	tt.Frame()
+	if !a.ddlOpen {
+		t.Fatal("Ctrl+Q should open the view DDL panel")
+	}
+	if !strings.Contains(strings.ToUpper(a.ddlText), "CREATE VIEW") {
+		t.Fatalf("view DDL expected, got %q", a.ddlText)
+	}
+}
+
 // 光标停在词的不同位置都要取到整词；不在词上返回空。
 func TestEditorWordAtCaret(t *testing.T) {
 	a := newConsoleRoot(t)

@@ -409,6 +409,10 @@ func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name st
 	}
 	var ddl sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = ? AND name = ?`, t, name).Scan(&ddl)
+	// Ctrl+Q 不知道对象类型时按表来问；表里没有同名对象就当成视图再找一次。
+	if errors.Is(err, sql.ErrNoRows) && kind == engine.ObjectTable {
+		err = s.db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type = 'view' AND name = ?`, name).Scan(&ddl)
+	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("未找到 %s 的 DDL", name)
