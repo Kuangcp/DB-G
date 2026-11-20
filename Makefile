@@ -1,4 +1,4 @@
-.PHONY: run build release localRelease install test vet
+.PHONY: run build release localRelease install test vet i18n-status i18n-check
 
 # 发布版本号：有 tag 用 tag（v1.0.0），否则 git describe / dev
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -44,3 +44,11 @@ test:
 vet:
 	CGO_ENABLED=0 go1.27 vet ./...
 	go1.27 tool mygo vet .
+
+# 国际化：status 列出全部中文字面量，check 只报 ui/app 的未翻译项（CI 用）
+i18n-status:
+	CGO_ENABLED=0 go1.27 run ./tools/l10nscan -all
+
+i18n-check:
+	CGO_ENABLED=0 go1.27 run ./tools/l10nscan
+	go1.27 tool mygo i18n check
