@@ -90,11 +90,20 @@ func aiContextNote(rep ai.PromptReport, extra string) string {
 	if rep.Dialogue > 0 {
 		parts = append(parts, locales.AiDebugDialogue(rep.Dialogue))
 	}
+	if rep.ResultRows > 0 || rep.ResultColumns > 0 {
+		parts = append(parts, locales.AiDebugResult(rep.ResultRows, rep.ResultColumns))
+	}
+	if rep.HasPlan {
+		parts = append(parts, locales.AiDebugPlan())
+	}
+	if rep.DDL > 0 {
+		parts = append(parts, locales.AiDebugDDL(rep.DDL))
+	}
 	if rep.Trimmed() {
 		parts = append(parts, locales.AiContextDropped(
-			rep.DroppedTables, rep.DroppedColumns, rep.DroppedDialogue,
+			rep.DroppedTables, rep.DroppedColumns, rep.DroppedDialogue, rep.DroppedDDL,
 			rep.DroppedHistory, rep.DroppedErrors, rep.DroppedSamples))
-		if rep.TruncatedSQL || rep.TruncatedSelection || rep.TruncatedExtra || rep.TruncatedText {
+		if rep.TruncatedSQL || rep.TruncatedSelection || rep.TruncatedExtra || rep.TruncatedPlan || rep.TruncatedText {
 			parts = append(parts, locales.AiContextTextTrimmed())
 		}
 	}
@@ -117,8 +126,16 @@ func (a *root) openAIDebug() {
 
 // openAIPreview 组装“现在发送会发什么”的草稿，不改编辑器、不发请求。
 func (a *root) openAIPreview() {
+	if a.aiChat.preparing {
+		return
+	}
 	q := strings.TrimSpace(a.aiChat.input)
 	snap := a.chatSnapshot()
+	a.prepareAIContext(snap, func(snap ai.ContextSnapshot) { a.showAIPreview(q, snap) })
+}
+
+// showAIPreview 用准备好的快照打开预览；DDL 加载期间面板会显示准备状态。
+func (a *root) showAIPreview(q string, snap ai.ContextSnapshot) {
 	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
 	note := aiContextNote(rep, "")
 	if q == "" {

@@ -114,6 +114,12 @@ func (a *root) aiSection(c *ui.Context) {
 	if ui.Checkbox(c, &a.aiPrefs.AllowErrorLogs, locales.AiAllowErrors()).Changed() {
 		a.saveAIPrefs()
 	}
+	if ui.Checkbox(c, &a.aiPrefs.AllowSampleRows, locales.AiAllowSamples()).Changed() {
+		a.saveAIPrefs()
+	}
+	if ui.Checkbox(c, &a.aiPrefs.AllowDDL, locales.AiAllowDDL()).Changed() {
+		a.saveAIPrefs()
+	}
 	if ui.Checkbox(c, &a.aiPrefs.AITitle, locales.AiAutoTitle()).Changed() {
 		a.saveAIPrefs()
 	}

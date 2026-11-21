@@ -35,6 +35,8 @@ type aiChatState struct {
 	seq           uint64
 	err           string
 	lastCtx       string
+	preparing     bool   // 正在补齐 DDL 等上下文
+	prepareSeq    uint64 // 上下文准备轮次；旧结果作废
 	usage         ai.Usage
 	started       time.Time
 	md            markdown.Options
@@ -156,16 +158,28 @@ func (a *root) aiDialogue() []ai.Message {
 func (a *root) chatSnapshot() ai.ContextSnapshot {
 	snap := a.aiSnapshot()
 	snap.Dialogue = a.aiDialogue()
+	snap.Result = a.aiResultContext()
+	snap.Plan = a.aiPlanContext()
+	if a.aiPrefs.AllowDDL {
+		connID := a.activeConnID()
+		reqs := a.aiDDLRequests(connID, snap)
+		a.attachAIDDL(&snap, connID, reqs)
+	}
 	return snap
 }
 
 // sendAI 发送当前输入；服务端错误只写面板，不影响查询。
 func (a *root) sendAI() {
 	q := strings.TrimSpace(a.aiChat.input)
-	if q == "" {
+	if q == "" || a.aiChat.streaming || a.aiChat.preparing {
 		return
 	}
 	snap := a.chatSnapshot()
+	a.prepareAIContext(snap, func(snap ai.ContextSnapshot) { a.sendAIChat(q, snap) })
+}
+
+// sendAIChat 在上下文准备好后组装提示词并开始流式请求。
+func (a *root) sendAIChat(q string, snap ai.ContextSnapshot) {
 	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
 	a.aiChat.lastCtx = aiContextNote(rep, "")
 	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(rep, ""), q, msgs); err != nil {
@@ -324,6 +338,7 @@ func (a *root) applyAIEvent(seq uint64, ev ai.Event) {
 
 // stopAI 取消当前请求并丢弃后续回包。
 func (a *root) stopAI() {
+	a.cancelAIPrepare()
 	if !a.aiChat.streaming {
 		return
 	}
@@ -341,6 +356,15 @@ func (a *root) stopAI() {
 		}
 	}
 	a.saveAIChat()
+}
+
+// cancelAIPrepare 作废正在补齐 DDL 的上下文准备。
+func (a *root) cancelAIPrepare() {
+	if !a.aiChat.preparing {
+		return
+	}
+	a.aiChat.prepareSeq++
+	a.aiChat.preparing = false
 }
 
 // resetAIChat 新建一段会话。

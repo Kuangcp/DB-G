@@ -78,6 +78,33 @@ type TableContext struct {
 	Comment    string
 	Columns    []ColumnContext
 	PrimaryKey []string
+	// DDL 是可选的相关表建表/视图语句；默认不收集，开启后按预算裁剪。
+	DDL string
+}
+
+// ResultColumn 是结果集的一列。
+type ResultColumn struct {
+	Name string
+	Type string
+}
+
+// ResultContext 是当前结果集的形状；默认不发数据值，Sample 需用户开启。
+type ResultContext struct {
+	SQL         string
+	Columns     []ResultColumn
+	RowCount    int // 当前页已加载的行数
+	Truncated   bool
+	HasMore     bool
+	ExecMillis  int64
+	FetchMillis int64
+	Sample      [][]string // 可选样本行，已在 UI 侧截断
+}
+
+// PlanContext 是当前打开的执行计划；Text 是统一计划树的可读文本。
+type PlanContext struct {
+	SQL     string
+	Analyze bool
+	Text    string
 }
 
 // HistoryItem 是一条可选的查询历史。
@@ -109,6 +136,8 @@ type ContextSnapshot struct {
 	Dialogue  []Message
 	ActiveSQL string
 	Selection string
+	Result    *ResultContext
+	Plan      *PlanContext
 	History   []HistoryItem
 	Errors    []ErrorItem
 	Samples   []TableSample

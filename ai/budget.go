@@ -38,15 +38,20 @@ func (b Budget) Limit() int {
 
 // PromptReport 是一次裁剪后的上下文报告，供 UI 显示“实际发了什么、丢了什么”。
 type PromptReport struct {
-	Limit    int // 输入 token 上限
-	Tokens   int // 实际提示词估算 token
-	Tables   int // 最终包含的表
-	Columns  int // 最终包含的列
-	Dialogue int // 最终包含的对话消息
+	Limit         int // 输入 token 上限
+	Tokens        int // 实际提示词估算 token
+	Tables        int // 最终包含的表
+	Columns       int // 最终包含的列
+	Dialogue      int // 最终包含的对话消息
+	DDL           int // 最终包含 DDL 的表数
+	ResultRows    int // 结果集当前页行数（未带结果时为 0）
+	ResultColumns int
+	HasPlan       bool
 
 	DroppedTables   int
 	DroppedColumns  int
 	DroppedDialogue int
+	DroppedDDL      int
 	DroppedHistory  int
 	DroppedErrors   int
 	DroppedSamples  int
@@ -54,14 +59,16 @@ type PromptReport struct {
 	TruncatedSQL       bool
 	TruncatedSelection bool
 	TruncatedExtra     bool
+	TruncatedPlan      bool
 	TruncatedText      bool // 补全场景的前/后文被截断，或最后兜底截断
 }
 
 // Trimmed 报告这次是否发生过任何裁剪。
 func (r PromptReport) Trimmed() bool {
 	return r.DroppedTables > 0 || r.DroppedColumns > 0 || r.DroppedDialogue > 0 ||
-		r.DroppedHistory > 0 || r.DroppedErrors > 0 || r.DroppedSamples > 0 || r.TruncatedSQL ||
-		r.TruncatedSelection || r.TruncatedExtra || r.TruncatedText
+		r.DroppedDDL > 0 || r.DroppedHistory > 0 || r.DroppedErrors > 0 ||
+		r.DroppedSamples > 0 || r.TruncatedSQL || r.TruncatedSelection ||
+		r.TruncatedExtra || r.TruncatedPlan || r.TruncatedText
 }
 
 // tokenTotal 估算整组消息的 token。
@@ -76,6 +83,11 @@ func tokenTotal(msgs []Message) int {
 // trimSchemaStep 按优先级做一步裁剪：样本 → 历史 → 错误 → 低排名表的列 →
 // 超出排名的表 → 其余列 → 只保留最相关的表。返回 false 表示再无可裁。
 func trimSchemaStep(s *ContextSnapshot, rep *PromptReport) bool {
+	if s.Result != nil && len(s.Result.Sample) > 0 {
+		rep.DroppedSamples += len(s.Result.Sample)
+		s.Result.Sample = nil
+		return true
+	}
 	if len(s.Samples) > 0 {
 		rep.DroppedSamples += len(s.Samples)
 		s.Samples = nil
@@ -114,6 +126,13 @@ func trimSchemaStep(s *ContextSnapshot, rep *PromptReport) bool {
 		rep.DroppedDialogue++
 		s.Dialogue = nil
 		return true
+	}
+	for i := range s.Tables {
+		if s.Tables[i].DDL != "" {
+			rep.DroppedDDL++
+			s.Tables[i].DDL = ""
+			return true
+		}
 	}
 	// 排名靠后的表先只留表名；通常前 8 张足够回答。
 	for i := len(s.Tables) - 1; i >= contextKeepColumnsTables; i-- {
@@ -234,6 +253,11 @@ func trimChatText(s *ContextSnapshot, extras *[]string, rep *PromptReport) bool 
 		rep.TruncatedSelection = true
 		return true
 	}
+	if s.Plan != nil && len(s.Plan.Text) > 128 {
+		s.Plan.Text = truncateMiddleRunes(s.Plan.Text, len([]rune(s.Plan.Text))/2)
+		rep.TruncatedPlan = true
+		return true
+	}
 	for i, e := range *extras {
 		if len(e) > 128 {
 			(*extras)[i] = truncateMiddleRunes(e, len([]rune(e))/2)
@@ -247,10 +271,17 @@ func trimChatText(s *ContextSnapshot, extras *[]string, rep *PromptReport) bool 
 // finalizeReport 记录最终实际包含的规模。
 func finalizeReport(s ContextSnapshot, rep *PromptReport, tokens int) PromptReport {
 	rep.Tokens = tokens
-	rep.Tables, rep.Columns, rep.Dialogue = len(s.Tables), 0, len(s.Dialogue)
+	rep.Tables, rep.Columns, rep.Dialogue, rep.DDL = len(s.Tables), 0, len(s.Dialogue), 0
 	for _, t := range s.Tables {
 		rep.Columns += len(t.Columns)
+		if t.DDL != "" {
+			rep.DDL++
+		}
 	}
+	if s.Result != nil {
+		rep.ResultRows, rep.ResultColumns = s.Result.RowCount, len(s.Result.Columns)
+	}
+	rep.HasPlan = s.Plan != nil
 	return *rep
 }
 

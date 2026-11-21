@@ -82,6 +82,7 @@ func (a *root) groupOpenPtr(key string, v bool) *bool {
 
 func (a *root) reloadTree() {
 	a.treeGen++
+	a.aiDDL = nil
 	a.treeData = nil
 	a.treeCounts = nil
 	a.treeLoading = nil

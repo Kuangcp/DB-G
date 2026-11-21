@@ -74,6 +74,9 @@ func (a *root) aiPanel(c *ui.Context) {
 				}
 			})
 		}
+		if st.preparing {
+			ui.Text(c, locales.AiPreparingContext()).FontSize(11).TextColor(t.TextMuted).SingleLine()
+		}
 		if st.err != "" {
 			ui.Text(c, st.err).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(st.err)
 		}
@@ -94,10 +97,10 @@ func (a *root) aiPanel(c *ui.Context) {
 				if ui.Button(c, locales.AiStop()).Clicked() {
 					a.stopAI()
 				}
-			} else if ui.PrimaryButton(c, locales.AiSend()).Disabled(st.input == "").Clicked() {
+			} else if ui.PrimaryButton(c, locales.AiSend()).Disabled(st.input == "" || st.preparing).Clicked() {
 				a.sendAI()
 			}
-			if ui.Button(c, locales.AiPreviewContext()).FontSize(11).Clicked() {
+			if ui.Button(c, locales.AiPreviewContext()).FontSize(11).Disabled(st.preparing).Clicked() {
 				a.openAIPreview()
 			}
 			ui.Spacer(c)

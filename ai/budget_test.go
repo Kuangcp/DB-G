@@ -152,3 +152,58 @@ func TestBudgetDropsOldestDialogue(t *testing.T) {
 		t.Fatalf("over budget: %d > %d", rep.Tokens, rep.Limit)
 	}
 }
+
+func TestBuildChatIncludesResultPlanAndDDL(t *testing.T) {
+	snapshot := ContextSnapshot{
+		Connection: ConnInfo{Kind: "postgres", Database: "public"},
+		ActiveSQL:  "select id from users",
+		Tables: []TableContext{{
+			Name: "users", DDL: "CREATE TABLE users (id bigint)",
+		}},
+		Result: &ResultContext{
+			Columns:  []ResultColumn{{Name: "id", Type: "bigint"}},
+			RowCount: 2, ExecMillis: 12, HasMore: true,
+			Sample: [][]string{{"1"}, {"2"}},
+		},
+		Plan: &PlanContext{SQL: "select id from users", Analyze: true, Text: "Seq Scan on users"},
+	}
+	msgs, rep := BuildChat(snapshot, "解释一下", Budget{})
+	body := msgs[1].Content
+	for _, want := range []string{"当前结果集", "列: id bigint", "当前页行数: 2", "执行计划（EXPLAIN ANALYZE）",
+		"Seq Scan on users", "DDL:", "CREATE TABLE users"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, body)
+		}
+	}
+	if rep.DDL != 1 || rep.ResultRows != 2 || rep.ResultColumns != 1 || !rep.HasPlan {
+		t.Fatalf("report: %+v", rep)
+	}
+}
+
+func TestBudgetDropsDDLBeforeSchema(t *testing.T) {
+	ddl := strings.Repeat("CREATE TABLE x (id bigint);\n", 200)
+	snapshot := ContextSnapshot{
+		Connection: ConnInfo{Kind: "postgres"},
+		Tables: []TableContext{
+			{Name: "users", Columns: []ColumnContext{{Name: "id", Type: "bigint"}}, DDL: ddl},
+			{Name: "orders", Columns: []ColumnContext{{Name: "id", Type: "bigint"}}},
+		},
+		Result: &ResultContext{
+			Columns: []ResultColumn{{Name: "id", Type: "bigint"}}, RowCount: 1,
+			Sample: [][]string{{"1"}},
+		},
+	}
+	_, rep := BuildChat(snapshot, "查 users", Budget{ContextWindow: 2400, MaxOutput: 900})
+	if rep.Trimmed() == false || rep.DroppedSamples == 0 {
+		t.Fatalf("expected samples trimmed first: %+v", rep)
+	}
+	if rep.DDL != 0 || rep.DroppedDDL == 0 {
+		t.Fatalf("DDL should be trimmed under budget: %+v", rep)
+	}
+	if rep.Tables == 0 || rep.Columns == 0 {
+		t.Fatalf("relevant schema should survive: %+v", rep)
+	}
+	if rep.Tokens > rep.Limit {
+		t.Fatalf("over budget: %d > %d", rep.Tokens, rep.Limit)
+	}
+}

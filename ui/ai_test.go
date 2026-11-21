@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"db-g/ai"
+	"db-g/ai/plan"
 	"db-g/app"
 	"db-g/engine"
 )
@@ -615,5 +617,96 @@ func TestAIDialogueKeepsRecentMessages(t *testing.T) {
 	}
 	if got[0].Content != "msg-04" || got[len(got)-1].Content != "msg-11" {
 		t.Fatalf("dialogue window: %+v", got)
+	}
+}
+
+func TestAIResultContextShapeAndSamples(t *testing.T) {
+	a := newTestRoot()
+	a.lastExecSQL = "select id, name from users"
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery:       true,
+		Columns:       []string{"id", "name"},
+		ColumnTypes:   []string{"INTEGER", "TEXT"},
+		Rows:          [][]any{{int64(1), "alice"}, {int64(2), nil}},
+		HasMore:       true,
+		ExecDuration:  12 * time.Millisecond,
+		FetchDuration: 3 * time.Millisecond,
+	}, "")
+	rc := a.aiResultContext()
+	if rc == nil || rc.RowCount != 2 || len(rc.Columns) != 2 || !rc.HasMore {
+		t.Fatalf("result context: %+v", rc)
+	}
+	if rc.Columns[1].Type != "TEXT" || rc.ExecMillis != 12 || rc.FetchMillis != 3 {
+		t.Fatalf("result details: %+v", rc)
+	}
+	if len(rc.Sample) != 0 {
+		t.Fatalf("samples must stay off by default: %+v", rc.Sample)
+	}
+	a.aiPrefs.AllowSampleRows = true
+	rc = a.aiResultContext()
+	if len(rc.Sample) != 2 || rc.Sample[0][1] != "alice" || rc.Sample[1][1] != "NULL" {
+		t.Fatalf("samples: %+v", rc.Sample)
+	}
+}
+
+func TestAIPlanContextOnlyWhenOpen(t *testing.T) {
+	a := newTestRoot()
+	a.plan = planState{open: false, nodes: []plan.PlanNode{{Op: "Seq Scan"}}}
+	if got := a.aiPlanContext(); got != nil {
+		t.Fatalf("closed plan must not be sent: %+v", got)
+	}
+	a.plan.open = true
+	a.plan.sql = "select * from users"
+	got := a.aiPlanContext()
+	if got == nil || !strings.Contains(got.Text, "Seq Scan") || got.SQL != "select * from users" {
+		t.Fatalf("plan context: %+v", got)
+	}
+}
+
+func TestAIDDLContextPrefetchAndCache(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := a.consoleMgr().Create(prof.ID, "DDL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.connSchema[prof.ID] = "db1"
+	fake := &schemaFakeSession{
+		schemas: []string{"db1"},
+		objects: map[string][]engine.DBObject{
+			"db1": {{Kind: engine.ObjectTable, Name: "t", Schema: "db1"}},
+		},
+	}
+	a.testSetSession(prof.ID, fake)
+	a.aiPrefs.AllowDDL = true
+	a.aiPrefs.Model = "fake"
+	a.setActiveText("select * from t")
+	a.catalog.finish(prof.ID+"|db1", []string{"t"}, nil, "postgres")
+
+	p := &fakeAIProvider{events: []ai.Event{{Kind: ai.EventText, Text: "ok"}, {Kind: ai.EventDone}}}
+	a.aiTestProvider = p
+	a.aiChat.input = "看看这张表"
+	a.sendAI()
+	if fake.ddlSchema != "db1" {
+		t.Fatalf("DDL must use the scoped schema: %q", fake.ddlSchema)
+	}
+	last := p.req.Messages[len(p.req.Messages)-1].Content
+	if !strings.Contains(last, "CREATE TABLE db1.t") || !strings.Contains(last, "DDL:") {
+		t.Fatalf("prompt missing DDL:\n%s", last)
+	}
+
+	// 第二次发送即使会话不可用，也应命中 DDL 缓存。
+	a.sessions = map[string]engine.Session{}
+	a.aiChat.input = "再说一次"
+	a.sendAI()
+	last = p.req.Messages[len(p.req.Messages)-1].Content
+	if !strings.Contains(last, "CREATE TABLE db1.t") {
+		t.Fatalf("cached DDL missing on second send:\n%s", last)
 	}
 }

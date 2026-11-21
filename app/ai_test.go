@@ -23,13 +23,16 @@ func TestLoadAIPrefsDefaultsAndRoundTrip(t *testing.T) {
 	if prefs.BaseURL != DefaultAIBaseURL {
 		t.Fatalf("default base: %q", prefs.BaseURL)
 	}
-	if prefs.AllowHistory || prefs.AllowErrorLogs {
+	if prefs.AllowHistory || prefs.AllowErrorLogs || prefs.AllowSampleRows || prefs.AllowDDL {
 		t.Fatalf("egress must default off: %+v", prefs)
 	}
 
 	prefs.Model = "qwen2.5-coder:7b"
 	prefs.APIKey = "sk-secret"
 	prefs.AllowHistory = true
+	prefs.AllowDDL = true
+	prefs.AllowSampleRows = true
+	prefs.ContextWindow = 16384
 	if err := SaveAIPrefs(path, vault, prefs); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +47,8 @@ func TestLoadAIPrefsDefaultsAndRoundTrip(t *testing.T) {
 	if warn != "" {
 		t.Fatal(warn)
 	}
-	if got.APIKey != "sk-secret" || got.Model != prefs.Model || !got.AllowHistory {
+	if got.APIKey != "sk-secret" || got.Model != prefs.Model || !got.AllowHistory ||
+		!got.AllowDDL || !got.AllowSampleRows || got.ContextWindow != 16384 {
 		t.Fatalf("round trip: %+v", got)
 	}
 	if got.APIKeyEnc == "" {

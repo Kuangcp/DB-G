@@ -94,6 +94,7 @@ func (a *root) titleBar(c *ui.Context) {
 					a.loadAIChat()
 					a.aiChat.scroll.Y = math.MaxFloat32
 				} else {
+					a.cancelAIPrepare()
 					a.stopAI()
 				}
 			}

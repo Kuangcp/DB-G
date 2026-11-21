@@ -20,16 +20,19 @@ type AIPrefs struct {
 	// APIKey 是运行时明文；不直接序列化。
 	APIKey string `json:"-"`
 	// APIKeyEnc 是落盘的 enc:v1:… 密文。
-	APIKeyEnc      string `json:"apiKey,omitempty"`
-	AllowHistory   bool   `json:"allowHistory"`
-	AllowErrorLogs bool   `json:"allowErrorLogs"`
+	APIKeyEnc       string `json:"apiKey,omitempty"`
+	AllowHistory    bool   `json:"allowHistory"`
+	AllowErrorLogs  bool   `json:"allowErrorLogs"`
+	AllowSampleRows bool   `json:"allowSampleRows"`
+	// AllowDDL 为 true 时发送当前 SQL 引用表的 DDL（默认关）。
+	AllowDDL bool `json:"allowDDL"`
 	// AITitle 为 true 时用模型生成会话标题；默认用首条消息截取。
 	AITitle bool `json:"aiTitle,omitempty"`
 	// ContextWindow 是模型上下文窗口（token）；0 = 使用 ai.DefaultContextWindow。
 	ContextWindow int `json:"contextWindow,omitempty"`
 }
 
-// DefaultAIPrefs 返回默认配置：本地 Ollama，默认只发表结构与当前 SQL。
+// DefaultAIPrefs 返回默认配置：本地 Ollama，默认只发表结构、当前 SQL 与结果形状。
 func DefaultAIPrefs() AIPrefs {
 	return AIPrefs{BaseURL: DefaultAIBaseURL}
 }

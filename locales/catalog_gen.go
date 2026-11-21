@@ -6516,11 +6516,11 @@ func (msgs Messages) AiModelPlaceholder() string {
 	return Catalog.Format(msgs.locale, "aiModelPlaceholder", nil)
 }
 
-// AiPrivacyHint says "By default only the schema and current SQL are sent; enable history or error logs only when needed."
+// AiPrivacyHint says "By default only the schema, current SQL and result shape are sent; history, errors, samples and DDL are opt-in."
 // in the language the app shows.
 func AiPrivacyHint() string { return In(i18n.Locale()).AiPrivacyHint() }
 
-// AiPrivacyHint says "By default only the schema and current SQL are sent; enable history or error logs only when needed."
+// AiPrivacyHint says "By default only the schema, current SQL and result shape are sent; history, errors, samples and DDL are opt-in."
 // in the language of msgs.
 func (msgs Messages) AiPrivacyHint() string {
 	return Catalog.Format(msgs.locale, "aiPrivacyHint", nil)
@@ -6544,6 +6544,66 @@ func AiAllowErrors() string { return In(i18n.Locale()).AiAllowErrors() }
 // in the language of msgs.
 func (msgs Messages) AiAllowErrors() string {
 	return Catalog.Format(msgs.locale, "aiAllowErrors", nil)
+}
+
+// AiAllowSamples says "Send current result sample rows (up to 3)"
+// in the language the app shows.
+func AiAllowSamples() string { return In(i18n.Locale()).AiAllowSamples() }
+
+// AiAllowSamples says "Send current result sample rows (up to 3)"
+// in the language of msgs.
+func (msgs Messages) AiAllowSamples() string {
+	return Catalog.Format(msgs.locale, "aiAllowSamples", nil)
+}
+
+// AiAllowDDL says "Send DDL for tables referenced by the current SQL"
+// in the language the app shows.
+func AiAllowDDL() string { return In(i18n.Locale()).AiAllowDDL() }
+
+// AiAllowDDL says "Send DDL for tables referenced by the current SQL"
+// in the language of msgs.
+func (msgs Messages) AiAllowDDL() string {
+	return Catalog.Format(msgs.locale, "aiAllowDDL", nil)
+}
+
+// AiPreparingContext says "Preparing context…"
+// in the language the app shows.
+func AiPreparingContext() string { return In(i18n.Locale()).AiPreparingContext() }
+
+// AiPreparingContext says "Preparing context…"
+// in the language of msgs.
+func (msgs Messages) AiPreparingContext() string {
+	return Catalog.Format(msgs.locale, "aiPreparingContext", nil)
+}
+
+// AiDebugResult says "result {rows} rows · {cols} cols"
+// in the language the app shows.
+func AiDebugResult(rows int, cols int) string { return In(i18n.Locale()).AiDebugResult(rows, cols) }
+
+// AiDebugResult says "result {rows} rows · {cols} cols"
+// in the language of msgs.
+func (msgs Messages) AiDebugResult(rows int, cols int) string {
+	return Catalog.Format(msgs.locale, "aiDebugResult", map[string]any{"rows": rows, "cols": cols})
+}
+
+// AiDebugPlan says "execution plan"
+// in the language the app shows.
+func AiDebugPlan() string { return In(i18n.Locale()).AiDebugPlan() }
+
+// AiDebugPlan says "execution plan"
+// in the language of msgs.
+func (msgs Messages) AiDebugPlan() string {
+	return Catalog.Format(msgs.locale, "aiDebugPlan", nil)
+}
+
+// AiDebugDDL says "DDL {n} tables"
+// in the language the app shows.
+func AiDebugDDL(n int) string { return In(i18n.Locale()).AiDebugDDL(n) }
+
+// AiDebugDDL says "DDL {n} tables"
+// in the language of msgs.
+func (msgs Messages) AiDebugDDL(n int) string {
+	return Catalog.Format(msgs.locale, "aiDebugDDL", map[string]any{"n": n})
 }
 
 // AiAutoTitle says "Generate conversation titles with AI (one extra call; off by default)"
@@ -6936,16 +6996,16 @@ func (msgs Messages) AiContextTokens(tokens int, limit int) string {
 	return Catalog.Format(msgs.locale, "aiContextTokens", map[string]any{"tokens": tokens, "limit": limit})
 }
 
-// AiContextDropped says "trimmed {tables} tables · {cols} columns · {dialogue} dialogue · {history} history · {errors} errors · {samples}…"
+// AiContextDropped says "trimmed {tables} tables · {cols} columns · {dialogue} dialogue · {ddl} DDL · {history} history · {errors} errors…"
 // in the language the app shows.
-func AiContextDropped(tables int, cols int, dialogue int, history int, errors int, samples int) string {
-	return In(i18n.Locale()).AiContextDropped(tables, cols, dialogue, history, errors, samples)
+func AiContextDropped(tables int, cols int, dialogue int, ddl int, history int, errors int, samples int) string {
+	return In(i18n.Locale()).AiContextDropped(tables, cols, dialogue, ddl, history, errors, samples)
 }
 
-// AiContextDropped says "trimmed {tables} tables · {cols} columns · {dialogue} dialogue · {history} history · {errors} errors · {samples}…"
+// AiContextDropped says "trimmed {tables} tables · {cols} columns · {dialogue} dialogue · {ddl} DDL · {history} history · {errors} errors…"
 // in the language of msgs.
-func (msgs Messages) AiContextDropped(tables int, cols int, dialogue int, history int, errors int, samples int) string {
-	return Catalog.Format(msgs.locale, "aiContextDropped", map[string]any{"tables": tables, "cols": cols, "dialogue": dialogue, "history": history, "errors": errors, "samples": samples})
+func (msgs Messages) AiContextDropped(tables int, cols int, dialogue int, ddl int, history int, errors int, samples int) string {
+	return Catalog.Format(msgs.locale, "aiContextDropped", map[string]any{"tables": tables, "cols": cols, "dialogue": dialogue, "ddl": ddl, "history": history, "errors": errors, "samples": samples})
 }
 
 // AiContextTextTrimmed says "SQL/plan text truncated"
