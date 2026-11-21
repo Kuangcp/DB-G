@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -28,7 +30,15 @@ func NewOpenAIProvider(cfg OpenAIConfig) *OpenAIProvider {
 	if base := strings.TrimSpace(cfg.BaseURL); base != "" {
 		cc.BaseURL = strings.TrimRight(base, "/")
 	}
-	cc.HTTPClient = &http.Client{}
+	// 流式请求不能用 Client.Timeout（会截断长回答），只限制建连/握手/响应头；
+	// 流中长时间无事件由 ui 侧的空闲看门狗处理。
+	cc.HTTPClient = &http.Client{Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 15 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}}
 	return &OpenAIProvider{client: openai.NewClientWithConfig(cc)}
 }
 

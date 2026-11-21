@@ -141,14 +141,16 @@ type ContextSnapshot struct {
 	Connection ConnInfo
 	Tables     []TableContext
 	// Dialogue 是最近几轮对话（user/assistant），只用于 Chat；不包含本次问题。
-	Dialogue  []Message
-	ActiveSQL string
-	Selection string
-	Result    *ResultContext
-	Plan      *PlanContext
-	History   []HistoryItem
-	Errors    []ErrorItem
-	Samples   []TableSample
+	Dialogue []Message
+	// DialogueSummary 是更早对话的确定性摘要，放在 system 消息里。
+	DialogueSummary string
+	ActiveSQL       string
+	Selection       string
+	Result          *ResultContext
+	Plan            *PlanContext
+	History         []HistoryItem
+	Errors          []ErrorItem
+	Samples         []TableSample
 	// Language 是界面语言（BCP 47 标签）；提示词据此要求模型用同语言回答。
 	Language string
 }

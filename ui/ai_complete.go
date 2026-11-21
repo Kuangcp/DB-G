@@ -91,7 +91,7 @@ func (a *root) requestAICompletion() {
 		return b.String(), streamErr
 	}
 	if a.win == nil {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			st.loading = false
 			st.cancel = nil
@@ -106,7 +106,7 @@ func (a *root) requestAICompletion() {
 	}
 	win := a.win
 	go func() {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			if ctx.Err() == nil {
 				app.LogWarn("ai", "completion failed", "err", err.Error())

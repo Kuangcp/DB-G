@@ -75,7 +75,7 @@ func (a *root) fixErrorSQL() {
 		return b.String(), streamErr
 	}
 	if a.win == nil {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			a.aiFix.loading = false
 			a.aiFix.err = err.Error()
@@ -90,7 +90,7 @@ func (a *root) fixErrorSQL() {
 	}
 	win := a.win
 	go func() {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			if ctx.Err() == nil {
 				app.LogWarn("ai", "fix stream failed", "err", err.Error())

@@ -6324,6 +6324,16 @@ func (msgs Messages) AiKindChat() string {
 	return Catalog.Format(msgs.locale, "aiKindChat", nil)
 }
 
+// AiTimeout says "AI response timed out; try again"
+// in the language the app shows.
+func AiTimeout() string { return In(i18n.Locale()).AiTimeout() }
+
+// AiTimeout says "AI response timed out; try again"
+// in the language of msgs.
+func (msgs Messages) AiTimeout() string {
+	return Catalog.Format(msgs.locale, "aiTimeout", nil)
+}
+
 // AiStopped says "Stopped"
 // in the language the app shows.
 func AiStopped() string { return In(i18n.Locale()).AiStopped() }
@@ -7028,6 +7038,18 @@ func AiDebugTablesCols(tables int, cols int) string {
 // in the language of msgs.
 func (msgs Messages) AiDebugTablesCols(tables int, cols int) string {
 	return Catalog.Format(msgs.locale, "aiDebugTablesCols", map[string]any{"tables": tables, "cols": cols})
+}
+
+// AiDialogueSummary says "Earlier conversation ({n} messages omitted). User asked: {asks}"
+// in the language the app shows.
+func AiDialogueSummary(n int, asks string) string {
+	return In(i18n.Locale()).AiDialogueSummary(n, asks)
+}
+
+// AiDialogueSummary says "Earlier conversation ({n} messages omitted). User asked: {asks}"
+// in the language of msgs.
+func (msgs Messages) AiDialogueSummary(n int, asks string) string {
+	return Catalog.Format(msgs.locale, "aiDialogueSummary", map[string]any{"n": n, "asks": asks})
 }
 
 // AiDebugDialogue says "dialogue {n}"

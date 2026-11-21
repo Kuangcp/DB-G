@@ -13,6 +13,7 @@ import (
 
 	"db-g/ai"
 	"db-g/app"
+	"db-g/engine"
 	"db-g/locales"
 )
 
@@ -90,19 +91,38 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 			snap.Selection = sel
 		}
 	}
-	if a.catalog != nil {
+	if connID != "" {
 		key, schema := a.completionScope(connID)
-		tables, views, ok := a.catalog.objects(key)
-		if ok {
-			const maxTables = 200
-			for _, group := range [][]string{tables, views} {
-				for _, name := range group {
-					if len(snap.Tables) >= maxTables {
-						break
-					}
-					t := ai.TableContext{Name: name, Schema: schema}
+		var tables, views []string
+		if a.catalog != nil {
+			tables, views, _ = a.catalog.objects(key)
+		}
+		// 补全目录没加载时退回对象树/元数据缓存，AI 不再拿到空 schema。
+		if len(tables)+len(views) == 0 {
+			if m := a.treeData[objectTreeKey(connID, schema)]; m != nil {
+				for _, o := range m[engine.ObjectTable] {
+					tables = append(tables, o.Name)
+				}
+				for _, o := range m[engine.ObjectView] {
+					views = append(views, o.Name)
+				}
+			}
+		}
+		const maxTables = 200
+		seen := map[string]bool{}
+		for _, group := range [][]string{tables, views} {
+			for _, name := range group {
+				if len(snap.Tables) >= maxTables || name == "" || seen[strings.ToLower(name)] {
+					continue
+				}
+				seen[strings.ToLower(name)] = true
+				t := ai.TableContext{Name: name, Schema: schema}
+				if a.catalog != nil {
 					if cols, ok := a.catalog.columns(key, name); ok {
-						for _, c := range cols {
+						for i, c := range cols {
+							if i >= aiHydrateColumnsMax {
+								break
+							}
 							t.Columns = append(t.Columns, ai.ColumnContext{
 								Name: c.Name, Type: c.Type,
 								Nullable: c.Nullable, PrimaryKey: c.PrimaryKey,
@@ -112,20 +132,20 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 							}
 						}
 					}
-					snap.Tables = append(snap.Tables, t)
 				}
+				snap.Tables = append(snap.Tables, t)
 			}
 		}
 	}
 	if a.aiPrefs.AllowHistory && a.history != nil && connID != "" {
 		for _, h := range a.history.List(connID, 20) {
 			snap.History = append(snap.History, ai.HistoryItem{
-				SQL: h.SQL, OK: h.OK, Err: h.Err, Rows: h.Rows,
+				SQL: ai.Redact(h.SQL), OK: h.OK, Err: ai.Redact(h.Err), Rows: h.Rows,
 			})
 		}
 	}
 	if a.aiPrefs.AllowErrorLogs && a.consoleErr != "" {
-		snap.Errors = append(snap.Errors, ai.ErrorItem{SQL: snap.ActiveSQL, Err: a.consoleErr})
+		snap.Errors = append(snap.Errors, ai.ErrorItem{SQL: ai.Redact(snap.ActiveSQL), Err: ai.Redact(a.consoleErr)})
 	}
 	return snap
 }
@@ -136,28 +156,47 @@ const maxAIDialogueMessages = 8
 // aiDialogue 把面板里已完成的消息转成模型对话历史，只保留最近几轮。
 // 正在流式生成或没有正文的消息不发送。
 func (a *root) aiDialogue() []ai.Message {
-	var out []ai.Message
+	_, msgs := a.aiDialogueParts()
+	return msgs
+}
+
+// aiDialogueParts 把长对话拆成“更早的确定性摘要 + 最近 8 条消息”。
+func (a *root) aiDialogueParts() (string, []ai.Message) {
+	var all []ai.Message
 	for _, m := range a.aiChat.messages {
 		if strings.TrimSpace(m.text) == "" || !m.done {
 			continue
 		}
 		switch m.role {
 		case "user":
-			out = append(out, ai.Message{Role: ai.RoleUser, Content: m.text})
+			all = append(all, ai.Message{Role: ai.RoleUser, Content: m.text})
 		case "assistant":
-			out = append(out, ai.Message{Role: ai.RoleAssistant, Content: m.text})
+			all = append(all, ai.Message{Role: ai.RoleAssistant, Content: m.text})
 		}
 	}
-	if len(out) > maxAIDialogueMessages {
-		out = out[len(out)-maxAIDialogueMessages:]
+	if len(all) <= maxAIDialogueMessages {
+		return "", all
 	}
-	return out
+	older := all[:len(all)-maxAIDialogueMessages]
+	var asks []string
+	for _, m := range older {
+		if m.Role != ai.RoleUser {
+			continue
+		}
+		q := strings.Join(strings.Fields(m.Content), " ")
+		asks = append(asks, truncateRunes(q, 80))
+		if len(asks) >= 3 {
+			break
+		}
+	}
+	summary := locales.AiDialogueSummary(len(older), strings.Join(asks, " / "))
+	return summary, all[len(all)-maxAIDialogueMessages:]
 }
 
 // chatSnapshot 是 Chat/预览专用快照：在普通上下文上附最近对话。
 func (a *root) chatSnapshot() ai.ContextSnapshot {
 	snap := a.aiSnapshot()
-	snap.Dialogue = a.aiDialogue()
+	snap.DialogueSummary, snap.Dialogue = a.aiDialogueParts()
 	snap.Result = a.aiResultContext()
 	snap.Plan = a.aiPlanContext()
 	if connID := a.activeConnID(); connID != "" {
@@ -229,7 +268,7 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 		MaxTokens:   1200,
 	}
 	if a.win == nil {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			a.aiChat.streaming = false
 			a.aiChat.cancel = nil
@@ -245,7 +284,7 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 	}
 	win := a.win
 	go func() {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			if ctx.Err() == nil {
 				app.LogWarn("ai", "stream failed", "model", model, "err", err.Error())
@@ -599,7 +638,7 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 	}
 	req := ai.Request{Model: a.aiPrefs.Model, Messages: msgs, Temperature: 0, MaxTokens: 48}
 	if a.win == nil {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err == nil {
 			apply(read(ch))
 		}
@@ -607,7 +646,7 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 	}
 	win := a.win
 	go func() {
-		ch, err := provider.Stream(ctx, req)
+		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			return
 		}

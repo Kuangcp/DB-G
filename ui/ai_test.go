@@ -618,6 +618,10 @@ func TestAIDialogueKeepsRecentMessages(t *testing.T) {
 	if got[0].Content != "msg-04" || got[len(got)-1].Content != "msg-11" {
 		t.Fatalf("dialogue window: %+v", got)
 	}
+	summary, _ := a.aiDialogueParts()
+	if !strings.Contains(summary, "msg-00") || !strings.Contains(summary, "省略") {
+		t.Fatalf("older dialogue summary: %q", summary)
+	}
 }
 
 func TestAIResultContextShapeAndSamples(t *testing.T) {

@@ -223,6 +223,16 @@ func TestRankTablesUnicodeAndForeignKeyExpansion(t *testing.T) {
 	}
 }
 
+func TestBuildChatIncludesDialogueSummary(t *testing.T) {
+	msgs, _ := BuildChat(ContextSnapshot{
+		Connection:      ConnInfo{Kind: "sqlite"},
+		DialogueSummary: "更早的对话：用户问过 users 表结构",
+	}, "现在呢", Budget{})
+	if !strings.Contains(msgs[0].Content, "更早的对话摘要") || !strings.Contains(msgs[0].Content, "users 表结构") {
+		t.Fatalf("system prompt missing summary:\n%s", msgs[0].Content)
+	}
+}
+
 func TestQueryTokensUnicode(t *testing.T) {
 	tokens := queryTokens("查询用户订单 user_profile")
 	joined := strings.Join(tokens, ",")
@@ -230,5 +240,20 @@ func TestQueryTokensUnicode(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in %v", want, tokens)
 		}
+	}
+}
+
+func TestPromptFenceEscapesBackticks(t *testing.T) {
+	target := "select '```sql'"
+	msgs := BuildRewriteMessages(ContextSnapshot{
+		Connection: ConnInfo{Kind: "sqlite"},
+		Tables:     []TableContext{{Name: "t", DDL: "CREATE TABLE t (v TEXT DEFAULT '```')"}},
+	}, target, "保持语义")
+	body := msgs[1].Content
+	if !strings.Contains(body, "````sql") {
+		t.Fatalf("DDL fence must grow for embedded backticks:\n%s", body)
+	}
+	if !strings.Contains(body, "````sql\n"+target+"\n````") {
+		t.Fatalf("rewrite target fence must grow:\n%s", body)
 	}
 }

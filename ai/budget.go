@@ -248,6 +248,11 @@ func trimChatText(s *ContextSnapshot, extras *[]string, rep *PromptReport) bool 
 		rep.TruncatedSQL = true
 		return true
 	}
+	if len(s.DialogueSummary) > 128 {
+		s.DialogueSummary = truncateMiddleRunes(s.DialogueSummary, len([]rune(s.DialogueSummary))/2)
+		rep.TruncatedExtra = true
+		return true
+	}
 	if len(s.Selection) > 64 {
 		s.Selection = truncateMiddleRunes(s.Selection, len([]rune(s.Selection))/2)
 		rep.TruncatedSelection = true

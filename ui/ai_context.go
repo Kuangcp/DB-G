@@ -12,12 +12,15 @@ import (
 )
 
 const (
-	aiDDLTTL        = 10 * time.Minute
-	aiDDLMaxTables  = 4
-	aiDDLTimeout    = 5 * time.Second
-	aiResultSamples = 3
-	aiSampleColumns = 20
-	aiSampleRunes   = 120
+	aiDDLTTL            = 10 * time.Minute
+	aiDDLMaxTables      = 4
+	aiDDLTimeout        = 5 * time.Second
+	aiHydrateTimeout    = 8 * time.Second
+	aiHydrateTables     = 8
+	aiHydrateColumnsMax = 80
+	aiResultSamples     = 3
+	aiSampleColumns     = 20
+	aiSampleRunes       = 120
 )
 
 // aiDDLEntry 是相关表 DDL 的内存缓存；只服务 AI 上下文，不落盘。
@@ -79,7 +82,7 @@ func (a *root) aiResultContext() *ai.ResultContext {
 		for _, row := range res.Rows[:rows] {
 			vals := make([]string, 0, cols)
 			for c := 0; c < cols; c++ {
-				vals = append(vals, truncateRunes(cellText(row[c]), aiSampleRunes))
+				vals = append(vals, ai.Redact(truncateRunes(cellText(row[c]), aiSampleRunes)))
 			}
 			out.Sample = append(out.Sample, vals)
 		}
@@ -96,6 +99,17 @@ func (a *root) aiPlanContext() *ai.PlanContext {
 		SQL: a.plan.sql, Analyze: a.plan.analyze,
 		Text: plan.Text(a.plan.nodes),
 	}
+}
+
+// hasColumnLister / hasSchemaColumnLister 避免在多个分支重复类型断言。
+func hasColumnLister(sess engine.Session) bool {
+	_, ok := sess.(engine.ColumnLister)
+	return ok
+}
+
+func hasSchemaColumnLister(sess engine.Session) bool {
+	_, ok := sess.(engine.SchemaColumnLister)
+	return ok
 }
 
 // aiDDLKey 是缓存键：连接 + schema + 表名（大小写不敏感）。
@@ -276,8 +290,8 @@ func (a *root) attachAIDDL(snap *ai.ContextSnapshot, connID string, reqs []aiDDL
 	}
 }
 
-// prepareAIContext 在发送/预览前补齐缺失的外键与 DDL，然后在主线程调用 done。
-// 外键用于检索扩展；DDL 只在设置开启时加载。两者都没有缺失时不产生额外延迟。
+// prepareAIContext 在发送/预览前补齐缺失的表/列、外键与 DDL，然后在主线程调用 done。
+// 外键用于检索扩展；DDL 只在设置开启时加载。没有缺失时不产生额外延迟。
 func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done func(ai.ContextSnapshot)) {
 	if a.aiChat.preparing {
 		done(snap)
@@ -288,6 +302,7 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done f
 		done(snap)
 		return
 	}
+	key, schemaDefault := a.completionScope(connID)
 	// 缓存命中的部分先挂上；缺失的再异步补。
 	relReqs := a.aiRelationRequests(question, snap, connID)
 	a.attachAIRelations(&snap, relReqs)
@@ -308,7 +323,20 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done f
 			}
 		}
 	}
-	if len(missingRel) == 0 && len(missingDDL) == 0 {
+	// 表名/列缺失时也走同一轮后台补齐。
+	needTables := len(snap.Tables) == 0
+	needColumns := false
+	for _, t := range ai.RankTables(question, snap.Tables, snap.ActiveSQL, 8) {
+		if len(t.Columns) == 0 {
+			needColumns = true
+			break
+		}
+	}
+	if needTables {
+		// 新加载出来的表也要在同一轮补列，避免第一次发送只有表名。
+		needColumns = true
+	}
+	if len(missingRel) == 0 && len(missingDDL) == 0 && !needTables && !needColumns {
 		done(snap)
 		return
 	}
@@ -334,18 +362,75 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done f
 	if !hasFK || !sess.Caps().Has(engine.CapForeignKeys) {
 		missingRel = nil
 	}
-	if len(missingRel) == 0 && len(missingDDL) == 0 {
+	if needTables && (!sess.Caps().Has(engine.CapObjects)) {
+		needTables = false
+	}
+	if needColumns && (!sess.Caps().Has(engine.CapColumns) ||
+		(!hasSchemaColumnLister(sess) && !hasColumnLister(sess))) {
+		needColumns = false
+	}
+	if !needTables && !needColumns && len(missingRel) == 0 && len(missingDDL) == 0 {
 		done(snap)
 		return
 	}
 	type prepared struct {
-		ddl  map[string]string
-		refs map[string][]ai.TableRef
+		ddl          map[string]string
+		refs         map[string][]ai.TableRef
+		tables       []ai.TableContext
+		tableNames   []string
+		viewNames    []string
+		tablesLoaded bool
+		columns      map[string][]engine.Column
 	}
 	load := func() prepared {
-		ctx, cancel := context.WithTimeout(context.Background(), aiDDLTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), aiHydrateTimeout)
 		defer cancel()
-		out := prepared{ddl: map[string]string{}, refs: map[string][]ai.TableRef{}}
+		out := prepared{
+			ddl: map[string]string{}, refs: map[string][]ai.TableRef{},
+			columns: map[string][]engine.Column{},
+		}
+		local := snap.Tables
+		if needTables {
+			tables, views, err := objectsOfIn(sess, schemaDefault)
+			if err != nil {
+				app.LogWarn("ai", "context tables failed", "conn", p.ID, "err", err.Error())
+			} else if len(tables)+len(views) > 0 {
+				out.tableNames, out.viewNames, out.tablesLoaded = tables, views, true
+				local = make([]ai.TableContext, 0, len(tables)+len(views))
+				for _, name := range tables {
+					if len(local) >= 200 {
+						break
+					}
+					local = append(local, ai.TableContext{Name: name, Schema: schemaDefault})
+				}
+				for _, name := range views {
+					if len(local) >= 200 {
+						break
+					}
+					local = append(local, ai.TableContext{Name: name, Schema: schemaDefault})
+				}
+				out.tables = local
+			}
+		}
+		if needColumns && len(local) > 0 {
+			loaded := 0
+			for _, t := range ai.RankTables(question, local, snap.ActiveSQL, aiHydrateTables) {
+				if len(t.Columns) > 0 || loaded >= aiHydrateTables {
+					continue
+				}
+				schema := t.Schema
+				if schema == "" {
+					schema = schemaDefault
+				}
+				cols, err := columnsOf(sess, schema, t.Name)
+				if err != nil {
+					app.LogWarn("ai", "context columns failed", "conn", p.ID, "table", t.Name, "err", err.Error())
+					continue
+				}
+				out.columns[strings.ToLower(t.Name)] = cols
+				loaded++
+			}
+		}
 		for _, req := range missingDDL {
 			var ddl string
 			var err error
@@ -397,6 +482,33 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done f
 		}
 		for key, refs := range got.refs {
 			a.aiRelations[key] = aiRelationEntry{refs: refs, at: now}
+		}
+		if got.tablesLoaded {
+			snap.Tables = got.tables
+			if a.catalog != nil {
+				a.catalog.finish(key, got.tableNames, got.viewNames, a.connKindOf(connID))
+			}
+		}
+		for i := range snap.Tables {
+			t := &snap.Tables[i]
+			if cols, ok := got.columns[strings.ToLower(t.Name)]; ok {
+				t.Columns = nil
+				t.PrimaryKey = nil
+				for i, c := range cols {
+					if i >= aiHydrateColumnsMax {
+						break
+					}
+					t.Columns = append(t.Columns, ai.ColumnContext{
+						Name: c.Name, Type: c.Type, Nullable: c.Nullable, PrimaryKey: c.PrimaryKey,
+					})
+					if c.PrimaryKey {
+						t.PrimaryKey = append(t.PrimaryKey, c.Name)
+					}
+				}
+				if a.catalog != nil {
+					a.catalog.finishColumns(key, t.Name, cols, a.connKindOf(connID))
+				}
+			}
 		}
 		a.attachAIDDL(&snap, connID, ddlReqs)
 		a.attachAIRelations(&snap, relReqs)
