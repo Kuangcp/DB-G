@@ -110,6 +110,7 @@ type root struct {
 	vault             *app.Vault
 	aiTestProvider    ai.Provider // 测试注入；nil = 按 aiPrefs 创建
 	aiChat            aiChatState
+	aiTokenScale      map[string]float64 // model → provider 实际/估算比例
 	aiLintOpen        bool
 	aiLintReport      aiSQLReport
 	aiDDL             map[string]aiDDLEntry      // 相关表 DDL 缓存（AI 上下文用）

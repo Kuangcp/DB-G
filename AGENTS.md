@@ -192,8 +192,8 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 - **不翻译**：日志、驱动/数据库服务端错误（原样展示，不二次包装）、SQL/标识符/数据、持久化枚举 ID。
   更新弹窗由 mygo 自己按 `App.Locale()` 取文案，不要另写一套。
 - `app/` 的用户可见错误/警告可以用 `db-g/locales`（生成叶子包）；哨兵错误用 `app.localeError`
-  包一层，保住 `errors.Is` 的同一性。`ai/` 的提示词不走 catalog，由 `ContextSnapshot.Language`
-  要求模型跟随界面语言回答。
+  包一层，保住 `errors.Is` 的同一性。`ai/` 的提示词不走 catalog：system 与段落标题用英文基础模板，
+  由 `ContextSnapshot.Language` 追加语言指令要求模型跟随界面语言回答。
 
 ## UI 约定（★ 必读）
 

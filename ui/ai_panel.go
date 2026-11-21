@@ -106,6 +106,9 @@ func (a *root) aiPanel(c *ui.Context) {
 				a.openAIPreview()
 			}
 			ui.Spacer(c)
+			if st.estimate > 0 {
+				ui.Text(c, locales.AiTokenEstimate(st.estimate)).FontSize(10.5).TextColor(t.TextMuted)
+			}
 			if st.usage.TotalTokens > 0 {
 				ui.Text(c, locales.AiTokenUsage(st.usage.PromptTokens, st.usage.CompletionTokens, st.usage.TotalTokens)).
 					FontSize(10.5).TextColor(t.TextMuted)

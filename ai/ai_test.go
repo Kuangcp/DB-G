@@ -107,7 +107,7 @@ func TestBuildMessagesRanksTablesAndKeepsEgress(t *testing.T) {
 			t.Fatalf("context missing %q:\n%s", want, body)
 		}
 	}
-	if !strings.Contains(body, "最近查询") {
+	if !strings.Contains(body, "Recent Queries") {
 		t.Fatalf("history should be included when the snapshot carries it:\n%s", body)
 	}
 }
@@ -182,7 +182,7 @@ func TestBuildRewriteMessagesKeepsTargetOnce(t *testing.T) {
 		t.Fatalf("messages: %+v", msgs)
 	}
 	body := msgs[1].Content
-	for _, want := range []string{"只保留需要的列", "# 待改写 SQL", target, "users"} {
+	for _, want := range []string{"只保留需要的列", "# SQL to Rewrite", target, "users"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("rewrite prompt missing %q:\n%s", want, body)
 		}
@@ -190,7 +190,7 @@ func TestBuildRewriteMessagesKeepsTargetOnce(t *testing.T) {
 	if strings.Count(body, target) != 1 {
 		t.Fatalf("target should appear once, got %d:\n%s", strings.Count(body, target), body)
 	}
-	if strings.Contains(body, "# 当前选区") || strings.Contains(body, "# 当前 SQL") {
+	if strings.Contains(body, "# Current Selection") || strings.Contains(body, "# Current SQL") {
 		t.Fatalf("duplicate current-SQL sections:\n%s", body)
 	}
 }
@@ -228,7 +228,7 @@ func TestBuildChatIncludesDialogueSummary(t *testing.T) {
 		Connection:      ConnInfo{Kind: "sqlite"},
 		DialogueSummary: "更早的对话：用户问过 users 表结构",
 	}, "现在呢", Budget{})
-	if !strings.Contains(msgs[0].Content, "更早的对话摘要") || !strings.Contains(msgs[0].Content, "users 表结构") {
+	if !strings.Contains(msgs[0].Content, "Earlier conversation summary") || !strings.Contains(msgs[0].Content, "users 表结构") {
 		t.Fatalf("system prompt missing summary:\n%s", msgs[0].Content)
 	}
 }

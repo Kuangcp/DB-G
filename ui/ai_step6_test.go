@@ -69,7 +69,7 @@ func TestAIContextHydratesTablesAndColumns(t *testing.T) {
 		t.Fatalf("precondition: catalog/tree should be empty: %+v", snap.Tables)
 	}
 	var got ai.ContextSnapshot
-	a.prepareAIContext("users 有哪些列", snap, func(s ai.ContextSnapshot) { got = s })
+	a.prepareAIContext("users 有哪些列", snap, false, func(s ai.ContextSnapshot) { got = s })
 	if fake.objectCalls == 0 || fake.columnCalls == 0 {
 		t.Fatalf("hydrate calls: objects=%d columns=%d", fake.objectCalls, fake.columnCalls)
 	}
@@ -90,7 +90,7 @@ func TestAIContextHydratesTablesAndColumns(t *testing.T) {
 		t.Fatalf("catalog not warmed: %v %v", tables, ok)
 	}
 	objects, columns := fake.objectCalls, fake.columnCalls
-	a.prepareAIContext("users 有哪些列", a.chatSnapshot(), func(ai.ContextSnapshot) {})
+	a.prepareAIContext("users 有哪些列", a.chatSnapshot(), false, func(ai.ContextSnapshot) {})
 	if fake.objectCalls != objects || fake.columnCalls != columns {
 		t.Fatalf("second prepare must use cache: objects %d->%d columns %d->%d",
 			objects, fake.objectCalls, columns, fake.columnCalls)

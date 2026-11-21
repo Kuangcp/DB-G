@@ -169,7 +169,7 @@ func TestBuildChatIncludesResultPlanAndDDL(t *testing.T) {
 	}
 	msgs, rep := BuildChat(snapshot, "解释一下", Budget{})
 	body := msgs[1].Content
-	for _, want := range []string{"当前结果集", "列: id bigint", "当前页行数: 2", "执行计划（EXPLAIN ANALYZE）",
+	for _, want := range []string{"Current Result", "Columns: id bigint", "Current page rows: 2", "Execution Plan (EXPLAIN ANALYZE)",
 		"Seq Scan on users", "DDL:", "CREATE TABLE users"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, body)
@@ -205,5 +205,38 @@ func TestBudgetDropsDDLBeforeSchema(t *testing.T) {
 	}
 	if rep.Tokens > rep.Limit {
 		t.Fatalf("over budget: %d > %d", rep.Tokens, rep.Limit)
+	}
+}
+
+func TestCompactSchemaAndForeignKeyAnnotation(t *testing.T) {
+	snapshot := ContextSnapshot{
+		Connection: ConnInfo{Kind: "postgres"},
+		Tables: []TableContext{
+			{Name: "users", Columns: []ColumnContext{
+				{Name: "id", Type: "bigint", PrimaryKey: true},
+				{Name: "name", Type: "text"},
+			}},
+			{Name: "orders", Columns: []ColumnContext{
+				{Name: "id", Type: "bigint", PrimaryKey: true},
+				{Name: "user_id", Type: "bigint", Nullable: true},
+			}, References: []TableRef{{Name: "users", Column: "user_id", RefColumn: "id"}}},
+		},
+	}
+	msgs, _ := BuildChat(snapshot, "orders", Budget{})
+	body := msgs[1].Content
+	if !strings.Contains(body, "orders(id bigint PK, user_id bigint -> users.id)") {
+		t.Fatalf("compact schema missing:\n%s", body)
+	}
+	if strings.Contains(body, "- id bigint") {
+		t.Fatalf("old verbose schema still present:\n%s", body)
+	}
+}
+
+func TestBudgetEstimateScaleShrinksLimit(t *testing.T) {
+	plain := Budget{ContextWindow: 8192, MaxOutput: 1200}
+	scaled := plain
+	scaled.EstimateScale = 1.5
+	if scaled.Limit() >= plain.Limit() {
+		t.Fatalf("scaled limit = %d, plain = %d", scaled.Limit(), plain.Limit())
 	}
 }

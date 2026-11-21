@@ -106,7 +106,7 @@ func TestDiagnosePlanSendsExecutionContext(t *testing.T) {
 		t.Fatalf("diagnose chat: open=%v messages=%+v", a.aiChat.open, a.aiChat.messages)
 	}
 	p := a.aiTestProvider.(*fakeAIProvider)
-	if !strings.Contains(p.req.Messages[1].Content, "执行计划") ||
+	if !strings.Contains(p.req.Messages[1].Content, "Execution Plan") ||
 		!strings.Contains(p.req.Messages[1].Content, "SCAN users") {
 		t.Fatalf("plan missing from prompt:\n%s", p.req.Messages[1].Content)
 	}

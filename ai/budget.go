@@ -17,6 +17,8 @@ const DefaultOutputReserve = 1200
 type Budget struct {
 	ContextWindow int
 	MaxOutput     int
+	// EstimateScale 是按 provider 实际 usage 校准后的估算倍率；>1 时收紧预算。
+	EstimateScale float64
 }
 
 // Limit 返回输入侧可用 token 上限：窗口减输出预留，再留一点协议余量。
@@ -30,6 +32,9 @@ func (b Budget) Limit() int {
 		out = DefaultOutputReserve
 	}
 	limit := win - out - 512
+	if b.EstimateScale > 1.05 {
+		limit = int(float64(limit) / b.EstimateScale)
+	}
 	if limit < 512 {
 		limit = 512
 	}

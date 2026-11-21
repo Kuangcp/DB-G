@@ -59,7 +59,7 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 		t.Fatalf("result: %q", got)
 	}
 	body := p.req.Messages[1].Content
-	for _, want := range []string{"待改写 SQL", "只查 id", sql} {
+	for _, want := range []string{"SQL to Rewrite", "只查 id", sql} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, body)
 		}

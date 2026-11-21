@@ -6408,6 +6408,16 @@ func (msgs Messages) AiSelfCheckUnknownColumn(column string, table string) strin
 	return Catalog.Format(msgs.locale, "aiSelfCheckUnknownColumn", map[string]any{"column": column, "table": table})
 }
 
+// AiTokenEstimate says "estimated prompt ~{n}"
+// in the language the app shows.
+func AiTokenEstimate(n int) string { return In(i18n.Locale()).AiTokenEstimate(n) }
+
+// AiTokenEstimate says "estimated prompt ~{n}"
+// in the language of msgs.
+func (msgs Messages) AiTokenEstimate(n int) string {
+	return Catalog.Format(msgs.locale, "aiTokenEstimate", map[string]any{"n": n})
+}
+
 // AiTokenUsage says "prompt {prompt} · completion {completion} · total {total}"
 // in the language the app shows.
 func AiTokenUsage(prompt int, completion int, total int) string {
@@ -6780,6 +6790,46 @@ func AiAllowDDL() string { return In(i18n.Locale()).AiAllowDDL() }
 // in the language of msgs.
 func (msgs Messages) AiAllowDDL() string {
 	return Catalog.Format(msgs.locale, "aiAllowDDL", nil)
+}
+
+// AiCtxDDL says "DDL"
+// in the language the app shows.
+func AiCtxDDL() string { return In(i18n.Locale()).AiCtxDDL() }
+
+// AiCtxDDL says "DDL"
+// in the language of msgs.
+func (msgs Messages) AiCtxDDL() string {
+	return Catalog.Format(msgs.locale, "aiCtxDDL", nil)
+}
+
+// AiCtxSamples says "Samples"
+// in the language the app shows.
+func AiCtxSamples() string { return In(i18n.Locale()).AiCtxSamples() }
+
+// AiCtxSamples says "Samples"
+// in the language of msgs.
+func (msgs Messages) AiCtxSamples() string {
+	return Catalog.Format(msgs.locale, "aiCtxSamples", nil)
+}
+
+// AiCtxHistory says "History"
+// in the language the app shows.
+func AiCtxHistory() string { return In(i18n.Locale()).AiCtxHistory() }
+
+// AiCtxHistory says "History"
+// in the language of msgs.
+func (msgs Messages) AiCtxHistory() string {
+	return Catalog.Format(msgs.locale, "aiCtxHistory", nil)
+}
+
+// AiCtxErrors says "Errors"
+// in the language the app shows.
+func AiCtxErrors() string { return In(i18n.Locale()).AiCtxErrors() }
+
+// AiCtxErrors says "Errors"
+// in the language of msgs.
+func (msgs Messages) AiCtxErrors() string {
+	return Catalog.Format(msgs.locale, "aiCtxErrors", nil)
 }
 
 // AiPreparingContext says "Preparing context…"

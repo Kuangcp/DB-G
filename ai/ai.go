@@ -84,10 +84,12 @@ type TableContext struct {
 	References []TableRef
 }
 
-// TableRef 是另一张表的引用（schema 可空）。
+// TableRef 是另一张表的引用（schema 可空）；Column/RefColumn 用于提示词标注外键。
 type TableRef struct {
-	Schema string
-	Name   string
+	Schema    string
+	Name      string
+	Column    string
+	RefColumn string
 }
 
 // ResultColumn 是结果集的一列。

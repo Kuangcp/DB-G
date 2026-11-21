@@ -26,11 +26,13 @@ type aiDebugEntry struct {
 
 // aiDebugState 是「最近 AI 请求」查看器的瞬态状态。
 type aiDebugState struct {
-	open    bool
-	sel     int // -1 = 发送前预览，>=0 = 最近请求
-	entries []aiDebugEntry
-	draft   *aiDebugEntry // 发送前预览；发送后清空
-	body    string
+	open           bool
+	sel            int // -1 = 发送前预览，>=0 = 最近请求
+	entries        []aiDebugEntry
+	draft          *aiDebugEntry // 发送前预览；发送后清空
+	previewOpts    aiEgressPolicy
+	previewAllowed aiEgressPolicy
+	body           string
 }
 
 // recordAIRequest 记录一次请求，供「查看上下文」剖析实际发送的内容。
@@ -69,8 +71,12 @@ func (a *root) recordAIRequest(kind, model, note string, msgs []ai.Message) {
 }
 
 // aiBudget 把设置里的上下文窗口和本次输出上限合成一次请求预算。
-func (a *root) aiBudget(maxOutput int) ai.Budget {
-	return ai.Budget{ContextWindow: a.aiPrefs.ContextWindow, MaxOutput: maxOutput}
+func (a *root) aiBudget(task string, maxOutput int) ai.Budget {
+	scale := 1.0
+	if v := a.aiTokenScale[a.aiTaskModel(task)]; v > 1 {
+		scale = v
+	}
+	return ai.Budget{ContextWindow: a.aiPrefs.ContextWindow, MaxOutput: maxOutput, EstimateScale: scale}
 }
 
 // aiModelName 返回请求里实际写的模型名；未配置时与请求一致记为 local。
@@ -126,17 +132,28 @@ func (a *root) openAIDebug() {
 
 // openAIPreview 组装“现在发送会发什么”的草稿，不改编辑器、不发请求。
 func (a *root) openAIPreview() {
-	if a.aiChat.preparing {
-		return
-	}
 	q := strings.TrimSpace(a.aiChat.input)
-	snap := a.chatSnapshot()
-	a.prepareAIContext(q, snap, func(snap ai.ContextSnapshot) { a.showAIPreview(q, snap) })
+	allowed := a.aiEgressPolicy()
+	a.aiDebug.previewAllowed = allowed
+	a.aiDebug.previewOpts = allowed
+	a.startAIPreview(q)
+}
+
+// refreshAIPreview 在预览开关变化后重算草稿；旧的后台加载作废。
+func (a *root) refreshAIPreview() {
+	a.cancelAIPrepare()
+	a.startAIPreview(strings.TrimSpace(a.aiChat.input))
+}
+
+func (a *root) startAIPreview(q string) {
+	opts := a.aiDebug.previewOpts
+	snap := a.chatSnapshotWith(opts)
+	a.prepareAIContext(q, snap, opts.ddl, func(snap ai.ContextSnapshot) { a.showAIPreview(q, snap) })
 }
 
 // showAIPreview 用准备好的快照打开预览；DDL 加载期间面板会显示准备状态。
 func (a *root) showAIPreview(q string, snap ai.ContextSnapshot) {
-	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
+	msgs, rep := ai.BuildChat(snap, q, a.aiBudget("chat", 1200))
 	note := aiContextNote(rep, "")
 	if q == "" {
 		note += " · " + locales.AiPreviewNoQuestion()
@@ -198,6 +215,24 @@ func (a *root) aiDebugModal(c *ui.Context) {
 		if len(st.entries) == 0 && st.draft == nil {
 			ui.Spacer(c)
 			return
+		}
+		if st.sel == -1 {
+			ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
+				check := func(label, tip string, value *bool, allowed bool) {
+					if ui.Checkbox(c, value, label).FontSize(11).Disabled(!allowed).Tooltip(tip).Changed() {
+						a.refreshAIPreview()
+					}
+				}
+				check(locales.AiCtxDDL(), locales.AiAllowDDL(), &st.previewOpts.ddl, st.previewAllowed.ddl)
+				check(locales.AiCtxSamples(), locales.AiAllowSamples(), &st.previewOpts.samples, st.previewAllowed.samples)
+				check(locales.AiCtxHistory(), locales.AiAllowHistory(), &st.previewOpts.history, st.previewAllowed.history)
+				check(locales.AiCtxErrors(), locales.AiAllowErrors(), &st.previewOpts.errors, st.previewAllowed.errors)
+				ui.Spacer(c)
+				if a.aiChat.preparing {
+					ui.Spinner(c)
+					ui.Text(c, locales.AiPreparingContext()).FontSize(10.5).TextColor(t.TextMuted)
+				}
+			})
 		}
 		ui.Row(c).Grow(1).FillWidth().Gap(10).Children(func() {
 			ui.Column(c).Width(220).FillHeight().Children(func() {

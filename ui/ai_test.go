@@ -752,7 +752,7 @@ func TestAIContextPrefetchesForeignKeys(t *testing.T) {
 
 	snap := a.chatSnapshot()
 	var prepared ai.ContextSnapshot
-	a.prepareAIContext("orders 有多少", snap, func(s ai.ContextSnapshot) { prepared = s })
+	a.prepareAIContext("orders 有多少", snap, false, func(s ai.ContextSnapshot) { prepared = s })
 	if fk.calls == 0 {
 		t.Fatal("foreign keys should be loaded into the context")
 	}
@@ -768,7 +768,7 @@ func TestAIContextPrefetchesForeignKeys(t *testing.T) {
 
 	// 第二次直接从缓存取，不再查询会话。
 	before := fk.calls
-	a.prepareAIContext("orders 有多少", a.chatSnapshot(), func(ai.ContextSnapshot) {})
+	a.prepareAIContext("orders 有多少", a.chatSnapshot(), false, func(ai.ContextSnapshot) {})
 	if fk.calls != before {
 		t.Fatalf("foreign keys must be cached: calls %d -> %d", before, fk.calls)
 	}

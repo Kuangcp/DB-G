@@ -74,6 +74,11 @@ func (a *root) aiEgressPolicy() aiEgressPolicy {
 // aiResultContext 把当前结果集压成“形状”（列/行数/耗时），
 // 只有用户开启时才附带少量样本行。
 func (a *root) aiResultContext() *ai.ResultContext {
+	return a.aiResultContextWith(a.aiEgressPolicy().samples)
+}
+
+// aiResultContextWith 按一次性开关决定是否带样本行。
+func (a *root) aiResultContextWith(samples bool) *ai.ResultContext {
 	rt := a.currentRuntime()
 	if rt == nil {
 		return nil
@@ -97,7 +102,7 @@ func (a *root) aiResultContext() *ai.ResultContext {
 		}
 		out.Columns = append(out.Columns, ai.ResultColumn{Name: name, Type: typ})
 	}
-	if a.aiEgressPolicy().samples {
+	if samples {
 		rows := min(len(res.Rows), aiResultSamples)
 		cols := min(len(res.Columns), aiSampleColumns)
 		for _, row := range res.Rows[:rows] {
@@ -313,7 +318,7 @@ func (a *root) attachAIDDL(snap *ai.ContextSnapshot, connID string, reqs []aiDDL
 
 // prepareAIContext 在发送/预览前补齐缺失的表/列、外键与 DDL，然后在主线程调用 done。
 // 外键用于检索扩展；DDL 只在设置开启时加载。没有缺失时不产生额外延迟。
-func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done func(ai.ContextSnapshot)) {
+func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowDDL bool, done func(ai.ContextSnapshot)) {
 	if a.aiChat.preparing {
 		done(snap)
 		return
@@ -335,7 +340,7 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done f
 	}
 	var ddlReqs []aiDDLRequest
 	var missingDDL []aiDDLRequest
-	if a.aiEgressPolicy().ddl {
+	if allowDDL {
 		ddlReqs = a.aiDDLRequests(connID, snap)
 		a.attachAIDDL(&snap, connID, ddlReqs)
 		for _, req := range ddlReqs {
@@ -477,7 +482,7 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done f
 				if row.RefTable == "" {
 					continue
 				}
-				refs = append(refs, ai.TableRef{Schema: row.RefSchema, Name: row.RefTable})
+				refs = append(refs, ai.TableRef{Schema: row.RefSchema, Name: row.RefTable, Column: row.Column, RefColumn: row.RefColumn})
 			}
 			out.refs[req.key] = refs
 		}

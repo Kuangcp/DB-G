@@ -27,20 +27,23 @@ type aiChatMessage struct {
 
 // aiChatState 是右侧 AI 面板的瞬态状态。
 type aiChatState struct {
-	open          bool
-	split         float32 // 主区域占左右分屏的百分比；剩余给 AI 面板
-	input         string
-	messages      []aiChatMessage
-	streaming     bool
-	cancel        context.CancelFunc
-	seq           uint64
-	err           string
-	lastCtx       string
-	lint          aiSQLReport // 最近一次插入 SQL 的本地自检结果
-	preparing     bool        // 正在补齐 DDL 等上下文
-	prepareSeq    uint64      // 上下文准备轮次；旧结果作废
-	usage         ai.Usage
-	totalUsage    ai.Usage
+	open       bool
+	split      float32 // 主区域占左右分屏的百分比；剩余给 AI 面板
+	input      string
+	messages   []aiChatMessage
+	streaming  bool
+	cancel     context.CancelFunc
+	seq        uint64
+	err        string
+	lastCtx    string
+	lint       aiSQLReport // 最近一次插入 SQL 的本地自检结果
+	preparing  bool        // 正在补齐 DDL 等上下文
+	prepareSeq uint64      // 上下文准备轮次；旧结果作废
+	usage      ai.Usage
+	totalUsage ai.Usage
+	estimate   int // 本次请求的估算输入 token
+	reqModel   string
+
 	usageCounted  bool
 	started       time.Time
 	md            markdown.Options
@@ -76,6 +79,11 @@ func (a *root) aiProviderFor() (ai.Provider, error) {
 
 // aiSnapshot 组装一次请求的上下文；默认只带 schema 与当前 SQL。
 func (a *root) aiSnapshot() ai.ContextSnapshot {
+	return a.aiSnapshotWith(a.aiEgressPolicy())
+}
+
+// aiSnapshotWith 按给定的一次性策略组装基础快照。
+func (a *root) aiSnapshotWith(opts aiEgressPolicy) ai.ContextSnapshot {
 	var snap ai.ContextSnapshot
 	snap.Language = uiLocale()
 	connID := a.activeConnID()
@@ -140,14 +148,14 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 			}
 		}
 	}
-	if a.aiEgressPolicy().history && a.history != nil && connID != "" {
+	if opts.history && a.history != nil && connID != "" {
 		for _, h := range a.history.List(connID, 20) {
 			snap.History = append(snap.History, ai.HistoryItem{
 				SQL: ai.Redact(h.SQL), OK: h.OK, Err: ai.Redact(h.Err), Rows: h.Rows,
 			})
 		}
 	}
-	if a.aiEgressPolicy().errors && a.consoleErr != "" {
+	if opts.errors && a.consoleErr != "" {
 		snap.Errors = append(snap.Errors, ai.ErrorItem{SQL: ai.Redact(snap.ActiveSQL), Err: ai.Redact(a.consoleErr)})
 	}
 	return snap
@@ -198,13 +206,18 @@ func (a *root) aiDialogueParts() (string, []ai.Message) {
 
 // chatSnapshot 是 Chat/预览专用快照：在普通上下文上附最近对话。
 func (a *root) chatSnapshot() ai.ContextSnapshot {
-	snap := a.aiSnapshot()
+	return a.chatSnapshotWith(a.aiEgressPolicy())
+}
+
+// chatSnapshotWith 在基础快照上附对话、结果、计划与缓存 DDL。
+func (a *root) chatSnapshotWith(opts aiEgressPolicy) ai.ContextSnapshot {
+	snap := a.aiSnapshotWith(opts)
 	snap.DialogueSummary, snap.Dialogue = a.aiDialogueParts()
-	snap.Result = a.aiResultContext()
+	snap.Result = a.aiResultContextWith(opts.samples)
 	snap.Plan = a.aiPlanContext()
 	if connID := a.activeConnID(); connID != "" {
 		a.attachCachedAIRelations(&snap, connID)
-		if a.aiEgressPolicy().ddl {
+		if opts.ddl {
 			reqs := a.aiDDLRequests(connID, snap)
 			a.attachAIDDL(&snap, connID, reqs)
 		}
@@ -218,13 +231,14 @@ func (a *root) sendAI() {
 	if q == "" || a.aiChat.streaming || a.aiChat.preparing {
 		return
 	}
-	snap := a.chatSnapshot()
-	a.prepareAIContext(q, snap, func(snap ai.ContextSnapshot) { a.sendAIChat(q, snap) })
+	policy := a.aiEgressPolicy()
+	snap := a.chatSnapshotWith(policy)
+	a.prepareAIContext(q, snap, policy.ddl, func(snap ai.ContextSnapshot) { a.sendAIChat(q, snap) })
 }
 
 // sendAIChat 在上下文准备好后组装提示词并开始流式请求。
 func (a *root) sendAIChat(q string, snap ai.ContextSnapshot) {
-	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(a.aiTaskMaxTokens("chat")))
+	msgs, rep := ai.BuildChat(snap, q, a.aiBudget("chat", a.aiTaskMaxTokens("chat")))
 	a.aiChat.lastCtx = aiContextNote(rep, "")
 	a.aiChat.lint = aiSQLReport{}
 	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(rep, ""), q, msgs); err != nil {
@@ -251,6 +265,11 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 	a.aiChat.err = ""
 	a.aiChat.usage = ai.Usage{}
 	a.aiChat.usageCounted = false
+	a.aiChat.estimate = 0
+	for _, m := range msgs {
+		a.aiChat.estimate += ai.EstimateTokens(m.Content)
+	}
+	a.aiChat.reqModel = model
 	a.aiChat.messages = append(a.aiChat.messages,
 		aiChatMessage{role: "user", text: display, done: true},
 		aiChatMessage{role: "assistant"},
@@ -361,6 +380,7 @@ func (a *root) applyAIEvent(seq uint64, ev ai.Event) {
 	case ai.EventUsage:
 		if ev.Usage != nil {
 			a.aiChat.usage = *ev.Usage
+			a.updateAITokenScale(a.aiChat.reqModel, a.aiChat.estimate, ev.Usage.PromptTokens)
 		}
 	case ai.EventDone:
 		a.addAIUsage()
@@ -382,6 +402,35 @@ func (a *root) applyAIEvent(seq uint64, ev ai.Event) {
 		a.aiChat.cancel = nil
 		a.saveAIChat()
 	}
+}
+
+// updateAITokenScale 用 provider 实际 prompt tokens 校准估算倍率。
+func (a *root) updateAITokenScale(model string, estimate, actual int) {
+	if model == "" || estimate <= 0 || actual <= 0 {
+		return
+	}
+	ratio := float64(actual) / float64(estimate)
+	if ratio < 1 {
+		ratio = 1
+	}
+	if ratio > 2 {
+		ratio = 2
+	}
+	if a.aiTokenScale == nil {
+		a.aiTokenScale = map[string]float64{}
+	}
+	old := a.aiTokenScale[model]
+	if old <= 0 {
+		old = 1
+	}
+	next := old*0.7 + ratio*0.3
+	if next < 1 {
+		next = 1
+	}
+	if next > 2 {
+		next = 2
+	}
+	a.aiTokenScale[model] = next
 }
 
 // addAIUsage 把本次请求的 token 计入会话累计，只计一次。

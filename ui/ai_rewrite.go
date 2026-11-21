@@ -61,7 +61,7 @@ func (a *root) startAIRewrite() {
 		return
 	}
 	snap := a.aiSnapshot()
-	msgs, rep := ai.BuildRewrite(snap, st.target, instruction, a.aiBudget(a.aiTaskMaxTokens("rewrite")))
+	msgs, rep := ai.BuildRewrite(snap, st.target, instruction, a.aiBudget("rewrite", a.aiTaskMaxTokens("rewrite")))
 	a.recordAIRequest(locales.AiKindRewrite(), a.aiTaskModel("fix"),
 		aiContextNote(rep, locales.AiRewriteStats(len(st.target), len(instruction))), msgs)
 	st.loading, st.err, st.result, st.lint, st.diff = true, "", "", aiSQLReport{}, nil
