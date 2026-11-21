@@ -61,6 +61,20 @@ type SchemaColumnLister interface {
 	ColumnsIn(ctx context.Context, schema, table string) ([]Column, error)
 }
 
+// ForeignKey 是一个列的外键指向（供 AI 检索时做一跳扩展）。
+type ForeignKey struct {
+	Column    string
+	RefSchema string
+	RefTable  string
+	RefColumn string
+}
+
+// ForeignKeyer 是可选能力接口：列出一个表的外键。
+// 只在 AI 组装上下文时按需调用，不进入普通补全/对象树的热路径。
+type ForeignKeyer interface {
+	ForeignKeys(ctx context.Context, schema, table string) ([]ForeignKey, error)
+}
+
 // SchemaSwitcher 是可选能力接口：切换会话的当前 schema/库。
 // MySQL 用 USE <库>，PostgreSQL 用 SET search_path，ClickHouse 用 USE <库>。
 type SchemaSwitcher interface {

@@ -160,10 +160,12 @@ func (a *root) chatSnapshot() ai.ContextSnapshot {
 	snap.Dialogue = a.aiDialogue()
 	snap.Result = a.aiResultContext()
 	snap.Plan = a.aiPlanContext()
-	if a.aiPrefs.AllowDDL {
-		connID := a.activeConnID()
-		reqs := a.aiDDLRequests(connID, snap)
-		a.attachAIDDL(&snap, connID, reqs)
+	if connID := a.activeConnID(); connID != "" {
+		a.attachCachedAIRelations(&snap, connID)
+		if a.aiPrefs.AllowDDL {
+			reqs := a.aiDDLRequests(connID, snap)
+			a.attachAIDDL(&snap, connID, reqs)
+		}
 	}
 	return snap
 }
@@ -175,7 +177,7 @@ func (a *root) sendAI() {
 		return
 	}
 	snap := a.chatSnapshot()
-	a.prepareAIContext(snap, func(snap ai.ContextSnapshot) { a.sendAIChat(q, snap) })
+	a.prepareAIContext(q, snap, func(snap ai.ContextSnapshot) { a.sendAIChat(q, snap) })
 }
 
 // sendAIChat 在上下文准备好后组装提示词并开始流式请求。

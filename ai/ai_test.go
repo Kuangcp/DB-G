@@ -194,3 +194,41 @@ func TestBuildRewriteMessagesKeepsTargetOnce(t *testing.T) {
 		t.Fatalf("duplicate current-SQL sections:\n%s", body)
 	}
 }
+
+func TestRankTablesUnicodeAndForeignKeyExpansion(t *testing.T) {
+	tables := []TableContext{
+		{Name: "订单", Columns: []ColumnContext{{Name: "用户ID"}, {Name: "金额"}}},
+		{Name: "用户", Columns: []ColumnContext{{Name: "用户ID"}, {Name: "昵称"}}},
+		{Name: "日志"},
+		{Name: "audit_log"},
+	}
+	got := RankTables("查用户订单的金额", tables, "", 3)
+	if got[0].Name != "订单" {
+		t.Fatalf("Chinese query ranking: %+v", got)
+	}
+	if got[0].Name == "订单" && len(got) > 1 && got[1].Name != "用户" {
+		t.Fatalf("related Chinese table should follow: %+v", got)
+	}
+
+	// orders 命中后，外键指向的 customers 应被带到无关表前面。
+	refs := []TableContext{
+		{Name: "orders", Columns: []ColumnContext{{Name: "customer_id"}},
+			References: []TableRef{{Name: "customers"}}},
+		{Name: "metrics"},
+		{Name: "customers"},
+	}
+	ranked := RankTables("orders 有多少", refs, "", 2)
+	if len(ranked) != 2 || ranked[0].Name != "orders" || ranked[1].Name != "customers" {
+		t.Fatalf("foreign-key expansion: %+v", ranked)
+	}
+}
+
+func TestQueryTokensUnicode(t *testing.T) {
+	tokens := queryTokens("查询用户订单 user_profile")
+	joined := strings.Join(tokens, ",")
+	for _, want := range []string{"用户", "订单", "user", "profile"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in %v", want, tokens)
+		}
+	}
+}

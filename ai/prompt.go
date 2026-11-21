@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -64,6 +65,35 @@ func RankTables(question string, tables []TableContext, activeSQL string, limit 
 		}
 		out = append(out, scored{table: t, score: score, index: i})
 	}
+	// 外键一跳：已命中的表把相关表带进来，反向只给较小加权，避免把整片子表拖进来。
+	byName := map[string]int{}
+	for i, s := range out {
+		byName[strings.ToLower(s.table.Name)] = i
+	}
+	delta := make([]int, len(out))
+	for i, s := range out {
+		if s.score == 0 {
+			continue
+		}
+		for _, ref := range s.table.References {
+			if j, ok := byName[strings.ToLower(ref.Name)]; ok && j != i {
+				delta[j] += 45
+			}
+		}
+	}
+	for i := range out {
+		if out[i].score == 0 {
+			continue
+		}
+		for _, ref := range out[i].table.References {
+			if j, ok := byName[strings.ToLower(ref.Name)]; ok && j != i && out[j].score > 0 {
+				delta[i] += 20
+			}
+		}
+	}
+	for i := range out {
+		out[i].score += delta[i]
+	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].score == out[j].score {
 			return out[i].index < out[j].index
@@ -77,9 +107,20 @@ func RankTables(question string, tables []TableContext, activeSQL string, limit 
 	return ranked
 }
 
-// queryTokens 把问题拆成用于匹配的短词；既保留整段，也拆 snake_case。
+// queryTokens 把问题拆成用于匹配的短词：保留整词与 snake_case 分段，
+// 并对中文等无空格文字额外生成二元组，避免整句无法命中表/列名。
 func queryTokens(q string) []string {
+	const maxTokens = 64
 	var out []string
+	seen := map[string]bool{}
+	add := func(word string) {
+		runes := []rune(word)
+		if len(runes) < 2 || seen[word] || len(out) >= maxTokens {
+			return
+		}
+		seen[word] = true
+		out = append(out, word)
+	}
 	var b strings.Builder
 	flush := func() {
 		if b.Len() == 0 {
@@ -87,19 +128,29 @@ func queryTokens(q string) []string {
 		}
 		word := b.String()
 		b.Reset()
-		if len(word) < 2 {
-			return
-		}
-		out = append(out, word)
+		add(word)
 		for _, part := range strings.Split(word, "_") {
-			if part != word && len(part) >= 2 {
-				out = append(out, part)
+			if part != word {
+				add(part)
+			}
+		}
+		runes := []rune(word)
+		wide := false
+		for _, r := range runes {
+			if r > unicode.MaxASCII {
+				wide = true
+				break
+			}
+		}
+		if wide && len(runes) > 2 {
+			for i := 0; i+1 < len(runes); i++ {
+				add(string(runes[i : i+2]))
 			}
 		}
 	}
 	for _, r := range q {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' {
-			b.WriteRune(r)
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+			b.WriteRune(unicode.ToLower(r))
 			continue
 		}
 		flush()

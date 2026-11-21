@@ -26,6 +26,19 @@ type aiDDLEntry struct {
 	at  time.Time
 }
 
+// aiRelationEntry 是某张表外键的内存缓存（只服务 AI 检索）。
+type aiRelationEntry struct {
+	refs []ai.TableRef
+	at   time.Time
+}
+
+// aiRelationRequest 是一次需要补齐外键的表。
+type aiRelationRequest struct {
+	key    string
+	schema string
+	table  string
+}
+
 // aiDDLRequest 是一次上下文需要补齐的 DDL 目标。
 type aiDDLRequest struct {
 	key    string
@@ -108,6 +121,90 @@ func (a *root) forgetAIDDL(connID string) {
 	}
 }
 
+// aiRelationKey 是外键缓存键。
+func aiRelationKey(connID, schema, table string) string {
+	return connID + "\x00" + schema + "\x00" + strings.ToLower(table)
+}
+
+// cachedAIRelations 取未过期的外键；ok 表示已缓存（即使 refs 为空）。
+func (a *root) cachedAIRelations(key string) ([]ai.TableRef, bool) {
+	e, ok := a.aiRelations[key]
+	if !ok || time.Since(e.at) > aiDDLTTL {
+		return nil, false
+	}
+	return e.refs, true
+}
+
+// attachCachedAIRelations 把已缓存的外键挂到快照的表上，供排序做一跳扩展。
+func (a *root) attachCachedAIRelations(snap *ai.ContextSnapshot, connID string) {
+	schemaDefault := a.connSchema[connID]
+	for i := range snap.Tables {
+		t := &snap.Tables[i]
+		schema := t.Schema
+		if schema == "" {
+			schema = schemaDefault
+		}
+		if refs, ok := a.cachedAIRelations(aiRelationKey(connID, schema, t.Name)); ok {
+			t.References = refs
+		}
+	}
+}
+
+// aiRelationRequests 为词法上最相关的几张表补齐外键（最多 6 张）。
+func (a *root) aiRelationRequests(question string, snap ai.ContextSnapshot, connID string) []aiRelationRequest {
+	candidates := ai.RankTables(question, snap.Tables, snap.ActiveSQL, 8)
+	schemaDefault := a.connSchema[connID]
+	seen := map[string]bool{}
+	var out []aiRelationRequest
+	for _, t := range candidates {
+		if t.Name == "" {
+			continue
+		}
+		schema := t.Schema
+		if schema == "" {
+			schema = schemaDefault
+		}
+		key := aiRelationKey(connID, schema, t.Name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if _, ok := a.cachedAIRelations(key); ok {
+			continue
+		}
+		out = append(out, aiRelationRequest{key: key, schema: schema, table: t.Name})
+		if len(out) >= 6 {
+			break
+		}
+	}
+	return out
+}
+
+// attachAIRelations 把本轮加载的外键挂到快照的表上。
+func (a *root) attachAIRelations(snap *ai.ContextSnapshot, reqs []aiRelationRequest) {
+	byName := map[string][]ai.TableRef{}
+	for _, req := range reqs {
+		if refs, ok := a.cachedAIRelations(req.key); ok {
+			byName[strings.ToLower(req.table)] = refs
+		}
+	}
+	for i := range snap.Tables {
+		t := &snap.Tables[i]
+		if refs, ok := byName[strings.ToLower(t.Name)]; ok {
+			t.References = refs
+		}
+	}
+}
+
+// forgetAIRelations 丢弃某连接的外键缓存。
+func (a *root) forgetAIRelations(connID string) {
+	for key := range a.aiRelations {
+		if strings.HasPrefix(key, connID+"\x00") {
+			delete(a.aiRelations, key)
+		}
+	}
+}
+
 // aiDDLRequests 收集当前 SQL/结果 SQL 引用的表（最多 4 张）。
 func (a *root) aiDDLRequests(connID string, snap ai.ContextSnapshot) []aiDDLRequest {
 	if connID == "" {
@@ -179,10 +276,10 @@ func (a *root) attachAIDDL(snap *ai.ContextSnapshot, connID string, reqs []aiDDL
 	}
 }
 
-// prepareAIContext 在发送/预览前补齐缺失的 DDL，然后在主线程调用 done。
-// 未开启 DDL、没有会话或没有缺失时直接 done，不产生额外延迟。
-func (a *root) prepareAIContext(snap ai.ContextSnapshot, done func(ai.ContextSnapshot)) {
-	if !a.aiPrefs.AllowDDL || a.aiChat.preparing {
+// prepareAIContext 在发送/预览前补齐缺失的外键与 DDL，然后在主线程调用 done。
+// 外键用于检索扩展；DDL 只在设置开启时加载。两者都没有缺失时不产生额外延迟。
+func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done func(ai.ContextSnapshot)) {
+	if a.aiChat.preparing {
 		done(snap)
 		return
 	}
@@ -191,15 +288,27 @@ func (a *root) prepareAIContext(snap ai.ContextSnapshot, done func(ai.ContextSna
 		done(snap)
 		return
 	}
-	reqs := a.aiDDLRequests(connID, snap)
-	a.attachAIDDL(&snap, connID, reqs)
-	var missing []aiDDLRequest
-	for _, req := range reqs {
-		if _, ok := a.cachedAIDDL(req.key); !ok {
-			missing = append(missing, req)
+	// 缓存命中的部分先挂上；缺失的再异步补。
+	relReqs := a.aiRelationRequests(question, snap, connID)
+	a.attachAIRelations(&snap, relReqs)
+	var missingRel []aiRelationRequest
+	for _, req := range relReqs {
+		if _, ok := a.cachedAIRelations(req.key); !ok {
+			missingRel = append(missingRel, req)
 		}
 	}
-	if len(missing) == 0 {
+	var ddlReqs []aiDDLRequest
+	var missingDDL []aiDDLRequest
+	if a.aiPrefs.AllowDDL {
+		ddlReqs = a.aiDDLRequests(connID, snap)
+		a.attachAIDDL(&snap, connID, ddlReqs)
+		for _, req := range ddlReqs {
+			if _, ok := a.cachedAIDDL(req.key); !ok {
+				missingDDL = append(missingDDL, req)
+			}
+		}
+	}
+	if len(missingRel) == 0 && len(missingDDL) == 0 {
 		done(snap)
 		return
 	}
@@ -209,21 +318,35 @@ func (a *root) prepareAIContext(snap ai.ContextSnapshot, done func(ai.ContextSna
 		return
 	}
 	sess := a.sessionFor(connID)
-	if sess == nil || !sess.Caps().Has(engine.CapObjectDDL) {
+	if sess == nil {
 		done(snap)
 		return
 	}
 	scoped, hasScoped := sess.(engine.SchemaObjectDDLer)
 	lister, hasLister := sess.(engine.ObjectDDLer)
 	if !hasScoped && !hasLister {
+		missingDDL = nil
+	}
+	if !sess.Caps().Has(engine.CapObjectDDL) {
+		missingDDL = nil
+	}
+	fk, hasFK := sess.(engine.ForeignKeyer)
+	if !hasFK || !sess.Caps().Has(engine.CapForeignKeys) {
+		missingRel = nil
+	}
+	if len(missingRel) == 0 && len(missingDDL) == 0 {
 		done(snap)
 		return
 	}
-	load := func() map[string]string {
+	type prepared struct {
+		ddl  map[string]string
+		refs map[string][]ai.TableRef
+	}
+	load := func() prepared {
 		ctx, cancel := context.WithTimeout(context.Background(), aiDDLTimeout)
 		defer cancel()
-		loaded := map[string]string{}
-		for _, req := range missing {
+		out := prepared{ddl: map[string]string{}, refs: map[string][]ai.TableRef{}}
+		for _, req := range missingDDL {
 			var ddl string
 			var err error
 			if hasScoped {
@@ -235,25 +358,48 @@ func (a *root) prepareAIContext(snap ai.ContextSnapshot, done func(ai.ContextSna
 				app.LogWarn("ai", "context ddl failed", "conn", p.ID, "table", req.table, "err", err.Error())
 				continue
 			}
-			loaded[req.key] = ddl
+			out.ddl[req.key] = ddl
 		}
-		return loaded
+		for _, req := range missingRel {
+			rows, err := fk.ForeignKeys(ctx, req.schema, req.table)
+			refs := make([]ai.TableRef, 0, len(rows))
+			if err != nil {
+				app.LogWarn("ai", "context fk failed", "conn", p.ID, "table", req.table, "err", err.Error())
+				continue
+			}
+			for _, row := range rows {
+				if row.RefTable == "" {
+					continue
+				}
+				refs = append(refs, ai.TableRef{Schema: row.RefSchema, Name: row.RefTable})
+			}
+			out.refs[req.key] = refs
+		}
+		return out
 	}
 	a.aiChat.preparing = true
 	a.aiChat.prepareSeq++
 	seq := a.aiChat.prepareSeq
-	apply := func(loaded map[string]string) {
+	apply := func(got prepared) {
 		if seq != a.aiChat.prepareSeq {
 			return
 		}
 		a.aiChat.preparing = false
+		now := time.Now()
 		if a.aiDDL == nil {
 			a.aiDDL = map[string]aiDDLEntry{}
 		}
-		for key, ddl := range loaded {
-			a.aiDDL[key] = aiDDLEntry{ddl: ddl, at: time.Now()}
+		for key, ddl := range got.ddl {
+			a.aiDDL[key] = aiDDLEntry{ddl: ddl, at: now}
 		}
-		a.attachAIDDL(&snap, connID, reqs)
+		if a.aiRelations == nil {
+			a.aiRelations = map[string]aiRelationEntry{}
+		}
+		for key, refs := range got.refs {
+			a.aiRelations[key] = aiRelationEntry{refs: refs, at: now}
+		}
+		a.attachAIDDL(&snap, connID, ddlReqs)
+		a.attachAIRelations(&snap, relReqs)
 		done(snap)
 	}
 	if a.win == nil {
@@ -262,7 +408,7 @@ func (a *root) prepareAIContext(snap ai.ContextSnapshot, done func(ai.ContextSna
 	}
 	win := a.win
 	go func() {
-		loaded := load()
-		a.safeUpdate(win, func() { apply(loaded) })
+		got := load()
+		a.safeUpdate(win, func() { apply(got) })
 	}()
 }

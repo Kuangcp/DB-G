@@ -50,6 +50,7 @@ func (a *root) removeConn(id string) {
 		a.catalog.invalidate(id)
 	}
 	a.forgetAIDDL(id)
+	a.forgetAIRelations(id)
 	a.forgetConnMeta(id)
 	a.closeSession(id, "connection removed")
 	if a.connErrOf(id) != "" {

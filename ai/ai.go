@@ -80,6 +80,14 @@ type TableContext struct {
 	PrimaryKey []string
 	// DDL 是可选的相关表建表/视图语句；默认不收集，开启后按预算裁剪。
 	DDL string
+	// References 是外键指向的表（只用于检索排序，不直接发给模型）。
+	References []TableRef
+}
+
+// TableRef 是另一张表的引用（schema 可空）。
+type TableRef struct {
+	Schema string
+	Name   string
 }
 
 // ResultColumn 是结果集的一列。

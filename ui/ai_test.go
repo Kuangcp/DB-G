@@ -710,3 +710,62 @@ func TestAIDDLContextPrefetchAndCache(t *testing.T) {
 		t.Fatalf("cached DDL missing on second send:\n%s", last)
 	}
 }
+
+type fkFakeSession struct {
+	treeFakeSession
+	calls int
+}
+
+func (f *fkFakeSession) Caps() engine.Capabilities {
+	return engine.CapObjects | engine.CapForeignKeys
+}
+
+func (f *fkFakeSession) ForeignKeys(_ context.Context, _ string, table string) ([]engine.ForeignKey, error) {
+	f.calls++
+	if table == "orders" {
+		return []engine.ForeignKey{{Column: "customer_id", RefTable: "customers", RefColumn: "id"}}, nil
+	}
+	return nil, nil
+}
+
+func TestAIContextPrefetchesForeignKeys(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := a.consoleMgr().Create(prof.ID, "FK")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.setActiveText("select * from orders")
+	a.catalog.finish(prof.ID, []string{"orders", "customers", "metrics"}, nil, "")
+	fk := &fkFakeSession{}
+	a.testSetSession(prof.ID, fk)
+
+	snap := a.chatSnapshot()
+	var prepared ai.ContextSnapshot
+	a.prepareAIContext("orders 有多少", snap, func(s ai.ContextSnapshot) { prepared = s })
+	if fk.calls == 0 {
+		t.Fatal("foreign keys should be loaded into the context")
+	}
+	var refs []ai.TableRef
+	for _, table := range prepared.Tables {
+		if table.Name == "orders" {
+			refs = table.References
+		}
+	}
+	if len(refs) != 1 || refs[0].Name != "customers" {
+		t.Fatalf("orders references: %+v", refs)
+	}
+
+	// 第二次直接从缓存取，不再查询会话。
+	before := fk.calls
+	a.prepareAIContext("orders 有多少", a.chatSnapshot(), func(ai.ContextSnapshot) {})
+	if fk.calls != before {
+		t.Fatalf("foreign keys must be cached: calls %d -> %d", before, fk.calls)
+	}
+}

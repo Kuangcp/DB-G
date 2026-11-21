@@ -109,7 +109,8 @@ type root struct {
 	vault             *app.Vault
 	aiTestProvider    ai.Provider // 测试注入；nil = 按 aiPrefs 创建
 	aiChat            aiChatState
-	aiDDL             map[string]aiDDLEntry // 相关表 DDL 缓存（AI 上下文用）
+	aiDDL             map[string]aiDDLEntry      // 相关表 DDL 缓存（AI 上下文用）
+	aiRelations       map[string]aiRelationEntry // 相关表外键缓存（AI 检索用）
 	aiFix             aiFixState
 	aiCompletion      aiCompletionState
 	plan              planState

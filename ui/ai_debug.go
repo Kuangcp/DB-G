@@ -131,7 +131,7 @@ func (a *root) openAIPreview() {
 	}
 	q := strings.TrimSpace(a.aiChat.input)
 	snap := a.chatSnapshot()
-	a.prepareAIContext(snap, func(snap ai.ContextSnapshot) { a.showAIPreview(q, snap) })
+	a.prepareAIContext(q, snap, func(snap ai.ContextSnapshot) { a.showAIPreview(q, snap) })
 }
 
 // showAIPreview 用准备好的快照打开预览；DDL 加载期间面板会显示准备状态。
