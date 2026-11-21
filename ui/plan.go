@@ -280,10 +280,11 @@ func (a *root) diagnosePlan() {
 		return
 	}
 	snap := a.aiSnapshot()
-	msgs := ai.BuildPlanMessages(snap, plan.Text(a.plan.nodes), a.plan.analyze)
+	planText := plan.Text(a.plan.nodes)
+	msgs, rep := ai.BuildPlan(snap, planText, a.plan.analyze, a.aiBudget(1200))
 	a.aiChat.open = true
-	a.aiChat.lastCtx = locales.PlanContext()
-	if err := a.startAIRequest(locales.TopExecPlan(), aiContextNote(snap, locales.PlanTextBytes(len(plan.Text(a.plan.nodes)))), locales.PlanDiagnoseAsk(), msgs); err != nil {
+	a.aiChat.lastCtx = aiContextNote(rep, locales.PlanContext())
+	if err := a.startAIRequest(locales.TopExecPlan(), aiContextNote(rep, locales.PlanTextBytes(len(planText))), locales.PlanDiagnoseAsk(), msgs); err != nil {
 		a.aiChat.err = err.Error()
 	}
 }

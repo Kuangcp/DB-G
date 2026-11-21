@@ -108,10 +108,19 @@ func queryTokens(q string) []string {
 	return out
 }
 
-// BuildMessages 组装一次 Chat-to-SQL 请求。
+// BuildMessages 组装一次 Chat-to-SQL 请求（无显式预算，使用默认窗口）。
 func BuildMessages(snapshot ContextSnapshot, question string) []Message {
-	tables := RankTables(question, snapshot.Tables, snapshot.ActiveSQL, maxContextTables)
-	snapshot.Tables = tables
+	msgs, _ := BuildChat(snapshot, question, Budget{})
+	return msgs
+}
+
+// BuildChat 组装一次带预算的 Chat-to-SQL 请求，并返回裁剪报告。
+func BuildChat(snapshot ContextSnapshot, question string, budget Budget) ([]Message, PromptReport) {
+	return buildChatPrompt(snapshot, question, nil, budget)
+}
+
+// chatMessages 只负责渲染，不裁剪；预算由 buildChatPrompt 处理。
+func chatMessages(snapshot ContextSnapshot, question string) []Message {
 	system := fmt.Sprintf(`你是 DB-G 的 SQL 助手，当前数据源方言是 %s。
 规则：
 1. 只根据给出的表/列回答；不要编造不存在的对象。
@@ -258,8 +267,14 @@ func ExtractSQL(markdown string) (string, bool) {
 	}
 }
 
-// BuildPlanMessages 组装一次执行计划诊断请求。
+// BuildPlanMessages 组装一次执行计划诊断请求（默认预算）。
 func BuildPlanMessages(snapshot ContextSnapshot, planText string, analyze bool) []Message {
+	msgs, _ := BuildPlan(snapshot, planText, analyze, Budget{})
+	return msgs
+}
+
+// BuildPlan 组装一次带预算的执行计划诊断请求。
+func BuildPlan(snapshot ContextSnapshot, planText string, analyze bool, budget Budget) ([]Message, PromptReport) {
 	question := "请分析这个执行计划：指出最慢/代价最高的节点、可能缺失的索引或写法问题，并给出可执行的优化建议。"
 	if !analyze {
 		question += " 这是普通 EXPLAIN，没有真实耗时数据。"
@@ -268,21 +283,39 @@ func BuildPlanMessages(snapshot ContextSnapshot, planText string, analyze bool) 
 	if analyze {
 		mode = "EXPLAIN ANALYZE"
 	}
-	msgs := BuildMessages(snapshot, question)
-	msgs[1].Content += "\n\n# 执行计划（" + mode + "）\n```\n" + planText + "\n```\n"
-	return msgs
+	extra := "\n\n# 执行计划（" + mode + "）\n```\n" + planText + "\n```\n"
+	return buildChatPrompt(snapshot, question, []string{extra}, budget)
 }
 
-// BuildFixMessages 组装一次 SQL 错误修复请求。
+// BuildFixMessages 组装一次 SQL 错误修复请求（默认预算）。
 func BuildFixMessages(snapshot ContextSnapshot, sql, errText string) []Message {
-	msgs := BuildMessages(snapshot, "请修复下面这条执行失败的 SQL，保持原有业务语义，只做必要的语法/字段修正。")
-	msgs[1].Content += "\n\n# 失败 SQL\n```sql\n" + sql + "\n```\n\n# 驱动错误\n```\n" + errText + "\n```\n"
+	msgs, _ := BuildFix(snapshot, sql, errText, Budget{})
 	return msgs
 }
 
-// BuildRewriteMessages 组装一次「按诉求改写选中 SQL」请求。
-// target 是被选中的原文；它与快照里的当前语句/选区重复时只保留一份。
+// BuildFix 组装一次带预算的 SQL 错误修复请求；失败 SQL 与当前语句重复时只留一份。
+func BuildFix(snapshot ContextSnapshot, sql, errText string, budget Budget) ([]Message, PromptReport) {
+	sql = strings.TrimSpace(sql)
+	if strings.TrimSpace(snapshot.ActiveSQL) == sql {
+		snapshot.ActiveSQL = ""
+	}
+	if strings.TrimSpace(snapshot.Selection) == sql {
+		snapshot.Selection = ""
+	}
+	extra := "\n\n# 失败 SQL\n```sql\n" + sql + "\n```\n\n# 驱动错误\n```\n" + errText + "\n```\n"
+	return buildChatPrompt(snapshot,
+		"请修复下面这条执行失败的 SQL，保持原有业务语义，只做必要的语法/字段修正。", []string{extra}, budget)
+}
+
+// BuildRewriteMessages 组装一次「按诉求改写选中 SQL」请求（默认预算）。
 func BuildRewriteMessages(snapshot ContextSnapshot, target, instruction string) []Message {
+	msgs, _ := BuildRewrite(snapshot, target, instruction, Budget{})
+	return msgs
+}
+
+// BuildRewrite 组装一次带预算的改写请求。
+// target 是被选中的原文；它与快照里的当前语句/选区重复时只保留一份。
+func BuildRewrite(snapshot ContextSnapshot, target, instruction string, budget Budget) ([]Message, PromptReport) {
 	target = strings.TrimSpace(target)
 	snapshot.Selection = ""
 	if strings.TrimSpace(snapshot.ActiveSQL) == target {
@@ -290,23 +323,24 @@ func BuildRewriteMessages(snapshot ContextSnapshot, target, instruction string) 
 	}
 	question := "按下面的要求改写这条 SQL。除非要求改变，保持原有语句类型（SELECT/UPDATE/…）与业务语义。" +
 		"需要 SQL 时只输出一个 ```sql 代码块。\n要求：" + instruction
-	msgs := BuildMessages(snapshot, question)
-	msgs[1].Content += "\n\n# 待改写 SQL\n```sql\n" + target + "\n```\n"
+	extra := "\n\n# 待改写 SQL\n```sql\n" + target + "\n```\n"
+	return buildChatPrompt(snapshot, question, []string{extra}, budget)
+}
+
+// BuildCompletionMessages 组装一次编辑器内联补全请求（默认预算）。
+func BuildCompletionMessages(snapshot ContextSnapshot, before, after string) []Message {
+	msgs, _ := BuildCompletion(snapshot, before, after, Budget{})
 	return msgs
 }
 
-// BuildCompletionMessages 组装一次编辑器内联补全请求。
+// BuildCompletion 组装一次带预算的内联补全请求。
 // before 是光标前文，after 是光标后文；模型只返回应插入光标处的 SQL 片段。
-func BuildCompletionMessages(snapshot ContextSnapshot, before, after string) []Message {
-	const beforeLimit, afterLimit = 4000, 1200
-	if len(before) > beforeLimit {
-		before = before[len(before)-beforeLimit:]
-	}
-	if len(after) > afterLimit {
-		after = after[:afterLimit]
-	}
-	tables := RankTables(before, snapshot.Tables, snapshot.ActiveSQL, 12)
-	snapshot.Tables = tables
+func BuildCompletion(snapshot ContextSnapshot, before, after string, budget Budget) ([]Message, PromptReport) {
+	return buildCompletionPrompt(snapshot, before, after, budget)
+}
+
+// completionMessages 只负责渲染，不裁剪；预算由 buildCompletionPrompt 处理。
+func completionMessages(snapshot ContextSnapshot, before, after string) []Message {
 	system := fmt.Sprintf(`你是 SQL 编辑器补全引擎，当前方言是 %s。
 只返回应插入光标处的 SQL 文本，不要 Markdown、不要代码围栏、不要解释。
 补全会替换光标前正在输入的单词，因此输出要包含该单词的完整拼写。

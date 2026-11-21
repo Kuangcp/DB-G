@@ -60,9 +60,9 @@ func (a *root) startAIRewrite() {
 		return
 	}
 	snap := a.aiSnapshot()
-	msgs := ai.BuildRewriteMessages(snap, st.target, instruction)
+	msgs, rep := ai.BuildRewrite(snap, st.target, instruction, a.aiBudget(1600))
 	a.recordAIRequest(locales.AiKindRewrite(), a.aiModelName(),
-		aiContextNote(snap, locales.AiRewriteStats(len(st.target), len(instruction))), msgs)
+		aiContextNote(rep, locales.AiRewriteStats(len(st.target), len(instruction))), msgs)
 	st.loading, st.err, st.result, st.diff = true, "", "", nil
 	ctx, cancel := context.WithCancel(context.Background())
 	st.seq++

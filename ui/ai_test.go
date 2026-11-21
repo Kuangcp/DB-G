@@ -441,3 +441,100 @@ func TestAIChatMessageAlignmentAndCopy(t *testing.T) {
 		t.Fatalf("copy answer: %q", got)
 	}
 }
+
+// 多 schema 连接必须按 completionScope 的 key 取表/列，否则 AI 上下文为空。
+func TestAISnapshotUsesCurrentSchemaKey(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := a.consoleMgr().Create(prof.ID, "schema")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.connSchema[prof.ID] = "shop"
+	key := prof.ID + "|shop"
+	a.catalog.finish(key, []string{"orders"}, nil, "mysql")
+	a.catalog.finishColumns(key, "orders", []engine.Column{
+		{Name: "id", Type: "bigint", PrimaryKey: true},
+		{Name: "amount", Type: "int"},
+	}, "mysql")
+	a.catalog.finish(prof.ID, []string{"wrong_default"}, nil, "mysql")
+
+	snap := a.aiSnapshot()
+	if len(snap.Tables) != 1 || snap.Tables[0].Name != "orders" {
+		t.Fatalf("tables must come from the current schema: %+v", snap.Tables)
+	}
+	if snap.Tables[0].Schema != "shop" {
+		t.Fatalf("table schema missing: %+v", snap.Tables[0])
+	}
+	if len(snap.Tables[0].Columns) != 2 {
+		t.Fatalf("columns must use the scoped cache: %+v", snap.Tables[0])
+	}
+}
+
+// 发送前预览必须与实际请求使用同一套预算组装，且不触发模型调用。
+func TestAIPreviewShowsBudgetedContext(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := a.consoleMgr().Create(prof.ID, "preview")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.setActiveText("select * from users")
+	a.aiPrefs.ContextWindow = 2048
+	a.aiPrefs.Model = "fake"
+	a.aiChat.input = "查 users 的行数"
+
+	p := &fakeAIProvider{}
+	a.aiTestProvider = p
+	a.openAIPreview()
+	if p.calls != 0 {
+		t.Fatalf("preview must not call the provider: %d", p.calls)
+	}
+	if !a.aiDebug.open || a.aiDebug.sel != -1 || a.aiDebug.draft == nil {
+		t.Fatalf("preview state: open=%v sel=%d draft=%v", a.aiDebug.open, a.aiDebug.sel, a.aiDebug.draft)
+	}
+	if !strings.Contains(a.aiDebug.body, "users") || !strings.Contains(a.aiDebug.body, "查 users 的行数") {
+		t.Fatalf("preview body missing context:\n%s", a.aiDebug.body)
+	}
+	if !strings.Contains(a.aiDebug.draft.Note, "token") {
+		t.Fatalf("preview note should carry the token budget: %q", a.aiDebug.draft.Note)
+	}
+
+	// 小窗口 + 大 schema/历史：预览报告必须反映裁剪。
+	var names []string
+	for i := range 16 {
+		name := fmt.Sprintf("big_%02d", i)
+		names = append(names, name)
+		var cols []engine.Column
+		for j := range 30 {
+			cols = append(cols, engine.Column{Name: fmt.Sprintf("c_%02d_%02d", i, j), Type: "text"})
+		}
+		a.catalog.finishColumns(prof.ID, name, cols, "")
+	}
+	a.catalog.finish(prof.ID, names, nil, "")
+	a.history = app.OpenHistory(t.TempDir())
+	for i := range 12 {
+		if err := a.history.Add(app.HistoryEntry{ConnID: prof.ID, SQL: fmt.Sprintf("select %d", i), OK: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.aiPrefs.AllowHistory = true
+	a.aiChat.input = "统计 big_00 的数据"
+	a.openAIPreview()
+	if !strings.Contains(a.aiDebug.draft.Note, "已裁剪") {
+		t.Fatalf("preview note must report trimming: %q", a.aiDebug.draft.Note)
+	}
+}

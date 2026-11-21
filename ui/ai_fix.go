@@ -47,9 +47,9 @@ func (a *root) fixErrorSQL() {
 		return
 	}
 	snap := a.aiSnapshot()
-	msgs := ai.BuildFixMessages(snap, sql, errText)
+	msgs, rep := ai.BuildFix(snap, sql, errText, a.aiBudget(1200))
 	a.recordAIRequest(locales.AiKindFix(), a.aiModelName(),
-		aiContextNote(snap, locales.AiFailureStats(len(sql), len(errText))), msgs)
+		aiContextNote(rep, locales.AiFailureStats(len(sql), len(errText))), msgs)
 	a.aiFix = aiFixState{open: true, loading: true, original: sql}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.aiFix.seq++

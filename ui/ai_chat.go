@@ -89,7 +89,8 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 		}
 	}
 	if a.catalog != nil {
-		tables, views, ok := a.catalog.objects(connID)
+		key, schema := a.completionScope(connID)
+		tables, views, ok := a.catalog.objects(key)
 		if ok {
 			const maxTables = 200
 			for _, group := range [][]string{tables, views} {
@@ -97,8 +98,8 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 					if len(snap.Tables) >= maxTables {
 						break
 					}
-					t := ai.TableContext{Name: name}
-					if cols, ok := a.catalog.columns(connID, name); ok {
+					t := ai.TableContext{Name: name, Schema: schema}
+					if cols, ok := a.catalog.columns(key, name); ok {
 						for _, c := range cols {
 							t.Columns = append(t.Columns, ai.ColumnContext{
 								Name: c.Name, Type: c.Type,
@@ -134,10 +135,9 @@ func (a *root) sendAI() {
 		return
 	}
 	snap := a.aiSnapshot()
-	msgs := ai.BuildMessages(snap, q)
-	tables, cols, rows := snap.Summary()
-	a.aiChat.lastCtx = locales.AiContextStats(tables, cols, rows)
-	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(snap, ""), q, msgs); err != nil {
+	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
+	a.aiChat.lastCtx = aiContextNote(rep, "")
+	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(rep, ""), q, msgs); err != nil {
 		a.aiChat.err = err.Error()
 		return
 	}

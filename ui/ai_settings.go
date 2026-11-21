@@ -88,6 +88,23 @@ func (a *root) aiSection(c *ui.Context) {
 		a.saveAIPrefs()
 	}
 
+	// 上下文窗口只影响提示词裁剪，不会改模型本身；0 表示用默认 8192。
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, locales.AiContextWindow()).FontSize(12).TextColor(c.Theme().TextMuted)
+		win := float64(a.aiPrefs.ContextWindow)
+		if win <= 0 {
+			win = float64(ai.DefaultContextWindow)
+		}
+		if ui.NumberInput(c, &win, 2048, 131072, 1024).
+			Label(locales.AiContextWindowLabel()).Width(110).Radius(cr).Changed() {
+			a.aiPrefs.ContextWindow = int(win)
+			a.saveAIPrefs()
+		}
+		ui.Text(c, locales.AiContextWindowValue(ai.DefaultContextWindow)).FontSize(11).
+			TextColor(c.Theme().TextMuted)
+	})
+	ui.Text(c, locales.AiContextWindowHint()).FontSize(11).TextColor(c.Theme().TextMuted)
+
 	ui.Divider(c)
 	ui.Text(c, locales.AiPrivacyHint()).FontSize(12).
 		TextColor(c.Theme().TextMuted)
@@ -95,9 +112,6 @@ func (a *root) aiSection(c *ui.Context) {
 		a.saveAIPrefs()
 	}
 	if ui.Checkbox(c, &a.aiPrefs.AllowErrorLogs, locales.AiAllowErrors()).Changed() {
-		a.saveAIPrefs()
-	}
-	if ui.Checkbox(c, &a.aiPrefs.AllowSampleRows, locales.AiAllowSamples()).Changed() {
 		a.saveAIPrefs()
 	}
 	if ui.Checkbox(c, &a.aiPrefs.AITitle, locales.AiAutoTitle()).Changed() {

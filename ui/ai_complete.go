@@ -49,9 +49,9 @@ func (a *root) requestAICompletion() {
 	st.prefix = text[start:offset]
 	st.suggestion = ""
 	st.loading = true
-	msgs := ai.BuildCompletionMessages(snap, text[:offset], text[offset:])
+	msgs, rep := ai.BuildCompletion(snap, text[:offset], text[offset:], a.aiBudget(160))
 	a.recordAIRequest(locales.AiKindComplete(), a.aiModelName(),
-		aiContextNote(snap, locales.AiCursorStats(offset, len(text)-offset)), msgs)
+		aiContextNote(rep, locales.AiCursorStats(offset, len(text)-offset)), msgs)
 	ctx, cancel := context.WithCancel(context.Background())
 	st.cancel = cancel
 	req := ai.Request{

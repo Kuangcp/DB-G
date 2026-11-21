@@ -131,7 +131,7 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | 外观设置（模式/强调色/密度/圆角/字号/GPU 渲染） | `theme.json` | `app.ThemePrefs`；系统模式无覆盖时不调 SetTheme，保留桌面偏好；关闭 GPU 时 `main` 在首帧前设 `MYGO_GPU=0`，重启生效 |
 | 界面语言 | `locale.json` | `app.LocalizationPrefs`；`""` 跟随系统、`en`、`zh-Hans`；启动时 `mygo.App.SetLocale`，切换即时生效 |
 | 快捷键改绑 | `keymap.json` | `app.SaveKeymap`，只存与默认不同的动作 |
-| AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关 |
+| AI 服务配置 | `ai.json` | `app.AIPrefs`；API Key 用同一个 `secret.key` 加密；默认 Ollama，出网开关默认关；`contextWindow` 控制提示词预算（0 = 8192） |
 | AI 会话 | `ai/conversations/<workspaceID>.json` | 按工作区保存多段会话与活动会话；只存文本，不存上下文快照/样本行 |
 | 结果加载预算/分页 | `results.json` | `app.ResultPrefs`；结果集大小上限（MB，默认 8）与每页行数（默认 500，50–5000），设置页「结果」可改；驱动按页大小读取并置 `HasMore`，UI 用派生表 `LIMIT/OFFSET` 翻页 |
 | 控制台自动保存 | `console.json` | `app.ConsolePrefs`；正文停止输入后的保存延迟（秒，默认 5，范围 1-60），设置页「控制台」可改 |

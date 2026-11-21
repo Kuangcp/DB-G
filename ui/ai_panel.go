@@ -97,6 +97,9 @@ func (a *root) aiPanel(c *ui.Context) {
 			} else if ui.PrimaryButton(c, locales.AiSend()).Disabled(st.input == "").Clicked() {
 				a.sendAI()
 			}
+			if ui.Button(c, locales.AiPreviewContext()).FontSize(11).Clicked() {
+				a.openAIPreview()
+			}
 			ui.Spacer(c)
 			if st.usage.TotalTokens > 0 {
 				ui.Text(c, "tokens "+strconv.Itoa(st.usage.TotalTokens)).FontSize(10.5).TextColor(t.TextMuted)

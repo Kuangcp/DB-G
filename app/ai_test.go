@@ -23,7 +23,7 @@ func TestLoadAIPrefsDefaultsAndRoundTrip(t *testing.T) {
 	if prefs.BaseURL != DefaultAIBaseURL {
 		t.Fatalf("default base: %q", prefs.BaseURL)
 	}
-	if prefs.AllowHistory || prefs.AllowSampleRows || prefs.AllowErrorLogs {
+	if prefs.AllowHistory || prefs.AllowErrorLogs {
 		t.Fatalf("egress must default off: %+v", prefs)
 	}
 

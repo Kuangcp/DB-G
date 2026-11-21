@@ -6354,18 +6354,6 @@ func (msgs Messages) AiAlreadyStreaming() string {
 	return Catalog.Format(msgs.locale, "aiAlreadyStreaming", nil)
 }
 
-// AiContextStats says "Context: {tables} tables / {cols} columns / {rows} sample rows"
-// in the language the app shows.
-func AiContextStats(tables int, cols int, rows int) string {
-	return In(i18n.Locale()).AiContextStats(tables, cols, rows)
-}
-
-// AiContextStats says "Context: {tables} tables / {cols} columns / {rows} sample rows"
-// in the language of msgs.
-func (msgs Messages) AiContextStats(tables int, cols int, rows int) string {
-	return Catalog.Format(msgs.locale, "aiContextStats", map[string]any{"tables": tables, "cols": cols, "rows": rows})
-}
-
 // AiSaveConversationFailed says "Failed to save the AI conversation: {err}"
 // in the language the app shows.
 func AiSaveConversationFailed(err string) string {
@@ -6528,11 +6516,11 @@ func (msgs Messages) AiModelPlaceholder() string {
 	return Catalog.Format(msgs.locale, "aiModelPlaceholder", nil)
 }
 
-// AiPrivacyHint says "By default only the schema and current SQL are sent; enable the three options below as needed."
+// AiPrivacyHint says "By default only the schema and current SQL are sent; enable history or error logs only when needed."
 // in the language the app shows.
 func AiPrivacyHint() string { return In(i18n.Locale()).AiPrivacyHint() }
 
-// AiPrivacyHint says "By default only the schema and current SQL are sent; enable the three options below as needed."
+// AiPrivacyHint says "By default only the schema and current SQL are sent; enable history or error logs only when needed."
 // in the language of msgs.
 func (msgs Messages) AiPrivacyHint() string {
 	return Catalog.Format(msgs.locale, "aiPrivacyHint", nil)
@@ -6556,16 +6544,6 @@ func AiAllowErrors() string { return In(i18n.Locale()).AiAllowErrors() }
 // in the language of msgs.
 func (msgs Messages) AiAllowErrors() string {
 	return Catalog.Format(msgs.locale, "aiAllowErrors", nil)
-}
-
-// AiAllowSamples says "Send table sample rows (not collected yet)"
-// in the language the app shows.
-func AiAllowSamples() string { return In(i18n.Locale()).AiAllowSamples() }
-
-// AiAllowSamples says "Send table sample rows (not collected yet)"
-// in the language of msgs.
-func (msgs Messages) AiAllowSamples() string {
-	return Catalog.Format(msgs.locale, "aiAllowSamples", nil)
 }
 
 // AiAutoTitle says "Generate conversation titles with AI (one extra call; off by default)"
@@ -6874,6 +6852,112 @@ func (msgs Messages) AiRewriteUserMessage(instruction string, target string) str
 	return Catalog.Format(msgs.locale, "aiRewriteUserMessage", map[string]any{"instruction": instruction, "target": target})
 }
 
+// AiContextWindow says "Context window (tokens)"
+// in the language the app shows.
+func AiContextWindow() string { return In(i18n.Locale()).AiContextWindow() }
+
+// AiContextWindow says "Context window (tokens)"
+// in the language of msgs.
+func (msgs Messages) AiContextWindow() string {
+	return Catalog.Format(msgs.locale, "aiContextWindow", nil)
+}
+
+// AiContextWindowLabel says "AI context window"
+// in the language the app shows.
+func AiContextWindowLabel() string { return In(i18n.Locale()).AiContextWindowLabel() }
+
+// AiContextWindowLabel says "AI context window"
+// in the language of msgs.
+func (msgs Messages) AiContextWindowLabel() string {
+	return Catalog.Format(msgs.locale, "aiContextWindowLabel", nil)
+}
+
+// AiContextWindowValue says "default {default}"
+// in the language the app shows.
+func AiContextWindowValue(default_ int) string {
+	return In(i18n.Locale()).AiContextWindowValue(default_)
+}
+
+// AiContextWindowValue says "default {default}"
+// in the language of msgs.
+func (msgs Messages) AiContextWindowValue(default_ int) string {
+	return Catalog.Format(msgs.locale, "aiContextWindowValue", map[string]any{"default": default_})
+}
+
+// AiContextWindowHint says "Used only to trim prompts; set it to the model's real context length. Larger values send more schema/history."
+// in the language the app shows.
+func AiContextWindowHint() string { return In(i18n.Locale()).AiContextWindowHint() }
+
+// AiContextWindowHint says "Used only to trim prompts; set it to the model's real context length. Larger values send more schema/history."
+// in the language of msgs.
+func (msgs Messages) AiContextWindowHint() string {
+	return Catalog.Format(msgs.locale, "aiContextWindowHint", nil)
+}
+
+// AiPreviewContext says "Preview Context"
+// in the language the app shows.
+func AiPreviewContext() string { return In(i18n.Locale()).AiPreviewContext() }
+
+// AiPreviewContext says "Preview Context"
+// in the language of msgs.
+func (msgs Messages) AiPreviewContext() string {
+	return Catalog.Format(msgs.locale, "aiPreviewContext", nil)
+}
+
+// AiPreviewDraft says "Pre-send preview"
+// in the language the app shows.
+func AiPreviewDraft() string { return In(i18n.Locale()).AiPreviewDraft() }
+
+// AiPreviewDraft says "Pre-send preview"
+// in the language of msgs.
+func (msgs Messages) AiPreviewDraft() string {
+	return Catalog.Format(msgs.locale, "aiPreviewDraft", nil)
+}
+
+// AiPreviewNoQuestion says "(no question typed yet)"
+// in the language the app shows.
+func AiPreviewNoQuestion() string { return In(i18n.Locale()).AiPreviewNoQuestion() }
+
+// AiPreviewNoQuestion says "(no question typed yet)"
+// in the language of msgs.
+func (msgs Messages) AiPreviewNoQuestion() string {
+	return Catalog.Format(msgs.locale, "aiPreviewNoQuestion", nil)
+}
+
+// AiContextTokens says "~{tokens}/{limit} tokens"
+// in the language the app shows.
+func AiContextTokens(tokens int, limit int) string {
+	return In(i18n.Locale()).AiContextTokens(tokens, limit)
+}
+
+// AiContextTokens says "~{tokens}/{limit} tokens"
+// in the language of msgs.
+func (msgs Messages) AiContextTokens(tokens int, limit int) string {
+	return Catalog.Format(msgs.locale, "aiContextTokens", map[string]any{"tokens": tokens, "limit": limit})
+}
+
+// AiContextDropped says "trimmed {tables} tables · {cols} columns · {history} history · {errors} errors · {samples} samples"
+// in the language the app shows.
+func AiContextDropped(tables int, cols int, history int, errors int, samples int) string {
+	return In(i18n.Locale()).AiContextDropped(tables, cols, history, errors, samples)
+}
+
+// AiContextDropped says "trimmed {tables} tables · {cols} columns · {history} history · {errors} errors · {samples} samples"
+// in the language of msgs.
+func (msgs Messages) AiContextDropped(tables int, cols int, history int, errors int, samples int) string {
+	return Catalog.Format(msgs.locale, "aiContextDropped", map[string]any{"tables": tables, "cols": cols, "history": history, "errors": errors, "samples": samples})
+}
+
+// AiContextTextTrimmed says "SQL/plan text truncated"
+// in the language the app shows.
+func AiContextTextTrimmed() string { return In(i18n.Locale()).AiContextTextTrimmed() }
+
+// AiContextTextTrimmed says "SQL/plan text truncated"
+// in the language of msgs.
+func (msgs Messages) AiContextTextTrimmed() string {
+	return Catalog.Format(msgs.locale, "aiContextTextTrimmed", nil)
+}
+
 // AiDebugTablesCols says "tables {tables} · columns {cols}"
 // in the language the app shows.
 func AiDebugTablesCols(tables int, cols int) string {
@@ -6884,56 +6968,6 @@ func AiDebugTablesCols(tables int, cols int) string {
 // in the language of msgs.
 func (msgs Messages) AiDebugTablesCols(tables int, cols int) string {
 	return Catalog.Format(msgs.locale, "aiDebugTablesCols", map[string]any{"tables": tables, "cols": cols})
-}
-
-// AiDebugEmptyColumns says "no columns {n}"
-// in the language the app shows.
-func AiDebugEmptyColumns(n int) string { return In(i18n.Locale()).AiDebugEmptyColumns(n) }
-
-// AiDebugEmptyColumns says "no columns {n}"
-// in the language of msgs.
-func (msgs Messages) AiDebugEmptyColumns(n int) string {
-	return Catalog.Format(msgs.locale, "aiDebugEmptyColumns", map[string]any{"n": n})
-}
-
-// AiDebugHistory says "history {n}"
-// in the language the app shows.
-func AiDebugHistory(n int) string { return In(i18n.Locale()).AiDebugHistory(n) }
-
-// AiDebugHistory says "history {n}"
-// in the language of msgs.
-func (msgs Messages) AiDebugHistory(n int) string {
-	return Catalog.Format(msgs.locale, "aiDebugHistory", map[string]any{"n": n})
-}
-
-// AiDebugErrors says "errors {n}"
-// in the language the app shows.
-func AiDebugErrors(n int) string { return In(i18n.Locale()).AiDebugErrors(n) }
-
-// AiDebugErrors says "errors {n}"
-// in the language of msgs.
-func (msgs Messages) AiDebugErrors(n int) string {
-	return Catalog.Format(msgs.locale, "aiDebugErrors", map[string]any{"n": n})
-}
-
-// AiDebugSQLBytes says "current SQL {n}B"
-// in the language the app shows.
-func AiDebugSQLBytes(n int) string { return In(i18n.Locale()).AiDebugSQLBytes(n) }
-
-// AiDebugSQLBytes says "current SQL {n}B"
-// in the language of msgs.
-func (msgs Messages) AiDebugSQLBytes(n int) string {
-	return Catalog.Format(msgs.locale, "aiDebugSQLBytes", map[string]any{"n": n})
-}
-
-// AiDebugSelectionBytes says "selection {n}B"
-// in the language the app shows.
-func AiDebugSelectionBytes(n int) string { return In(i18n.Locale()).AiDebugSelectionBytes(n) }
-
-// AiDebugSelectionBytes says "selection {n}B"
-// in the language of msgs.
-func (msgs Messages) AiDebugSelectionBytes(n int) string {
-	return Catalog.Format(msgs.locale, "aiDebugSelectionBytes", map[string]any{"n": n})
 }
 
 // AiDebugEmpty says "No AI requests have been sent yet."
