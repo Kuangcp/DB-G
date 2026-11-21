@@ -530,6 +530,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 				a.connFormTimeout = strconv.Itoa(p.QueryTimeout)
 			}
 			a.connFormGuard = p.GuardBlock
+			a.connFormAIStrict = p.AIContextStrict
 			a.connProto = connProtoIndex(p.Protocol)
 			a.connFormFolder = p.FolderID
 			a.setConnTagForm(p.Tags)
@@ -576,19 +577,20 @@ func (a *root) duplicateConn(p app.ConnProfile) {
 		name = locales.ConnDupNameN(p.Name, i)
 	}
 	cloned := app.ConnProfile{
-		Name:         name,
-		Kind:         p.Kind,
-		Path:         p.Path,
-		Host:         p.Host,
-		Port:         p.Port,
-		User:         p.User,
-		Password:     p.Password,
-		Database:     p.Database,
-		Protocol:     p.Protocol,
-		Params:       p.Params,
-		FolderID:     p.FolderID,
-		QueryTimeout: p.QueryTimeout,
-		Tags:         p.Tags,
+		Name:            name,
+		Kind:            p.Kind,
+		Path:            p.Path,
+		Host:            p.Host,
+		Port:            p.Port,
+		User:            p.User,
+		Password:        p.Password,
+		Database:        p.Database,
+		Protocol:        p.Protocol,
+		Params:          p.Params,
+		FolderID:        p.FolderID,
+		QueryTimeout:    p.QueryTimeout,
+		AIContextStrict: p.AIContextStrict,
+		Tags:            p.Tags,
 	}
 	if err := a.store.Add(cloned); err != nil {
 		a.connErr = locales.ConnDupFailed(err.Error())
@@ -794,6 +796,7 @@ func (a *root) connModal(c *ui.Context) {
 					}
 				})
 				ui.Checkbox(c, &a.connFormGuard, locales.ConnFormBlockGuard())
+				ui.Checkbox(c, &a.connFormAIStrict, locales.ConnFormAIStrict()).Tooltip(locales.ConnFormAIStrictTip())
 
 				if a.connFormErr != "" {
 					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
@@ -943,6 +946,7 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 	}
 	p.QueryTimeout = sec
 	p.GuardBlock = a.connFormGuard
+	p.AIContextStrict = a.connFormAIStrict
 	p.Tags = a.connTagFormList()
 	if a.connFormKind == "sqlite" {
 		return p, nil
@@ -1105,6 +1109,7 @@ func (a *root) openNewConnForm(folderID string) {
 	a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
 	a.connFormParams, a.connFormTimeout, a.connProto = "", "", 0
 	a.connFormGuard = false
+	a.connFormAIStrict = false
 	a.connFormFolder = folderID
 	a.resetConnTagForm()
 	a.resetConnTest()

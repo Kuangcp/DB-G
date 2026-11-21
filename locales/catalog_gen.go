@@ -1400,6 +1400,26 @@ func (msgs Messages) ConnFormNoTags() string {
 	return Catalog.Format(msgs.locale, "connFormNoTags", nil)
 }
 
+// ConnFormAIStrict says "AI: send schema and current SQL only"
+// in the language the app shows.
+func ConnFormAIStrict() string { return In(i18n.Locale()).ConnFormAIStrict() }
+
+// ConnFormAIStrict says "AI: send schema and current SQL only"
+// in the language of msgs.
+func (msgs Messages) ConnFormAIStrict() string {
+	return Catalog.Format(msgs.locale, "connFormAIStrict", nil)
+}
+
+// ConnFormAIStrictTip says "Ignores global DDL/sample/history/error switches for this connection."
+// in the language the app shows.
+func ConnFormAIStrictTip() string { return In(i18n.Locale()).ConnFormAIStrictTip() }
+
+// ConnFormAIStrictTip says "Ignores global DDL/sample/history/error switches for this connection."
+// in the language of msgs.
+func (msgs Messages) ConnFormAIStrictTip() string {
+	return Catalog.Format(msgs.locale, "connFormAIStrictTip", nil)
+}
+
 // ConnFormBlockGuard says "Block high-risk SQL directly (warn by default)"
 // in the language the app shows.
 func ConnFormBlockGuard() string { return In(i18n.Locale()).ConnFormBlockGuard() }
@@ -6322,6 +6342,40 @@ func AiKindChat() string { return In(i18n.Locale()).AiKindChat() }
 // in the language of msgs.
 func (msgs Messages) AiKindChat() string {
 	return Catalog.Format(msgs.locale, "aiKindChat", nil)
+}
+
+// AiSelfCheck says "SQL self-check: {issues}"
+// in the language the app shows.
+func AiSelfCheck(issues string) string { return In(i18n.Locale()).AiSelfCheck(issues) }
+
+// AiSelfCheck says "SQL self-check: {issues}"
+// in the language of msgs.
+func (msgs Messages) AiSelfCheck(issues string) string {
+	return Catalog.Format(msgs.locale, "aiSelfCheck", map[string]any{"issues": issues})
+}
+
+// AiSelfCheckUnknownTable says "table {name} not found"
+// in the language the app shows.
+func AiSelfCheckUnknownTable(name string) string {
+	return In(i18n.Locale()).AiSelfCheckUnknownTable(name)
+}
+
+// AiSelfCheckUnknownTable says "table {name} not found"
+// in the language of msgs.
+func (msgs Messages) AiSelfCheckUnknownTable(name string) string {
+	return Catalog.Format(msgs.locale, "aiSelfCheckUnknownTable", map[string]any{"name": name})
+}
+
+// AiSelfCheckUnknownColumn says "column {column} not found on {table}"
+// in the language the app shows.
+func AiSelfCheckUnknownColumn(column string, table string) string {
+	return In(i18n.Locale()).AiSelfCheckUnknownColumn(column, table)
+}
+
+// AiSelfCheckUnknownColumn says "column {column} not found on {table}"
+// in the language of msgs.
+func (msgs Messages) AiSelfCheckUnknownColumn(column string, table string) string {
+	return Catalog.Format(msgs.locale, "aiSelfCheckUnknownColumn", map[string]any{"column": column, "table": table})
 }
 
 // AiTimeout says "AI response timed out; try again"

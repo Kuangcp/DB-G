@@ -19,6 +19,7 @@ type aiFixState struct {
 	original string
 	fixed    string
 	err      string
+	check    string // 本地 SQL 自检提示
 	seq      uint64
 	cancel   context.CancelFunc
 	diff     *myeditor.DiffState
@@ -122,6 +123,7 @@ func (a *root) finishAIFix(seq uint64, raw string, err error) {
 		return
 	}
 	a.aiFix.fixed = fixed
+	a.aiFix.check = aiSQLCheckText(a.aiSQLLint(fixed))
 	lang := myeditor.LanguageFor("query.sql")
 	old := myeditor.NewBuffer(a.aiFix.original)
 	old.SetLanguage(lang)
@@ -213,6 +215,9 @@ func (a *root) aiFixModal(c *ui.Context) {
 			})
 		case a.aiFix.err != "":
 			ui.Text(c, a.aiFix.err).TextColor(t.Danger).FontSize(12)
+		}
+		if a.aiFix.check != "" {
+			ui.Text(c, a.aiFix.check).FontSize(11).TextColor(t.Warning).SingleLine().Tooltip(a.aiFix.check)
 		}
 		if a.aiFix.diff != nil {
 			myeditor.DiffView(c, a.aiFix.diff).Grow(1).FillWidth()

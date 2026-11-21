@@ -50,6 +50,27 @@ type aiDDLRequest struct {
 	kind   engine.ObjectKind
 }
 
+// aiEgressPolicy 是当前连接实际生效的 AI 出网策略：全局开关 AND 连接级严格模式。
+type aiEgressPolicy struct {
+	ddl, samples, history, errors bool
+}
+
+func (a *root) aiEgressPolicy() aiEgressPolicy {
+	strict := false
+	if a.store != nil {
+		if p, ok := a.store.Get(a.activeConnID()); ok {
+			strict = p.AIContextStrict
+		}
+	}
+	if strict {
+		return aiEgressPolicy{}
+	}
+	return aiEgressPolicy{
+		ddl: a.aiPrefs.AllowDDL, samples: a.aiPrefs.AllowSampleRows,
+		history: a.aiPrefs.AllowHistory, errors: a.aiPrefs.AllowErrorLogs,
+	}
+}
+
 // aiResultContext 把当前结果集压成“形状”（列/行数/耗时），
 // 只有用户开启时才附带少量样本行。
 func (a *root) aiResultContext() *ai.ResultContext {
@@ -76,7 +97,7 @@ func (a *root) aiResultContext() *ai.ResultContext {
 		}
 		out.Columns = append(out.Columns, ai.ResultColumn{Name: name, Type: typ})
 	}
-	if a.aiPrefs.AllowSampleRows {
+	if a.aiEgressPolicy().samples {
 		rows := min(len(res.Rows), aiResultSamples)
 		cols := min(len(res.Columns), aiSampleColumns)
 		for _, row := range res.Rows[:rows] {
@@ -314,7 +335,7 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, done f
 	}
 	var ddlReqs []aiDDLRequest
 	var missingDDL []aiDDLRequest
-	if a.aiPrefs.AllowDDL {
+	if a.aiEgressPolicy().ddl {
 		ddlReqs = a.aiDDLRequests(connID, snap)
 		a.attachAIDDL(&snap, connID, ddlReqs)
 		for _, req := range ddlReqs {

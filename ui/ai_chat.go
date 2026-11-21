@@ -36,6 +36,7 @@ type aiChatState struct {
 	seq           uint64
 	err           string
 	lastCtx       string
+	check         string // 最近一次插入 SQL 的本地自检结果
 	preparing     bool   // 正在补齐 DDL 等上下文
 	prepareSeq    uint64 // 上下文准备轮次；旧结果作废
 	usage         ai.Usage
@@ -137,14 +138,14 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 			}
 		}
 	}
-	if a.aiPrefs.AllowHistory && a.history != nil && connID != "" {
+	if a.aiEgressPolicy().history && a.history != nil && connID != "" {
 		for _, h := range a.history.List(connID, 20) {
 			snap.History = append(snap.History, ai.HistoryItem{
 				SQL: ai.Redact(h.SQL), OK: h.OK, Err: ai.Redact(h.Err), Rows: h.Rows,
 			})
 		}
 	}
-	if a.aiPrefs.AllowErrorLogs && a.consoleErr != "" {
+	if a.aiEgressPolicy().errors && a.consoleErr != "" {
 		snap.Errors = append(snap.Errors, ai.ErrorItem{SQL: ai.Redact(snap.ActiveSQL), Err: ai.Redact(a.consoleErr)})
 	}
 	return snap
@@ -201,7 +202,7 @@ func (a *root) chatSnapshot() ai.ContextSnapshot {
 	snap.Plan = a.aiPlanContext()
 	if connID := a.activeConnID(); connID != "" {
 		a.attachCachedAIRelations(&snap, connID)
-		if a.aiPrefs.AllowDDL {
+		if a.aiEgressPolicy().ddl {
 			reqs := a.aiDDLRequests(connID, snap)
 			a.attachAIDDL(&snap, connID, reqs)
 		}
@@ -223,6 +224,7 @@ func (a *root) sendAI() {
 func (a *root) sendAIChat(q string, snap ai.ContextSnapshot) {
 	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
 	a.aiChat.lastCtx = aiContextNote(rep, "")
+	a.aiChat.check = ""
 	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(rep, ""), q, msgs); err != nil {
 		a.aiChat.err = err.Error()
 		return
@@ -420,6 +422,7 @@ func (a *root) insertAISQL(text string) bool {
 	if !ok {
 		return false
 	}
+	a.aiChat.check = aiSQLCheckText(a.aiSQLLint(sql))
 	a.code.Insert(sql)
 	return true
 }
@@ -505,6 +508,7 @@ func (a *root) selectAIConversation(id string, saveCurrent bool) {
 	}
 	a.aiChat.convID = id
 	a.aiChat.messages = a.aiChat.messages[:0]
+	a.aiChat.check = ""
 	for _, m := range conv.Messages {
 		a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{
 			role: m.Role, text: m.Text, done: m.Done, err: m.Err,
@@ -527,6 +531,7 @@ func (a *root) newAIConversation() {
 	a.aiChat.messages = nil
 	a.aiChat.err = ""
 	a.aiChat.lastCtx = ""
+	a.aiChat.check = ""
 	a.aiChat.usage = ai.Usage{}
 	a.aiChat.scroll.Y = 0
 	a.saveAIChat()

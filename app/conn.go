@@ -37,6 +37,9 @@ type ConnProfile struct {
 	QueryTimeout int `json:"queryTimeout,omitempty"`
 	// GuardBlock 为 true 时，高危 SQL 规则命中直接阻断执行；默认只提醒。
 	GuardBlock bool `json:"guardBlock,omitempty"`
+	// AIContextStrict 为 true 时，该连接只发送 schema 与当前 SQL：
+	// 即使全局 AI 设置允许，也不发送 DDL、样本、历史与错误日志。
+	AIContextStrict bool `json:"aiContextStrict,omitempty"`
 	// Tags 是数据源标签（最多 MaxConnTags 个），用于结果区底栏标记。
 	Tags []ConnTag `json:"tags,omitempty"`
 }

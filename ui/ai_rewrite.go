@@ -23,6 +23,7 @@ type aiRewriteState struct {
 	version     uint64 // 打开时的正文版本，应用前校验
 	result      string
 	err         string
+	check       string // 本地 SQL 自检提示
 	seq         uint64
 	cancel      context.CancelFunc
 	diff        *myeditor.DiffState
@@ -63,7 +64,7 @@ func (a *root) startAIRewrite() {
 	msgs, rep := ai.BuildRewrite(snap, st.target, instruction, a.aiBudget(1600))
 	a.recordAIRequest(locales.AiKindRewrite(), a.aiModelName(),
 		aiContextNote(rep, locales.AiRewriteStats(len(st.target), len(instruction))), msgs)
-	st.loading, st.err, st.result, st.diff = true, "", "", nil
+	st.loading, st.err, st.result, st.check, st.diff = true, "", "", "", nil
 	ctx, cancel := context.WithCancel(context.Background())
 	st.seq++
 	seq := st.seq
@@ -132,6 +133,7 @@ func (a *root) finishAIRewrite(seq uint64, raw string, err error) {
 		return
 	}
 	st.result = fixed
+	st.check = aiSQLCheckText(a.aiSQLLint(fixed))
 	lang := myeditor.LanguageFor("query.sql")
 	old := myeditor.NewBuffer(st.target)
 	old.SetLanguage(lang)
@@ -270,6 +272,9 @@ func (a *root) aiRewriteModal(c *ui.Context) {
 			})
 		case st.err != "":
 			ui.Text(c, st.err).TextColor(t.Danger).FontSize(12).SingleLine().Tooltip(st.err)
+		}
+		if st.check != "" {
+			ui.Text(c, st.check).FontSize(11).TextColor(t.Warning).SingleLine().Tooltip(st.check)
 		}
 		if st.diff != nil {
 			ui.Text(c, locales.AiDiff()).FontSize(11).TextColor(t.TextMuted)

@@ -77,6 +77,9 @@ func (a *root) aiPanel(c *ui.Context) {
 		if st.preparing {
 			ui.Text(c, locales.AiPreparingContext()).FontSize(11).TextColor(t.TextMuted).SingleLine()
 		}
+		if st.check != "" {
+			ui.Text(c, st.check).FontSize(11).TextColor(t.Warning).SingleLine().Tooltip(st.check)
+		}
 		if st.err != "" {
 			ui.Text(c, st.err).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(st.err)
 		}
@@ -141,7 +144,7 @@ func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 				}
 				if sql, ok := ai.ExtractSQL(m.text); ok {
 					if ui.Button(c, locales.AiInsertSQL()).Clicked() {
-						a.code.Insert(sql)
+						a.insertAISQL(m.text)
 					}
 					if ui.Button(c, locales.AiCopySQL()).Clicked() {
 						c.WriteClipboard(sql)

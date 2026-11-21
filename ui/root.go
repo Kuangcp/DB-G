@@ -51,6 +51,7 @@ type root struct {
 	connFormParams    string
 	connFormTimeout   string                       // 查询超时（秒，空 = 默认 30）
 	connFormGuard     bool                         // 高危 SQL 硬阻断
+	connFormAIStrict  bool                         // 连接级 AI 只发 schema + SQL
 	connProto         int                          // ClickHouse 协议：0 native / 1 http / 2 https
 	connFormFolder    string                       // 连接所属文件夹；空 = 根级
 	connFormTags      []connTagDraft               // 已添加标签（最多 app.MaxConnTags）
