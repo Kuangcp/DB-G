@@ -538,3 +538,82 @@ func TestAIPreviewShowsBudgetedContext(t *testing.T) {
 		t.Fatalf("preview note must report trimming: %q", a.aiDebug.draft.Note)
 	}
 }
+
+// 第二次提问必须携带前一轮 user/assistant 消息；当前问题仍放在最后。
+func TestAIChatSendsDialogue(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := a.consoleMgr().Create(prof.ID, "多轮")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.setActiveText("select * from users")
+
+	p := &fakeAIProvider{events: []ai.Event{
+		{Kind: ai.EventText, Text: "第一答"},
+		{Kind: ai.EventDone},
+	}}
+	a.aiTestProvider = p
+	a.aiPrefs.Model = "fake"
+	a.aiChat.open = true
+	a.aiChat.input = "第一问"
+	a.sendAI()
+
+	p.events = []ai.Event{{Kind: ai.EventText, Text: "第二答"}, {Kind: ai.EventDone}}
+	a.aiChat.input = "第二问"
+	a.sendAI()
+
+	msgs := p.req.Messages
+	if len(msgs) != 4 {
+		t.Fatalf("second request messages = %d: %+v", len(msgs), msgs)
+	}
+	if msgs[0].Role != ai.RoleSystem || msgs[1].Role != ai.RoleUser ||
+		msgs[2].Role != ai.RoleAssistant || msgs[3].Role != ai.RoleUser {
+		t.Fatalf("roles: %+v", msgs)
+	}
+	if msgs[1].Content != "第一问" || msgs[2].Content != "第一答" {
+		t.Fatalf("dialogue not preserved: %+v", msgs[1:3])
+	}
+	if !strings.Contains(msgs[3].Content, "第二问") || !strings.Contains(msgs[3].Content, "users") {
+		t.Fatalf("current turn missing context:\n%s", msgs[3].Content)
+	}
+	if strings.Contains(strings.Join([]string{msgs[1].Content, msgs[2].Content}, "\n"), "第二问") {
+		t.Fatal("current question must not appear in history")
+	}
+
+	// 预览也必须带同一份对话记忆。
+	a.aiChat.input = "第三问"
+	a.openAIPreview()
+	if !strings.Contains(a.aiDebug.body, "第一问") || !strings.Contains(a.aiDebug.body, "第一答") {
+		t.Fatalf("preview must carry dialogue:\n%s", a.aiDebug.body)
+	}
+}
+
+func TestAIDialogueKeepsRecentMessages(t *testing.T) {
+	a := newConsoleRoot(t)
+	for i := range 12 {
+		role := "user"
+		if i%2 == 1 {
+			role = "assistant"
+		}
+		a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{
+			role: role, text: fmt.Sprintf("msg-%02d", i), done: true,
+		})
+	}
+	// 未完成/空消息不进入上下文。
+	a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{role: "assistant", text: "", done: false})
+	got := a.aiDialogue()
+	if len(got) != maxAIDialogueMessages {
+		t.Fatalf("dialogue length = %d", len(got))
+	}
+	if got[0].Content != "msg-04" || got[len(got)-1].Content != "msg-11" {
+		t.Fatalf("dialogue window: %+v", got)
+	}
+}

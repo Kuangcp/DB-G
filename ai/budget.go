@@ -38,16 +38,18 @@ func (b Budget) Limit() int {
 
 // PromptReport 是一次裁剪后的上下文报告，供 UI 显示“实际发了什么、丢了什么”。
 type PromptReport struct {
-	Limit   int // 输入 token 上限
-	Tokens  int // 实际提示词估算 token
-	Tables  int // 最终包含的表
-	Columns int // 最终包含的列
+	Limit    int // 输入 token 上限
+	Tokens   int // 实际提示词估算 token
+	Tables   int // 最终包含的表
+	Columns  int // 最终包含的列
+	Dialogue int // 最终包含的对话消息
 
-	DroppedTables  int
-	DroppedColumns int
-	DroppedHistory int
-	DroppedErrors  int
-	DroppedSamples int
+	DroppedTables   int
+	DroppedColumns  int
+	DroppedDialogue int
+	DroppedHistory  int
+	DroppedErrors   int
+	DroppedSamples  int
 
 	TruncatedSQL       bool
 	TruncatedSelection bool
@@ -57,8 +59,8 @@ type PromptReport struct {
 
 // Trimmed 报告这次是否发生过任何裁剪。
 func (r PromptReport) Trimmed() bool {
-	return r.DroppedTables > 0 || r.DroppedColumns > 0 || r.DroppedHistory > 0 ||
-		r.DroppedErrors > 0 || r.DroppedSamples > 0 || r.TruncatedSQL ||
+	return r.DroppedTables > 0 || r.DroppedColumns > 0 || r.DroppedDialogue > 0 ||
+		r.DroppedHistory > 0 || r.DroppedErrors > 0 || r.DroppedSamples > 0 || r.TruncatedSQL ||
 		r.TruncatedSelection || r.TruncatedExtra || r.TruncatedText
 }
 
@@ -99,6 +101,18 @@ func trimSchemaStep(s *ContextSnapshot, rep *PromptReport) bool {
 	if len(s.Errors) == 1 {
 		rep.DroppedErrors++
 		s.Errors = nil
+		return true
+	}
+	// 对话从最旧的消息开始丢，保留最近的上下文。
+	if len(s.Dialogue) > 1 {
+		keep := len(s.Dialogue) / 2
+		rep.DroppedDialogue += len(s.Dialogue) - keep
+		s.Dialogue = s.Dialogue[len(s.Dialogue)-keep:]
+		return true
+	}
+	if len(s.Dialogue) == 1 {
+		rep.DroppedDialogue++
+		s.Dialogue = nil
 		return true
 	}
 	// 排名靠后的表先只留表名；通常前 8 张足够回答。
@@ -233,7 +247,7 @@ func trimChatText(s *ContextSnapshot, extras *[]string, rep *PromptReport) bool 
 // finalizeReport 记录最终实际包含的规模。
 func finalizeReport(s ContextSnapshot, rep *PromptReport, tokens int) PromptReport {
 	rep.Tokens = tokens
-	rep.Tables, rep.Columns = len(s.Tables), 0
+	rep.Tables, rep.Columns, rep.Dialogue = len(s.Tables), 0, len(s.Dialogue)
 	for _, t := range s.Tables {
 		rep.Columns += len(t.Columns)
 	}

@@ -87,10 +87,13 @@ func aiContextNote(rep ai.PromptReport, extra string) string {
 		locales.AiDebugTablesCols(rep.Tables, rep.Columns),
 		locales.AiContextTokens(rep.Tokens, rep.Limit),
 	}
+	if rep.Dialogue > 0 {
+		parts = append(parts, locales.AiDebugDialogue(rep.Dialogue))
+	}
 	if rep.Trimmed() {
 		parts = append(parts, locales.AiContextDropped(
-			rep.DroppedTables, rep.DroppedColumns, rep.DroppedHistory,
-			rep.DroppedErrors, rep.DroppedSamples))
+			rep.DroppedTables, rep.DroppedColumns, rep.DroppedDialogue,
+			rep.DroppedHistory, rep.DroppedErrors, rep.DroppedSamples))
 		if rep.TruncatedSQL || rep.TruncatedSelection || rep.TruncatedExtra || rep.TruncatedText {
 			parts = append(parts, locales.AiContextTextTrimmed())
 		}
@@ -115,7 +118,7 @@ func (a *root) openAIDebug() {
 // openAIPreview 组装“现在发送会发什么”的草稿，不改编辑器、不发请求。
 func (a *root) openAIPreview() {
 	q := strings.TrimSpace(a.aiChat.input)
-	snap := a.aiSnapshot()
+	snap := a.chatSnapshot()
 	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
 	note := aiContextNote(rep, "")
 	if q == "" {

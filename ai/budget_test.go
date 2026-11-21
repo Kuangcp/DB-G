@@ -99,3 +99,56 @@ func TestBuildFixKeepsFailedSQLOnce(t *testing.T) {
 		t.Fatalf("failed SQL should appear once, got %d:\n%s", n, body)
 	}
 }
+
+func TestBuildChatIncludesDialogueInOrder(t *testing.T) {
+	snapshot := ContextSnapshot{
+		Connection: ConnInfo{Kind: "mysql"},
+		Dialogue: []Message{
+			{Role: RoleUser, Content: "上一问"},
+			{Role: RoleAssistant, Content: "上一答"},
+		},
+	}
+	msgs, _ := BuildChat(snapshot, "这一问", Budget{})
+	if len(msgs) != 4 {
+		t.Fatalf("messages: %+v", msgs)
+	}
+	want := []struct {
+		role Role
+		text string
+	}{
+		{RoleSystem, ""},
+		{RoleUser, "上一问"},
+		{RoleAssistant, "上一答"},
+		{RoleUser, "这一问"},
+	}
+	for i, w := range want {
+		if msgs[i].Role != w.role || (w.text != "" && !strings.Contains(msgs[i].Content, w.text)) {
+			t.Fatalf("message %d: %+v", i, msgs[i])
+		}
+	}
+	// 一次性任务（修复/计划/改写）不能带聊天历史。
+	fixMsgs, _ := BuildFix(snapshot, "select 1", "err", Budget{})
+	if strings.Contains(fixMsgs[1].Content, "上一问") {
+		t.Fatalf("fix prompt must not carry dialogue:\n%s", fixMsgs[1].Content)
+	}
+}
+
+func TestBudgetDropsOldestDialogue(t *testing.T) {
+	var dialogue []Message
+	for i := range 8 {
+		dialogue = append(dialogue, Message{Role: RoleUser, Content: strings.Repeat("旧消息 ", 120) + itoa(i)})
+	}
+	_, rep := BuildChat(ContextSnapshot{
+		Connection: ConnInfo{Kind: "sqlite"},
+		Dialogue:   dialogue,
+	}, "新问题", Budget{ContextWindow: 2400, MaxOutput: 900})
+	if rep.DroppedDialogue == 0 {
+		t.Fatalf("expected old dialogue to be dropped: %+v", rep)
+	}
+	if rep.Dialogue == 0 || rep.Dialogue >= len(dialogue) {
+		t.Fatalf("should keep the newest dialogue: %+v", rep)
+	}
+	if rep.Tokens > rep.Limit {
+		t.Fatalf("over budget: %d > %d", rep.Tokens, rep.Limit)
+	}
+}

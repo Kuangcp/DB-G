@@ -128,13 +128,44 @@ func (a *root) aiSnapshot() ai.ContextSnapshot {
 	return snap
 }
 
+// maxAIDialogueMessages 是随请求发送的最近对话消息数（约 4 轮）。
+const maxAIDialogueMessages = 8
+
+// aiDialogue 把面板里已完成的消息转成模型对话历史，只保留最近几轮。
+// 正在流式生成或没有正文的消息不发送。
+func (a *root) aiDialogue() []ai.Message {
+	var out []ai.Message
+	for _, m := range a.aiChat.messages {
+		if strings.TrimSpace(m.text) == "" || !m.done {
+			continue
+		}
+		switch m.role {
+		case "user":
+			out = append(out, ai.Message{Role: ai.RoleUser, Content: m.text})
+		case "assistant":
+			out = append(out, ai.Message{Role: ai.RoleAssistant, Content: m.text})
+		}
+	}
+	if len(out) > maxAIDialogueMessages {
+		out = out[len(out)-maxAIDialogueMessages:]
+	}
+	return out
+}
+
+// chatSnapshot 是 Chat/预览专用快照：在普通上下文上附最近对话。
+func (a *root) chatSnapshot() ai.ContextSnapshot {
+	snap := a.aiSnapshot()
+	snap.Dialogue = a.aiDialogue()
+	return snap
+}
+
 // sendAI 发送当前输入；服务端错误只写面板，不影响查询。
 func (a *root) sendAI() {
 	q := strings.TrimSpace(a.aiChat.input)
 	if q == "" {
 		return
 	}
-	snap := a.aiSnapshot()
+	snap := a.chatSnapshot()
 	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
 	a.aiChat.lastCtx = aiContextNote(rep, "")
 	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(rep, ""), q, msgs); err != nil {

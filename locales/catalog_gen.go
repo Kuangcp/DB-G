@@ -6936,16 +6936,16 @@ func (msgs Messages) AiContextTokens(tokens int, limit int) string {
 	return Catalog.Format(msgs.locale, "aiContextTokens", map[string]any{"tokens": tokens, "limit": limit})
 }
 
-// AiContextDropped says "trimmed {tables} tables · {cols} columns · {history} history · {errors} errors · {samples} samples"
+// AiContextDropped says "trimmed {tables} tables · {cols} columns · {dialogue} dialogue · {history} history · {errors} errors · {samples}…"
 // in the language the app shows.
-func AiContextDropped(tables int, cols int, history int, errors int, samples int) string {
-	return In(i18n.Locale()).AiContextDropped(tables, cols, history, errors, samples)
+func AiContextDropped(tables int, cols int, dialogue int, history int, errors int, samples int) string {
+	return In(i18n.Locale()).AiContextDropped(tables, cols, dialogue, history, errors, samples)
 }
 
-// AiContextDropped says "trimmed {tables} tables · {cols} columns · {history} history · {errors} errors · {samples} samples"
+// AiContextDropped says "trimmed {tables} tables · {cols} columns · {dialogue} dialogue · {history} history · {errors} errors · {samples}…"
 // in the language of msgs.
-func (msgs Messages) AiContextDropped(tables int, cols int, history int, errors int, samples int) string {
-	return Catalog.Format(msgs.locale, "aiContextDropped", map[string]any{"tables": tables, "cols": cols, "history": history, "errors": errors, "samples": samples})
+func (msgs Messages) AiContextDropped(tables int, cols int, dialogue int, history int, errors int, samples int) string {
+	return Catalog.Format(msgs.locale, "aiContextDropped", map[string]any{"tables": tables, "cols": cols, "dialogue": dialogue, "history": history, "errors": errors, "samples": samples})
 }
 
 // AiContextTextTrimmed says "SQL/plan text truncated"
@@ -6968,6 +6968,16 @@ func AiDebugTablesCols(tables int, cols int) string {
 // in the language of msgs.
 func (msgs Messages) AiDebugTablesCols(tables int, cols int) string {
 	return Catalog.Format(msgs.locale, "aiDebugTablesCols", map[string]any{"tables": tables, "cols": cols})
+}
+
+// AiDebugDialogue says "dialogue {n}"
+// in the language the app shows.
+func AiDebugDialogue(n int) string { return In(i18n.Locale()).AiDebugDialogue(n) }
+
+// AiDebugDialogue says "dialogue {n}"
+// in the language of msgs.
+func (msgs Messages) AiDebugDialogue(n int) string {
+	return Catalog.Format(msgs.locale, "aiDebugDialogue", map[string]any{"n": n})
 }
 
 // AiDebugEmpty says "No AI requests have been sent yet."
