@@ -19,7 +19,7 @@ type aiFixState struct {
 	original string
 	fixed    string
 	err      string
-	check    string // 本地 SQL 自检提示
+	lint     aiSQLReport // 本地 SQL 自检
 	seq      uint64
 	cancel   context.CancelFunc
 	diff     *myeditor.DiffState
@@ -48,8 +48,8 @@ func (a *root) fixErrorSQL() {
 		return
 	}
 	snap := a.aiSnapshot()
-	msgs, rep := ai.BuildFix(snap, sql, errText, a.aiBudget(1200))
-	a.recordAIRequest(locales.AiKindFix(), a.aiModelName(),
+	msgs, rep := ai.BuildFix(snap, sql, errText, a.aiBudget(a.aiTaskMaxTokens("fix")))
+	a.recordAIRequest(locales.AiKindFix(), a.aiTaskModel("fix"),
 		aiContextNote(rep, locales.AiFailureStats(len(sql), len(errText))), msgs)
 	a.aiFix = aiFixState{open: true, loading: true, original: sql}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -57,10 +57,10 @@ func (a *root) fixErrorSQL() {
 	seq := a.aiFix.seq
 	a.aiFix.cancel = cancel
 	req := ai.Request{
-		Model:       a.aiPrefs.Model,
+		Model:       a.aiTaskModel("fix"),
 		Messages:    msgs,
 		Temperature: 0,
-		MaxTokens:   1200,
+		MaxTokens:   a.aiTaskMaxTokens("fix"),
 	}
 	read := func(ch <-chan ai.Event) (string, error) {
 		var b strings.Builder
@@ -99,7 +99,7 @@ func (a *root) fixErrorSQL() {
 			}
 			return
 		}
-		app.LogInfo("ai", "fix request", "model", a.aiPrefs.Model, "sql_len", len(sql))
+		app.LogInfo("ai", "fix request", "model", a.aiTaskModel("fix"), "sql_len", len(sql))
 		text, err := read(ch)
 		a.safeUpdate(win, func() { a.finishAIFix(seq, text, err) })
 	}()
@@ -123,7 +123,7 @@ func (a *root) finishAIFix(seq uint64, raw string, err error) {
 		return
 	}
 	a.aiFix.fixed = fixed
-	a.aiFix.check = aiSQLCheckText(a.aiSQLLint(fixed))
+	a.aiFix.lint = a.aiSQLCheck(fixed)
 	lang := myeditor.LanguageFor("query.sql")
 	old := myeditor.NewBuffer(a.aiFix.original)
 	old.SetLanguage(lang)
@@ -216,8 +216,8 @@ func (a *root) aiFixModal(c *ui.Context) {
 		case a.aiFix.err != "":
 			ui.Text(c, a.aiFix.err).TextColor(t.Danger).FontSize(12)
 		}
-		if a.aiFix.check != "" {
-			ui.Text(c, a.aiFix.check).FontSize(11).TextColor(t.Warning).SingleLine().Tooltip(a.aiFix.check)
+		if !a.aiFix.lint.Empty() {
+			showAILintButton(a, c, a.aiFix.lint)
 		}
 		if a.aiFix.diff != nil {
 			myeditor.DiffView(c, a.aiFix.diff).Grow(1).FillWidth()

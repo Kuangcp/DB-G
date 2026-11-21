@@ -58,6 +58,12 @@ func TestAISQLLint(t *testing.T) {
 	if got := a.aiSQLLint(`select missing_col from users`); len(got) != 1 || got[0].Column != "missing_col" {
 		t.Fatalf("missing bare column: %+v", got)
 	}
+	if rep := a.aiSQLCheck(`delete from users`); len(rep.Risks) == 0 || !rep.HasRisk() {
+		t.Fatalf("high-risk rule missing: %+v", rep)
+	}
+	if rep := a.aiSQLCheck(`drop table users`); len(rep.Risks) == 0 {
+		t.Fatalf("drop rule missing: %+v", rep)
+	}
 }
 
 func TestInsertAISQLRunsSelfCheck(t *testing.T) {
@@ -65,8 +71,8 @@ func TestInsertAISQLRunsSelfCheck(t *testing.T) {
 	if !a.insertAISQL("```sql\nselect u.missing_col from users u;\n```") {
 		t.Fatal("insert failed")
 	}
-	if !strings.Contains(a.aiChat.check, "missing_col") {
-		t.Fatalf("self-check warning missing: %q", a.aiChat.check)
+	if !strings.Contains(a.aiChat.lint.Summary(), "missing_col") {
+		t.Fatalf("self-check warning missing: %q", a.aiChat.lint.Summary())
 	}
 	if !strings.Contains(a.code.Text(), "missing_col") {
 		t.Fatalf("SQL not inserted: %q", a.code.Text())

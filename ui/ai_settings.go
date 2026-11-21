@@ -88,9 +88,59 @@ func (a *root) aiSection(c *ui.Context) {
 		a.saveAIPrefs()
 	}
 
+	// 任务级模型：留空继承聊天模型。
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, locales.AiCompletionModel()).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Width(130)
+		ui.Spacer(c)
+		if ui.TextInput(c, &a.aiPrefs.CompletionModel).
+			Placeholder(locales.AiModelInherit()).Label(locales.AiCompletionModel()).
+			Radius(cr).Fill().Changed() {
+			a.saveAIPrefs()
+		}
+	})
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, locales.AiFixModel()).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Width(130)
+		ui.Spacer(c)
+		if ui.TextInput(c, &a.aiPrefs.FixModel).
+			Placeholder(locales.AiModelInherit()).Label(locales.AiFixModel()).
+			Radius(cr).Fill().Changed() {
+			a.saveAIPrefs()
+		}
+	})
+
+	ui.Divider(c)
+	ui.Text(c, locales.AiTaskParams()).Bold()
+	ui.Text(c, locales.AiTaskParamsHint()).FontSize(11).TextColor(c.Theme().TextMuted)
+	taskNum := func(label string, v *int, lo, hi, step int) {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, label).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Width(160)
+			ui.Spacer(c)
+			n := float64(*v)
+			if ui.NumberInput(c, &n, float64(lo), float64(hi), float64(step)).
+				Label(label).Width(110).Radius(cr).Changed() {
+				*v = int(n)
+				a.saveAIPrefs()
+			}
+		})
+	}
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, locales.AiChatTemperature()).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Width(160)
+		ui.Spacer(c)
+		temp := a.aiPrefs.ChatTemperature
+		if ui.NumberInput(c, &temp, 0.1, 2, 0.1).
+			Label(locales.AiChatTemperature()).Width(110).Radius(cr).Changed() {
+			a.aiPrefs.ChatTemperature = temp
+			a.saveAIPrefs()
+		}
+	})
+	taskNum(locales.AiChatMaxTokens(), &a.aiPrefs.ChatMaxTokens, 256, 32768, 64)
+	taskNum(locales.AiCompletionMaxTokens(), &a.aiPrefs.CompletionMaxTokens, 32, 4096, 32)
+	taskNum(locales.AiFixMaxTokens(), &a.aiPrefs.FixMaxTokens, 256, 8192, 64)
+	taskNum(locales.AiRewriteMaxTokens(), &a.aiPrefs.RewriteMaxTokens, 256, 8192, 64)
+
 	// 上下文窗口只影响提示词裁剪，不会改模型本身；0 表示用默认 8192。
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, locales.AiContextWindow()).FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, locales.AiContextWindow()).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Width(160)
 		win := float64(a.aiPrefs.ContextWindow)
 		if win <= 0 {
 			win = float64(ai.DefaultContextWindow)

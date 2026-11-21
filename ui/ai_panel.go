@@ -3,7 +3,6 @@ package ui
 import (
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -77,8 +76,8 @@ func (a *root) aiPanel(c *ui.Context) {
 		if st.preparing {
 			ui.Text(c, locales.AiPreparingContext()).FontSize(11).TextColor(t.TextMuted).SingleLine()
 		}
-		if st.check != "" {
-			ui.Text(c, st.check).FontSize(11).TextColor(t.Warning).SingleLine().Tooltip(st.check)
+		if !st.lint.Empty() {
+			showAILintButton(a, c, st.lint)
 		}
 		if st.err != "" {
 			ui.Text(c, st.err).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(st.err)
@@ -108,7 +107,12 @@ func (a *root) aiPanel(c *ui.Context) {
 			}
 			ui.Spacer(c)
 			if st.usage.TotalTokens > 0 {
-				ui.Text(c, "tokens "+strconv.Itoa(st.usage.TotalTokens)).FontSize(10.5).TextColor(t.TextMuted)
+				ui.Text(c, locales.AiTokenUsage(st.usage.PromptTokens, st.usage.CompletionTokens, st.usage.TotalTokens)).
+					FontSize(10.5).TextColor(t.TextMuted)
+			}
+			if st.totalUsage.TotalTokens > 0 {
+				ui.Text(c, locales.AiTokenTotal(st.totalUsage.TotalTokens)).
+					FontSize(10.5).TextColor(t.TextMuted)
 			}
 		})
 	})

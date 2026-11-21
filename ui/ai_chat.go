@@ -36,10 +36,12 @@ type aiChatState struct {
 	seq           uint64
 	err           string
 	lastCtx       string
-	check         string // 最近一次插入 SQL 的本地自检结果
-	preparing     bool   // 正在补齐 DDL 等上下文
-	prepareSeq    uint64 // 上下文准备轮次；旧结果作废
+	lint          aiSQLReport // 最近一次插入 SQL 的本地自检结果
+	preparing     bool        // 正在补齐 DDL 等上下文
+	prepareSeq    uint64      // 上下文准备轮次；旧结果作废
 	usage         ai.Usage
+	totalUsage    ai.Usage
+	usageCounted  bool
 	started       time.Time
 	md            markdown.Options
 	scroll        ui.ScrollState
@@ -222,9 +224,9 @@ func (a *root) sendAI() {
 
 // sendAIChat 在上下文准备好后组装提示词并开始流式请求。
 func (a *root) sendAIChat(q string, snap ai.ContextSnapshot) {
-	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(1200))
+	msgs, rep := ai.BuildChat(snap, q, a.aiBudget(a.aiTaskMaxTokens("chat")))
 	a.aiChat.lastCtx = aiContextNote(rep, "")
-	a.aiChat.check = ""
+	a.aiChat.lint = aiSQLReport{}
 	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(rep, ""), q, msgs); err != nil {
 		a.aiChat.err = err.Error()
 		return
@@ -244,10 +246,11 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 	if err != nil {
 		return err
 	}
-	model := a.aiModelName()
+	model := a.aiTaskModel("chat")
 	a.recordAIRequest(kind, model, note, msgs)
 	a.aiChat.err = ""
 	a.aiChat.usage = ai.Usage{}
+	a.aiChat.usageCounted = false
 	a.aiChat.messages = append(a.aiChat.messages,
 		aiChatMessage{role: "user", text: display, done: true},
 		aiChatMessage{role: "assistant"},
@@ -266,8 +269,8 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 	req := ai.Request{
 		Model:       model,
 		Messages:    msgs,
-		Temperature: 0.2,
-		MaxTokens:   1200,
+		Temperature: a.aiChatTemperature(),
+		MaxTokens:   a.aiTaskMaxTokens("chat"),
 	}
 	if a.win == nil {
 		ch, err := openAIStream(ctx, cancel, provider, req)
@@ -360,6 +363,7 @@ func (a *root) applyAIEvent(seq uint64, ev ai.Event) {
 			a.aiChat.usage = *ev.Usage
 		}
 	case ai.EventDone:
+		a.addAIUsage()
 		msg.done = true
 		a.aiChat.streaming = false
 		a.aiChat.cancel = nil
@@ -367,6 +371,7 @@ func (a *root) applyAIEvent(seq uint64, ev ai.Event) {
 		app.LogInfo("ai", "chat done", "dur_ms", time.Since(a.aiChat.started).Milliseconds(),
 			"tokens", a.aiChat.usage.TotalTokens)
 	case ai.EventError:
+		a.addAIUsage()
 		if ev.Err != nil {
 			msg.err = ev.Err.Error()
 			a.aiChat.err = ev.Err.Error()
@@ -377,6 +382,17 @@ func (a *root) applyAIEvent(seq uint64, ev ai.Event) {
 		a.aiChat.cancel = nil
 		a.saveAIChat()
 	}
+}
+
+// addAIUsage 把本次请求的 token 计入会话累计，只计一次。
+func (a *root) addAIUsage() {
+	if a.aiChat.usageCounted || a.aiChat.usage.TotalTokens == 0 {
+		return
+	}
+	a.aiChat.usageCounted = true
+	a.aiChat.totalUsage.PromptTokens += a.aiChat.usage.PromptTokens
+	a.aiChat.totalUsage.CompletionTokens += a.aiChat.usage.CompletionTokens
+	a.aiChat.totalUsage.TotalTokens += a.aiChat.usage.TotalTokens
 }
 
 // stopAI 取消当前请求并丢弃后续回包。
@@ -422,7 +438,7 @@ func (a *root) insertAISQL(text string) bool {
 	if !ok {
 		return false
 	}
-	a.aiChat.check = aiSQLCheckText(a.aiSQLLint(sql))
+	a.aiChat.lint = a.aiSQLCheck(sql)
 	a.code.Insert(sql)
 	return true
 }
@@ -508,13 +524,15 @@ func (a *root) selectAIConversation(id string, saveCurrent bool) {
 	}
 	a.aiChat.convID = id
 	a.aiChat.messages = a.aiChat.messages[:0]
-	a.aiChat.check = ""
+	a.aiChat.lint = aiSQLReport{}
 	for _, m := range conv.Messages {
 		a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{
 			role: m.Role, text: m.Text, done: m.Done, err: m.Err,
 		})
 	}
 	a.aiChat.store.ActiveID = id
+	a.aiChat.usage, a.aiChat.totalUsage = ai.Usage{}, ai.Usage{}
+	a.aiChat.usageCounted = false
 	a.aiChat.scroll.Y = math.MaxFloat32
 	a.saveAIChat()
 }
@@ -531,8 +549,9 @@ func (a *root) newAIConversation() {
 	a.aiChat.messages = nil
 	a.aiChat.err = ""
 	a.aiChat.lastCtx = ""
-	a.aiChat.check = ""
-	a.aiChat.usage = ai.Usage{}
+	a.aiChat.lint = aiSQLReport{}
+	a.aiChat.usage, a.aiChat.totalUsage = ai.Usage{}, ai.Usage{}
+	a.aiChat.usageCounted = false
 	a.aiChat.scroll.Y = 0
 	a.saveAIChat()
 }
@@ -641,7 +660,7 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 		}
 		return b.String()
 	}
-	req := ai.Request{Model: a.aiPrefs.Model, Messages: msgs, Temperature: 0, MaxTokens: 48}
+	req := ai.Request{Model: a.aiTaskModel("chat"), Messages: msgs, Temperature: 0, MaxTokens: 48}
 	if a.win == nil {
 		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err == nil {

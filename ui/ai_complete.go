@@ -49,16 +49,16 @@ func (a *root) requestAICompletion() {
 	st.prefix = text[start:offset]
 	st.suggestion = ""
 	st.loading = true
-	msgs, rep := ai.BuildCompletion(snap, text[:offset], text[offset:], a.aiBudget(160))
-	a.recordAIRequest(locales.AiKindComplete(), a.aiModelName(),
+	msgs, rep := ai.BuildCompletion(snap, text[:offset], text[offset:], a.aiBudget(a.aiTaskMaxTokens("completion")))
+	a.recordAIRequest(locales.AiKindComplete(), a.aiTaskModel("completion"),
 		aiContextNote(rep, locales.AiCursorStats(offset, len(text)-offset)), msgs)
 	ctx, cancel := context.WithCancel(context.Background())
 	st.cancel = cancel
 	req := ai.Request{
-		Model:       a.aiPrefs.Model,
+		Model:       a.aiTaskModel("completion"),
 		Messages:    msgs,
 		Temperature: 0,
-		MaxTokens:   160,
+		MaxTokens:   a.aiTaskMaxTokens("completion"),
 	}
 	consume := func(text string, err error) {
 		if seq != a.aiCompletion.seq {

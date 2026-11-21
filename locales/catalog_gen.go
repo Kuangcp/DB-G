@@ -6344,6 +6344,36 @@ func (msgs Messages) AiKindChat() string {
 	return Catalog.Format(msgs.locale, "aiKindChat", nil)
 }
 
+// AiSelfCheckTitle says "SQL Self-check"
+// in the language the app shows.
+func AiSelfCheckTitle() string { return In(i18n.Locale()).AiSelfCheckTitle() }
+
+// AiSelfCheckTitle says "SQL Self-check"
+// in the language of msgs.
+func (msgs Messages) AiSelfCheckTitle() string {
+	return Catalog.Format(msgs.locale, "aiSelfCheckTitle", nil)
+}
+
+// AiSelfCheckSQL says "Checked SQL"
+// in the language the app shows.
+func AiSelfCheckSQL() string { return In(i18n.Locale()).AiSelfCheckSQL() }
+
+// AiSelfCheckSQL says "Checked SQL"
+// in the language of msgs.
+func (msgs Messages) AiSelfCheckSQL() string {
+	return Catalog.Format(msgs.locale, "aiSelfCheckSQL", nil)
+}
+
+// AiSelfCheckCopy says "Copy Report"
+// in the language the app shows.
+func AiSelfCheckCopy() string { return In(i18n.Locale()).AiSelfCheckCopy() }
+
+// AiSelfCheckCopy says "Copy Report"
+// in the language of msgs.
+func (msgs Messages) AiSelfCheckCopy() string {
+	return Catalog.Format(msgs.locale, "aiSelfCheckCopy", nil)
+}
+
 // AiSelfCheck says "SQL self-check: {issues}"
 // in the language the app shows.
 func AiSelfCheck(issues string) string { return In(i18n.Locale()).AiSelfCheck(issues) }
@@ -6376,6 +6406,28 @@ func AiSelfCheckUnknownColumn(column string, table string) string {
 // in the language of msgs.
 func (msgs Messages) AiSelfCheckUnknownColumn(column string, table string) string {
 	return Catalog.Format(msgs.locale, "aiSelfCheckUnknownColumn", map[string]any{"column": column, "table": table})
+}
+
+// AiTokenUsage says "prompt {prompt} · completion {completion} · total {total}"
+// in the language the app shows.
+func AiTokenUsage(prompt int, completion int, total int) string {
+	return In(i18n.Locale()).AiTokenUsage(prompt, completion, total)
+}
+
+// AiTokenUsage says "prompt {prompt} · completion {completion} · total {total}"
+// in the language of msgs.
+func (msgs Messages) AiTokenUsage(prompt int, completion int, total int) string {
+	return Catalog.Format(msgs.locale, "aiTokenUsage", map[string]any{"prompt": prompt, "completion": completion, "total": total})
+}
+
+// AiTokenTotal says "session {total}"
+// in the language the app shows.
+func AiTokenTotal(total int) string { return In(i18n.Locale()).AiTokenTotal(total) }
+
+// AiTokenTotal says "session {total}"
+// in the language of msgs.
+func (msgs Messages) AiTokenTotal(total int) string {
+	return Catalog.Format(msgs.locale, "aiTokenTotal", map[string]any{"total": total})
 }
 
 // AiTimeout says "AI response timed out; try again"
@@ -6578,6 +6630,106 @@ func AiModelPlaceholder() string { return In(i18n.Locale()).AiModelPlaceholder()
 // in the language of msgs.
 func (msgs Messages) AiModelPlaceholder() string {
 	return Catalog.Format(msgs.locale, "aiModelPlaceholder", nil)
+}
+
+// AiCompletionModel says "Completion model"
+// in the language the app shows.
+func AiCompletionModel() string { return In(i18n.Locale()).AiCompletionModel() }
+
+// AiCompletionModel says "Completion model"
+// in the language of msgs.
+func (msgs Messages) AiCompletionModel() string {
+	return Catalog.Format(msgs.locale, "aiCompletionModel", nil)
+}
+
+// AiFixModel says "Fix / rewrite model"
+// in the language the app shows.
+func AiFixModel() string { return In(i18n.Locale()).AiFixModel() }
+
+// AiFixModel says "Fix / rewrite model"
+// in the language of msgs.
+func (msgs Messages) AiFixModel() string {
+	return Catalog.Format(msgs.locale, "aiFixModel", nil)
+}
+
+// AiModelInherit says "Leave empty to use the chat model"
+// in the language the app shows.
+func AiModelInherit() string { return In(i18n.Locale()).AiModelInherit() }
+
+// AiModelInherit says "Leave empty to use the chat model"
+// in the language of msgs.
+func (msgs Messages) AiModelInherit() string {
+	return Catalog.Format(msgs.locale, "aiModelInherit", nil)
+}
+
+// AiTaskParams says "Task Parameters"
+// in the language the app shows.
+func AiTaskParams() string { return In(i18n.Locale()).AiTaskParams() }
+
+// AiTaskParams says "Task Parameters"
+// in the language of msgs.
+func (msgs Messages) AiTaskParams() string {
+	return Catalog.Format(msgs.locale, "aiTaskParams", nil)
+}
+
+// AiTaskParamsHint says "Separate models and output limits per task; empty/zero values fall back to defaults on load."
+// in the language the app shows.
+func AiTaskParamsHint() string { return In(i18n.Locale()).AiTaskParamsHint() }
+
+// AiTaskParamsHint says "Separate models and output limits per task; empty/zero values fall back to defaults on load."
+// in the language of msgs.
+func (msgs Messages) AiTaskParamsHint() string {
+	return Catalog.Format(msgs.locale, "aiTaskParamsHint", nil)
+}
+
+// AiChatTemperature says "Chat temperature"
+// in the language the app shows.
+func AiChatTemperature() string { return In(i18n.Locale()).AiChatTemperature() }
+
+// AiChatTemperature says "Chat temperature"
+// in the language of msgs.
+func (msgs Messages) AiChatTemperature() string {
+	return Catalog.Format(msgs.locale, "aiChatTemperature", nil)
+}
+
+// AiChatMaxTokens says "Chat max output"
+// in the language the app shows.
+func AiChatMaxTokens() string { return In(i18n.Locale()).AiChatMaxTokens() }
+
+// AiChatMaxTokens says "Chat max output"
+// in the language of msgs.
+func (msgs Messages) AiChatMaxTokens() string {
+	return Catalog.Format(msgs.locale, "aiChatMaxTokens", nil)
+}
+
+// AiCompletionMaxTokens says "Completion max output"
+// in the language the app shows.
+func AiCompletionMaxTokens() string { return In(i18n.Locale()).AiCompletionMaxTokens() }
+
+// AiCompletionMaxTokens says "Completion max output"
+// in the language of msgs.
+func (msgs Messages) AiCompletionMaxTokens() string {
+	return Catalog.Format(msgs.locale, "aiCompletionMaxTokens", nil)
+}
+
+// AiFixMaxTokens says "Fix max output"
+// in the language the app shows.
+func AiFixMaxTokens() string { return In(i18n.Locale()).AiFixMaxTokens() }
+
+// AiFixMaxTokens says "Fix max output"
+// in the language of msgs.
+func (msgs Messages) AiFixMaxTokens() string {
+	return Catalog.Format(msgs.locale, "aiFixMaxTokens", nil)
+}
+
+// AiRewriteMaxTokens says "Rewrite max output"
+// in the language the app shows.
+func AiRewriteMaxTokens() string { return In(i18n.Locale()).AiRewriteMaxTokens() }
+
+// AiRewriteMaxTokens says "Rewrite max output"
+// in the language of msgs.
+func (msgs Messages) AiRewriteMaxTokens() string {
+	return Catalog.Format(msgs.locale, "aiRewriteMaxTokens", nil)
 }
 
 // AiPrivacyHint says "By default only the schema, current SQL and result shape are sent; history, errors, samples and DDL are opt-in."

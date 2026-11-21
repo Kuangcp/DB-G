@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 
+	"db-g/app"
 	"db-g/engine"
 	"db-g/locales"
 )
@@ -12,6 +13,42 @@ import (
 type aiSQLIssue struct {
 	Table  string
 	Column string
+}
+
+// aiSQLReport 是一次本地自检结果：表列问题 + 高危规则。
+type aiSQLReport struct {
+	SQL    string
+	Issues []aiSQLIssue
+	Risks  []app.SQLRisk
+}
+
+func (r aiSQLReport) Empty() bool { return len(r.Issues) == 0 && len(r.Risks) == 0 }
+
+// Summary 用一行文本概括自检结果。
+func (r aiSQLReport) Summary() string {
+	if r.Empty() {
+		return ""
+	}
+	parts := make([]string, 0, len(r.Risks)+len(r.Issues))
+	for _, risk := range r.Risks {
+		parts = append(parts, risk.Message)
+	}
+	for _, issue := range r.Issues {
+		if issue.Column == "" {
+			parts = append(parts, locales.AiSelfCheckUnknownTable(issue.Table))
+		} else {
+			parts = append(parts, locales.AiSelfCheckUnknownColumn(issue.Column, issue.Table))
+		}
+	}
+	return locales.AiSelfCheck(strings.Join(parts, " · "))
+}
+
+// HasRisk 报告是否存在高危规则命中（用于危险色提示）。
+func (r aiSQLReport) HasRisk() bool { return len(r.Risks) > 0 }
+
+// aiSQLCheck 汇总表列自检与确定性高危规则。
+func (a *root) aiSQLCheck(sql string) aiSQLReport {
+	return aiSQLReport{SQL: sql, Issues: a.aiSQLLint(sql), Risks: app.CheckSQLRisks(sql)}
 }
 
 // aiSQLLint 用当前连接的已知表/缓存列做保守自检：
@@ -195,18 +232,7 @@ func sqlCheckKeywords() map[string]bool {
 	return out
 }
 
-// aiSQLCheckText 把自检问题拼成一行可读提示；无问题返回空串。
+// aiSQLCheckText 兼容旧调用：只根据表列问题拼一行提示。
 func aiSQLCheckText(issues []aiSQLIssue) string {
-	if len(issues) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(issues)+1)
-	for _, issue := range issues {
-		if issue.Column == "" {
-			parts = append(parts, locales.AiSelfCheckUnknownTable(issue.Table))
-			continue
-		}
-		parts = append(parts, locales.AiSelfCheckUnknownColumn(issue.Column, issue.Table))
-	}
-	return locales.AiSelfCheck(strings.Join(parts, " · "))
+	return aiSQLReport{Issues: issues}.Summary()
 }

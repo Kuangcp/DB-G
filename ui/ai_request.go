@@ -3,14 +3,63 @@ package ui
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"db-g/ai"
+	"db-g/app"
 	"db-g/locales"
 )
 
 // aiIdleTimeout 是流式响应空闲多久后自动取消；正常生成不会长时间没有事件。
 const aiIdleTimeout = 60 * time.Second
+
+// aiTaskModel 返回任务模型；未单独配置时继承聊天模型。
+func (a *root) aiTaskModel(task string) string {
+	switch task {
+	case "completion":
+		if m := strings.TrimSpace(a.aiPrefs.CompletionModel); m != "" {
+			return m
+		}
+	case "fix":
+		if m := strings.TrimSpace(a.aiPrefs.FixModel); m != "" {
+			return m
+		}
+	}
+	if m := strings.TrimSpace(a.aiPrefs.Model); m != "" {
+		return m
+	}
+	return "local"
+}
+
+// aiTaskMaxTokens 返回任务输出上限；预算与请求共用同一个值。
+func (a *root) aiTaskMaxTokens(task string) int {
+	def := app.DefaultAIPrefs()
+	value := func(v, fallback int) int {
+		if v > 0 {
+			return v
+		}
+		return fallback
+	}
+	switch task {
+	case "completion":
+		return value(a.aiPrefs.CompletionMaxTokens, def.CompletionMaxTokens)
+	case "fix":
+		return value(a.aiPrefs.FixMaxTokens, def.FixMaxTokens)
+	case "rewrite":
+		return value(a.aiPrefs.RewriteMaxTokens, def.RewriteMaxTokens)
+	}
+	return value(a.aiPrefs.ChatMaxTokens, def.ChatMaxTokens)
+}
+
+// aiChatTemperature 返回聊天温度；旧配置/未加载配置时回退默认 0.2。
+func (a *root) aiChatTemperature() float32 {
+	t := a.aiPrefs.ChatTemperature
+	if t < 0.1 || t > 2 {
+		t = app.DefaultAIPrefs().ChatTemperature
+	}
+	return float32(t)
+}
 
 // openAIStream 建立流、失败时重试一次，并套上空闲看门狗。
 func openAIStream(ctx context.Context, cancel context.CancelFunc, p ai.Provider, req ai.Request) (<-chan ai.Event, error) {

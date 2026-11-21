@@ -26,6 +26,10 @@ func TestLoadAIPrefsDefaultsAndRoundTrip(t *testing.T) {
 	if prefs.AllowHistory || prefs.AllowErrorLogs || prefs.AllowSampleRows || prefs.AllowDDL {
 		t.Fatalf("egress must default off: %+v", prefs)
 	}
+	if prefs.ChatTemperature != 0.2 || prefs.ChatMaxTokens != 1200 ||
+		prefs.CompletionMaxTokens != 160 || prefs.FixMaxTokens != 1200 || prefs.RewriteMaxTokens != 1600 {
+		t.Fatalf("task defaults: %+v", prefs)
+	}
 
 	prefs.Model = "qwen2.5-coder:7b"
 	prefs.APIKey = "sk-secret"
@@ -33,6 +37,13 @@ func TestLoadAIPrefsDefaultsAndRoundTrip(t *testing.T) {
 	prefs.AllowDDL = true
 	prefs.AllowSampleRows = true
 	prefs.ContextWindow = 16384
+	prefs.CompletionModel = "tiny"
+	prefs.FixModel = "smart"
+	prefs.ChatTemperature = 0.7
+	prefs.ChatMaxTokens = 2048
+	prefs.CompletionMaxTokens = 320
+	prefs.FixMaxTokens = 2048
+	prefs.RewriteMaxTokens = 4096
 	if err := SaveAIPrefs(path, vault, prefs); err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +59,10 @@ func TestLoadAIPrefsDefaultsAndRoundTrip(t *testing.T) {
 		t.Fatal(warn)
 	}
 	if got.APIKey != "sk-secret" || got.Model != prefs.Model || !got.AllowHistory ||
-		!got.AllowDDL || !got.AllowSampleRows || got.ContextWindow != 16384 {
+		!got.AllowDDL || !got.AllowSampleRows || got.ContextWindow != 16384 ||
+		got.CompletionModel != "tiny" || got.FixModel != "smart" ||
+		got.ChatTemperature != 0.7 || got.ChatMaxTokens != 2048 ||
+		got.CompletionMaxTokens != 320 || got.FixMaxTokens != 2048 || got.RewriteMaxTokens != 4096 {
 		t.Fatalf("round trip: %+v", got)
 	}
 	if got.APIKeyEnc == "" {

@@ -30,11 +30,47 @@ type AIPrefs struct {
 	AITitle bool `json:"aiTitle,omitempty"`
 	// ContextWindow 是模型上下文窗口（token）；0 = 使用 ai.DefaultContextWindow。
 	ContextWindow int `json:"contextWindow,omitempty"`
+	// 任务级模型：空串表示继承主 Model。
+	CompletionModel string `json:"completionModel,omitempty"`
+	FixModel        string `json:"fixModel,omitempty"`
+	// 任务级生成参数；0 在读取时补默认值。
+	ChatTemperature     float64 `json:"chatTemperature,omitempty"`
+	ChatMaxTokens       int     `json:"chatMaxTokens,omitempty"`
+	CompletionMaxTokens int     `json:"completionMaxTokens,omitempty"`
+	FixMaxTokens        int     `json:"fixMaxTokens,omitempty"`
+	RewriteMaxTokens    int     `json:"rewriteMaxTokens,omitempty"`
 }
 
 // DefaultAIPrefs 返回默认配置：本地 Ollama，默认只发表结构、当前 SQL 与结果形状。
 func DefaultAIPrefs() AIPrefs {
-	return AIPrefs{BaseURL: DefaultAIBaseURL}
+	return AIPrefs{
+		BaseURL:             DefaultAIBaseURL,
+		ChatTemperature:     0.2,
+		ChatMaxTokens:       1200,
+		CompletionMaxTokens: 160,
+		FixMaxTokens:        1200,
+		RewriteMaxTokens:    1600,
+	}
+}
+
+// NormalizeAIPrefs 给旧 ai.json 缺失的任务参数补默认值；不覆盖已填值。
+func NormalizeAIPrefs(p AIPrefs) AIPrefs {
+	if p.ChatTemperature < 0.1 || p.ChatTemperature > 2 {
+		p.ChatTemperature = 0.2
+	}
+	if p.ChatMaxTokens <= 0 {
+		p.ChatMaxTokens = 1200
+	}
+	if p.CompletionMaxTokens <= 0 {
+		p.CompletionMaxTokens = 160
+	}
+	if p.FixMaxTokens <= 0 {
+		p.FixMaxTokens = 1200
+	}
+	if p.RewriteMaxTokens <= 0 {
+		p.RewriteMaxTokens = 1600
+	}
+	return p
 }
 
 // DefaultAIPrefsPath 返回 ai.json 路径。
@@ -58,6 +94,7 @@ func LoadAIPrefs(path string, vault *Vault) (AIPrefs, string) {
 	if err := json.Unmarshal(data, &prefs); err != nil {
 		return DefaultAIPrefs(), locales.AppAICorrupt(err.Error())
 	}
+	prefs = NormalizeAIPrefs(prefs)
 	if prefs.BaseURL == "" {
 		prefs.BaseURL = DefaultAIBaseURL
 	}
@@ -76,6 +113,7 @@ func SaveAIPrefs(path string, vault *Vault, prefs AIPrefs) error {
 	if strings.TrimSpace(path) == "" {
 		return nil
 	}
+	prefs = NormalizeAIPrefs(prefs)
 	if prefs.APIKey != "" {
 		enc, err := vault.Encrypt(prefs.APIKey)
 		if err != nil {

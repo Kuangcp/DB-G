@@ -281,7 +281,7 @@ func (a *root) diagnosePlan() {
 	}
 	snap := a.aiSnapshot()
 	planText := plan.Text(a.plan.nodes)
-	msgs, rep := ai.BuildPlan(snap, planText, a.plan.analyze, a.aiBudget(1200))
+	msgs, rep := ai.BuildPlan(snap, planText, a.plan.analyze, a.aiBudget(a.aiTaskMaxTokens("chat")))
 	a.aiChat.open = true
 	a.aiChat.lastCtx = aiContextNote(rep, locales.PlanContext())
 	if err := a.startAIRequest(locales.TopExecPlan(), aiContextNote(rep, locales.PlanTextBytes(len(planText))), locales.PlanDiagnoseAsk(), msgs); err != nil {
