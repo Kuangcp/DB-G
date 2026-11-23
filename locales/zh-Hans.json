@@ -215,6 +215,8 @@
   "exportRunning": "正在导出 {format}，请勿关闭应用",
   "exportFullRunning": "正在全量导出 {format}，请勿关闭应用",
   "exportWritten": " · 已写 {n, number, ::group-off} 行",
+  "exportOpenFolderTip": "双击打开文件所在目录",
+  "exportOpenFolderFailed": "打开目录失败：{err}",
   "exportClearTip": "清除导出提示",
   "filterColumns": "筛选 {n} 列",
   "sortAsc": "升序",

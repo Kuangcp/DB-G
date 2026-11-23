@@ -231,6 +231,8 @@ type root struct {
 	exportConfirm       bool
 	exportFormat        string
 	exportStatus        string
+	exportPath          string             // 最近一次成功导出的文件，双击状态可打开所在目录
+	revealPath          func(string) error // 测试注入；nil = app.RevealPath
 	editStatus          string
 	editStatusSeq       atomic.Uint64
 	exportBusy          bool

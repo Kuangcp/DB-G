@@ -717,9 +717,16 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			}
 			ui.Text(c, label).FontSize(12).TextColor(c.Theme().Accent).SingleLine()
 		} else if a.exportStatus != "" {
-			ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+			status := ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+			if a.exportPath != "" {
+				status.Tooltip(locales.ExportOpenFolderTip())
+				if status.DoubleClicked() {
+					a.openExportFolder()
+				}
+			}
 			if iconButtonPlain(c, iconClose, locales.ExportClearTip(), ui.Transparent).Clicked() {
 				a.exportStatus = ""
+				a.exportPath = ""
 			}
 		}
 		if a.editStatus != "" {
@@ -1419,6 +1426,20 @@ func (a *root) exportCloseModal(c *ui.Context) {
 	})
 }
 
+// openExportFolder 用系统文件管理器定位最近导出的文件。
+func (a *root) openExportFolder() {
+	if a.exportPath == "" {
+		return
+	}
+	reveal := app.RevealPath
+	if a.revealPath != nil {
+		reveal = a.revealPath
+	}
+	if err := reveal(a.exportPath); err != nil {
+		a.exportStatus = locales.ExportOpenFolderFailed(err.Error())
+	}
+}
+
 // exportDefaultName 是导出保存框的默认文件名：YYYYMMDD-HHMM + 扩展名。
 func exportDefaultName(now time.Time, ext string) string {
 	return now.Format("20060102-1504") + ext
@@ -1445,6 +1466,7 @@ func (a *root) pickExport(format string, full bool) {
 		}
 		a.safeUpdate(win, func() {
 			a.exportStatus = ""
+			a.exportPath = ""
 			a.exportBusy = true
 			a.exportFull = full
 			a.exportFormat = format
@@ -1463,10 +1485,12 @@ func (a *root) pickExport(format string, full bool) {
 			a.exportBusy = false
 			a.exportCloseConfirm = false
 			if err != nil {
+				a.exportPath = ""
 				a.exportStatus = locales.ExportFailed(err.Error())
 				app.LogError("export", "failed", "path", path, "format", format, "err", err.Error())
 				return
 			}
+			a.exportPath = path
 			a.exportStatus = locales.ExportDone(n, path)
 			app.LogInfo("export", "done", "path", path, "format", format, "rows", n, "full", full)
 		})
@@ -1494,6 +1518,7 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 		}
 		a.safeUpdate(win, func() {
 			a.exportStatus = ""
+			a.exportPath = ""
 			a.exportBusy = true
 			a.exportFull = false
 			a.exportFormat = format
@@ -1505,10 +1530,12 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 			a.exportBusy = false
 			a.exportCloseConfirm = false
 			if err != nil {
+				a.exportPath = ""
 				a.exportStatus = locales.ExportFailed(err.Error())
 				app.LogError("export", "selection failed", "path", path, "format", format, "err", err.Error())
 				return
 			}
+			a.exportPath = path
 			a.exportStatus = locales.ExportSelectionDone(n, path)
 			app.LogInfo("export", "selection done", "path", path, "format", format, "rows", n)
 		})

@@ -2192,6 +2192,26 @@ func (msgs Messages) ExportWritten(n int) string {
 	return Catalog.Format(msgs.locale, "exportWritten", map[string]any{"n": n})
 }
 
+// ExportOpenFolderTip says "Double-click to open the containing folder"
+// in the language the app shows.
+func ExportOpenFolderTip() string { return In(i18n.Locale()).ExportOpenFolderTip() }
+
+// ExportOpenFolderTip says "Double-click to open the containing folder"
+// in the language of msgs.
+func (msgs Messages) ExportOpenFolderTip() string {
+	return Catalog.Format(msgs.locale, "exportOpenFolderTip", nil)
+}
+
+// ExportOpenFolderFailed says "Could not open folder: {err}"
+// in the language the app shows.
+func ExportOpenFolderFailed(err string) string { return In(i18n.Locale()).ExportOpenFolderFailed(err) }
+
+// ExportOpenFolderFailed says "Could not open folder: {err}"
+// in the language of msgs.
+func (msgs Messages) ExportOpenFolderFailed(err string) string {
+	return Catalog.Format(msgs.locale, "exportOpenFolderFailed", map[string]any{"err": err})
+}
+
 // ExportClearTip says "Clear Export Message"
 // in the language the app shows.
 func ExportClearTip() string { return In(i18n.Locale()).ExportClearTip() }

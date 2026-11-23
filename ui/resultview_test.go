@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"db-g/engine"
 )
 
 func TestPageSQL(t *testing.T) {
@@ -233,5 +235,28 @@ func TestExportCurrentAndFull(t *testing.T) {
 	data, _ = os.ReadFile(fullJSONL)
 	if len(strings.Split(strings.TrimSpace(string(data)), "\n")) != 2 {
 		t.Fatalf("full jsonl lines: %q", data)
+	}
+}
+
+func TestExportStatusDoubleClickOpensFolder(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{IsQuery: true, Columns: []string{"id"}, Rows: [][]any{{int64(1)}}}, "")
+	a.exportStatus = "Exported 2 rows → /tmp/out.csv"
+	a.exportPath = "/tmp/out.csv"
+	var got string
+	a.revealPath = func(path string) error {
+		got = path
+		return nil
+	}
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if err := tt.Click("Exported 2 rows → /tmp/out.csv"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Exported 2 rows → /tmp/out.csv"); err != nil {
+		t.Fatal(err)
+	}
+	if got != "/tmp/out.csv" {
+		t.Fatalf("reveal path = %q", got)
 	}
 }
