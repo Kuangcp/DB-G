@@ -105,3 +105,32 @@ func TestTabBarActiveTabKeepsLayout(t *testing.T) {
 		t.Fatal("first tab should no longer show the accent line")
 	}
 }
+
+// 未激活标签是描主题边框的胶囊；激活标签只留 accent 底边线。
+func TestTabBarInactiveTabHasBorder(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	first, err := a.consoleMgr().Create(prof.ID, "查询一")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.consoleMgr().Create(prof.ID, "查询二"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(first.ID) {
+		t.Fatal("activate")
+	}
+	var border ui.Color
+	tt := ui.NewTester(func(c *ui.Context) {
+		rootView(a)(c)
+		border = c.Theme().Border
+	}, 1200, 700)
+	tt.Frame()
+	inactive, ok := tt.Find("查询二")
+	if !ok {
+		t.Fatal("inactive tab missing")
+	}
+	if !rectHasColor(tt.Image(), tabBox(inactive), border) {
+		t.Fatal("inactive tab should show a theme border")
+	}
+}

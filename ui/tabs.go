@@ -82,13 +82,19 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 	active := rec.ID == a.activeConsole
 	size := a.tabFontSize()
 	height := max(t.Space(6.5), size*1.7+4)
+	// 胶囊形：圆角取高度的一半。未激活标签描一圈主题边框（深色下深灰、浅色下浅灰），
+	// 激活标签保持 accent 底边线 + 浅 accent 底。两种状态的边框与内边距之和相同
+	//（1+8 与 0+9、1+1 与 0+2），切换时标签尺寸与文字位置不动。
 	btn := ui.ButtonBase(c).Label(label).Gap(5).Height(height).
-		Padding(2, 9).Radius(t.Space(1.25)).
-		BorderWidth(0, 0, 2, 0).BorderColor(ui.Transparent)
+		Radius(height / 2)
 	if active {
-		btn.BorderColor(t.Accent).Background(t.Accent.Alpha(0.10))
-	} else if btn.Hovered() {
-		btn.Background(t.SurfaceHover)
+		btn.Padding(2, 9).BorderWidth(0, 0, 2, 0).BorderColor(t.Accent).
+			Background(t.Accent.Alpha(0.10))
+	} else {
+		btn.Padding(1, 8, 3, 8).BorderWidth(1).BorderColor(t.Border)
+		if btn.Hovered() {
+			btn.Background(t.SurfaceHover)
+		}
 	}
 	btn.Children(func() {
 		if warn {
