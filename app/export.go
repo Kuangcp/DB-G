@@ -186,12 +186,14 @@ type ExportWriters interface {
 	Close() error
 }
 
-// NewExportWriter 按格式创建写出器（csv/json/insert）。
+// NewExportWriter 按格式创建写出器（csv/json/jsonl/insert）。
 func NewExportWriter(w io.Writer, format, kind, table string) ExportWriters {
 	bw := bufio.NewWriter(w)
 	switch format {
 	case "json":
 		return &jsonWriter{w: bw}
+	case "jsonl":
+		return &jsonlWriter{w: bw}
 	case "insert":
 		return &insertWriter{w: bw, kind: kind, table: table}
 	default:
@@ -261,6 +263,33 @@ func (j *jsonWriter) Close() error {
 	return j.w.Flush()
 }
 
+// jsonlWriter 每行一个 JSON 对象，适合大结果集的流式消费。
+type jsonlWriter struct {
+	w    *bufio.Writer
+	cols []string
+}
+
+func (j *jsonlWriter) Start(cols []string) error { j.cols = cols; return nil }
+func (j *jsonlWriter) Row(row []any) error {
+	m := make(map[string]any, len(j.cols))
+	for i, c := range j.cols {
+		if i < len(row) {
+			m[c] = jsonValue(row[i])
+		} else {
+			m[c] = nil
+		}
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	if _, err := j.w.Write(data); err != nil {
+		return err
+	}
+	return j.w.WriteByte('\n')
+}
+func (j *jsonlWriter) Close() error { return j.w.Flush() }
+
 type insertWriter struct {
 	w     *bufio.Writer
 	kind  string
@@ -275,7 +304,7 @@ func (i *insertWriter) Row(row []any) error {
 }
 func (i *insertWriter) Close() error { return i.w.Flush() }
 
-// ExportRows 把已加载的结果写到文件（format: csv/json/insert）。
+// ExportRows 把已加载的结果写到文件（format: csv/json/jsonl/insert）。
 func ExportRows(path, format, kind, table string, cols []string, rows [][]any) (int, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return 0, err

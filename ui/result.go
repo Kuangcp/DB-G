@@ -688,15 +688,22 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			if m.Item(locales.ExportCurrentJSON()).Chosen() {
 				a.pickExport("json", false)
 			}
+			if m.Item(locales.ExportCurrentJSONL()).Chosen() {
+				a.pickExport("jsonl", false)
+			}
 			if m.Item(locales.ExportCurrentInsert()).Chosen() {
 				a.pickExport("insert", false)
 			}
+			m.Separator()
 			full := a.canStream()
 			if it := m.Item(locales.ExportFullCSV()); it.Disabled(!full).Chosen() {
 				a.confirmFullExport("csv")
 			}
 			if it := m.Item(locales.ExportFullJSON()); it.Disabled(!full).Chosen() {
 				a.confirmFullExport("json")
+			}
+			if it := m.Item(locales.ExportFullJSONL()); it.Disabled(!full).Chosen() {
+				a.confirmFullExport("jsonl")
 			}
 		})
 		if a.exportBusy {
@@ -832,6 +839,9 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 				}
 				if sm.Item("JSON…").Chosen() {
 					a.pickExportSelection("json", rows, cols)
+				}
+				if sm.Item("JSONL…").Chosen() {
+					a.pickExportSelection("jsonl", rows, cols)
 				}
 				if it := sm.Item("SQL INSERT…"); it.Disabled(!hasTable).Chosen() {
 					a.pickExportSelection("insert", rows, cols)

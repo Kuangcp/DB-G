@@ -189,3 +189,76 @@ func TestInsertStatementWithColumnTypes(t *testing.T) {
 		t.Fatalf("postgres must keep RFC3339: %s", got)
 	}
 }
+
+func TestExportJSONLTypes(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewExportWriter(&buf, "jsonl", "sqlite", "")
+	if err := w.Start([]string{"id", "name", "ok", "n"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Row([]any{int64(1), "alice", true, nil}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Row([]any{int64(2), "中文", false, int64(9)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("jsonl lines = %d: %q", len(lines), buf.String())
+	}
+	var first, second map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &first); err != nil {
+		t.Fatalf("line 0 invalid: %v %q", err, lines[0])
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &second); err != nil {
+		t.Fatalf("line 1 invalid: %v %q", err, lines[1])
+	}
+	if first["id"] != float64(1) || first["name"] != "alice" || first["ok"] != true || first["n"] != nil {
+		t.Fatalf("row 0: %#v", first)
+	}
+	if second["id"] != float64(2) || second["name"] != "中文" || second["ok"] != false || second["n"] != float64(9) {
+		t.Fatalf("row 1: %#v", second)
+	}
+	if strings.Contains(buf.String(), "[\n") || strings.Contains(buf.String(), "\n]") {
+		t.Fatalf("jsonl must not be a JSON array: %q", buf.String())
+	}
+}
+
+func TestExportStreamJSONL(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/out.jsonl"
+	n, err := ExportStream(path, "jsonl", "sqlite", "", func(onCols func([]string) error, onRow func([]any) error) error {
+		if err := onCols([]string{"id"}); err != nil {
+			return err
+		}
+		for i := range 3 {
+			if err := onRow([]any{i}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil || n != 3 {
+		t.Fatalf("stream: n=%d err=%v", n, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("lines = %d: %q", len(lines), data)
+	}
+	for i, line := range lines {
+		var got map[string]any
+		if err := json.Unmarshal([]byte(line), &got); err != nil {
+			t.Fatalf("line %d: %v %q", i, err, line)
+		}
+		if got["id"] != float64(i) {
+			t.Fatalf("line %d: %#v", i, got)
+		}
+	}
+}

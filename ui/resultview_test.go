@@ -213,4 +213,25 @@ func TestExportCurrentAndFull(t *testing.T) {
 	if !strings.Contains(string(data), `"name":"bob"`) {
 		t.Fatalf("json: %q", data)
 	}
+
+	jsonlPath := dir + "/out.jsonl"
+	if _, err := a.exportTo(jsonlPath, "jsonl", false); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(jsonlPath)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "{") || !strings.Contains(lines[1], `"name":"bob"`) {
+		t.Fatalf("current jsonl: %q", data)
+	}
+
+	fullJSONL := dir + "/all.jsonl"
+	progress = 0
+	n, err = a.exportToProgress(fullJSONL, "jsonl", true, func(v int) { progress = v })
+	if err != nil || n != 2 || progress != 2 {
+		t.Fatalf("full jsonl: n=%d progress=%d err=%v", n, progress, err)
+	}
+	data, _ = os.ReadFile(fullJSONL)
+	if len(strings.Split(strings.TrimSpace(string(data)), "\n")) != 2 {
+		t.Fatalf("full jsonl lines: %q", data)
+	}
 }

@@ -247,6 +247,8 @@
   "exportMenu": "Export…",
   "exportCurrentCSV": "Current Result CSV",
   "exportCurrentJSON": "Current Result JSON",
+  "exportCurrentJSONL": "Current Result JSONL",
+  "exportFullJSONL": "Full JSONL (streamed, reruns the query)",
   "exportCurrentInsert": "Current Result SQL INSERT",
   "exportFullCSV": "Full CSV (streamed, reruns the query)",
   "exportFullJSON": "Full JSON (streamed, reruns the query)",

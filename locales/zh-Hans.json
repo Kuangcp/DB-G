@@ -207,6 +207,8 @@
   "exportMenu": "导出…",
   "exportCurrentCSV": "当前结果 CSV",
   "exportCurrentJSON": "当前结果 JSON",
+  "exportCurrentJSONL": "当前结果 JSONL",
+  "exportFullJSONL": "全量 JSONL（流式，会重新执行查询）",
   "exportCurrentInsert": "当前结果 SQL INSERT",
   "exportFullCSV": "全量 CSV（流式，重新执行查询）",
   "exportFullJSON": "全量 JSON（流式，重新执行查询）",

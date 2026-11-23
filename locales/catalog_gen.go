@@ -2112,6 +2112,26 @@ func (msgs Messages) ExportCurrentJSON() string {
 	return Catalog.Format(msgs.locale, "exportCurrentJSON", nil)
 }
 
+// ExportCurrentJSONL says "Current Result JSONL"
+// in the language the app shows.
+func ExportCurrentJSONL() string { return In(i18n.Locale()).ExportCurrentJSONL() }
+
+// ExportCurrentJSONL says "Current Result JSONL"
+// in the language of msgs.
+func (msgs Messages) ExportCurrentJSONL() string {
+	return Catalog.Format(msgs.locale, "exportCurrentJSONL", nil)
+}
+
+// ExportFullJSONL says "Full JSONL (streamed, reruns the query)"
+// in the language the app shows.
+func ExportFullJSONL() string { return In(i18n.Locale()).ExportFullJSONL() }
+
+// ExportFullJSONL says "Full JSONL (streamed, reruns the query)"
+// in the language of msgs.
+func (msgs Messages) ExportFullJSONL() string {
+	return Catalog.Format(msgs.locale, "exportFullJSONL", nil)
+}
+
 // ExportCurrentInsert says "Current Result SQL INSERT"
 // in the language the app shows.
 func ExportCurrentInsert() string { return In(i18n.Locale()).ExportCurrentInsert() }
