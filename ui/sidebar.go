@@ -26,7 +26,7 @@ func (a *root) sidebar(c *ui.Context) {
 				a.reloadTree()
 			}
 			ui.Spacer(c)
-		}).Label(locales.SidebarDatasourceActions())
+		}).Label(locales.SidebarDatasourceActions()).DragWindow()
 		if a.store == nil {
 			ui.Text(c, locales.SidebarStartHint()).TextColor(c.Theme().TextMuted)
 			a.connModal(c)

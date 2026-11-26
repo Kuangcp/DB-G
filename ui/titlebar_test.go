@@ -11,7 +11,7 @@ import (
 	"db-g/app"
 )
 
-func TestTitleBarRendersIconAndActions(t *testing.T) {
+func TestTopBarRendersActionsWithoutAppName(t *testing.T) {
 	a := newTestRoot()
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 16, 16))); err != nil {
@@ -20,14 +20,14 @@ func TestTitleBarRendersIconAndActions(t *testing.T) {
 	a.SetAppIconPNG(buf.Bytes())
 	tt := ui.NewTester(func(c *ui.Context) {
 		a.applyTheme(c)
-		a.titleBar(c)
+		a.topBar(c)
 	}, 800, 80)
 	tt.Frame()
-	if !tt.HasText(app.DisplayName) {
-		t.Fatalf("title bar missing app name: %v", tt.Texts())
+	if tt.HasText(app.DisplayName) {
+		t.Fatalf("top bar must not show app name: %v", tt.Texts())
 	}
 	if tt.HasText("SQL 工作台") {
-		t.Fatalf("title bar must not show subtitle: %v", tt.Texts())
+		t.Fatalf("top bar must not show subtitle: %v", tt.Texts())
 	}
 	for _, label := range []string{"打开 SQL 文件", "历史", "AI 助手", "设置"} {
 		if _, ok := tt.Find(label); !ok {

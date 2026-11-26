@@ -9,8 +9,8 @@ import (
 	"db-g/locales"
 )
 
-// TitleBarHeight 是自绘标题栏的高度（DIP）：窗口内容顶部留出的一条，
-// 整条作为拖拽区，右侧放窗口控制按钮。
+// TitleBarHeight 是主窗口右列顶栏的高度（DIP）：右侧编辑区顶部留出的一条，
+// 整条作为拖拽区，右侧放窗口控制按钮。左侧数据源列表从窗口顶端开始，不占这条。
 const TitleBarHeight = 38
 
 // titleWindow 是自绘标题栏需要的窗口控制能力（主窗口与设置窗口共用）。
@@ -65,17 +65,50 @@ func (a *root) settingsTitleBar(c *ui.Context) {
 	})
 }
 
-// titleBar 是自绘标题栏：整条可拖动，双击最大化；右侧是窗口控制按钮。
-// 只在有原生窗口时显示按钮，headless 测试仍能看到应用名与拖拽区。
-func (a *root) titleBar(c *ui.Context) {
+// topBar 是主窗口右列顶栏：整条可拖动，双击最大化。左边是当前数据源名与状态、
+// 数据库（schema）切换和提示信息，右边是应用操作与窗口控制按钮。
+// 左侧数据源列表改成通顶全高后，这条只覆盖编辑区一侧。
+func (a *root) topBar(c *ui.Context) {
 	t := c.Theme()
 	bar := ui.Row(c).Height(TitleBarHeight).FillWidth().Padding(0, 12).Gap(8).
 		AlignItems(ui.Center).DragWindow().Background(t.Surface)
 	bar.Children(func() {
-		if a.appIcon != nil {
-			ui.Image(c, a.appIcon).Width(20).Height(20)
+		connID := a.activeConnID()
+		if connID != "" && a.store != nil {
+			if p, ok := a.store.Get(connID); ok {
+				a.topBarConn(c, p)
+			}
 		}
-		ui.Text(c, app.DisplayName).Bold().FontSize(12.5)
+		a.schemaPicker(c)
+		if a.connErr != "" {
+			ui.Text(c, a.connErr).TextColor(t.Danger).SingleLine()
+		}
+		if a.consoleErr != "" {
+			if ui.Button(c, a.consoleErr).TextColor(t.Danger).SingleLine().Clicked() {
+				a.consoleErr = ""
+			}
+		}
+		if a.extMsg != "" {
+			if ui.Button(c, a.extMsg).FontSize(12).TextColor(t.TextMuted).SingleLine().Clicked() {
+				a.extMsg = ""
+			}
+		}
+		if a.installNeed.NeedInstall {
+			label := locales.InstallTitle()
+			switch {
+			case a.installNeed.Upgrade:
+				label = locales.TopUpgradeApp(a.installNeed.Running)
+			case a.installNeed.Repair:
+				label = locales.InstallRepairTitle()
+			}
+			if iconButton(c, iconUpgrade, label, t.Accent).Clicked() {
+				a.installOpen = true
+				a.installErr = ""
+			}
+		}
+		if a.installNote != "" {
+			ui.Text(c, a.installNote).FontSize(12).TextColor(t.TextMuted).SingleLine()
+		}
 		ui.Spacer(c)
 		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
 			if iconButtonPlain(c, iconFolderOpen, locales.TopOpenSQLFile(), t.TextMuted).Clicked() {

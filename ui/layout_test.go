@@ -8,6 +8,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // 编辑器/结果分隔线按窗口高度取比例：窗口变矮时两栏等比缩小。
@@ -212,5 +213,43 @@ func TestCtrlQIgnoresNonTableWord(t *testing.T) {
 	tt.Frame()
 	if a.ddlOpen {
 		t.Fatalf("光标在关键字上不该弹 DDL：%q", a.ddlTitle)
+	}
+}
+
+// 左侧数据源列表通顶，顶栏只覆盖编辑区；执行/分析跟着控制台标签行。
+func TestLayoutSidebarFullHeightExecOnTabRow(t *testing.T) {
+	a, _ := topBarTestRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	conn, ok := tt.Find("数据源 本地")
+	if !ok {
+		t.Fatalf("顶栏没有数据源名: %v", tt.Texts())
+	}
+	newConn, ok := tt.Find(locales.SidebarNewConn())
+	if !ok {
+		t.Fatalf("侧栏缺少新建数据源按钮: %v", tt.Texts())
+	}
+	if newConn.Y >= TitleBarHeight {
+		t.Fatalf("侧栏应通顶，新建按钮 y=%v 低于顶栏高度 %v", newConn.Y, TitleBarHeight)
+	}
+	if conn.Y >= TitleBarHeight {
+		t.Fatalf("数据源名应在顶栏里，y=%v", conn.Y)
+	}
+	exec, ok := tt.Find(locales.TopExec())
+	if !ok {
+		t.Fatalf("缺少执行按钮: %v", tt.Texts())
+	}
+	ws, ok := tt.Find("默认")
+	if !ok {
+		t.Fatalf("缺少工作区切换器: %v", tt.Texts())
+	}
+	if exec.Y <= conn.Y {
+		t.Fatalf("执行按钮应在标签行（顶栏下方），exec y=%v conn y=%v", exec.Y, conn.Y)
+	}
+	if d := exec.Y - ws.Y; d < -6 || d > 6 {
+		t.Fatalf("执行按钮应与工作区切换器同一行: exec=%v ws=%v", exec, ws)
+	}
+	if exec.X <= ws.X {
+		t.Fatalf("执行按钮应在工作区切换器右侧: exec=%v ws=%v", exec, ws)
 	}
 }

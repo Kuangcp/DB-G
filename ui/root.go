@@ -153,7 +153,6 @@ type root struct {
 	execPending       bool
 
 	appIconPNG  []byte                                  // 窗口图标；自举安装时写入图标目录
-	appIcon     ui.ImageSource                          // 标题栏渲染用
 	selfInstall bool                                    // 发布构建才启用（app.ReleaseBuild）
 	installNeed app.InstallStatus                       // 安装/升级状态；NeedInstall 决定顶栏图标
 	installOpen bool                                    // 安装确认弹窗
@@ -831,61 +830,15 @@ func (a *root) view(c *ui.Context) {
 		a.planConfirmModal(c)
 		a.guardModal(c)
 
-		ui.Column(c).Fill().Children(func() {
-			a.titleBar(c)
-			ui.Split(c, &a.sidebarWidth, func() {
-				a.sidebar(c)
-			}, func() {
-				main := func() {
+		ui.Split(c, &a.sidebarWidth, func() {
+			a.sidebar(c)
+		}, func() {
+			main := func() {
+				ui.Column(c).Fill().Children(func() {
+					// 顶栏：数据源名/状态、数据库切换、应用操作与窗口控制（原来占一整行的标题栏）。
+					a.topBar(c)
 					ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
-						// 顶栏：连接状态 + 操作。工具条里的按钮悬停前没有面孔。
-						ui.Toolbar(c, func() {
-							connID := a.activeConnID()
-							if connID != "" && a.store != nil {
-								if p, ok := a.store.Get(connID); ok {
-									a.topBarConn(c, p)
-								}
-							}
-							a.schemaPicker(c)
-							if a.connErr != "" {
-								ui.Text(c, a.connErr).TextColor(c.Theme().Danger).SingleLine()
-							}
-							if a.consoleErr != "" {
-								if ui.Button(c, a.consoleErr).TextColor(c.Theme().Danger).SingleLine().Clicked() {
-									a.consoleErr = ""
-								}
-							}
-							if a.extMsg != "" {
-								if ui.Button(c, a.extMsg).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().Clicked() {
-									a.extMsg = ""
-								}
-							}
-							ui.Spacer(c)
-							if iconButton(c, iconPlay, locales.TopExec(), c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-								a.execPending = true
-							}
-							if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-								a.runExplain(false)
-							}
-							if a.installNeed.NeedInstall {
-								label := locales.InstallTitle()
-								switch {
-								case a.installNeed.Upgrade:
-									label = locales.TopUpgradeApp(a.installNeed.Running)
-								case a.installNeed.Repair:
-									label = locales.InstallRepairTitle()
-								}
-								if iconButton(c, iconUpgrade, label, c.Theme().Accent).Clicked() {
-									a.installOpen = true
-									a.installErr = ""
-								}
-							}
-							if a.installNote != "" {
-								ui.Text(c, a.installNote).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
-							}
-						}).Label(locales.TopActions())
-
-						// 标签条 + 工作区切换器
+						// 标签条 + 工作区切换器 + 执行/分析
 						a.tabBar(c)
 
 						// 工具行：查找（编辑器自带查找栏；性能预设/信息在独立设置窗口里）
@@ -921,18 +874,18 @@ func (a *root) view(c *ui.Context) {
 						// 状态栏贴在主窗口底部：结果区隐藏、执行计划或结果很高时都不会被挤掉。
 						a.resultFooter(c)
 					})
+				})
+			}
+			if a.aiChat.open {
+				if a.aiChat.split <= 0 || a.aiChat.split >= 100 {
+					a.aiChat.split = 68
 				}
-				if a.aiChat.open {
-					if a.aiChat.split <= 0 || a.aiChat.split >= 100 {
-						a.aiChat.split = 68
-					}
-					ui.SplitPercent(c, &a.aiChat.split, main, func() {
-						a.aiPanel(c)
-					}).Fill().SplitReset(68)
-					return
-				}
-				main()
-			}).Grow(1)
-		})
+				ui.SplitPercent(c, &a.aiChat.split, main, func() {
+					a.aiPanel(c)
+				}).Fill().SplitReset(68)
+				return
+			}
+			main()
+		}).Fill()
 	}
 }

@@ -43,6 +43,15 @@ func (a *root) tabBar(c *ui.Context) {
 		ui.Toolbar(c, func() {
 			ui.MenuButton(c, name, a.workspaceMenu)
 		}).Padding(0).Shrink(0)
+		// 执行 / 分析：原来占在数据源顶栏，挪到标签行右侧。
+		ui.Toolbar(c, func() {
+			if iconButton(c, iconPlay, locales.TopExec(), c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+				a.execPending = true
+			}
+			if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+				a.runExplain(false)
+			}
+		}).Padding(0).Shrink(0).Label(locales.TopActions())
 	})
 }
 
