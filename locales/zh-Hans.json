@@ -121,7 +121,7 @@
   "connModalNew": "新建连接",
   "connModalEdit": "编辑连接",
   "connFormTitle": "{kind} 连接",
-  "connFormURLParseClipboard": "从剪贴板解析连接 URL",
+  "connFormURLParseClipboard": "解析剪贴板连接URL",
   "connFormURLInvalid": "无法识别的连接 URL",
   "connFormURLUnsupported": "URL 中的数据源类型不受支持",
   "connFormName": "名称",

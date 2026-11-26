@@ -147,7 +147,7 @@
   "connFormTitle": "{kind} Connection",
   "@connFormTitle": { "placeholders": { "kind": { "type": "String" } } },
   "connFormName": "Name",
-  "connFormURLParseClipboard": "Parse URL from Clipboard",
+  "connFormURLParseClipboard": "Parse Connection URL from Clipboard",
   "connFormURLInvalid": "Unrecognized connection URL",
   "connFormURLUnsupported": "Unsupported datasource type in the URL",
   "connFormLocation": "Location",

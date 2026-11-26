@@ -6,7 +6,7 @@ import (
 	"db-g/locales"
 )
 
-// 顶部 URL 导入：解析后切换类型、填端口/协议/参数，名称空缺时用库名。
+// URL 导入：解析后切换类型、填端口/协议/参数，名称空缺时用库名。
 func TestConnFormURLImportMySQL(t *testing.T) {
 	a, tt := openConnModal(t)
 	tt.SetClipboard("jdbc:mysql://root:pw@db.local:3307/app?useSSL=false")
@@ -60,6 +60,8 @@ func TestConnFormURLImportSQLite(t *testing.T) {
 func TestConnFormURLImportFailureKeepsFields(t *testing.T) {
 	a, tt := openConnModal(t)
 	a.connFormKind, a.connFormHost = "postgres", "keep.example"
+	// 直接改表单字段后先重排一帧：按钮在底栏，点击坐标取自上一帧布局。
+	tt.Frame()
 	tt.SetClipboard("jdbc:oracle:thin:@host:1521:xe")
 	if err := tt.Click(locales.ConnFormURLParseClipboard()); err != nil {
 		t.Fatal(err)
@@ -70,5 +72,25 @@ func TestConnFormURLImportFailureKeepsFields(t *testing.T) {
 	}
 	if a.connFormURLErr == "" {
 		t.Fatal("应显示导入错误")
+	}
+}
+
+// 解析按钮在底栏、紧挨着「复制」右侧，不再占据表单顶部的大按钮位置。
+func TestConnFormURLButtonBesideCopy(t *testing.T) {
+	_, tt := openConnModal(t)
+	copyRect, ok := tt.Find(locales.ConnFormCopy())
+	if !ok {
+		t.Fatalf("找不到「复制」按钮: %v", tt.Texts())
+	}
+	urlRect, ok := tt.Find(locales.ConnFormURLParseClipboard())
+	if !ok {
+		t.Fatalf("找不到「解析剪贴板连接URL」按钮: %v", tt.Texts())
+	}
+	if dy := urlRect.Y - copyRect.Y; dy < -2 || dy > 2 {
+		t.Fatalf("解析按钮应与「复制」同一行: copy.y=%v url.y=%v", copyRect.Y, urlRect.Y)
+	}
+	if urlRect.X < copyRect.X+copyRect.W {
+		t.Fatalf("解析按钮应在「复制」右侧: copy=[%v,%v] url.x=%v",
+			copyRect.X, copyRect.X+copyRect.W, urlRect.X)
 	}
 }

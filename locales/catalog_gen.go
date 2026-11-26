@@ -1260,11 +1260,11 @@ func (msgs Messages) ConnFormName() string {
 	return Catalog.Format(msgs.locale, "connFormName", nil)
 }
 
-// ConnFormURLParseClipboard says "Parse URL from Clipboard"
+// ConnFormURLParseClipboard says "Parse Connection URL from Clipboard"
 // in the language the app shows.
 func ConnFormURLParseClipboard() string { return In(i18n.Locale()).ConnFormURLParseClipboard() }
 
-// ConnFormURLParseClipboard says "Parse URL from Clipboard"
+// ConnFormURLParseClipboard says "Parse Connection URL from Clipboard"
 // in the language of msgs.
 func (msgs Messages) ConnFormURLParseClipboard() string {
 	return Catalog.Format(msgs.locale, "connFormURLParseClipboard", nil)

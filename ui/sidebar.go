@@ -709,16 +709,6 @@ func (a *root) connModal(c *ui.Context) {
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
 			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
 				ui.Text(c, locales.ConnFormTitle(kindLabel(a.connFormKind))).Bold()
-				if ui.Button(c, locales.ConnFormURLParseClipboard()).Radius(radius).Clicked() {
-					a.connFormURL = c.ReadClipboard()
-					a.applyConnURL()
-				}
-				if a.connFormURLErr != "" {
-					ui.Text(c, a.connFormURLErr).FontSize(11).TextColor(c.Theme().Danger).
-						SingleLine().Tooltip(a.connFormURLErr)
-				}
-				ui.Divider(c)
-				ui.Box(c).Height(4)
 				ui.TextInput(c, &a.connFormName).Placeholder(locales.ConnFormName()).Radius(radius).AutoFocus()
 				if a.store != nil && len(a.store.Folders()) > 0 {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -829,6 +819,10 @@ func (a *root) connModal(c *ui.Context) {
 					ui.Text(c, a.connTestMsg).FontSize(12).TextColor(col).
 						SingleLine().Tooltip(a.connTestMsg)
 				}
+				if a.connFormURLErr != "" {
+					ui.Text(c, a.connFormURLErr).FontSize(11).TextColor(c.Theme().Danger).
+						SingleLine().Tooltip(a.connFormURLErr)
+				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					if a.connTestBusy {
 						if ui.Button(c, locales.ConnFormCancelTest()).Radius(radius).Clicked() {
@@ -843,6 +837,10 @@ func (a *root) connModal(c *ui.Context) {
 					if ui.Button(c, locales.ConnFormCopy()).Radius(radius).Tooltip(locales.ConnFormCopyTip()).
 						Clicked() {
 						a.copyConnForm(c)
+					}
+					if ui.Button(c, locales.ConnFormURLParseClipboard()).Radius(radius).Clicked() {
+						a.connFormURL = c.ReadClipboard()
+						a.applyConnURL()
 					}
 					ui.Spacer(c)
 					if ui.Button(c, locales.CommonCancel()).Radius(radius).Clicked() {
