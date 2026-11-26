@@ -48,6 +48,7 @@ type root struct {
 	connFormPort      string
 	connFormUser      string
 	connFormPass      string
+	connFormShowPass  bool // 密码框是否显示明文（纯瞬态）
 	connFormDB        string
 	connFormParams    string
 	connFormTimeout   string                       // 查询超时（秒，空 = 默认 30）

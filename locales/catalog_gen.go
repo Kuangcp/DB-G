@@ -1310,6 +1310,26 @@ func (msgs Messages) ConnFormPassword() string {
 	return Catalog.Format(msgs.locale, "connFormPassword", nil)
 }
 
+// ConnFormShowPassword says "Show password"
+// in the language the app shows.
+func ConnFormShowPassword() string { return In(i18n.Locale()).ConnFormShowPassword() }
+
+// ConnFormShowPassword says "Show password"
+// in the language of msgs.
+func (msgs Messages) ConnFormShowPassword() string {
+	return Catalog.Format(msgs.locale, "connFormShowPassword", nil)
+}
+
+// ConnFormHidePassword says "Hide password"
+// in the language the app shows.
+func ConnFormHidePassword() string { return In(i18n.Locale()).ConnFormHidePassword() }
+
+// ConnFormHidePassword says "Hide password"
+// in the language of msgs.
+func (msgs Messages) ConnFormHidePassword() string {
+	return Catalog.Format(msgs.locale, "connFormHidePassword", nil)
+}
+
 // ConnFormProtocol says "Protocol"
 // in the language the app shows.
 func ConnFormProtocol() string { return In(i18n.Locale()).ConnFormProtocol() }

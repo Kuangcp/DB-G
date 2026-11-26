@@ -152,6 +152,8 @@
   "connFormPort": "Port",
   "connFormUser": "User",
   "connFormPassword": "Password",
+  "connFormShowPassword": "Show password",
+  "connFormHidePassword": "Hide password",
   "connFormProtocol": "Protocol",
   "connFormSqlitePath": "SQLite file path",
   "connFormBrowse": "Browse…",

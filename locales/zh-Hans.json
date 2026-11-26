@@ -127,6 +127,8 @@
   "connFormPort": "端口",
   "connFormUser": "用户",
   "connFormPassword": "密码",
+  "connFormShowPassword": "显示密码",
+  "connFormHidePassword": "隐藏密码",
   "connFormProtocol": "协议",
   "connFormSqlitePath": "SQLite 文件路径",
   "connFormBrowse": "浏览…",

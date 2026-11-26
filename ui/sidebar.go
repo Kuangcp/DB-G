@@ -523,6 +523,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
 			a.connFormKind = p.Kind
 			a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
+			a.connFormShowPass = false
 			a.connFormPort = ""
 			if p.Port > 0 {
 				a.connFormPort = strconv.Itoa(p.Port)
@@ -677,7 +678,7 @@ func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool, dep
 
 // 连接弹窗的固定尺寸：切换数据源时表单行数不同，面板却不变，窗口不会一弹一弹。
 const (
-	connFormWidth  = 640
+	connFormWidth  = 840
 	connFormHeight = 600
 )
 
@@ -720,7 +721,7 @@ func (a *root) connModal(c *ui.Context) {
 					})
 					ui.Row(c).Gap(6).Children(func() {
 						ui.TextInput(c, &a.connFormUser).Placeholder(locales.ConnFormUser()).Radius(radius).Fill()
-						ui.TextInput(c, &a.connFormPass).Placeholder(locales.ConnFormPassword()).Radius(radius).Password()
+						a.connPasswordInput(c, radius)
 					})
 					if a.connFormKind == "clickhouse" {
 						// 协议决定 DSN 的 scheme，也决定默认端口：native 9000、
@@ -840,6 +841,30 @@ func (a *root) connModal(c *ui.Context) {
 			})
 		})
 	}).Width(connFormWidth).Height(connFormHeight)
+}
+
+// connPasswordInput 是连接密码框：眼睛按钮叠在输入框内部右侧，
+// 点击在隐藏与明文之间切换（Password 只在隐藏时调用）。
+func (a *root) connPasswordInput(c *ui.Context, radius float32) {
+	t := c.Theme()
+	ui.Box(c).Fill().Children(func() {
+		padX := t.Space(2.5)
+		in := ui.TextInput(c, &a.connFormPass).Placeholder(locales.ConnFormPassword()).
+			Label(locales.ConnFormPassword()).Radius(radius).Fill().
+			Padding(t.Space(1.5), padX+26, t.Space(1.5), padX)
+		if !a.connFormShowPass {
+			in.Password()
+		}
+		icon, label := iconEye, locales.ConnFormShowPassword()
+		if a.connFormShowPass {
+			icon, label = iconEyeOff, locales.ConnFormHidePassword()
+		}
+		eye := iconButtonPlain(c, icon, label, t.TextMuted).
+			AttachTo(in, ui.AnchorRight, ui.AnchorRight).Right(6)
+		if eye.Clicked() {
+			a.connFormShowPass = !a.connFormShowPass
+		}
+	})
 }
 
 // connKindRow 是左侧数据源类型的一行：走通用的侧边导航样式（无按钮外观、
@@ -1110,6 +1135,7 @@ func (a *root) openNewConnForm(folderID string) {
 	a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
 	a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
 	a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
+	a.connFormShowPass = false
 	a.connFormParams, a.connFormTimeout, a.connProto = "", "", 0
 	a.connFormGuard = false
 	a.connFormAIStrict = false

@@ -12,6 +12,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 
 	_ "db-g/driver/sqlite"
 )
@@ -1209,5 +1210,31 @@ func TestSidebarFolderRowClickToggles(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("订单库") {
 		t.Fatalf("clicking folder row again should expand: %q", tt.Texts())
+	}
+}
+
+func TestConnPasswordEyeTogglesPlaintext(t *testing.T) {
+	a := newSidebarRoot(t)
+	a.openNewConnForm("")
+	a.connFormKind = "mysql"
+	a.connFormPass = "s3cret"
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if a.connFormShowPass {
+		t.Fatal("密码默认应隐藏")
+	}
+	if err := tt.Click(locales.ConnFormShowPassword()); err != nil {
+		t.Fatalf("密码框右侧应有显示密码按钮: %v", err)
+	}
+	tt.Frame()
+	if !a.connFormShowPass {
+		t.Fatal("点击眼睛后应显示明文")
+	}
+	if err := tt.Click(locales.ConnFormHidePassword()); err != nil {
+		t.Fatalf("显示后按钮应变为隐藏密码: %v", err)
+	}
+	tt.Frame()
+	if a.connFormShowPass {
+		t.Fatal("再次点击后应恢复隐藏")
 	}
 }

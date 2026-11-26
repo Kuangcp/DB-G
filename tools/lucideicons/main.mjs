@@ -29,6 +29,7 @@ const icons = {
   iconClose: "x",
   iconCopy: "copy",
   iconEye: "eye",
+  iconEyeOff: "eye-off",
   iconChevronDown: "chevron-down",
   iconChevronLeft: "chevron-left",
   iconChevronRight: "chevron-right",
