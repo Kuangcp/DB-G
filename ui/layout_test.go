@@ -216,14 +216,18 @@ func TestCtrlQIgnoresNonTableWord(t *testing.T) {
 	}
 }
 
-// 左侧数据源列表通顶；控制台标签在顶栏，数据源/数据库/执行在第二行。
+// 左侧数据源列表通顶；标题栏下面是控制台标签行，再下面是数据源/数据库/执行。
 func TestLayoutSidebarFullHeightConnRow(t *testing.T) {
 	a, _ := topBarTestRoot(t)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
+	entry, ok := tt.Find(locales.PaletteOpen())
+	if !ok {
+		t.Fatalf("标题栏没有命令面板入口: %v", tt.Texts())
+	}
 	tabs, ok := tt.Find(locales.TabToolbarLabel())
 	if !ok {
-		t.Fatalf("顶栏没有控制台标签: %v", tt.Texts())
+		t.Fatalf("没有控制台标签行: %v", tt.Texts())
 	}
 	conn, ok := tt.Find("数据源 本地")
 	if !ok {
@@ -236,11 +240,14 @@ func TestLayoutSidebarFullHeightConnRow(t *testing.T) {
 	if newConn.Y >= TitleBarHeight {
 		t.Fatalf("侧栏应通顶，新建按钮 y=%v 低于顶栏高度 %v", newConn.Y, TitleBarHeight)
 	}
-	if tabs.Y+tabs.H > TitleBarHeight+2 {
-		t.Fatalf("控制台标签应在顶栏里: tabs=%v 顶栏高 %v", tabs, TitleBarHeight)
+	if entry.Y+entry.H > TitleBarHeight+1 {
+		t.Fatalf("命令面板入口应在标题栏里: entry=%v 顶栏高 %v", entry, TitleBarHeight)
 	}
-	if conn.Y < TitleBarHeight {
-		t.Fatalf("数据源名应在第二行，y=%v", conn.Y)
+	if tabs.Y < TitleBarHeight {
+		t.Fatalf("控制台标签应在标题栏下面的第二行: tabs=%v", tabs)
+	}
+	if conn.Y <= tabs.Y {
+		t.Fatalf("数据源名应在标签行下面: conn=%v tabs=%v", conn, tabs)
 	}
 	exec, ok := tt.Find(locales.TopExec())
 	if !ok {

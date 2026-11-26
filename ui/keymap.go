@@ -47,6 +47,8 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Ctrl, ui.KeyEnter}, {0, ui.KeyF5}}},
 	{ID: "save", Label: locales.KeySaveConsole, Scope: scopeAlways,
 		Def: []chord{{ui.Ctrl, ui.KeyS}}},
+	{ID: "commandPalette", Label: locales.KeyCommandPalette, Scope: scopeAlways,
+		Def: []chord{{ui.Ctrl, ui.KeyP}}},
 	{ID: "duplicateLine", Label: locales.KeyDuplicateLine, Scope: scopeEditor, Cmd: myeditor.DuplicateLinesDown,
 		Def: []chord{{ui.Ctrl, ui.KeyY}}},
 	{ID: "deleteLine", Label: locales.KeyDeleteLine, Scope: scopeEditor, Cmd: myeditor.DeleteLine,

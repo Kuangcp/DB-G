@@ -43,6 +43,8 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 	switch id {
 	case "exec":
 		a.execPending = true
+	case "commandPalette":
+		a.openPalette()
 	case "save":
 		a.pollExternalFiles(true)
 		if a.externalBlocked() {

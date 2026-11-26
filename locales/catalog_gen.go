@@ -2854,6 +2854,16 @@ func (msgs Messages) KeyExec() string {
 	return Catalog.Format(msgs.locale, "keyExec", nil)
 }
 
+// KeyCommandPalette says "Command Palette"
+// in the language the app shows.
+func KeyCommandPalette() string { return In(i18n.Locale()).KeyCommandPalette() }
+
+// KeyCommandPalette says "Command Palette"
+// in the language of msgs.
+func (msgs Messages) KeyCommandPalette() string {
+	return Catalog.Format(msgs.locale, "keyCommandPalette", nil)
+}
+
 // KeySaveConsole says "Save Console"
 // in the language the app shows.
 func KeySaveConsole() string { return In(i18n.Locale()).KeySaveConsole() }
@@ -4134,6 +4144,66 @@ func TopEditor() string { return In(i18n.Locale()).TopEditor() }
 // in the language of msgs.
 func (msgs Messages) TopEditor() string {
 	return Catalog.Format(msgs.locale, "topEditor", nil)
+}
+
+// PaletteOpen says "Command Palette"
+// in the language the app shows.
+func PaletteOpen() string { return In(i18n.Locale()).PaletteOpen() }
+
+// PaletteOpen says "Command Palette"
+// in the language of msgs.
+func (msgs Messages) PaletteOpen() string {
+	return Catalog.Format(msgs.locale, "paletteOpen", nil)
+}
+
+// PaletteSearchPlaceholder says "Search actions, consoles, or SQL"
+// in the language the app shows.
+func PaletteSearchPlaceholder() string { return In(i18n.Locale()).PaletteSearchPlaceholder() }
+
+// PaletteSearchPlaceholder says "Search actions, consoles, or SQL"
+// in the language of msgs.
+func (msgs Messages) PaletteSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "paletteSearchPlaceholder", nil)
+}
+
+// PaletteSectionActions says "Actions"
+// in the language the app shows.
+func PaletteSectionActions() string { return In(i18n.Locale()).PaletteSectionActions() }
+
+// PaletteSectionActions says "Actions"
+// in the language of msgs.
+func (msgs Messages) PaletteSectionActions() string {
+	return Catalog.Format(msgs.locale, "paletteSectionActions", nil)
+}
+
+// PaletteSectionConsoles says "Consoles"
+// in the language the app shows.
+func PaletteSectionConsoles() string { return In(i18n.Locale()).PaletteSectionConsoles() }
+
+// PaletteSectionConsoles says "Consoles"
+// in the language of msgs.
+func (msgs Messages) PaletteSectionConsoles() string {
+	return Catalog.Format(msgs.locale, "paletteSectionConsoles", nil)
+}
+
+// PaletteSectionSQL says "SQL Matches"
+// in the language the app shows.
+func PaletteSectionSQL() string { return In(i18n.Locale()).PaletteSectionSQL() }
+
+// PaletteSectionSQL says "SQL Matches"
+// in the language of msgs.
+func (msgs Messages) PaletteSectionSQL() string {
+	return Catalog.Format(msgs.locale, "paletteSectionSQL", nil)
+}
+
+// PaletteEmpty says "No matching actions, consoles, or SQL"
+// in the language the app shows.
+func PaletteEmpty() string { return In(i18n.Locale()).PaletteEmpty() }
+
+// PaletteEmpty says "No matching actions, consoles, or SQL"
+// in the language of msgs.
+func (msgs Messages) PaletteEmpty() string {
+	return Catalog.Format(msgs.locale, "paletteEmpty", nil)
 }
 
 // RunGuardBlocked says "High-risk SQL blocked: {risk}"

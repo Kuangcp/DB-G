@@ -33,6 +33,13 @@ func (a *root) consoleTabs(c *ui.Context) {
 	}).Padding(0).Grow(1).Label(locales.TabToolbarLabel())
 }
 
+// tabsRow 是标题栏下的控制台标签行（标签之间用竖线分隔）。
+func (a *root) tabsRow(c *ui.Context) {
+	ui.Row(c).AlignItems(ui.Center).FillWidth().Padding(0, 8).Children(func() {
+		a.consoleTabs(c)
+	})
+}
+
 // tabFontSize 返回控制台标签的字号；配置越界时回退默认值。
 func (a *root) tabFontSize() float32 {
 	size := a.fontPrefs.TabSize

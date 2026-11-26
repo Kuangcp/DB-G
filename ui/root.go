@@ -228,6 +228,8 @@ type root struct {
 	statsSQLOpen        bool
 	statsSQLState       *myeditor.State // 统计 SQL 的只读高亮编辑器（惰性创建）
 	historyOpen         bool
+	paletteOpen         bool   // 命令面板（标题栏搜索框 / Ctrl+P）
+	paletteQuery        string // 命令面板当前查询
 	exportConfirm       bool
 	exportFormat        string
 	exportStatus        string
@@ -815,6 +817,7 @@ func (a *root) view(c *ui.Context) {
 		a.exportConfirmModal(c)
 		a.exportCloseModal(c)
 		a.historyPanel(c)
+		a.palette(c)
 		a.ddlPanel(c)
 		a.statsPanel(c)
 		a.aiLintModal(c)
@@ -834,8 +837,9 @@ func (a *root) view(c *ui.Context) {
 		pane := func() {
 			main := func() {
 				ui.Column(c).Fill().Children(func() {
-					// 顶栏（控制台标签 + 窗口控制）与第二行（数据源、数据库、操作、编辑工具）。
+					// 三行：标题栏（命令面板入口）→ 控制台标签 → 数据源与工具。
 					a.topBar(c)
+					a.tabsRow(c)
 					a.connBar(c)
 					ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
 						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。

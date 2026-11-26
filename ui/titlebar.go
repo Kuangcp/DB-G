@@ -65,8 +65,9 @@ func (a *root) settingsTitleBar(c *ui.Context) {
 	})
 }
 
-// topBar 是主窗口右列顶栏：整条可拖动，双击最大化。左边是控制台标签，
-// 右边是应用操作与窗口控制按钮。左侧数据源列表通顶全高，这条只覆盖编辑区一侧。
+// topBar 是主窗口右列标题栏：整条可拖动，双击最大化。左边是命令面板入口
+// （像 VSCode 的搜索框），右边是应用操作与窗口控制按钮。
+// 左侧数据源列表通顶全高，这条只覆盖编辑区一侧。
 func (a *root) topBar(c *ui.Context) {
 	t := c.Theme()
 	bar := ui.Row(c).Height(TitleBarHeight).FillWidth().Padding(0, 12).Gap(8).
@@ -77,7 +78,9 @@ func (a *root) topBar(c *ui.Context) {
 				a.sidebarHidden = false
 			}
 		}
-		a.consoleTabs(c)
+		ui.Row(c).Grow(1).Justify(ui.Center).Children(func() {
+			a.paletteEntry(c)
+		})
 		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
 			if iconButtonPlain(c, iconFolderOpen, locales.TopOpenSQLFile(), t.TextMuted).Clicked() {
 				a.pickOpenSQLFiles()
@@ -90,14 +93,7 @@ func (a *root) topBar(c *ui.Context) {
 				aiColor = t.Accent
 			}
 			if iconButtonPlain(c, iconSparkles, locales.TopAIAssistant(), aiColor).Clicked() {
-				a.aiChat.open = !a.aiChat.open
-				if a.aiChat.open {
-					a.loadAIChat()
-					a.aiChat.scroll.Y = math.MaxFloat32
-				} else {
-					a.cancelAIPrepare()
-					a.stopAI()
-				}
+				a.toggleAIChat()
 			}
 			if iconButtonPlain(c, iconSettings, locales.SettingsTitle(), t.TextMuted).Clicked() {
 				a.requestSettings()
@@ -111,7 +107,39 @@ func (a *root) topBar(c *ui.Context) {
 	})
 }
 
-// connBarHeight 是顶栏下第二行（数据源与编辑工具）的高度。
+// paletteEntry 是标题栏里的命令面板入口，外观像 VSCode 的搜索框。
+func (a *root) paletteEntry(c *ui.Context) {
+	t := c.Theme()
+	b := ui.ButtonBase(c).Label(locales.PaletteOpen()).Height(t.Space(6.5)).
+		Width(paletteWidth*0.6).Padding(0, t.Space(2.5)).Radius(t.Space(1.5)).
+		Border(1, t.Border).Background(t.Background)
+	if b.Hovered() {
+		b.Background(t.SurfaceHover)
+	}
+	b.Children(func() {
+		ui.Icon(c, iconSearch).FontSize(14).TextColor(t.TextMuted)
+		ui.Text(c, locales.PaletteSearchPlaceholder()).FontSize(12).
+			TextColor(t.TextMuted).SingleLine().Grow(1)
+		ui.Text(c, formatChords(a.chords["commandPalette"])).FontSize(11).TextColor(t.TextMuted)
+	})
+	if b.Clicked() {
+		a.openPalette()
+	}
+}
+
+// toggleAIChat 开关右侧 AI 面板；打开时载入会话并滚到底。
+func (a *root) toggleAIChat() {
+	a.aiChat.open = !a.aiChat.open
+	if a.aiChat.open {
+		a.loadAIChat()
+		a.aiChat.scroll.Y = math.MaxFloat32
+	} else {
+		a.cancelAIPrepare()
+		a.stopAI()
+	}
+}
+
+// connBarHeight 是标题栏下第三行（数据源与编辑工具）的高度。
 const connBarHeight = 34
 
 // connBar 是控制台标签下的第二行：当前数据源与数据库切换、提示信息、
