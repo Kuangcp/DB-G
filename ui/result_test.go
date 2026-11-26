@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/engine"
+	"db-g/locales"
 )
 
 type blockingFake struct{}
@@ -332,15 +333,25 @@ func TestCellViewerJSONTree(t *testing.T) {
 	if !a.cellViewJSONOK {
 		t.Fatal("JSON should render as a tree")
 	}
-	if !tt.HasText("user") || !tt.HasText(`"alice"`) {
+	if !tt.HasText("user") {
 		t.Fatalf("json tree: %q", tt.Texts())
+	}
+	if err := tt.Click("展开：user"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if _, ok := tt.Find("name"); !ok {
+		t.Fatalf("expanded node should show its children: %q", tt.Texts())
 	}
 	if err := tt.Click("收起：user"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if tt.HasText("name:") || tt.HasText("age:") {
+	if _, ok := tt.Find("name"); ok {
 		t.Fatalf("collapsed node still shows its children: %q", tt.Texts())
+	}
+	if _, ok := tt.Find("展开：user"); !ok {
+		t.Fatal("折叠后应显示为可展开状态")
 	}
 	if err := tt.Click("复制原文"); err != nil {
 		t.Fatal(err)
@@ -690,5 +701,67 @@ func TestResultLastRowFullyVisible(t *testing.T) {
 	}
 	if footer.Y+footer.H > 500 {
 		t.Fatalf("状态栏被挤出窗口: %+v", footer)
+	}
+}
+
+// JSON 预览支持搜索：匹配键和值，自动展开祖先并可在匹配间跳转。
+func TestCellViewerJSONFind(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"payload"},
+		Rows:    [][]any{{`{"a":{"k":"needle"},"b":{"k":"needle"}}`}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.openCellViewer(a.con.Result(), 0, 0)
+	tt.Frame()
+	if err := tt.Click(locales.CellViewerFind()); err != nil {
+		t.Fatalf("预览弹窗应有搜索入口: %v", err)
+	}
+	tt.Frame()
+	tt.Type("needle")
+	tt.Frame()
+	if got := len(a.cellViewFindHits); got != 2 {
+		t.Fatalf("应匹配 2 个节点，得到 %d", got)
+	}
+	if _, ok := tt.Find("k"); !ok {
+		t.Fatalf("命中节点的祖先应自动展开: %v", tt.Texts())
+	}
+	if !tt.HasText("1 / 2") {
+		t.Fatalf("缺少匹配计数: %v", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.cellViewFindCur != 1 || !tt.HasText("2 / 2") {
+		t.Fatalf("Enter 应跳到下一个匹配: cur=%d texts=%v", a.cellViewFindCur, tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if a.cellViewFindCur != 0 {
+		t.Fatalf("最后一个匹配后应回到第一个: cur=%d", a.cellViewFindCur)
+	}
+}
+
+// JSON 预览里 Ctrl+F 也能打开搜索条。
+func TestCellViewerJSONFindShortcut(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"payload"},
+		Rows:    [][]any{{`{"ok":true}`}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	a.openCellViewer(a.con.Result(), 0, 0)
+	tt.Frame()
+	if err := tt.Click("ok"); err != nil {
+		t.Fatalf("预览行应可聚焦: %v", err)
+	}
+	tt.Frame()
+	tt.Key(ui.Ctrl, ui.KeyF)
+	tt.Frame()
+	if !a.cellViewFindOpen {
+		t.Fatal("Ctrl+F 应打开预览搜索条")
 	}
 }

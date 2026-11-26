@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -301,12 +299,19 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 	}
 	a.cellViewText = text
 	a.fitCellModal(text, isJSON)
-	a.cellViewJSON, a.cellViewJSONOK = nil, false
-	a.cellViewCollapsed = map[string]bool{}
+	a.cellViewJSONOK = false
+	a.cellViewJSONRoot, a.cellViewJSONRows = nil, nil
+	a.cellViewJSONExpanded, a.cellViewJSONTruncated = nil, false
+	a.cellViewJSONList = ui.ListState{}
+	a.cellViewFindOpen = false
+	a.cellViewFindQuery, a.cellViewFindLast = "", ""
+	a.cellViewFindHits, a.cellViewFindCur = nil, 0
 	// 避免对超大文本做树解析（解析与节点量都随大小爆炸），超出就退回纯文本。
 	if isJSON && len(a.cellViewText) <= 1<<20 {
-		if v, ok := parseJSONValue(a.cellViewText); ok {
-			a.cellViewJSON, a.cellViewJSONOK = v, true
+		if root, truncated, err := buildJSONTree([]byte(a.cellViewText)); err == nil &&
+			(root.kind == "object" || root.kind == "array") {
+			a.applyCellJSON(root, truncated)
+			a.cellViewJSONOK = true
 		}
 	}
 	a.cellViewOpen = true
@@ -322,27 +327,6 @@ func humanBytes(n int64) string {
 	default:
 		return fmt.Sprintf("%d B", n)
 	}
-}
-
-// jsonNodeLimit 是 JSON 树一次最多渲染的节点数，超过后停止展开。
-const jsonNodeLimit = 5000
-
-// parseJSONValue 把文本解析成 JSON 树；只接受对象或数组顶层。
-func parseJSONValue(text string) (any, bool) {
-	dec := json.NewDecoder(strings.NewReader(text))
-	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, false
-	}
-	if dec.More() {
-		return nil, false
-	}
-	switch v.(type) {
-	case map[string]any, []any:
-		return v, true
-	}
-	return nil, false
 }
 
 // 单元格查看/编辑弹窗的默认与最小尺寸；窗口再小时由 Modal 的 MaxWidth/MaxHeight 兜底。
@@ -423,13 +407,23 @@ func (a *root) cellModalGrip(c *ui.Context) {
 func (a *root) viewerToolbar(c *ui.Context) {
 	ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
 		ui.Text(c, a.cellViewTitle).Bold().SingleLine()
+		if a.cellViewJSONOK && a.cellViewJSONTruncated {
+			ui.Text(c, locales.JsonTooManyNodes(maxJSONTreeRows)).
+				FontSize(11).TextColor(c.Theme().Warning).SingleLine()
+		}
 		ui.Spacer(c)
 		if a.cellViewJSONOK {
+			if iconButtonPlain(c, iconSearch, locales.CellViewerFind(), ui.Transparent).Clicked() {
+				a.cellViewFindOpen = !a.cellViewFindOpen
+				if a.cellViewFindOpen {
+					a.refreshCellFind()
+				}
+			}
 			if iconButtonPlain(c, iconCollapseAll, locales.JsonCollapseAll(), ui.Transparent).Clicked() {
-				a.collapseAllJSON()
+				a.expandAllJSON(false)
 			}
 			if iconButtonPlain(c, iconExpandAll, locales.JsonExpandAll(), ui.Transparent).Clicked() {
-				a.expandAllJSON()
+				a.expandAllJSON(true)
 			}
 		} else {
 			label := locales.JsonWrapOn()
@@ -450,90 +444,20 @@ func (a *root) viewerToolbar(c *ui.Context) {
 	})
 }
 
-// expandAllJSON 清空折叠状态，让所有 JSON 节点展开。
-func (a *root) expandAllJSON() {
-	a.cellViewCollapsed = make(map[string]bool)
-}
-
-// collapseAllJSON 只保留第一层展开，其他所有子层级折叠。
-func (a *root) collapseAllJSON() {
-	paths := collectAllPaths(a.cellViewJSON)
-	col := make(map[string]bool, len(paths))
-	for _, p := range paths {
-		// $ .key 或 $ [0] 是根的直接子节点，保留展开
-		// 更深一层的才折叠：需要跳过以 $.key.、$ [i]、$ .key.[j 开头但实际要排除的
-		if isTopLevel(p) {
-			continue
-		}
-		col[p] = true
-	}
-	a.cellViewCollapsed = col
-}
-
-// isTopLevel 判断 path 是否为 JSON 根的直接子节点。
-// 路径格式：$ .key → 第二层（顶层子节点），$[0] → 同上；$.a.b 或 $[0].b → 深层。
-func isTopLevel(path string) bool {
-	rest := strings.TrimPrefix(path, "$")
-	// $ 本身不是子节点
-	if rest == "" {
-		return false
-	}
-	// $.key — 第一个 "." 后面没有更多 "." 且不在 "[" 前
-	if idx := strings.IndexByte(rest, '.'); idx >= 0 {
-		// 检查 "." 之后是否还有 "." 或 "]"
-		after := rest[idx+1:]
-		return !strings.ContainsAny(after, ".[")
-	}
-	// $[i] — 单个 "]" 结尾即为顶层
-	if rest[0] == '[' {
-		closeIdx := strings.IndexByte(rest, ']')
-		if closeIdx < 0 {
-			return false
-		}
-		remaining := rest[closeIdx+1:]
-		return remaining == ""
-	}
-	return false
-}
-
-// collectAllPaths 递归收集 JSON 中所有可折叠节点（map/array）的 path。
-func collectAllPaths(v any) []string {
-	var out []string
-	var walk func(any, string)
-	walk = func(node any, path string) {
-		switch n := node.(type) {
-		case map[string]any:
-			for k, v := range n {
-				p := path + "." + k
-				out = append(out, p)
-				walk(v, p)
-			}
-		case []any:
-			for i, e := range n {
-				p := path + "[" + strconv.Itoa(i) + "]"
-				out = append(out, p)
-				walk(e, p)
-			}
-		}
-	}
-	walk(v, "$")
-	return out
-}
-
 // cellViewer 渲染长文本查看弹窗；JSON 时画可展开/折叠的树。
 func (a *root) cellViewer(c *ui.Context) {
 	if !a.cellViewOpen {
 		return
 	}
 	w, h := a.cellModalSize()
-	ui.Modal(c, &a.cellViewOpen, func() {
+	m := ui.Modal(c, &a.cellViewOpen, func() {
 		a.viewerToolbar(c)
+		if a.cellViewJSONOK && a.cellViewFindOpen {
+			a.cellViewFindBar(c)
+		}
 		switch {
 		case a.cellViewJSONOK:
-			ui.ScrollBoth(c).Grow(1).Children(func() {
-				nodes := 0
-				a.jsonTree(c, "$", a.cellViewJSON, 0, &nodes)
-			})
+			a.jsonRowsView(c)
 		case a.cellViewWrap:
 			// 纵向滚动容器里再套一层 FillWidth，文本才会拿到视口宽度并折行。
 			ui.Scroll(c).Grow(1).Children(func() {
@@ -549,102 +473,9 @@ func (a *root) cellViewer(c *ui.Context) {
 		}
 		a.cellModalGrip(c)
 	}).Width(w).Height(h)
-}
-
-// jsonTree 递归渲染 JSON 节点；path 是折叠状态的键。
-func (a *root) jsonTree(c *ui.Context, path string, v any, depth int, nodes *int) {
-	if *nodes >= jsonNodeLimit {
-		ui.Text(c, locales.JsonTooManyNodes(jsonNodeLimit)).TextColor(c.Theme().TextMuted).FontSize(12)
-		return
-	}
-	switch t := v.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(t))
-		for k := range t {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			*nodes++
-			a.jsonEntry(c, path+"."+k, k, t[k], depth, nodes)
-		}
-	case []any:
-		for i, e := range t {
-			*nodes++
-			a.jsonEntry(c, path+"["+strconv.Itoa(i)+"]", strconv.Itoa(i), e, depth, nodes)
-		}
-	}
-}
-
-// jsonEntry 渲染一个键（或数组下标）及其值；对象/数组可点击折叠。
-func (a *root) jsonEntry(c *ui.Context, path, key string, v any, depth int, nodes *int) {
-	t := c.Theme()
-	indent := ui.Row(c).MarginStart(float32(depth) * 16)
-	var kids map[string]any
-	var list []any
-	switch x := v.(type) {
-	case map[string]any:
-		kids = x
-	case []any:
-		list = x
-	}
-	if kids != nil || list != nil {
-		open := !a.cellViewCollapsed[path]
-		label := locales.JsonExpandKey(key)
-		if open {
-			label = locales.JsonCollapseKey(key)
-		}
-		indent.Gap(4).AlignItems(ui.Center).Children(func() {
-			btn := ui.ButtonBase(c).Label(label).Padding(t.Space(0.5)).Radius(t.Space(0.75))
-			if btn.Hovered() {
-				btn.Background(t.SurfaceHover)
-			}
-			btn.Children(func() {
-				ic := ui.Icon(c, iconChevronDown).FontSize(12).TextColor(t.TextMuted)
-				if !open {
-					ic.Rotate(-90)
-				}
-			})
-			if btn.Clicked() {
-				if open {
-					a.cellViewCollapsed[path] = true
-				} else {
-					delete(a.cellViewCollapsed, path)
-				}
-			}
-			ui.Text(c, key).FontSize(12.5).Bold()
-			summary := locales.JsonObjectSummary(len(kids))
-			if list != nil {
-				summary = locales.JsonArraySummary(len(list))
-			}
-			ui.Text(c, summary).FontSize(11.5).TextColor(t.TextMuted)
-		})
-		if open {
-			a.jsonTree(c, path, v, depth+1, nodes)
-		}
-		return
-	}
-	indent.Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Box(c).Width(12)
-		ui.Text(c, key+":").FontSize(12.5).TextColor(t.TextMuted)
-		text, col := jsonLeafText(v, t)
-		a.withResultFont(ui.Text(c, text).FontSize(12.5).Font("monospace").TextColor(col).SingleLine())
-	})
-}
-
-// jsonLeafText 返回叶子值的展示文本与颜色。
-func jsonLeafText(v any, t *ui.Theme) (string, ui.Color) {
-	switch x := v.(type) {
-	case nil:
-		return "null", t.TextMuted
-	case bool:
-		return strconv.FormatBool(x), t.Success
-	case json.Number:
-		return x.String(), t.Accent
-	case string:
-		return `"` + cutRunes(x, 200) + `"`, t.Text
-	default:
-		return fmt.Sprint(x), t.Text
+	if a.cellViewJSONOK && m.Shortcut(ui.Ctrl, ui.KeyF) {
+		a.cellViewFindOpen = true
+		a.refreshCellFind()
 	}
 }
 

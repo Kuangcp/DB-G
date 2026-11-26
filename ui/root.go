@@ -170,110 +170,118 @@ type root struct {
 	extResolveOpen bool
 	extMsg         string
 
-	mgr                 *app.ConsoleManager
-	catalog             *catalogCache
-	sessions            map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
-	sessionUse          map[string]uint64         // connID → 最近使用序号（LRU）
-	sessionErr          map[string]string         // connID → 上次打开失败的原因
-	useSeq              uint64
-	consoles            map[string]*app.Console // consoleID → 运行态
-	activeConsole       string
-	consoleMRU          []string // 最近使用过的控制台（Ctrl+Tab 切换用，队首最新）
-	pendingActivate     string
-	pendingClose        string
-	pendingSwitchWS     string
-	lastVer             map[string]uint64
-	lastCaret           [2]int
-	stmtRuns            []stmtRun              // 当前控制台的结果 tab：pinned 固定在最左，新执行追加到右侧
-	nextTabNo           int                    // 结果编号分配器（结果 N：pin/重排都不改名）
-	runsByConsole       map[string]consoleRuns // consoleID → 该控制台最近一次的结果 tab（对照 db-k 的 runSlots）
-	activeStmt          int
-	lastExecSQL         string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
-	resView             *resultView
-	pageStates          map[string]*pageState // runtimeID → 分页状态
-	resultRow           int
-	resultSel           ui.Selection[int]   // 结果表选中的单元格块（按显示行号）
-	lastResult          *engine.QueryResult // 上次渲染的结果指针（换结果时清空选区）
-	filterOpen          bool
-	filterCol           int
-	filterText          string
-	history             *app.History
-	pendingAppend       string // 激活控制台后，在其光标处追加的正文（对象预览用）
-	pendingExec         bool   // 写入正文后是否立即执行
-	editKey             string
-	editPlan            *app.EditPlan
-	editSets            map[string]*app.EditSet
-	readonlyReason      string
-	editBusy            bool
-	editCellOpen        bool
-	editCellRow         int
-	editCellCol         int
-	editCellText        string
-	inlineEditOn        bool // 结果表格内联编辑进行中
-	inlineEditRow       int  // 数据行下标
-	inlineEditCol       int  // 数据列下标
-	inlineEditText      string
-	inlineEditHadFocus  bool // 输入框已经拿到过焦点（用于失焦提交）
-	previewOpen         bool
-	previewLines        []string
-	ddlOpen             bool
-	ddlTitle            string
-	ddlText             string
-	ddlState            *myeditor.State // DDL 弹窗的只读高亮编辑器（惰性创建）
-	statsOpen           bool
-	statsLoading        bool
-	statsTitle          string
-	statsKind           string // 打开统计弹窗时数据源类型（决定 SQL 高亮方言）
-	stats               *engine.ObjectStats
-	statsErr            string
-	statsSQLOpen        bool
-	statsSQLState       *myeditor.State // 统计 SQL 的只读高亮编辑器（惰性创建）
-	historyOpen         bool
-	paletteOpen         bool   // 命令面板（标题栏搜索框 / Ctrl+P）
-	paletteQuery        string // 命令面板当前查询
-	paletteJumpID       string // 面板选中的 SQL 命中所在控制台（待跳转）
-	paletteJumpSel      [2]int // 跳转后要选中的 rune 范围
-	exportConfirm       bool
-	exportFormat        string
-	exportStatus        string
-	exportPath          string             // 最近一次成功导出的文件，双击状态可打开所在目录
-	revealPath          func(string) error // 测试注入；nil = app.RevealPath
-	editStatus          string
-	editStatusSeq       atomic.Uint64
-	exportBusy          bool
-	exportFull          bool
-	exportRows          atomic.Int64
-	exportCloseConfirm  bool
-	cellViewOpen        bool
-	cellViewTitle       string
-	cellViewText        string
-	cellViewJSON        any // 解析后的 JSON（非 JSON 为 nil）
-	cellViewJSONOK      bool
-	cellViewWrap        bool            // 查看器里的长文本是否自动折行
-	cellViewCollapsed   map[string]bool // JSON 树里折叠的节点路径
-	cellModalW          float32         // 单元格查看/编辑弹窗宽度
-	cellModalH          float32         // 单元格查看/编辑弹窗高度
-	consoleErr          string
-	widthsFor           *engine.QueryResult
-	widths              []float32
-	computingCompletion bool
-	retriggerPending    bool
-	completionWanted    bool // 编辑器正在等/持有补全弹层（用户触发）
-	completionWordStart int  // 触发时词起点的字节偏移；光标离开这个词就不再重弹
-	settingsRequested   bool
-	settingsWin         settingsWin
-	openSettingsWin     func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
-	tabMenuAction       string                               // "close" / "rename" / "delete"
-	tabMenuTarget       string
-	modalKind           string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
-	modalTarget         string
-	modalText           string
-	modalErr            string
-	folderModalKind     string // "" / "new" / "rename" / "delete"
-	folderModalTarget   string
-	folderModalText     string
-	folderModalErr      string
-	ddlConn             app.ConnProfile // DDL 查询用的连接（可能来自编辑器光标）
+	mgr                   *app.ConsoleManager
+	catalog               *catalogCache
+	sessions              map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
+	sessionUse            map[string]uint64         // connID → 最近使用序号（LRU）
+	sessionErr            map[string]string         // connID → 上次打开失败的原因
+	useSeq                uint64
+	consoles              map[string]*app.Console // consoleID → 运行态
+	activeConsole         string
+	consoleMRU            []string // 最近使用过的控制台（Ctrl+Tab 切换用，队首最新）
+	pendingActivate       string
+	pendingClose          string
+	pendingSwitchWS       string
+	lastVer               map[string]uint64
+	lastCaret             [2]int
+	stmtRuns              []stmtRun              // 当前控制台的结果 tab：pinned 固定在最左，新执行追加到右侧
+	nextTabNo             int                    // 结果编号分配器（结果 N：pin/重排都不改名）
+	runsByConsole         map[string]consoleRuns // consoleID → 该控制台最近一次的结果 tab（对照 db-k 的 runSlots）
+	activeStmt            int
+	lastExecSQL           string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
+	resView               *resultView
+	pageStates            map[string]*pageState // runtimeID → 分页状态
+	resultRow             int
+	resultSel             ui.Selection[int]   // 结果表选中的单元格块（按显示行号）
+	lastResult            *engine.QueryResult // 上次渲染的结果指针（换结果时清空选区）
+	filterOpen            bool
+	filterCol             int
+	filterText            string
+	history               *app.History
+	pendingAppend         string // 激活控制台后，在其光标处追加的正文（对象预览用）
+	pendingExec           bool   // 写入正文后是否立即执行
+	editKey               string
+	editPlan              *app.EditPlan
+	editSets              map[string]*app.EditSet
+	readonlyReason        string
+	editBusy              bool
+	editCellOpen          bool
+	editCellRow           int
+	editCellCol           int
+	editCellText          string
+	inlineEditOn          bool // 结果表格内联编辑进行中
+	inlineEditRow         int  // 数据行下标
+	inlineEditCol         int  // 数据列下标
+	inlineEditText        string
+	inlineEditHadFocus    bool // 输入框已经拿到过焦点（用于失焦提交）
+	previewOpen           bool
+	previewLines          []string
+	ddlOpen               bool
+	ddlTitle              string
+	ddlText               string
+	ddlState              *myeditor.State // DDL 弹窗的只读高亮编辑器（惰性创建）
+	statsOpen             bool
+	statsLoading          bool
+	statsTitle            string
+	statsKind             string // 打开统计弹窗时数据源类型（决定 SQL 高亮方言）
+	stats                 *engine.ObjectStats
+	statsErr              string
+	statsSQLOpen          bool
+	statsSQLState         *myeditor.State // 统计 SQL 的只读高亮编辑器（惰性创建）
+	historyOpen           bool
+	paletteOpen           bool   // 命令面板（标题栏搜索框 / Ctrl+P）
+	paletteQuery          string // 命令面板当前查询
+	paletteJumpID         string // 面板选中的 SQL 命中所在控制台（待跳转）
+	paletteJumpSel        [2]int // 跳转后要选中的 rune 范围
+	exportConfirm         bool
+	exportFormat          string
+	exportStatus          string
+	exportPath            string             // 最近一次成功导出的文件，双击状态可打开所在目录
+	revealPath            func(string) error // 测试注入；nil = app.RevealPath
+	editStatus            string
+	editStatusSeq         atomic.Uint64
+	exportBusy            bool
+	exportFull            bool
+	exportRows            atomic.Int64
+	exportCloseConfirm    bool
+	cellViewOpen          bool
+	cellViewTitle         string
+	cellViewText          string
+	cellViewJSONOK        bool          // 当前内容按 JSON 树渲染
+	cellViewJSONRoot      *jsonTreeNode // 解析后的 JSON 树
+	cellViewJSONRows      []jsonTreeRow // 当前展开状态下的可见行
+	cellViewJSONExpanded  map[string]bool
+	cellViewJSONTruncated bool
+	cellViewJSONList      ui.ListState
+	cellViewFindOpen      bool
+	cellViewFindQuery     string
+	cellViewFindHits      []*jsonTreeNode
+	cellViewFindCur       int
+	cellViewFindLast      string
+	cellViewWrap          bool    // 查看器里的长文本是否自动折行
+	cellModalW            float32 // 单元格查看/编辑弹窗宽度
+	cellModalH            float32 // 单元格查看/编辑弹窗高度
+	consoleErr            string
+	widthsFor             *engine.QueryResult
+	widths                []float32
+	computingCompletion   bool
+	retriggerPending      bool
+	completionWanted      bool // 编辑器正在等/持有补全弹层（用户触发）
+	completionWordStart   int  // 触发时词起点的字节偏移；光标离开这个词就不再重弹
+	settingsRequested     bool
+	settingsWin           settingsWin
+	openSettingsWin       func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
+	tabMenuAction         string                               // "close" / "rename" / "delete"
+	tabMenuTarget         string
+	modalKind             string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
+	modalTarget           string
+	modalText             string
+	modalErr              string
+	folderModalKind       string // "" / "new" / "rename" / "delete"
+	folderModalTarget     string
+	folderModalText       string
+	folderModalErr        string
+	ddlConn               app.ConnProfile // DDL 查询用的连接（可能来自编辑器光标）
 }
 
 func newRoot(text string) *root {

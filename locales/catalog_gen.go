@@ -1972,6 +1972,66 @@ func (msgs Messages) ResultStateFailed() string {
 	return Catalog.Format(msgs.locale, "resultStateFailed", nil)
 }
 
+// CellViewerFind says "Search"
+// in the language the app shows.
+func CellViewerFind() string { return In(i18n.Locale()).CellViewerFind() }
+
+// CellViewerFind says "Search"
+// in the language of msgs.
+func (msgs Messages) CellViewerFind() string {
+	return Catalog.Format(msgs.locale, "cellViewerFind", nil)
+}
+
+// CellViewerFindPlaceholder says "Search keys and values"
+// in the language the app shows.
+func CellViewerFindPlaceholder() string { return In(i18n.Locale()).CellViewerFindPlaceholder() }
+
+// CellViewerFindPlaceholder says "Search keys and values"
+// in the language of msgs.
+func (msgs Messages) CellViewerFindPlaceholder() string {
+	return Catalog.Format(msgs.locale, "cellViewerFindPlaceholder", nil)
+}
+
+// CellViewerFindHint says "Enter: next · Shift+Enter: previous"
+// in the language the app shows.
+func CellViewerFindHint() string { return In(i18n.Locale()).CellViewerFindHint() }
+
+// CellViewerFindHint says "Enter: next · Shift+Enter: previous"
+// in the language of msgs.
+func (msgs Messages) CellViewerFindHint() string {
+	return Catalog.Format(msgs.locale, "cellViewerFindHint", nil)
+}
+
+// CellViewerFindNoMatch says "No matches"
+// in the language the app shows.
+func CellViewerFindNoMatch() string { return In(i18n.Locale()).CellViewerFindNoMatch() }
+
+// CellViewerFindNoMatch says "No matches"
+// in the language of msgs.
+func (msgs Messages) CellViewerFindNoMatch() string {
+	return Catalog.Format(msgs.locale, "cellViewerFindNoMatch", nil)
+}
+
+// CellViewerFindPrev says "Previous match"
+// in the language the app shows.
+func CellViewerFindPrev() string { return In(i18n.Locale()).CellViewerFindPrev() }
+
+// CellViewerFindPrev says "Previous match"
+// in the language of msgs.
+func (msgs Messages) CellViewerFindPrev() string {
+	return Catalog.Format(msgs.locale, "cellViewerFindPrev", nil)
+}
+
+// CellViewerFindNext says "Next match"
+// in the language the app shows.
+func CellViewerFindNext() string { return In(i18n.Locale()).CellViewerFindNext() }
+
+// CellViewerFindNext says "Next match"
+// in the language of msgs.
+func (msgs Messages) CellViewerFindNext() string {
+	return Catalog.Format(msgs.locale, "cellViewerFindNext", nil)
+}
+
 // CellViewerResize says "Resize Dialog"
 // in the language the app shows.
 func CellViewerResize() string { return In(i18n.Locale()).CellViewerResize() }
