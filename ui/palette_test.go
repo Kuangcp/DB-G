@@ -17,7 +17,7 @@ func TestPaletteSearchesSQLAndSwitchesConsole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.SetText(first.ID, "SELECT id FROM users")
+	m.SetText(first.ID, "SELECT 1;\nSELECT 2;\nSELECT id FROM users;")
 	second, err := m.Create(prof.ID, "查询二")
 	if err != nil {
 		t.Fatal(err)
@@ -54,6 +54,12 @@ func TestPaletteSearchesSQLAndSwitchesConsole(t *testing.T) {
 	}
 	if a.activeConsole != first.ID {
 		t.Fatalf("应跳到匹配的控制台: got %q want %q", a.activeConsole, first.ID)
+	}
+	if got, _ := a.code.SelectedText(); got != "users" {
+		t.Fatalf("应选中命中的 SQL: %q", got)
+	}
+	if line := a.code.state.CursorPos().Line; line != 2 {
+		t.Fatalf("光标应落在命中行，got line %d", line)
 	}
 }
 

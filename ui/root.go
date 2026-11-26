@@ -230,6 +230,8 @@ type root struct {
 	historyOpen         bool
 	paletteOpen         bool   // 命令面板（标题栏搜索框 / Ctrl+P）
 	paletteQuery        string // 命令面板当前查询
+	paletteJumpID       string // 面板选中的 SQL 命中所在控制台（待跳转）
+	paletteJumpSel      [2]int // 跳转后要选中的 rune 范围
 	exportConfirm       bool
 	exportFormat        string
 	exportStatus        string
@@ -800,6 +802,7 @@ func (a *root) view(c *ui.Context) {
 			a.pendingActivate = ""
 			a.activateConsole(id)
 		}
+		a.applyPaletteJump()
 		if a.pendingAppend != "" {
 			sql := a.pendingAppend
 			a.pendingAppend = ""

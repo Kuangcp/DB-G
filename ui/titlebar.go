@@ -110,15 +110,15 @@ func (a *root) topBar(c *ui.Context) {
 // paletteEntry 是标题栏里的命令面板入口，外观像 VSCode 的搜索框。
 func (a *root) paletteEntry(c *ui.Context) {
 	t := c.Theme()
-	b := ui.ButtonBase(c).Label(locales.PaletteOpen()).Height(t.Space(6.5)).
-		Width(paletteWidth*0.6).Padding(0, t.Space(2.5)).Radius(t.Space(1.5)).
+	b := ui.ButtonBase(c).Label(locales.PaletteOpen()).Height(t.Space(8)).
+		Width(paletteWidth*0.85).Padding(0, t.Space(3)).Radius(t.Space(2)).
 		Border(1, t.Border).Background(t.Background)
 	if b.Hovered() {
 		b.Background(t.SurfaceHover)
 	}
 	b.Children(func() {
-		ui.Icon(c, iconSearch).FontSize(14).TextColor(t.TextMuted)
-		ui.Text(c, locales.PaletteSearchPlaceholder()).FontSize(12).
+		ui.Icon(c, iconSearch).FontSize(15).TextColor(t.TextMuted)
+		ui.Text(c, locales.PaletteSearchPlaceholder()).FontSize(12.5).
 			TextColor(t.TextMuted).SingleLine().Grow(1)
 		ui.Text(c, formatChords(a.chords["commandPalette"])).FontSize(11).TextColor(t.TextMuted)
 	})

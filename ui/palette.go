@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
@@ -170,25 +171,50 @@ func (a *root) paletteSQL(q string) []paletteItem {
 		label := a.consoleLabel(rec)
 		id := rec.ID
 		lines := strings.Split(text, "\n")
+		lineOff := 0
 		for i, line := range lines {
-			if !strings.Contains(strings.ToLower(line), q) {
+			at := strings.Index(strings.ToLower(line), q)
+			if at < 0 {
+				lineOff += utf8.RuneCountInString(line) + 1 // + 行尾换行
 				continue
 			}
 			snippet := strings.TrimSpace(line)
 			if r := []rune(snippet); len(r) > 80 {
 				snippet = string(r[:80]) + "…"
 			}
+			// 跳转时的选区：命中处到查询末尾（rune 偏移）。
+			selStart := lineOff + utf8.RuneCountInString(line[:at])
+			selEnd := selStart + utf8.RuneCountInString(q)
 			items = append(items, paletteItem{
 				label: label,
 				hint:  fmt.Sprintf("%d: %s", i+1, snippet),
-				run:   func() { a.pendingActivate = id },
+				run: func() {
+					a.pendingActivate = id
+					a.paletteJumpID = id
+					a.paletteJumpSel = [2]int{selStart, selEnd}
+				},
 			})
 			if len(items) >= paletteMaxSQL {
 				return items
 			}
+			lineOff += utf8.RuneCountInString(line) + 1
 		}
 	}
 	return items
+}
+
+// applyPaletteJump 在命令面板选中 SQL 命中后把光标/选区放到命中行并滚到可见。
+func (a *root) applyPaletteJump() {
+	if a.paletteJumpID == "" {
+		return
+	}
+	id := a.paletteJumpID
+	a.paletteJumpID = ""
+	if a.activeConsole != id {
+		return
+	}
+	a.code.SetSelection(a.paletteJumpSel[0], a.paletteJumpSel[1])
+	a.code.state.ScrollTo(a.code.state.CursorPos().Line)
 }
 
 // consoleLabel 是面板/标签里控制台的展示名：「数据源 / 控制台」。
