@@ -97,7 +97,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	} else if !rectHasColor(tt.Image(), r, th.Danger) {
 		t.Fatal("failed tab must show a red status dot")
 	}
-	marks := a.code.state.GutterMarks
+	marks := a.code.marks
 	if len(marks) != 1 || marks[0].Line != 0 || marks[0].Color != th.Danger {
 		t.Fatalf("失败语句的 gutter 标记应为红色圆点: %+v", marks)
 	}
@@ -117,7 +117,7 @@ func TestStmtSuccessMarksGutterOnly(t *testing.T) {
 	if lbs := a.code.state.LineBackgrounds; len(lbs) != 0 {
 		t.Fatalf("正文不应再整行着色: %+v", lbs)
 	}
-	marks := a.code.state.GutterMarks
+	marks := a.code.marks
 	if len(marks) != 1 || marks[0].Line != 0 || marks[0].Color != th.Success {
 		t.Fatalf("成功语句的 gutter 标记应为绿色圆点: %+v", marks)
 	}
@@ -155,7 +155,7 @@ func TestEditingStatementClearsItsMark(t *testing.T) {
 	a.runSQL()
 	waitStmts(t, a, tt, 2)
 	tt.Frame()
-	if got := len(a.code.state.GutterMarks); got != 2 {
+	if got := len(a.code.marks); got != 2 {
 		t.Fatalf("两条语句都应有状态圆点: %d", got)
 	}
 	// 只改第一行的 1 → 9，长度不变，第二段的偏移仍然有效。
@@ -166,7 +166,7 @@ func TestEditingStatementClearsItsMark(t *testing.T) {
 	if got := a.code.Text(); got != "SELECT 9;\nSELECT 2;" {
 		t.Fatalf("text: %q", got)
 	}
-	marks := a.code.state.GutterMarks
+	marks := a.code.marks
 	if len(marks) != 1 || marks[0].Line != 1 {
 		t.Fatalf("只有未改动的第二段保留标记: %+v", marks)
 	}
@@ -190,7 +190,7 @@ func TestDeleteLineClearsStmtMark(t *testing.T) {
 	if got := a.code.Text(); got != "SELECT 2;" {
 		t.Fatalf("text: %q", got)
 	}
-	if marks := a.code.state.GutterMarks; len(marks) != 0 {
+	if marks := a.code.marks; len(marks) != 0 {
 		t.Fatalf("删行后不能再有旧行号标记: %+v", marks)
 	}
 }
@@ -223,14 +223,58 @@ func TestEditingScratchBufferClearsMark(t *testing.T) {
 	a.runSQL()
 	waitStmts(t, a, tt, 2)
 	tt.Frame()
-	if got := len(a.code.state.GutterMarks); got != 2 {
+	if got := len(a.code.marks); got != 2 {
 		t.Fatalf("两条语句都应有状态圆点: %d", got)
 	}
 	a.setSelection(7, 8)
 	tt.Frame()
 	tt.Type("9")
 	tt.Frame()
-	if marks := a.code.state.GutterMarks; len(marks) != 1 || marks[0].Line != 1 {
+	if marks := a.code.marks; len(marks) != 1 || marks[0].Line != 1 {
 		t.Fatalf("只有未改动的第二段保留标记: %+v", marks)
+	}
+}
+
+// 切换控制台时状态点跟着控制台走：A 的点不能出现在 B，切回 A 也要恢复。
+func TestStmtMarksFollowActiveConsole(t *testing.T) {
+	a := newSidebarRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	m := a.consoleMgr()
+	ra, err := m.Create(prof.ID, "A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, err := m.Create(prof.ID, "B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(ra.ID) {
+		t.Fatal("activate A")
+	}
+	text := "SELECT 1;\nSELECT 2;\nSELECT 3;"
+	a.setActiveText(text)
+	a.setSelection(0, len([]rune(text)))
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	a.runSQL()
+	waitStmts(t, a, tt, 3)
+	tt.Frame()
+	if got := len(a.code.marks); got != 3 {
+		t.Fatalf("A 执行后应有 3 个状态点，得到 %d", got)
+	}
+	if !a.activateConsole(rb.ID) {
+		t.Fatal("activate B")
+	}
+	if got := len(a.code.marks); got != 0 {
+		t.Fatalf("B 没有执行记录，不该显示 A 的状态点，得到 %d", got)
+	}
+	if !a.activateConsole(ra.ID) {
+		t.Fatal("activate A again")
+	}
+	if got := len(a.code.marks); got != 3 {
+		t.Fatalf("切回 A 应恢复 3 个状态点，得到 %d", got)
 	}
 }

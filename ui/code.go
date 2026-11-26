@@ -14,7 +14,8 @@ type codeEditor struct {
 	state    *myeditor.State
 	buffers  map[string]*myeditor.Buffer
 	active   string
-	langKind string // 当前 Buffer 用的数据源类型（决定 SQL 方言高亮）
+	langKind string                // 当前 Buffer 用的数据源类型（决定 SQL 方言高亮）
+	marks    []myeditor.GutterMark // 语句执行状态点；由编辑器自己画在最左侧，避开行号
 }
 
 // newCodeEditor 创建编辑器封装；placeholder 在正文为空时显示。
@@ -166,6 +167,40 @@ func (c *codeEditor) ByteLen() int {
 // View 构建编辑器元素。
 func (c *codeEditor) View(cx *ui.Context) ui.Element {
 	return myeditor.View(cx, c.state).Grow(1).FillWidth()
+}
+
+// ViewWithDots 在编辑器上叠加语句状态圆点。不用编辑器的 GutterMarks：
+// 它固定画在行号左缘，行号到 3 位数就会和圆点重叠。圆点画在编辑器最左侧
+// 的留白里（行号数字始终从 gutter 左侧一个字符宽处开始），按行高对齐。
+func (c *codeEditor) ViewWithDots(cx *ui.Context) ui.Element {
+	box := ui.Box(cx).Grow(1).FillWidth().Clip()
+	box.Children(func() {
+		c.View(cx)
+		c.gutterDots(cx)
+	})
+	return box
+}
+
+// gutterDots 按上帧的行位置画状态圆点；滚动时跟着 ScrollY 移动。
+func (c *codeEditor) gutterDots(cx *ui.Context) {
+	if len(c.marks) == 0 {
+		return
+	}
+	lh := c.state.LineTop(1) - c.state.LineTop(0)
+	if lh <= 0 {
+		lh = 16
+	}
+	d := lh * 0.35
+	scroll := c.state.ScrollY()
+	vh := c.state.ViewportHeight()
+	for _, m := range c.marks {
+		y := c.state.LineTop(m.Line) - scroll + (lh-d)/2
+		if y+d < 0 || y > vh {
+			continue
+		}
+		ui.Box(cx).Absolute().Left(0.5).Top(float32(y)).Size(float32(d), float32(d)).
+			Radius(float32(d / 2)).Background(m.Color).IgnoreInput(true).AccessHidden(true)
+	}
 }
 
 // runeToByte 把 rune 偏移换成字节偏移（越界夹紧）。

@@ -193,7 +193,6 @@ func (a *root) loadStmtRuns(consoleID string) {
 		if a.activeStmt >= len(a.stmtRuns) {
 			a.activeStmt = len(a.stmtRuns) - 1
 		}
-		a.refreshStmtMarks()
 		return
 	}
 	a.stmtRuns, a.activeStmt = nil, 0

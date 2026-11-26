@@ -499,8 +499,9 @@ func (a *root) hasPinned() bool {
 // 执行中强调色、成功绿色、失败红色。正文不再整行着色，免得和当前行高亮抢注意力。
 func (a *root) refreshStmtMarks() {
 	st := a.code.state
+	st.GutterMarks = nil
 	if len(a.stmtRuns) == 0 || st.Buffer == nil {
-		st.GutterMarks = nil
+		a.code.marks = nil
 		st.LineBackgrounds = nil
 		return
 	}
@@ -531,7 +532,7 @@ func (a *root) refreshStmtMarks() {
 			out = append(out, myeditor.GutterMark{Line: line, Color: col})
 		}
 	}
-	st.GutterMarks = out
+	a.code.marks = out
 	st.LineBackgrounds = nil
 }
 
@@ -567,6 +568,9 @@ func (a *root) activateConsole(id string) bool {
 	start, end := m.Caret(rec.ID)
 	a.code.SetSelection(start, end)
 	a.activeConsole = rec.ID
+	// 状态点来自该控制台的 stmtRuns，必须在 SetActive 换成它的正文之后再算，
+	// 否则会沿用上一个控制台的圆点或按错误正文校验而全部丢掉。
+	a.refreshStmtMarks()
 	a.touchConsoleMRU(rec.ID)
 	// 活动控制台的正文惰性取自编辑器：逐帧只比较版本号，落盘时才拷贝。
 	m.SetTextSource(rec.ID, func() string { return a.code.Text() })
@@ -852,7 +856,7 @@ func (a *root) view(c *ui.Context) {
 						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
 						editor := func() {
 							a.externalBanner(c)
-							a.code.View(c).Label(locales.TopEditor())
+							a.code.ViewWithDots(c).Label(locales.TopEditor())
 							if a.execPending {
 								a.execPending = false
 								a.runSQL()

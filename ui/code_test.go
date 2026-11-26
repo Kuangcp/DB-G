@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	myeditor "github.com/egoist/mygo/ui/editor"
 )
 
 func newTestCode() *codeEditor { return newCodeEditor("在左侧数据源下新建或打开控制台") }
@@ -150,5 +153,45 @@ func TestFormatActiveFormatsSelectionOnly(t *testing.T) {
 	a.formatActive()
 	if got := a.activeText(); got != "-- keep me as is\nSELECT 1" {
 		t.Fatalf("selection format: %q", got)
+	}
+}
+
+// 3 位数行号时，状态圆点必须留在行号数字左侧：圆点右缘不超过编辑器
+// 左起 8 DIP。编辑器的 GutterMarks 从 +3 画 9 DIP 的点，会压到行号。
+func TestGutterDotsStayLeftOfLineNumbers(t *testing.T) {
+	c := newTestCode()
+	lines := make([]string, 0, 120)
+	for i := 1; i <= 120; i++ {
+		lines = append(lines, fmt.Sprintf("SELECT %d;", i))
+	}
+	c.SetActive("a", strings.Join(lines, "\n"))
+	c.state.ScrollTo(100)
+	var th *ui.Theme
+	tt := ui.NewTester(func(ctx *ui.Context) {
+		th = ctx.Theme()
+		c.marks = []myeditor.GutterMark{{Line: 100, Color: th.Success}}
+		c.ViewWithDots(ctx).Label("ed")
+	}, 800, 400)
+	tt.Frame()
+	tt.Frame()
+	r, ok := tt.Find("ed")
+	if !ok {
+		t.Fatal("编辑器缺少标签")
+	}
+	img := tt.Image()
+	maxX := -1
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := int(r.X); x < int(r.X+r.W); x++ {
+			p := img.RGBAAt(x, y)
+			if p.R == th.Success.R && p.G == th.Success.G && p.B == th.Success.B {
+				maxX = max(maxX, x)
+			}
+		}
+	}
+	if maxX < 0 {
+		t.Fatal("没有画出绿色状态圆点")
+	}
+	if got := float32(maxX) - r.X; got > 8 {
+		t.Fatalf("状态圆点压到行号：右缘 x=%v > 8", got)
 	}
 }

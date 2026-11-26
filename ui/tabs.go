@@ -303,6 +303,7 @@ func (a *root) clearEditorConsole() {
 	a.stmtRuns, a.activeStmt = nil, 0
 	a.activeConsole = ""
 	a.code.Clear()
+	a.refreshStmtMarks()
 	a.lastCaret = [2]int{}
 }
 

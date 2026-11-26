@@ -167,6 +167,7 @@ func (a *root) ensureExternal(id string) {
 	if id == a.activeConsole {
 		a.code.SetActive(id, text)
 		a.lastVer[id] = a.code.Version()
+		a.refreshStmtMarks()
 	} else {
 		a.code.Reload(id, text)
 	}
