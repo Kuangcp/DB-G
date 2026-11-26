@@ -345,6 +345,8 @@ func newRoot(text string) *root {
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
+	// 编辑器里 Ctrl+点击 / F12 标识符 = Ctrl+Q：打开该表/视图的 DDL。
+	a.code.state.OnDefinition = a.onEditorDefinition
 	a.applyEditorBindings()
 	a.applyFontPrefs()
 	return a
