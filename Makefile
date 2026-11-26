@@ -24,7 +24,8 @@ release:
 # 本地发布构建：装到配置目录供自举启动用；version 文件格式与 app.InstallSelf 一致：
 # [db-g] / build=10203 / version=1.2.3。build 只取 x.y.z（dev/commit hash 记 0）。
 CONFIG_DIR ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/db-g
-localRelease:
+# Linux Local Release
+lo:
 	@mkdir -p "$(CONFIG_DIR)/bin"
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o "$(CONFIG_DIR)/bin/db-g" .
 	@ver="$(VERSION)"; ver="$${ver#v}"; base="$${ver%%-*}"; \
