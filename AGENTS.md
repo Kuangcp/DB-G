@@ -90,9 +90,13 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 - 取会话**一律用 `sessionFor(connID)`**（顺带刷新 LRU），不要缓存会话指针；
   控制台相关操作（执行/结果/可编辑/导出）用 `activeSession()`，它天然属于激活控制台。
 - **启动不连任何数据源、不预载对象树**。连接时机只有两处：点数据源名（`expandConnAndTree`）、
-  执行时 `ensureConsoleConn()` 兜底。不要在任何初始化路径里偷偷建连接。
-- 圆点颜色由 `connDotColor()` 决定：红 = 上次打开失败（`sessionErr`，Tooltip 给原因）、
-  绿 = 有会话、灰 = 没连。没连上时**不要往树里写「未连接」这类错误行**，圆点已经说明状态。
+  执行时 `ensureConsoleConnAsync()` 兜底。不要在任何初始化路径里偷偷建连接。
+- **建连一律走 `connectAsync()`**：`engine.Open` + `Session.Open` + schema 探测都在后台，
+  完成后回投 UI 线程装会话；事件回调里不要直接调同步的 `connect()/openConn()`，
+  它们只给测试与 headless 路径用。同一数据源重复点击只发一次建连，其余回调排队等结果。
+- 圆点颜色由 `connDotColor()` 决定：黄 = 建连中（`connOpening`）、红 = 上次打开失败
+  （`sessionErr`，Tooltip 给原因）、绿 = 有会话、灰 = 没连。没连上时**不要往树里写
+  「未连接」这类错误行**，圆点/Tooltip 已经说明状态。
 
 ## 线程与并发（★ 必读）
 

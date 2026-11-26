@@ -519,6 +519,7 @@
   "sessionDatasource": "Datasource {name}",
   "@sessionDatasource": { "placeholders": { "name": { "type": "String" } } },
   "sessionConnectTip": "Click to connect / disconnect",
+  "sessionConnecting": "Connecting…",
   "editReadonlyNoWrite": "This datasource does not support writes",
   "editReadonlyNoTx": "This datasource does not support transactions",
   "editReadonlySingleTable": "Only single-table queries are editable (JOIN and subquery results are read-only)",

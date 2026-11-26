@@ -4466,6 +4466,16 @@ func (msgs Messages) SessionConnectTip() string {
 	return Catalog.Format(msgs.locale, "sessionConnectTip", nil)
 }
 
+// SessionConnecting says "Connecting…"
+// in the language the app shows.
+func SessionConnecting() string { return In(i18n.Locale()).SessionConnecting() }
+
+// SessionConnecting says "Connecting…"
+// in the language of msgs.
+func (msgs Messages) SessionConnecting() string {
+	return Catalog.Format(msgs.locale, "sessionConnecting", nil)
+}
+
 // EditReadonlyNoWrite says "This datasource does not support writes"
 // in the language the app shows.
 func EditReadonlyNoWrite() string { return In(i18n.Locale()).EditReadonlyNoWrite() }

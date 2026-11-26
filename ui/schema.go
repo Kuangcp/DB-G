@@ -44,44 +44,6 @@ func defaultSchemaFor(p app.ConnProfile, schemas []string) string {
 	return schemas[0]
 }
 
-// initSchemaAfterConnect 在连上后把当前 schema/库与 schema 列表装好：
-// 连接里没填库（MySQL 多库账号）时自动选第一项，避免补全/元数据报「未选择数据库」。
-func (a *root) initSchemaAfterConnect(p app.ConnProfile, sess engine.Session) {
-	sw, ok := sess.(engine.SchemaSwitcher)
-	if !ok {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
-	defer cancel()
-	if cur, err := sw.ActiveSchema(ctx); err == nil && cur != "" {
-		a.connSchema[p.ID] = cur
-	}
-	lister, ok := sess.(engine.SchemaLister)
-	if !ok {
-		return
-	}
-	schemas, err := lister.Schemas(ctx)
-	if err != nil || len(schemas) == 0 {
-		if err != nil {
-			app.LogWarn("catalog", "schemas load failed", "conn", p.ID, "err", err.Error())
-		}
-		return
-	}
-	if a.treeSchemas == nil {
-		a.treeSchemas = map[string][]string{}
-	}
-	a.treeSchemas[p.ID] = schemas
-	if a.connSchema[p.ID] == "" {
-		target := defaultSchemaFor(p, schemas)
-		if err := sw.UseSchema(ctx, target); err != nil {
-			app.LogWarn("catalog", "default schema failed", "conn", p.ID, "schema", target, "err", err.Error())
-			return
-		}
-		a.connSchema[p.ID] = target
-	}
-	a.saveMetaCache(p)
-}
-
 // ensureSchemas 惰性加载 schema/库列表；顶部下拉与对象树共用这份缓存。
 func (a *root) ensureSchemas(p app.ConnProfile) {
 	if len(a.treeSchemas[p.ID]) > 0 || a.schemaLoading[p.ID] {

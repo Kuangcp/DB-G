@@ -27,17 +27,22 @@ func (a *root) showStats(p app.ConnProfile, o engine.DBObject) {
 	if o.Kind != engine.ObjectTable {
 		return
 	}
-	if !a.connected(p.ID) {
-		if err := a.openConn(p); err != nil {
-			a.consoleErr = err.Error()
-			return
-		}
-	}
-	sess := a.sessionFor(p.ID)
+	// 先把弹窗按「加载中」打开：建连/取数的网络等待都在后台，不卡界面。
 	a.statsOpen, a.statsLoading = true, true
 	a.statsTitle, a.statsKind = o.Name, p.Kind
 	a.stats, a.statsErr, a.statsSQLOpen = nil, "", false
+	a.connectAsync(p, func(err error) {
+		if err != nil {
+			a.setStatsNote(err.Error())
+			return
+		}
+		a.loadStats(p, o)
+	})
+}
 
+// loadStats 在会话就绪后读统计并填弹窗；headless 同步，有窗口时后台 + Update。
+func (a *root) loadStats(p app.ConnProfile, o engine.DBObject) {
+	sess := a.sessionFor(p.ID)
 	load := func() {
 		statter, hasStats := sess.(engine.ObjectStatter)
 		scoped, hasScoped := sess.(engine.SchemaObjectStatter)

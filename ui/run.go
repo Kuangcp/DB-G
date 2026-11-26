@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -282,8 +281,7 @@ func (a *root) runSQL() {
 
 // runSQLNow 执行已经通过高危检查的语句。
 func (a *root) runSQLNow() {
-	text := a.code.Text()
-	ranges := a.execRanges(text)
+	ranges := a.execRanges(a.code.Text())
 	if len(ranges) == 0 {
 		return
 	}
@@ -293,10 +291,17 @@ func (a *root) runSQLNow() {
 			a.externalFlushFailed(err)
 			return
 		}
-		if err := a.ensureConsoleConn(); err != nil {
-			a.consoleErr = err.Error()
-			return
-		}
+		// 没连就后台连，连上后重新取一次语句再执行（等待期间正文可能已经改过）。
+		a.ensureConsoleConnAsync(func() { a.startRuns(a.execRanges(a.code.Text())) })
+		return
+	}
+	a.startRuns(ranges)
+}
+
+// startRuns 用给定语句重排结果 tab 并从当前位开始执行。
+func (a *root) startRuns(ranges []app.SQLStatement) {
+	if len(ranges) == 0 {
+		return
 	}
 	a.resetStmtRuns(ranges)
 	a.startStmt(a.activeStmt) // 跳过左侧已钉住的结果
@@ -377,16 +382,19 @@ func (a *root) rerunQuery(sql string) {
 	if sql == "" {
 		return
 	}
-	rt := a.currentRuntime()
 	if a.anyRunRunning() {
 		return
 	}
 	if a.activeConsole != "" {
-		if err := a.ensureConsoleConn(); err != nil {
-			a.consoleErr = err.Error()
-			return
-		}
+		a.ensureConsoleConnAsync(func() { a.startRerun(sql) })
+		return
 	}
+	a.startRerun(sql)
+}
+
+// startRerun 在会话就绪后执行刷新查询。
+func (a *root) startRerun(sql string) {
+	rt := a.currentRuntime()
 	sess := a.activeSession()
 	if sess == nil {
 		a.consoleErr = locales.ResultConnectFirst()
@@ -565,23 +573,34 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 	}
 }
 
-// ensureConsoleConn 保证已连接的控制台正是执行目标；否则连上它的数据源。
-func (a *root) ensureConsoleConn() error {
+// ensureConsoleConnAsync 保证已连接的控制台正是执行目标；没连就后台连上再调 then（UI 线程）。
+// 连接条件不满足时直接写 consoleErr。
+func (a *root) ensureConsoleConnAsync(then func()) {
 	m := a.consoleMgr()
 	if m == nil {
-		return errors.New(locales.RunNoConsole())
+		a.consoleErr = locales.RunNoConsole()
+		return
 	}
 	rec, ok := m.Active()
 	if !ok {
-		return errors.New(locales.RunNoActiveConsole())
+		a.consoleErr = locales.RunNoActiveConsole()
+		return
 	}
 	if a.connected(rec.ConnectionID) {
 		a.touchSession(rec.ConnectionID)
-		return nil
+		then()
+		return
 	}
 	p, ok := a.store.Get(rec.ConnectionID)
 	if !ok {
-		return errors.New(locales.RunConnDeleted())
+		a.consoleErr = locales.RunConnDeleted()
+		return
 	}
-	return a.openConn(p)
+	a.connectAsync(p, func(err error) {
+		if err != nil {
+			a.consoleErr = err.Error()
+			return
+		}
+		then()
+	})
 }

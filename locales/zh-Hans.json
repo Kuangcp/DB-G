@@ -441,6 +441,7 @@
   "sessionStopUnresponsive": "查询停止无响应，已断开数据源；重新执行会自动重连",
   "sessionDatasource": "数据源 {name}",
   "sessionConnectTip": "点击连接 / 断开数据源",
+  "sessionConnecting": "连接中…",
   "editReadonlyNoWrite": "当前数据源不支持写操作",
   "editReadonlyNoTx": "当前数据源不支持事务",
   "editReadonlySingleTable": "只有单表查询可编辑（JOIN/子查询结果只读）",

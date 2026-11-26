@@ -181,6 +181,9 @@ type root struct {
 	sessions              map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
 	sessionUse            map[string]uint64         // connID → 最近使用序号（LRU）
 	sessionErr            map[string]string         // connID → 上次打开失败的原因
+	connOpening           map[string]bool           // connID → 后台建连中
+	connWaiters           map[string][]func(error)  // connID → 等这次建连结果的回调（UI 线程执行）
+	bgRun                 func(work, done func())   // 后台执行 + 回投 UI 的注入点（测试用；nil = 按窗口有无决定）
 	useSeq                uint64
 	consoles              map[string]*app.Console // consoleID → 运行态
 	activeConsole         string
@@ -326,6 +329,8 @@ func newRoot(text string) *root {
 		sessions:         map[string]engine.Session{},
 		sessionUse:       map[string]uint64{},
 		sessionErr:       map[string]string{},
+		connOpening:      map[string]bool{},
+		connWaiters:      map[string][]func(error){},
 		serverInfo:       map[string]engine.ServerInfo{},
 		serverInfoErr:    map[string]string{},
 		serverInfoSeq:    map[string]uint64{},

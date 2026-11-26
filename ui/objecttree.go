@@ -129,13 +129,13 @@ func (a *root) expandConnAndTree(p app.ConnProfile) {
 	a.expandConn(p)
 }
 
-// expandConn 保证数据源连着：已经连着只 touch，不重连。
+// expandConn 保证数据源连着：已经连着只 touch，不重连；没连就后台连，不阻塞这一帧。
 func (a *root) expandConn(p app.ConnProfile) {
 	if a.connected(p.ID) {
 		a.touchSession(p.ID)
 		return
 	}
-	_ = a.openConn(p)
+	a.connectAsync(p, nil)
 }
 
 func (a *root) toggleExpandConn(p app.ConnProfile) {
@@ -426,6 +426,9 @@ func (a *root) objectGroups(c *ui.Context, p app.ConnProfile, depth int) {
 		treeInfoRow(c, locales.TreeLoadingMeta(), depth, c.Theme().TextMuted)
 		return
 	}
+	if a.connOpeningNow(p.ID) && !a.connected(p.ID) {
+		treeInfoRow(c, locales.SessionConnecting(), depth, c.Theme().TextMuted)
+	}
 	if a.metaCacheStale[p.ID] && a.connected(p.ID) {
 		a.refreshStaleMeta(p)
 	}
@@ -632,12 +635,17 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 	if m == nil {
 		return
 	}
-	if !a.connected(p.ID) {
-		if err := a.openConn(p); err != nil {
+	a.connectAsync(p, func(err error) {
+		if err != nil {
 			a.consoleErr = err.Error()
 			return
 		}
-	}
+		a.previewObjectNow(p, o, m)
+	})
+}
+
+// previewObjectNow 是 previewObject 建连之后的部分：只插 SQL，不自动执行。
+func (a *root) previewObjectNow(p app.ConnProfile, o engine.DBObject, m *app.ConsoleManager) {
 	sql := "SELECT * FROM " + qualifiedName(p.Kind, o) + " LIMIT 200;"
 	if recs := m.ConsolesOf(p.ID); len(recs) > 0 {
 		target := recs[0]
@@ -660,12 +668,17 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 
 // showDDL 取对象的 DDL 并弹窗（headless 同步，有窗口时后台 + Update）。
 func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
-	if !a.connected(p.ID) {
-		if err := a.openConn(p); err != nil {
+	a.connectAsync(p, func(err error) {
+		if err != nil {
 			a.consoleErr = err.Error()
 			return
 		}
-	}
+		a.loadObjectDDL(p, o)
+	})
+}
+
+// loadObjectDDL 在会话就绪后读 DDL；headless 同步，有窗口时后台 + Update。
+func (a *root) loadObjectDDL(p app.ConnProfile, o engine.DBObject) {
 	sess := a.sessionFor(p.ID)
 	load := func() {
 		lister, hasDDL := sess.(engine.ObjectDDLer)
