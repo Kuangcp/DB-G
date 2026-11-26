@@ -6,7 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// tabBox 是标签文字周围的一圈，用来找激活标签底部的 accent 线。
+// tabBox 是标签文字周围的一圈，用来找激活标签顶部的 accent 线。
 func tabBox(r ui.Rect) ui.Rect {
 	return ui.Rect{X: r.X - 6, Y: r.Y - 6, W: r.W + 12, H: r.H + 18}
 }
@@ -59,7 +59,7 @@ func TestTabBarHasNoCloseButton(t *testing.T) {
 	}
 }
 
-// 激活标签的底部有 accent 线，未激活的没有。
+// 激活标签的顶部有 accent 线，未激活的没有。
 func TestTabBarActiveTabHasAccentLine(t *testing.T) {
 	_, tt, accent := newTabRoot(t)
 	img := tt.Image()
@@ -79,7 +79,7 @@ func TestTabBarActiveTabHasAccentLine(t *testing.T) {
 	}
 }
 
-// 每个标签都预留了底部线的位置：切换激活项时标签尺寸与位置不动，不会跳。
+// 切换激活项时标签尺寸与位置不动，不会跳。
 func TestTabBarActiveTabKeepsLayout(t *testing.T) {
 	a, tt, accent := newTabRoot(t)
 	before1, _ := tt.Find("查询一")
@@ -106,8 +106,8 @@ func TestTabBarActiveTabKeepsLayout(t *testing.T) {
 	}
 }
 
-// 未激活标签是描主题边框的胶囊；激活标签只留 accent 底边线。
-func TestTabBarInactiveTabHasBorder(t *testing.T) {
+// 标签之间用主题色竖分隔线分开；第一个标签左侧没有线。
+func TestTabBarTabsSeparatedByDivider(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
 	first, err := a.consoleMgr().Create(prof.ID, "查询一")

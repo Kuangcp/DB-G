@@ -34,8 +34,8 @@ func (a *root) tabBar(c *ui.Context) {
 			ui.Spacer(c)
 		} else {
 			ui.Toolbar(c, func() {
-				for _, rec := range open {
-					a.tab(c, rec, counts[rec.ConnectionID] > 1)
+				for i, rec := range open {
+					a.tab(c, rec, counts[rec.ConnectionID] > 1, i == 0)
 				}
 			}).Padding(0).Grow(1).Label(locales.TabToolbarLabel())
 		}
@@ -66,7 +66,8 @@ func (a *root) tabFontSize() float32 {
 
 // tab 是一个控制台标签：数据源名在前，控制台名在后且字号更小；
 // 当前工作区里这个数据源只打开一个控制台时，省略控制台名。
-func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
+// first 为真时不画左侧分隔线（行里第一个标签）。
+func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool) {
 	m := a.consoleMgr()
 	t := c.Theme()
 	src := rec.ConnectionID
@@ -91,26 +92,18 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole bool) {
 	active := rec.ID == a.activeConsole
 	size := a.tabFontSize()
 	height := max(t.Space(6.5), size*1.7+4)
-	// 圆润的长方形：小圆角（不随高度做成胶囊）。未激活标签描一圈主题边框（深色下深灰、浅色下浅灰），
-	// 激活标签保持 accent 底边线 + 浅 accent 底。两种状态的边框与内边距之和相同
-	//（1+8 与 0+9、1+1 与 0+2），切换时标签尺寸与文字位置不动。
-	btn := ui.ButtonBase(c).Label(label).Gap(5).Height(height).
-		Radius(min(height/2, t.Space(2)))
+	// 简约标签：无边框无底色，标签之间一条竖分隔线（第一个没有）。
+	// 激活标签用 2px accent 上边线；上边线画出来而不是边框，切换时尺寸与文字位置不动。
+	btn := ui.ButtonBase(c).Label(label).Gap(5).Height(height).Padding(2, 9)
+	if !first {
+		btn.BorderWidth(0, 0, 0, 1).BorderColor(t.Border)
+	}
 	if active {
-		btn.Padding(2, 9).BorderWidth(0, 0, 2, 0).BorderColor(t.Accent).
-			Background(t.Accent.Alpha(0.10))
-	} else {
-		btn.Padding(1, 8, 3, 8).BorderWidth(1).BorderColor(t.Border)
-		// 深色主题下未选中标签垫一层 Surface，比页面底色亮一点、能和背景分开；
-		// 浅色主题保持无底色（白底会和页面几乎一样）。
-		if t.Dark {
-			btn.Background(t.Surface)
-			if btn.Hovered() {
-				btn.Background(t.SurfaceHover.Over(t.Surface))
-			}
-		} else if btn.Hovered() {
-			btn.Background(t.SurfaceHover)
-		}
+		btn.Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: 2}, t.Accent, 0)
+		})
+	} else if btn.Hovered() {
+		btn.Background(t.SurfaceHover)
 	}
 	btn.Children(func() {
 		if warn {
