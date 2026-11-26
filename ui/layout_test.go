@@ -266,8 +266,17 @@ func TestLayoutSidebarFullHeightConnRow(t *testing.T) {
 	if d := ws.Y - conn.Y; d < -8 || d > 8 {
 		t.Fatalf("工作区切换器应与数据源同一行: ws=%v conn=%v", ws, conn)
 	}
-	if exec.X <= ws.X {
-		t.Fatalf("执行按钮应在工作区切换器右侧: exec=%v ws=%v", exec, ws)
+	if ws.X <= exec.X {
+		t.Fatalf("工作区切换器应在执行按钮右侧: ws=%v exec=%v", ws, exec)
+	}
+	for _, label := range []string{locales.TopFind(), locales.KeyFormat(), locales.TopAIComplete()} {
+		tool, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("找不到编辑工具 %q: %v", label, tt.Texts())
+		}
+		if ws.X <= tool.X {
+			t.Fatalf("工作区切换器应在编辑工具 %q 右侧: ws=%v tool=%v", label, ws, tool)
+		}
 	}
 }
 
@@ -301,7 +310,7 @@ func TestSidebarToggleHidesAndShowsPanel(t *testing.T) {
 	}
 }
 
-// 查找/格式化/AI 补全在第二行最右侧，不再悬浮在编辑区上。
+// 查找/格式化/AI 补全在第二行右侧，不悬浮在编辑区上；工作区切换器在这行最右边。
 func TestEditorToolsOnConnRow(t *testing.T) {
 	a, _ := topBarTestRoot(t)
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -318,7 +327,10 @@ func TestEditorToolsOnConnRow(t *testing.T) {
 	if !ok {
 		t.Fatalf("缺少执行按钮: %v", tt.Texts())
 	}
-	rightmost := float32(0)
+	ws, ok := tt.Find("默认")
+	if !ok {
+		t.Fatalf("缺少工作区切换器: %v", tt.Texts())
+	}
 	for _, label := range []string{locales.TopFind(), locales.KeyFormat(), locales.TopAIComplete()} {
 		tool, ok := tt.Find(label)
 		if !ok {
@@ -333,9 +345,8 @@ func TestEditorToolsOnConnRow(t *testing.T) {
 		if tool.Y+tool.H > editor.Y {
 			t.Fatalf("%q 不该压在编辑区上: tool=%v editor=%v", label, tool, editor)
 		}
-		rightmost = max(rightmost, tool.X+tool.W)
-	}
-	if rightmost < 1400-16 {
-		t.Fatalf("编辑工具应贴在最右侧: right=%v", rightmost)
+		if tool.X+tool.W > ws.X {
+			t.Fatalf("%q 应在工作区切换器左侧: tool=%v ws=%v", label, tool, ws)
+		}
 	}
 }

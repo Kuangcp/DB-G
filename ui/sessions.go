@@ -377,24 +377,33 @@ func (a *root) connDot(c *ui.Context, connID string) {
 	}
 }
 
-// topBarConn 是顶栏数据源名 + 状态点：双击在连接/断开之间切换。
-// 断开只关会话并保留已加载的树（下次展开时按 stale 重拉首页）。
+// topBarConn 是第二行的数据源连接开关：只显示一个图标（插头=已连接，
+// 拔掉的插头=未连接，红色=上次打开失败），不重复显示数据源名。
+// 单击在连接/断开之间切换；断开只关会话并保留已加载的树（下次展开时按 stale 重拉首页）。
 func (a *root) topBarConn(c *ui.Context, p app.ConnProfile) {
 	t := c.Theme()
+	icon, col := iconUnplug, t.TextMuted
+	errMsg := a.connErrOf(p.ID)
+	switch {
+	case errMsg != "":
+		icon, col = iconUnplug, t.Danger
+	case a.connected(p.ID):
+		icon, col = iconPlug, t.Success
+	}
 	row := ui.ButtonBase(c).Label(locales.SessionDatasource(p.Name)).Gap(4).AlignItems(ui.Center).
-		Padding(t.Space(0.5), t.Space(0.75)).Radius(t.Space(1)).
-		Tooltip(locales.SessionConnectTip())
+		Padding(t.Space(0.5), t.Space(0.75)).Radius(t.Space(1))
+	if errMsg != "" {
+		row.Tooltip(errMsg)
+	} else {
+		row.Tooltip(locales.SessionConnectTip())
+	}
 	if row.Hovered() {
 		row.Background(t.SurfaceHover)
 	}
 	row.Children(func() {
-		a.connDot(c, p.ID)
-		name := ui.Text(c, p.Name).Bold().SingleLine()
-		if !a.connected(p.ID) {
-			name.TextColor(t.TextMuted)
-		}
+		iconChild(c, icon, col)
 	})
-	if row.DoubleClicked() {
+	if row.Clicked() {
 		if a.connected(p.ID) {
 			a.disconnectConn(p)
 		} else {

@@ -23,6 +23,7 @@ const icons = {
   iconFormat: "align-left",
   iconWrapText: "wrap-text",
   iconPlug: "plug",
+  iconUnplug: "unplug",
   iconRefresh: "rotate-cw",
   iconTrash: "trash-2",
   iconClose: "x",

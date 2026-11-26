@@ -4286,11 +4286,11 @@ func (msgs Messages) SessionDatasource(name string) string {
 	return Catalog.Format(msgs.locale, "sessionDatasource", map[string]any{"name": name})
 }
 
-// SessionConnectTip says "Double-click to connect / disconnect"
+// SessionConnectTip says "Click to connect / disconnect"
 // in the language the app shows.
 func SessionConnectTip() string { return In(i18n.Locale()).SessionConnectTip() }
 
-// SessionConnectTip says "Double-click to connect / disconnect"
+// SessionConnectTip says "Click to connect / disconnect"
 // in the language of msgs.
 func (msgs Messages) SessionConnectTip() string {
 	return Catalog.Format(msgs.locale, "sessionConnectTip", nil)

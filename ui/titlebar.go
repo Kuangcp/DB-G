@@ -143,7 +143,7 @@ func (a *root) toggleAIChat() {
 const connBarHeight = 34
 
 // connBar 是控制台标签下的第二行：当前数据源与数据库切换、提示信息、
-// 工作区与执行/分析，最右侧是查找/格式化/AI 补全。编辑区因此只占两行。
+// 执行/分析，最右侧是查找/格式化/AI 补全与工作区切换。编辑区因此只占两行。
 func (a *root) connBar(c *ui.Context) {
 	t := c.Theme()
 	bar := ui.Row(c).Height(connBarHeight).FillWidth().Padding(0, 8).Gap(6).
@@ -186,9 +186,6 @@ func (a *root) connBar(c *ui.Context) {
 			ui.Text(c, a.installNote).FontSize(12).TextColor(t.TextMuted).SingleLine()
 		}
 		ui.Toolbar(c, func() {
-			ui.MenuButton(c, a.workspaceName(), a.workspaceMenu)
-		}).Padding(0).Shrink(0)
-		ui.Toolbar(c, func() {
 			if iconButton(c, iconPlay, locales.TopExec(), t.Success).
 				Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
 				a.execPending = true
@@ -200,6 +197,9 @@ func (a *root) connBar(c *ui.Context) {
 		}).Padding(0).Shrink(0).Label(locales.TopActions())
 		ui.Spacer(c)
 		a.editorToolButtons(c)
+		ui.Toolbar(c, func() {
+			ui.MenuButton(c, a.workspaceName(), a.workspaceMenu)
+		}).Padding(0).Shrink(0)
 	})
 }
 
