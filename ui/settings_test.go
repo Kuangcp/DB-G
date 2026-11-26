@@ -10,6 +10,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	"db-g/locales"
 )
 
 // openSettingsSection 打开设置窗口并切到指定分区。
@@ -456,5 +457,28 @@ func TestSettingsContentReachesWindowBottom(t *testing.T) {
 	}
 	if rect.Y+rect.H > 520 {
 		t.Fatalf("底部控件被窗口裁掉: rect=%+v height=520", rect)
+	}
+}
+
+// 字体/结果/控制台分区的数字输入框要留足数字宽度，不能被 −/+ 按钮挤没。
+func TestSettingsNumberFieldsWideEnough(t *testing.T) {
+	a := newConsoleRoot(t)
+	cases := []struct {
+		section string
+		label   string
+	}{
+		{locales.SettingsFonts(), locales.SettingsEditorFontSize()},
+		{locales.SettingsResults(), locales.SettingsBudget()},
+		{locales.SettingsConsole(), locales.SettingsSaveDelay()},
+	}
+	for _, c := range cases {
+		tt := openSettingsSection(t, a, c.section)
+		rect, ok := tt.Find(c.label)
+		if !ok {
+			t.Fatalf("分区 %q 找不到数字输入框 %q: %v", c.section, c.label, tt.Texts())
+		}
+		if rect.W < settingsNumberWidth {
+			t.Fatalf("%q 输入框宽 %v，小于 %v", c.label, rect.W, settingsNumberWidth)
+		}
 	}
 }

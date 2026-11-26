@@ -110,6 +110,10 @@ func (a *root) settingsView(c *ui.Context) {
 	a.syncFindingsModal(c)
 }
 
+// settingsNumberWidth 是设置页数字输入框的固定宽度：mygo 的 NumberInput
+// 内含 −/+ 两个按钮，太窄时文字区会被挤到看不全。
+const settingsNumberWidth float32 = 140
+
 // fontSection 是全局字体设置：编辑区、结果区、功能界面各一套。
 func (a *root) fontSection(c *ui.Context) {
 	cr := controlRadius(c)
@@ -130,7 +134,7 @@ func (a *root) fontSection(c *ui.Context) {
 	ui.Text(c, locales.SettingsEditor()).Bold()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.NumberInput(c, &a.fontPrefs.Editor.Size, app.MinFontSize, app.MaxFontSize, 1).
-			Label(locales.SettingsEditorFontSize()).Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsEditorFontSize()).Width(settingsNumberWidth).Radius(cr).Changed() {
 			a.applyFontPrefs()
 		}
 		ui.Text(c, fmt.Sprintf("%.0f pt", a.fontPrefs.Editor.Size)).FontSize(12).
@@ -146,7 +150,7 @@ func (a *root) fontSection(c *ui.Context) {
 	ui.Text(c, locales.SettingsResultsArea()).Bold()
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.NumberInput(c, &a.fontPrefs.Result.Size, 0, app.MaxFontSize, 1).
-			Label(locales.SettingsResultFontSize()).Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsResultFontSize()).Width(settingsNumberWidth).Radius(cr).Changed() {
 			a.applyFontPrefs()
 		}
 		ui.Text(c, fmt.Sprintf("%.0f pt", a.fontPrefs.Result.Size)).FontSize(12).
@@ -165,7 +169,7 @@ func (a *root) fontSection(c *ui.Context) {
 		TextColor(c.Theme().TextMuted)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		if ui.NumberInput(c, &a.fontPrefs.TabSize, app.MinTabFontSize, app.MaxTabFontSize, 0.5).
-			Label(locales.SettingsTabFontSize()).Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsTabFontSize()).Width(settingsNumberWidth).Radius(cr).Changed() {
 			a.applyFontPrefs()
 		}
 		ui.Text(c, fmt.Sprintf("%.1f pt", a.fontPrefs.TabSize)).FontSize(12).
@@ -180,7 +184,7 @@ func (a *root) fontSection(c *ui.Context) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		size := float64(a.themePrefs.FontSize)
 		if ui.NumberInput(c, &size, app.DefaultThemeFontSize, app.MaxThemeFontSize, 1).
-			Label(locales.SettingsUiFontSize()).Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsUiFontSize()).Width(settingsNumberWidth).Radius(cr).Changed() {
 			p := a.themePrefs
 			p.FontSize = int(size)
 			a.setThemePrefs(p)
@@ -212,7 +216,7 @@ func (a *root) consolePrefsSection(c *ui.Context) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		secs := float64(a.consolePrefs.SaveDelaySeconds)
 		if ui.NumberInput(c, &secs, float64(app.MinConsoleSaveDelaySeconds), float64(app.MaxConsoleSaveDelaySeconds), 1).
-			Label(locales.SettingsSaveDelay()).Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsSaveDelay()).Width(settingsNumberWidth).Radius(cr).Changed() {
 			p := a.consolePrefs
 			p.SaveDelaySeconds = int(secs)
 			a.setConsolePrefs(p)
@@ -263,7 +267,7 @@ func (a *root) resultSection(c *ui.Context) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		mb := float64(a.resultPrefs.BudgetMB)
 		if ui.NumberInput(c, &mb, float64(app.MinResultBudgetMB), float64(app.MaxResultBudgetMB), 1).
-			Label(locales.SettingsBudget()).Width(90).Radius(cr).Changed() {
+			Label(locales.SettingsBudget()).Width(settingsNumberWidth).Radius(cr).Changed() {
 			p := a.resultPrefs
 			p.BudgetMB = int(mb)
 			a.setResultPrefs(p)
@@ -276,7 +280,7 @@ func (a *root) resultSection(c *ui.Context) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		size := float64(a.resultPrefs.PageSize)
 		if ui.NumberInput(c, &size, float64(app.MinResultPageSize), float64(app.MaxResultPageSize), 50).
-			Label(locales.SettingsRowsPerPage()).Width(100).Radius(cr).Changed() {
+			Label(locales.SettingsRowsPerPage()).Width(settingsNumberWidth).Radius(cr).Changed() {
 			p := a.resultPrefs
 			p.PageSize = int(size)
 			a.setResultPrefs(p)
