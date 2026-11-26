@@ -726,6 +726,8 @@ func (a *root) connModal(c *ui.Context) {
 					ui.Text(c, a.connFormURLErr).FontSize(11).TextColor(c.Theme().Danger).
 						SingleLine().Tooltip(a.connFormURLErr)
 				}
+				ui.Divider(c)
+				ui.Box(c).Height(4)
 				ui.TextInput(c, &a.connFormName).Placeholder(locales.ConnFormName()).Radius(radius).AutoFocus()
 				if a.store != nil && len(a.store.Folders()) > 0 {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
