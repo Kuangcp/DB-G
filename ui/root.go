@@ -257,6 +257,8 @@ type root struct {
 	widths              []float32
 	computingCompletion bool
 	retriggerPending    bool
+	completionWanted    bool // 编辑器正在等/持有补全弹层（用户触发）
+	completionWordStart int  // 触发时词起点的字节偏移；光标离开这个词就不再重弹
 	settingsRequested   bool
 	settingsWin         settingsWin
 	openSettingsWin     func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口

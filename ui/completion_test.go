@@ -477,3 +477,40 @@ func TestSQLInComment(t *testing.T) {
 		}
 	}
 }
+
+// 后台列加载完成时，如果用户已经移走光标、并没有在补全，不能凭空弹出补全浮窗。
+// （长查询结束 → 结果区判定可编辑 → 顺手加载列 → 加载完成重弹，就是这个路径。）
+func TestColumnLoadDoesNotPopCompletionsWithoutRequest(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.testSession(t).RunStatement(t.Context(),
+		`CREATE TABLE zz_phantom_tbl (id INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	a.catalog.invalidate(prof.ID)
+	rec, err := a.consoleMgr().Create(prof.ID, "浮窗")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	tt.Click("编辑器")
+	tt.Frame()
+	a.setActiveText("select * from ")
+	n := len("select * from ")
+	a.code.SetSelection(n, n)
+	// 结果区判定可编辑时会这样加载列；headless 下同步完成并回投「重弹」。
+	a.ensureColumns(prof.ID, "zz_phantom_tbl")
+	for range 3 {
+		tt.Frame()
+	}
+	if tt.HasText("Completions") {
+		t.Fatalf("没有补全请求时不该弹补全浮窗: %v", tt.Texts())
+	}
+}

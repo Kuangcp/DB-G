@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	myeditor "github.com/egoist/mygo/ui/editor"
 
@@ -25,6 +27,8 @@ func (a *root) onCompletion(r myeditor.CompletionRequest) {
 		a.code.state.ShowCompletions(-1, nil)
 		return
 	}
+	a.completionWanted = true
+	a.completionWordStart = r.Offset - len(r.Prefix)
 	items := a.completionItemsAt(r.Offset)
 	a.code.state.ShowCompletions(r.Offset-len(r.Prefix), items)
 }
@@ -171,7 +175,11 @@ func (a *root) ensureColumns(connID, table string) {
 		app.LogInfo("catalog", "columns loaded", "conn", connID, "schema", schema, "table", table, "cols", len(cols), "dur_ms", time.Since(start).Milliseconds())
 		if a.win != nil {
 			win := a.win
-			a.safeUpdate(win, a.showCompletionsAtCursor)
+			a.safeUpdate(win, func() {
+				if a.completionStillWanted() {
+					a.showCompletionsAtCursor()
+				}
+			})
 		}
 	}
 	if a.win == nil {
@@ -294,12 +302,53 @@ func (a *root) completionItemsAt(offset int) []myeditor.Completion {
 }
 
 // requestRetrigger 在加载完成后请求重弹；若正在计算候选则作业推迟到计算结束。
+// 只有用户还在补全那个词时才真的弹；否则后台加载完成会凭空弹出补全浮窗
+// （长查询结束 → 结果区判定可编辑 → 加载列 → 回投，就是这条路径）。
 func (a *root) requestRetrigger() {
 	if a.computingCompletion {
 		a.retriggerPending = true
 		return
 	}
+	if !a.completionStillWanted() {
+		return
+	}
 	a.showCompletionsAtCursor()
+}
+
+// completionStillWanted 报告后台加载完成时是否还该刷新补全弹层：编辑区仍有焦点，
+// 且光标还停在请求补全的那个词里（点走、换行或换到别的词就不再弹）。
+func (a *root) completionStillWanted() bool {
+	if !a.completionWanted || !a.code.state.Focused() {
+		return false
+	}
+	text := a.code.Text()
+	off := a.code.state.Cursor()
+	if off < a.completionWordStart || off > len(text) {
+		return false
+	}
+	for _, r := range text[a.completionWordStart:off] {
+		if !completionWordRune(r) {
+			return false
+		}
+	}
+	return completionWordStart(text, off) == a.completionWordStart
+}
+
+func completionWordRune(r rune) bool {
+	return r == '_' || r == '$' || unicode.IsLetter(r) || unicode.IsDigit(r)
+}
+
+// completionWordStart 返回光标所在词的起点（字节偏移）。
+func completionWordStart(text string, off int) int {
+	off = min(off, len(text))
+	for off > 0 {
+		r, size := utf8.DecodeLastRuneInString(text[:off])
+		if !completionWordRune(r) {
+			break
+		}
+		off -= size
+	}
+	return off
 }
 
 // computeCompletion 是一轮候选计算；more 为 true 表示本次发起了加载、值得再算一轮。
