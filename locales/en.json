@@ -126,6 +126,7 @@
   "connCollapse": "Collapse {name}",
   "@connCollapse": { "placeholders": { "name": { "type": "String" } } },
   "connEdit": "Edit Connection",
+  "connRefreshMeta": "Refresh Metadata",
   "connMenuDuplicate": "Duplicate Datasource",
   "connMenuDelete": "Delete Connection…",
   "connDupStoreUnavailable": "Duplicate failed: connection store unavailable",

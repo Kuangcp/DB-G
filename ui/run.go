@@ -544,6 +544,10 @@ func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) 
 			if !ok {
 				return
 			}
+			// DDL 成功后立即失效元数据缓存：否则补全/可编辑判定会继续用旧列。
+			if app.IsSchemaChangeSQL(sql) {
+				a.refreshConnMeta(connID)
+			}
 			// 找回该运行态当前所在位置，执行它的下一条（找不到说明结果已被清走）。
 			for j, run := range a.stmtRuns {
 				if run.runtimeID == rtID {

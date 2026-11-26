@@ -107,6 +107,7 @@
   "connExpand": "展开 {name}",
   "connCollapse": "收起 {name}",
   "connEdit": "编辑连接",
+  "connRefreshMeta": "刷新元数据",
   "connMenuDuplicate": "复制数据源",
   "connMenuDelete": "删除连接…",
   "connDupStoreUnavailable": "复制失败：连接库不可用",

@@ -167,3 +167,31 @@ func TestMetaCacheFreshHitAvoidsQueries(t *testing.T) {
 			sess.countCalls, sess.pageCalls, sess.objectsCall)
 	}
 }
+
+// 手动刷新元数据：清目录、树与磁盘缓存，但保留当前 schema 选择。
+func TestRefreshConnMetaClearsCaches(t *testing.T) {
+	a := newSidebarRoot(t)
+	p := seedConsoleConn(t, a, "本地")
+	a.connSchema[p.ID] = "main"
+	a.treeData[p.ID] = map[engine.ObjectKind][]engine.DBObject{
+		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "t"}},
+	}
+	a.treeCounts[p.ID] = map[engine.ObjectKind]int{engine.ObjectTable: 1}
+	key, _ := a.completionScope(p.ID)
+	a.catalog.finishColumns(key, "t", []engine.Column{{Name: "id", PrimaryKey: true}}, p.Kind)
+	if _, ok := a.catalog.getColumns(key, "t"); !ok {
+		t.Fatal("precondition: columns should be cached")
+	}
+
+	a.refreshConnMeta(p.ID)
+
+	if _, ok := a.catalog.getColumns(key, "t"); ok {
+		t.Fatal("刷新后补全列缓存应失效")
+	}
+	if len(a.treeData) != 0 || len(a.treeCounts) != 0 {
+		t.Fatalf("刷新后对象树缓存应清空: data=%d counts=%d", len(a.treeData), len(a.treeCounts))
+	}
+	if got := a.connSchema[p.ID]; got != "main" {
+		t.Fatalf("刷新不应丢掉当前 schema: %q", got)
+	}
+}

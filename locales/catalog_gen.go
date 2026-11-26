@@ -1110,6 +1110,16 @@ func (msgs Messages) ConnEdit() string {
 	return Catalog.Format(msgs.locale, "connEdit", nil)
 }
 
+// ConnRefreshMeta says "Refresh Metadata"
+// in the language the app shows.
+func ConnRefreshMeta() string { return In(i18n.Locale()).ConnRefreshMeta() }
+
+// ConnRefreshMeta says "Refresh Metadata"
+// in the language of msgs.
+func (msgs Messages) ConnRefreshMeta() string {
+	return Catalog.Format(msgs.locale, "connRefreshMeta", nil)
+}
+
 // ConnMenuDuplicate says "Duplicate Datasource"
 // in the language the app shows.
 func ConnMenuDuplicate() string { return In(i18n.Locale()).ConnMenuDuplicate() }

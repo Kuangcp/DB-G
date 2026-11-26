@@ -541,8 +541,11 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 			a.resetConnTest()
 		}
 	})
-	// 复制数据源 / 删除连接是低频且易误触的操作：放右键菜单，不占行内位置。
+	// 刷新元数据 / 复制数据源 / 删除连接是低频且易误触的操作：放右键菜单，不占行内位置。
 	row.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item(locales.ConnRefreshMeta()).Chosen() {
+			a.refreshConnMeta(p.ID)
+		}
 		if menu.Item(locales.ConnMenuDuplicate()).Chosen() {
 			a.duplicateConn(p)
 		}

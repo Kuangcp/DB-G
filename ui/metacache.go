@@ -283,6 +283,26 @@ func (a *root) refreshStaleMeta(p app.ConnProfile) {
 	}()
 }
 
+// refreshConnMeta 手动/DDL 后刷新一个连接的元数据：目录、树、磁盘缓存、
+// AI 的 DDL 与外键缓存都失效；保留当前 schema 选择与树的展开状态，
+// 展开的分组会在下一帧按需重新加载。
+func (a *root) refreshConnMeta(connID string) {
+	if connID == "" {
+		return
+	}
+	schema := a.connSchema[connID]
+	a.forgetConnMeta(connID)
+	if schema != "" {
+		a.connSchema[connID] = schema
+	}
+	if a.catalog != nil {
+		a.catalog.invalidate(connID)
+	}
+	a.forgetAIDDL(connID)
+	a.forgetAIRelations(connID)
+	app.LogInfo("catalog", "metadata refreshed", "conn", connID)
+}
+
 // forgetConnMeta 清掉一个连接的内存元数据与磁盘缓存（删除连接/连接地址变化）。
 func (a *root) forgetConnMeta(connID string) {
 	a.treeGen++
