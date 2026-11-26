@@ -657,3 +657,38 @@ func TestExportDefaultName(t *testing.T) {
 		t.Fatalf("sql name: %q", got)
 	}
 }
+
+// 结果区滚到最后一行时整行可见，不会被窗口底边裁掉一半。
+func TestResultLastRowFullyVisible(t *testing.T) {
+	a := newTestRoot()
+	rows := make([][]any, 0, 100)
+	for i := 0; i < 100; i++ {
+		rows = append(rows, []any{int64(i), fmt.Sprintf("zzlast_%03d", i)})
+	}
+	a.con.SetOutcome(&engine.QueryResult{IsQuery: true, Columns: []string{"id", "name"}, Rows: rows}, "")
+	tt := ui.NewTester(rootView(a), 1200, 500)
+	for range 3 {
+		tt.Frame()
+	}
+	a.resultState.ScrollTo(99, ui.End)
+	for range 2 {
+		tt.Frame()
+	}
+	last, ok := tt.Find("zzlast_099")
+	if !ok {
+		t.Fatalf("找不到最后一行: %v", tt.Texts())
+	}
+	if last.H < 16 {
+		t.Fatalf("最后一行被裁掉了: %+v", last)
+	}
+	if last.Y+last.H > 500 {
+		t.Fatalf("最后一行超出窗口: %+v", last)
+	}
+	footer, ok := tt.Find("未连接数据源")
+	if !ok {
+		t.Fatalf("状态栏不见了: %v", tt.Texts())
+	}
+	if footer.Y+footer.H > 500 {
+		t.Fatalf("状态栏被挤出窗口: %+v", footer)
+	}
+}

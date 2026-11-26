@@ -846,7 +846,8 @@ func (a *root) view(c *ui.Context) {
 					a.topBar(c)
 					a.tabsRow(c)
 					a.connBar(c)
-					ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
+					// 内容区取三行下面剩下的高度：Fill() 会按整窗高度算，把状态栏挤出窗口。
+					ui.Column(c).Grow(1).FillWidth().Padding(8).Gap(6).Children(func() {
 						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
 						editor := func() {
 							a.externalBanner(c)
