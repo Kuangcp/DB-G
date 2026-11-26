@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"db-g/locales"
 )
 
 // hasVerticalRun 在矩形里找一列至少有 n 个指定颜色的像素：分隔线是整段竖线，
@@ -161,5 +163,17 @@ func TestTabBarTabsSeparatedByDivider(t *testing.T) {
 		W: second.X - (firstTab.X + firstTab.W), H: second.H + 4}
 	if !hasVerticalRun(tt.Image(), between, border, 10) {
 		t.Fatal("tabs should be separated by a theme border")
+	}
+}
+
+// 控制台标签名字左边有数据源类型图标（品牌色）。
+func TestTabShowsDatasourceKindIcon(t *testing.T) {
+	_, tt, _ := newTabRoot(t)
+	bar, ok := tt.Find(locales.TabToolbarLabel())
+	if !ok {
+		t.Fatalf("console tabs missing: %v", tt.Texts())
+	}
+	if !rectHasColor(tt.Image(), bar, connKindColor("sqlite")) {
+		t.Fatal("tab should show the datasource kind icon")
 	}
 }

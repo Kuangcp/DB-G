@@ -56,8 +56,10 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 	m := a.consoleMgr()
 	t := c.Theme()
 	src := rec.ConnectionID
+	kind := ""
 	if p, ok := a.store.Get(rec.ConnectionID); ok {
 		src = p.Name
+		kind = p.Kind
 	}
 	dirty := m != nil && m.Dirty(rec.ID)
 	warn := false
@@ -97,6 +99,9 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 		}
 		if dirty {
 			ui.Text(c, "●").FontSize(10).TextColor(t.Accent)
+		}
+		if icon := connKindIcon(kind); icon != nil {
+			ui.Icon(c, icon).FontSize(size).TextColor(connKindColor(kind))
 		}
 		srcText := ui.Text(c, src).FontSize(size).SingleLine()
 		if active {
