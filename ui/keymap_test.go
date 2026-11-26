@@ -279,3 +279,17 @@ func TestSettingsShowsMouseDoubleClickBindings(t *testing.T) {
 		}
 	}
 }
+
+// 指针事件必须逐次取修饰键，不能累计：弹窗期间可能收不到 Ctrl 松开事件，
+// 否则下一次普通双击会被误判为 Ctrl+双击。
+func TestPointerModifiersDoNotStick(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.observeInputMods(ui.InputEvent{Kind: ui.InputPointerDown, Mods: ui.Ctrl, Clicks: 1})
+	if a.resultClickMods != ui.Ctrl {
+		t.Fatalf("Ctrl click: %v", a.resultClickMods)
+	}
+	a.observeInputMods(ui.InputEvent{Kind: ui.InputPointerDown, Mods: 0, Clicks: 1})
+	if a.resultClickMods != 0 {
+		t.Fatalf("普通 click 不应沿用上次的 Ctrl: %v", a.resultClickMods)
+	}
+}

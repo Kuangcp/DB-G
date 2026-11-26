@@ -785,33 +785,39 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		}
 		if txt.RowDoubleClicked() {
 			handledDouble = true
-			switch a.mouseActionFor(a.resultClickMods) {
+			action := a.mouseActionFor(a.resultClickMods)
+			a.pointerDouble = false
+			switch action {
 			case mouseCellEdit:
 				a.beginEditAt(r, ri, col-1)
 			case mouseCellPreview:
 				a.openCellViewer(r, ri, col-1)
 			}
 		}
-	})).HandleInput(a.trackResultClickMods).Grow(1)
+	})).Grow(1)
 	if tbl.Submitted() && !handledDouble {
 		row := a.displayToResult(r, a.resultRow)
 		col := a.cursorDataCol(r)
+		// 双击落在行号列/空白处时，单元格的 RowDoubleClicked 不会置 handledDouble；
+		// 这里必须按同一套鼠标手势处理，否则会回落到旧的硬编码行为。
+		if a.pointerDouble {
+			action := a.mouseActionFor(a.resultClickMods)
+			a.pointerDouble = false
+			switch action {
+			case mouseCellEdit:
+				a.beginEditAt(r, row, col)
+			case mouseCellPreview:
+				a.openCellViewer(r, row, col)
+			}
+			return
+		}
+		// Enter：保持原有键盘习惯（Ctrl+Enter 编辑，Enter 预览）。
 		if c.Modifiers()&ui.Ctrl != 0 {
 			a.beginEditAt(r, row, col)
 		} else {
 			a.openCellViewer(r, row, col)
 		}
 	}
-}
-
-// trackResultClickMods 记录结果表格上指针按下/抬起时的修饰键。双击的判定帧
-// 可能由随后的指针移动触发，那时 Context.Modifiers 已归零，所以不能依赖它。
-func (a *root) trackResultClickMods(ev ui.InputEvent) bool {
-	switch ev.Kind {
-	case ui.InputPointerDown, ui.InputPointerUp:
-		a.resultClickMods = ev.Mods
-	}
-	return false
 }
 
 // pinButton 显示钉住按钮：当前结果已钉住时图标上强调色，再点一次取消。

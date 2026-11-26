@@ -29,7 +29,8 @@ type root struct {
 	con               *app.Console
 	win               *mygo.Window
 	resultState       ui.ListState
-	resultClickMods   ui.Modifiers // 结果表格最近一次指针按下/抬起的修饰键
+	resultClickMods   ui.Modifiers // 结果表格最近一次指针按下/抬起时的修饰键
+	pointerDouble     bool         // 最近一次指针事件是否是双击的第二次按下
 	editorPercent     float32      // 编辑器占上下的百分比（结果区在下方）
 	resultsHidden     bool         // Alt+D 临时隐藏结果区
 	sidebarHidden     bool         // 临时隐藏左侧数据源面板（纯瞬态）
@@ -792,6 +793,7 @@ func rootView(a *root) func(c *ui.Context) {
 
 // view 是一帧的真正构建（由 guardView 包裹）。
 func (a *root) view(c *ui.Context) {
+	defer func() { a.pointerDouble = false }()
 	a.applyTheme(c)
 	{
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
@@ -898,12 +900,25 @@ func (a *root) view(c *ui.Context) {
 			}
 			main()
 		}
-		if a.sidebarHidden {
-			pane()
-			return
-		}
-		ui.Split(c, &a.sidebarWidth, func() {
-			a.sidebar(c)
-		}, pane).Fill()
+		ui.Box(c).Fill().ObserveInput(a.observeInputMods).Children(func() {
+			if a.sidebarHidden {
+				pane()
+				return
+			}
+			ui.Split(c, &a.sidebarWidth, func() {
+				a.sidebar(c)
+			}, pane).Fill()
+		})
+	}
+}
+
+// observeInputMods 记录指针按下/抬起时的修饰键和双击状态，供结果表格
+// 的双击手势判定使用。指针事件自带修饰键；不能用键盘累计状态兜底——
+// 弹窗打开期间可能收不到修饰键松开事件，累计值会粘住。
+func (a *root) observeInputMods(ev ui.InputEvent) {
+	switch ev.Kind {
+	case ui.InputPointerDown, ui.InputPointerUp:
+		a.resultClickMods = ev.Mods
+		a.pointerDouble = ev.Clicks >= 2
 	}
 }
