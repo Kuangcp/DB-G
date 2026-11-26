@@ -9,9 +9,8 @@ import (
 // 顶部 URL 导入：解析后切换类型、填端口/协议/参数，名称空缺时用库名。
 func TestConnFormURLImportMySQL(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormURL = "jdbc:mysql://root:pw@db.local:3307/app?useSSL=false"
-	tt.Frame()
-	if err := tt.Click(locales.ConnFormURLFill()); err != nil {
+	tt.SetClipboard("jdbc:mysql://root:pw@db.local:3307/app?useSSL=false")
+	if err := tt.Click(locales.ConnFormURLParseClipboard()); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -31,9 +30,8 @@ func TestConnFormURLImportMySQL(t *testing.T) {
 
 func TestConnFormURLImportClickHouse(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormURL = "jdbc:clickhouse:https://ch.example/analytics?compress=0"
-	tt.Frame()
-	if err := tt.Click(locales.ConnFormURLFill()); err != nil {
+	tt.SetClipboard("jdbc:clickhouse:https://ch.example/analytics?compress=0")
+	if err := tt.Click(locales.ConnFormURLParseClipboard()); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -46,9 +44,8 @@ func TestConnFormURLImportClickHouse(t *testing.T) {
 
 func TestConnFormURLImportSQLite(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormURL = "jdbc:sqlite:/tmp/app.db"
-	tt.Frame()
-	if err := tt.Click(locales.ConnFormURLFill()); err != nil {
+	tt.SetClipboard("jdbc:sqlite:/tmp/app.db")
+	if err := tt.Click(locales.ConnFormURLParseClipboard()); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -63,9 +60,8 @@ func TestConnFormURLImportSQLite(t *testing.T) {
 func TestConnFormURLImportFailureKeepsFields(t *testing.T) {
 	a, tt := openConnModal(t)
 	a.connFormKind, a.connFormHost = "postgres", "keep.example"
-	a.connFormURL = "jdbc:oracle:thin:@host:1521:xe"
-	tt.Frame()
-	if err := tt.Click(locales.ConnFormURLFill()); err != nil {
+	tt.SetClipboard("jdbc:oracle:thin:@host:1521:xe")
+	if err := tt.Click(locales.ConnFormURLParseClipboard()); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

@@ -1260,24 +1260,14 @@ func (msgs Messages) ConnFormName() string {
 	return Catalog.Format(msgs.locale, "connFormName", nil)
 }
 
-// ConnFormURLPlaceholder says "Paste a JDBC / connection URL…"
+// ConnFormURLParseClipboard says "Parse URL from Clipboard"
 // in the language the app shows.
-func ConnFormURLPlaceholder() string { return In(i18n.Locale()).ConnFormURLPlaceholder() }
+func ConnFormURLParseClipboard() string { return In(i18n.Locale()).ConnFormURLParseClipboard() }
 
-// ConnFormURLPlaceholder says "Paste a JDBC / connection URL…"
+// ConnFormURLParseClipboard says "Parse URL from Clipboard"
 // in the language of msgs.
-func (msgs Messages) ConnFormURLPlaceholder() string {
-	return Catalog.Format(msgs.locale, "connFormURLPlaceholder", nil)
-}
-
-// ConnFormURLFill says "Fill"
-// in the language the app shows.
-func ConnFormURLFill() string { return In(i18n.Locale()).ConnFormURLFill() }
-
-// ConnFormURLFill says "Fill"
-// in the language of msgs.
-func (msgs Messages) ConnFormURLFill() string {
-	return Catalog.Format(msgs.locale, "connFormURLFill", nil)
+func (msgs Messages) ConnFormURLParseClipboard() string {
+	return Catalog.Format(msgs.locale, "connFormURLParseClipboard", nil)
 }
 
 // ConnFormURLInvalid says "Unrecognized connection URL"

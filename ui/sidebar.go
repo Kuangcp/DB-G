@@ -709,19 +709,10 @@ func (a *root) connModal(c *ui.Context) {
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
 			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
 				ui.Text(c, locales.ConnFormTitle(kindLabel(a.connFormKind))).Bold()
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					ui.TextInput(c, &a.connFormURL).Placeholder(locales.ConnFormURLPlaceholder()).Radius(radius).Fill().
-						OnTextKey(func(k ui.TextKey) bool {
-							if k.Key == ui.KeyEnter && k.Mods == 0 {
-								a.applyConnURL()
-								return true
-							}
-							return false
-						})
-					if ui.Button(c, locales.ConnFormURLFill()).Radius(radius).Clicked() {
-						a.applyConnURL()
-					}
-				})
+				if ui.Button(c, locales.ConnFormURLParseClipboard()).Radius(radius).Clicked() {
+					a.connFormURL = c.ReadClipboard()
+					a.applyConnURL()
+				}
 				if a.connFormURLErr != "" {
 					ui.Text(c, a.connFormURLErr).FontSize(11).TextColor(c.Theme().Danger).
 						SingleLine().Tooltip(a.connFormURLErr)
