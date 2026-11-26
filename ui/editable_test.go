@@ -554,3 +554,50 @@ func TestCommitSuccessStatusShownInResultToolbar(t *testing.T) {
 		t.Fatalf("结果工具条缺少提交状态: %q", tt.Texts())
 	}
 }
+
+// 双击预览/编辑的手势可配置：互换后普通双击编辑，Ctrl+双击预览。
+func swapCellGestures(t *testing.T) (*root, *ui.Tester, ui.Rect) {
+	t.Helper()
+	a := openForSelection(t)
+	a.history = app.OpenHistory(t.TempDir())
+	if _, err := a.testSession(t).RunStatement(t.Context(), "INSERT INTO users (id, name) VALUES (1, 'alice')"); err != nil {
+		t.Fatal(err)
+	}
+	a.setMouseBinding(mouseCellEdit, 0) // 默认预览↔编辑互换
+	tt := runEditQuery(t, a, "SELECT id, name FROM users")
+	if a.editPlan == nil {
+		t.Fatalf("not editable: %q", a.readonlyReason)
+	}
+	rect, ok := tt.Find("alice")
+	if !ok {
+		t.Fatalf("cell missing: %q", tt.Texts())
+	}
+	return a, tt, rect
+}
+
+func TestMouseDoubleClickPlainEditsWhenSwapped(t *testing.T) {
+	a, tt, rect := swapCellGestures(t)
+	tt.ClickAt(rect.X+2, rect.Y+2)
+	tt.ClickAt(rect.X+2, rect.Y+2)
+	tt.Frame()
+	tt.Frame()
+	if !a.inlineEditOn || a.cellViewOpen {
+		t.Fatalf("普通双击应变成编辑: inline=%v view=%v", a.inlineEditOn, a.cellViewOpen)
+	}
+}
+
+func TestMouseDoubleClickCtrlPreviewsWhenSwapped(t *testing.T) {
+	a, tt, rect := swapCellGestures(t)
+	tt.HoldModifiers(ui.Ctrl)
+	tt.ClickAtWith(ui.Ctrl, rect.X+2, rect.Y+2)
+	tt.ClickAtWith(ui.Ctrl, rect.X+2, rect.Y+2)
+	tt.Frame()
+	tt.Frame()
+	tt.HoldModifiers(0)
+	if a.resultClickMods != ui.Ctrl {
+		t.Fatalf("应记录双击时的 Ctrl 修饰键，得到 %v", a.resultClickMods)
+	}
+	if !a.cellViewOpen || a.inlineEditOn {
+		t.Fatalf("Ctrl+双击应变成预览: view=%v inline=%v", a.cellViewOpen, a.inlineEditOn)
+	}
+}

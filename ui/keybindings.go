@@ -46,9 +46,31 @@ func (a *root) keymapSection(c *ui.Context) {
 			}
 		})
 	}
+	ui.Text(c, locales.KeymapMouseTitle()).FontSize(12).TextColor(c.Theme().TextMuted)
+	for _, act := range mouseActions {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, act.Label()).FontSize(12).SingleLine()
+			ui.Spacer(c)
+			ui.MenuButton(c, mouseGestureText(a.mouseBindings[act.ID]), func(menu *ui.Menu) {
+				for _, mods := range mouseGestureOptions() {
+					if menu.Item(mouseGestureText(mods)).
+						Checked(a.mouseBindings[act.ID] == mods).Chosen() {
+						a.setMouseBinding(act.ID, mods)
+					}
+				}
+			})
+			if ui.Button(c, locales.KeymapReset()).Radius(cr).
+				Disabled(a.mouseBindings[act.ID] == act.Def).Clicked() {
+				a.resetMouseBinding(act.ID)
+			}
+		})
+	}
 	ui.Row(c).Gap(8).Children(func() {
 		if ui.Button(c, locales.KeymapResetAll()).Radius(cr).Clicked() {
 			a.resetChords("")
+			for _, act := range mouseActions {
+				a.resetMouseBinding(act.ID)
+			}
 			a.captureAction = ""
 		}
 		if a.captureAction != "" {

@@ -785,13 +785,14 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		}
 		if txt.RowDoubleClicked() {
 			handledDouble = true
-			if c.Modifiers()&ui.Ctrl != 0 {
+			switch a.mouseActionFor(a.resultClickMods) {
+			case mouseCellEdit:
 				a.beginEditAt(r, ri, col-1)
-			} else {
+			case mouseCellPreview:
 				a.openCellViewer(r, ri, col-1)
 			}
 		}
-	})).Grow(1)
+	})).HandleInput(a.trackResultClickMods).Grow(1)
 	if tbl.Submitted() && !handledDouble {
 		row := a.displayToResult(r, a.resultRow)
 		col := a.cursorDataCol(r)
@@ -801,6 +802,16 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 			a.openCellViewer(r, row, col)
 		}
 	}
+}
+
+// trackResultClickMods 记录结果表格上指针按下/抬起时的修饰键。双击的判定帧
+// 可能由随后的指针移动触发，那时 Context.Modifiers 已归零，所以不能依赖它。
+func (a *root) trackResultClickMods(ev ui.InputEvent) bool {
+	switch ev.Kind {
+	case ui.InputPointerDown, ui.InputPointerUp:
+		a.resultClickMods = ev.Mods
+	}
+	return false
 }
 
 // pinButton 显示钉住按钮：当前结果已钉住时图标上强调色，再点一次取消。

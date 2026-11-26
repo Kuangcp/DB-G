@@ -29,9 +29,10 @@ type root struct {
 	con               *app.Console
 	win               *mygo.Window
 	resultState       ui.ListState
-	editorPercent     float32 // 编辑器占上下的百分比（结果区在下方）
-	resultsHidden     bool    // Alt+D 临时隐藏结果区
-	sidebarHidden     bool    // 临时隐藏左侧数据源面板（纯瞬态）
+	resultClickMods   ui.Modifiers // 结果表格最近一次指针按下/抬起的修饰键
+	editorPercent     float32      // 编辑器占上下的百分比（结果区在下方）
+	resultsHidden     bool         // Alt+D 临时隐藏结果区
+	sidebarHidden     bool         // 临时隐藏左侧数据源面板（纯瞬态）
 	selConn           app.ConnProfile
 	selObj            engine.DBObject
 	hasSelObj         bool
@@ -63,6 +64,7 @@ type root struct {
 	serverInfoErr     map[string]string            // connID → 版本查询失败原因
 	serverInfoSeq     map[string]uint64            // connID → 异步查询轮次（旧结果作废）
 	chords            map[string][]chord           // 动作 → 键位（见 keymap.go）
+	mouseBindings     map[string]ui.Modifiers      // 鼠标双击动作 → 修饰键（见 keymap.go）
 	keymapPath        string                       // keymap.json 的位置（空 = 不读盘，测试用）
 	fontPrefs         app.FontPrefs                // 编辑区/结果区/功能界面字体
 	fontPrefsPath     string                       // fonts.json 的位置（空 = 不落盘）
@@ -312,6 +314,7 @@ func newRoot(text string) *root {
 		cellModalH:       cellModalDefaultH,
 		cellViewWrap:     true,
 		chords:           defaultChords(),
+		mouseBindings:    defaultMouseBindings(),
 		fontPrefs:        app.DefaultFontPrefs(),
 		resultPrefs:      app.DefaultResultPrefs(),
 		consolePrefs:     app.DefaultConsolePrefs(),

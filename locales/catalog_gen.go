@@ -3096,6 +3096,46 @@ func (msgs Messages) KeymapInvalid(label string, err string) string {
 	return Catalog.Format(msgs.locale, "keymapInvalid", map[string]any{"label": label, "err": err})
 }
 
+// KeyCellPreview says "Preview cell on double-click"
+// in the language the app shows.
+func KeyCellPreview() string { return In(i18n.Locale()).KeyCellPreview() }
+
+// KeyCellPreview says "Preview cell on double-click"
+// in the language of msgs.
+func (msgs Messages) KeyCellPreview() string {
+	return Catalog.Format(msgs.locale, "keyCellPreview", nil)
+}
+
+// KeyCellEdit says "Edit cell on double-click"
+// in the language the app shows.
+func KeyCellEdit() string { return In(i18n.Locale()).KeyCellEdit() }
+
+// KeyCellEdit says "Edit cell on double-click"
+// in the language of msgs.
+func (msgs Messages) KeyCellEdit() string {
+	return Catalog.Format(msgs.locale, "keyCellEdit", nil)
+}
+
+// KeymapMouseTitle says "Mouse double-click"
+// in the language the app shows.
+func KeymapMouseTitle() string { return In(i18n.Locale()).KeymapMouseTitle() }
+
+// KeymapMouseTitle says "Mouse double-click"
+// in the language of msgs.
+func (msgs Messages) KeymapMouseTitle() string {
+	return Catalog.Format(msgs.locale, "keymapMouseTitle", nil)
+}
+
+// MouseDoubleClick says "Double-click"
+// in the language the app shows.
+func MouseDoubleClick() string { return In(i18n.Locale()).MouseDoubleClick() }
+
+// MouseDoubleClick says "Double-click"
+// in the language of msgs.
+func (msgs Messages) MouseDoubleClick() string {
+	return Catalog.Format(msgs.locale, "mouseDoubleClick", nil)
+}
+
 // KeymapTitle says "Shortcuts"
 // in the language the app shows.
 func KeymapTitle() string { return In(i18n.Locale()).KeymapTitle() }

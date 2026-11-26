@@ -75,6 +75,139 @@ var keyActions = []keyAction{
 		Def: []chord{{ui.Ctrl, ui.KeyK}}},
 }
 
+// mouseAction 是一个可配置的鼠标双击动作：Mods 是双击时必须按住的修饰键。
+type mouseAction struct {
+	ID    string // 持久化键名
+	Label func() string
+	Def   ui.Modifiers
+}
+
+const (
+	mouseCellPreview = "cellPreview"
+	mouseCellEdit    = "cellEdit"
+)
+
+// mouseActions 是结果表格里可配置的双击手势，顺序即设置窗口里的顺序。
+var mouseActions = []mouseAction{
+	{ID: mouseCellPreview, Label: locales.KeyCellPreview, Def: 0},
+	{ID: mouseCellEdit, Label: locales.KeyCellEdit, Def: ui.Ctrl},
+}
+
+func defaultMouseBindings() map[string]ui.Modifiers {
+	out := make(map[string]ui.Modifiers, len(mouseActions))
+	for _, act := range mouseActions {
+		out[act.ID] = act.Def
+	}
+	return out
+}
+
+// mouseActionFor 返回当前按住的修饰键对应的双击动作；没有绑定时为空。
+func (a *root) mouseActionFor(mods ui.Modifiers) string {
+	for _, act := range mouseActions {
+		if a.mouseBindings[act.ID] == mods {
+			return act.ID
+		}
+	}
+	return ""
+}
+
+// mouseGestureText 是设置窗口里鼠标手势的展示文本，如「Ctrl+双击」。
+func mouseGestureText(mods ui.Modifiers) string {
+	var b strings.Builder
+	for _, m := range []struct {
+		mod  ui.Modifiers
+		name string
+	}{{ui.Ctrl, "Ctrl"}, {ui.Alt, "Alt"}, {ui.Shift, "Shift"}, {ui.Super, "Super"}} {
+		if mods&m.mod != 0 {
+			b.WriteString(m.name)
+			b.WriteByte('+')
+		}
+	}
+	b.WriteString(locales.MouseDoubleClick())
+	return b.String()
+}
+
+// formatMouseBinding 是 keymap.json 里的存法："double"、"ctrl+double"。
+func formatMouseBinding(mods ui.Modifiers) string {
+	var b strings.Builder
+	for _, m := range []struct {
+		mod  ui.Modifiers
+		name string
+	}{{ui.Ctrl, "ctrl"}, {ui.Alt, "alt"}, {ui.Shift, "shift"}, {ui.Super, "super"}} {
+		if mods&m.mod != 0 {
+			b.WriteString(m.name)
+			b.WriteByte('+')
+		}
+	}
+	b.WriteString("double")
+	return b.String()
+}
+
+// parseMouseBinding 解析 "double" / "ctrl+double"。
+func parseMouseBinding(s string) (ui.Modifiers, error) {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(s)), "+")
+	var mods ui.Modifiers
+	for i, p := range parts {
+		p = strings.TrimSpace(p)
+		if i == len(parts)-1 {
+			if p != "double" {
+				return 0, errBadChord(s)
+			}
+			break
+		}
+		switch p {
+		case "ctrl", "control":
+			mods |= ui.Ctrl
+		case "shift":
+			mods |= ui.Shift
+		case "alt", "option":
+			mods |= ui.Alt
+		case "super", "cmd", "command", "win":
+			mods |= ui.Super
+		default:
+			return 0, errBadChord(s)
+		}
+	}
+	return mods, nil
+}
+
+// setMouseBinding 改一个双击手势；和另一个动作撞手势时互换，保证两者可区分。
+func (a *root) setMouseBinding(id string, mods ui.Modifiers) {
+	if a.mouseBindings == nil {
+		a.mouseBindings = defaultMouseBindings()
+	}
+	prev := a.mouseBindings[id]
+	if prev == mods {
+		return
+	}
+	for _, act := range mouseActions {
+		if act.ID != id && a.mouseBindings[act.ID] == mods {
+			a.mouseBindings[act.ID] = prev
+		}
+	}
+	a.mouseBindings[id] = mods
+	a.saveKeymap()
+}
+
+// resetMouseBinding 恢复一个双击手势的默认值。
+func (a *root) resetMouseBinding(id string) {
+	for _, act := range mouseActions {
+		if act.ID == id {
+			a.mouseBindings[id] = act.Def
+		}
+	}
+	a.saveKeymap()
+}
+
+// mouseGestureOptions 是设置菜单里可选的双击组合。
+func mouseGestureOptions() []ui.Modifiers {
+	return []ui.Modifiers{
+		0, ui.Ctrl, ui.Shift, ui.Alt,
+		ui.Ctrl | ui.Shift, ui.Ctrl | ui.Alt, ui.Shift | ui.Alt,
+		ui.Ctrl | ui.Shift | ui.Alt,
+	}
+}
+
 // applies 报告该动作在「编辑器是否聚焦」时是否生效。
 func (k keyAction) applies(editorFocused bool) bool {
 	switch k.Scope {
@@ -109,6 +242,7 @@ func defaultChords() map[string][]chord {
 // 只读 a.keymapPath 指向的文件，测试把它指到临时目录。
 func (a *root) loadKeymap() string {
 	a.chords = defaultChords()
+	a.mouseBindings = defaultMouseBindings()
 	if a.keymapPath == "" {
 		return ""
 	}
@@ -126,6 +260,19 @@ func (a *root) loadKeymap() string {
 		}
 		a.chords[act.ID] = act.Def
 	}
+	for _, act := range mouseActions {
+		if raw, ok := saved[act.ID]; ok {
+			mods, err := parseMouseBinding(raw)
+			if err != nil {
+				warn = locales.KeymapInvalid(act.Label(), err.Error())
+				a.mouseBindings[act.ID] = act.Def
+				continue
+			}
+			a.mouseBindings[act.ID] = mods
+			continue
+		}
+		a.mouseBindings[act.ID] = act.Def
+	}
 	return warn
 }
 
@@ -138,6 +285,12 @@ func (a *root) saveKeymap() {
 			continue
 		}
 		saved[act.ID] = formatChords(cur)
+	}
+	for _, act := range mouseActions {
+		if a.mouseBindings[act.ID] == act.Def {
+			continue
+		}
+		saved[act.ID] = formatMouseBinding(a.mouseBindings[act.ID])
 	}
 	if a.keymapPath == "" {
 		return

@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // focusEditor 打开一个控制台、把编辑器聚焦。
@@ -231,5 +232,50 @@ func TestCtrlSlashCommentsAndMovesDown(t *testing.T) {
 	}
 	if pos := a.code.state.CursorPos(); pos.Line != 1 || pos.Col != 0 {
 		t.Fatalf("取消注释后光标应下移: %+v", pos)
+	}
+}
+
+// 双击手势可改：互换后存进 keymap.json，并能在新实例里读回。
+func TestMouseBindingsSwapAndPersist(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.keymapPath = filepath.Join(t.TempDir(), "keymap.json")
+	if a.mouseBindings[mouseCellPreview] != 0 || a.mouseBindings[mouseCellEdit] != ui.Ctrl {
+		t.Fatalf("默认手势: %+v", a.mouseBindings)
+	}
+	a.setMouseBinding(mouseCellEdit, 0) // 与预览互换
+	if a.mouseBindings[mouseCellEdit] != 0 || a.mouseBindings[mouseCellPreview] != ui.Ctrl {
+		t.Fatalf("互换后: %+v", a.mouseBindings)
+	}
+	saved, warn := app.LoadKeymap(a.keymapPath)
+	if warn != "" {
+		t.Fatal(warn)
+	}
+	if saved[mouseCellEdit] != "double" || saved[mouseCellPreview] != "ctrl+double" {
+		t.Fatalf("存盘: %+v", saved)
+	}
+
+	b := newConsoleRoot(t)
+	b.keymapPath = a.keymapPath
+	if warn := b.loadKeymap(); warn != "" {
+		t.Fatalf("load: %s", warn)
+	}
+	if b.mouseBindings[mouseCellEdit] != 0 || b.mouseBindings[mouseCellPreview] != ui.Ctrl {
+		t.Fatalf("读回: %+v", b.mouseBindings)
+	}
+}
+
+// 设置-快捷键里能看到并修改双击手势。
+func TestSettingsShowsMouseDoubleClickBindings(t *testing.T) {
+	a := newConsoleRoot(t)
+	tt := ui.NewTester(a.settingsView, 720, 520)
+	tt.Frame()
+	if err := tt.Click("快捷键"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{locales.KeymapMouseTitle(), locales.KeyCellPreview(), locales.KeyCellEdit(), "Ctrl+双击"} {
+		if !tt.HasText(want) {
+			t.Fatalf("缺少 %q: %v", want, tt.Texts())
+		}
 	}
 }
