@@ -31,6 +31,7 @@ type root struct {
 	resultState       ui.ListState
 	editorPercent     float32 // 编辑器占上下的百分比（结果区在下方）
 	resultsHidden     bool    // Alt+D 临时隐藏结果区
+	sidebarHidden     bool    // 临时隐藏左侧数据源面板（纯瞬态）
 	selConn           app.ConnProfile
 	selObj            engine.DBObject
 	hasSelObj         bool
@@ -830,9 +831,7 @@ func (a *root) view(c *ui.Context) {
 		a.planConfirmModal(c)
 		a.guardModal(c)
 
-		ui.Split(c, &a.sidebarWidth, func() {
-			a.sidebar(c)
-		}, func() {
+		pane := func() {
 			main := func() {
 				ui.Column(c).Fill().Children(func() {
 					// 顶栏：数据源名/状态、数据库切换、应用操作与窗口控制（原来占一整行的标题栏）。
@@ -841,24 +840,14 @@ func (a *root) view(c *ui.Context) {
 						// 标签条 + 工作区切换器 + 执行/分析
 						a.tabBar(c)
 
-						// 工具行：查找（编辑器自带查找栏；性能预设/信息在独立设置窗口里）
-						ui.Toolbar(c, func() {
-							ui.Spacer(c)
-							if iconButton(c, iconSearch, locales.TopFind(), ui.Transparent).Clicked() {
-								a.code.Find()
-							}
-							if iconButton(c, iconFormat, locales.KeyFormat(), ui.Transparent).Clicked() {
-								a.formatActive()
-							}
-							if iconButton(c, iconSparkles, locales.TopAIComplete(), ui.Transparent).Clicked() {
-								a.requestAICompletion()
-							}
-						}).Label(locales.TopEditorTools())
-
 						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
 						editor := func() {
 							a.externalBanner(c)
-							a.code.View(c).Label(locales.TopEditor())
+							// 查找/格式化/AI 补全悬浮在编辑区右上角，不占一整行。
+							ui.Column(c).Fill().Children(func() {
+								a.code.View(c).Label(locales.TopEditor())
+								a.floatingEditorTools(c)
+							})
 							if a.execPending {
 								a.execPending = false
 								a.runSQL()
@@ -886,6 +875,13 @@ func (a *root) view(c *ui.Context) {
 				return
 			}
 			main()
-		}).Fill()
+		}
+		if a.sidebarHidden {
+			pane()
+			return
+		}
+		ui.Split(c, &a.sidebarWidth, func() {
+			a.sidebar(c)
+		}, pane).Fill()
 	}
 }

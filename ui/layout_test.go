@@ -60,7 +60,7 @@ func TestAltDTogglesResults(t *testing.T) {
 	if !a.resultsHidden || tt.HasText("alice") {
 		t.Fatalf("Alt+D should hide the results: hidden=%v", a.resultsHidden)
 	}
-	if !tt.HasText("编辑器工具") {
+	if _, ok := tt.Find(locales.TopFind()); !ok {
 		t.Fatal("editor tools should stay")
 	}
 	tt.Key(ui.Alt, ui.KeyD)
@@ -251,5 +251,58 @@ func TestLayoutSidebarFullHeightExecOnTabRow(t *testing.T) {
 	}
 	if exec.X <= ws.X {
 		t.Fatalf("执行按钮应在工作区切换器右侧: exec=%v ws=%v", exec, ws)
+	}
+}
+
+// 侧栏顶部的图标能隐藏数据源面板，隐藏后顶栏左上角出现「显示」入口。
+func TestSidebarToggleHidesAndShowsPanel(t *testing.T) {
+	a, _ := topBarTestRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if _, ok := tt.Find(locales.SidebarSearchObjects()); !ok {
+		t.Fatalf("侧栏搜索框应可见: %v", tt.Texts())
+	}
+	if err := tt.Click(locales.SidebarHide()); err != nil {
+		t.Fatalf("点击隐藏面板: %v", err)
+	}
+	tt.Frame()
+	if !a.sidebarHidden {
+		t.Fatal("点击后应隐藏侧栏")
+	}
+	if _, ok := tt.Find(locales.SidebarSearchObjects()); ok {
+		t.Fatalf("隐藏后不该再有侧栏搜索框: %v", tt.Texts())
+	}
+	if err := tt.Click(locales.SidebarShow()); err != nil {
+		t.Fatalf("顶栏应有显示面板按钮: %v", err)
+	}
+	tt.Frame()
+	if a.sidebarHidden {
+		t.Fatal("点击显示后应恢复侧栏")
+	}
+	if _, ok := tt.Find(locales.SidebarSearchObjects()); !ok {
+		t.Fatalf("恢复后侧栏搜索框应可见: %v", tt.Texts())
+	}
+}
+
+// 查找/格式化/AI 补全悬浮在编辑区内部，不再占一整行。
+func TestFloatingEditorToolsOverEditor(t *testing.T) {
+	a, _ := topBarTestRoot(t)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	editor, ok := tt.Find("编辑器")
+	if !ok {
+		t.Fatalf("找不到编辑区: %v", tt.Texts())
+	}
+	for _, label := range []string{locales.TopFind(), locales.KeyFormat(), locales.TopAIComplete()} {
+		tool, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("找不到悬浮按钮 %q: %v", label, tt.Texts())
+		}
+		if tool.Y < editor.Y || tool.Y+tool.H > editor.Y+editor.H {
+			t.Fatalf("%q 应悬浮在编辑区内: tool=%v editor=%v", label, tool, editor)
+		}
+		if tool.X < editor.X || tool.X+tool.W > editor.X+editor.W {
+			t.Fatalf("%q 应悬浮在编辑区内: tool=%v editor=%v", label, tool, editor)
+		}
 	}
 }

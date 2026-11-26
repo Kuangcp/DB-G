@@ -950,6 +950,26 @@ func (msgs Messages) SidebarDatasourceActions() string {
 	return Catalog.Format(msgs.locale, "sidebarDatasourceActions", nil)
 }
 
+// SidebarHide says "Hide Datasource Panel"
+// in the language the app shows.
+func SidebarHide() string { return In(i18n.Locale()).SidebarHide() }
+
+// SidebarHide says "Hide Datasource Panel"
+// in the language of msgs.
+func (msgs Messages) SidebarHide() string {
+	return Catalog.Format(msgs.locale, "sidebarHide", nil)
+}
+
+// SidebarShow says "Show Datasource Panel"
+// in the language the app shows.
+func SidebarShow() string { return In(i18n.Locale()).SidebarShow() }
+
+// SidebarShow says "Show Datasource Panel"
+// in the language of msgs.
+func (msgs Messages) SidebarShow() string {
+	return Catalog.Format(msgs.locale, "sidebarShow", nil)
+}
+
 // SidebarStartHint says "Start with “New Connection” in the top-left"
 // in the language the app shows.
 func SidebarStartHint() string { return In(i18n.Locale()).SidebarStartHint() }
@@ -4104,16 +4124,6 @@ func TopAIComplete() string { return In(i18n.Locale()).TopAIComplete() }
 // in the language of msgs.
 func (msgs Messages) TopAIComplete() string {
 	return Catalog.Format(msgs.locale, "topAIComplete", nil)
-}
-
-// TopEditorTools says "Editor Tools"
-// in the language the app shows.
-func TopEditorTools() string { return In(i18n.Locale()).TopEditorTools() }
-
-// TopEditorTools says "Editor Tools"
-// in the language of msgs.
-func (msgs Messages) TopEditorTools() string {
-	return Catalog.Format(msgs.locale, "topEditorTools", nil)
 }
 
 // TopEditor says "Editor"

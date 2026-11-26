@@ -26,6 +26,9 @@ func (a *root) sidebar(c *ui.Context) {
 				a.reloadTree()
 			}
 			ui.Spacer(c)
+			if iconButtonPlain(c, iconPanelLeftClose, locales.SidebarHide(), ui.Transparent).Clicked() {
+				a.sidebarHidden = true
+			}
 		}).Label(locales.SidebarDatasourceActions()).DragWindow()
 		if a.store == nil {
 			ui.Text(c, locales.SidebarStartHint()).TextColor(c.Theme().TextMuted)

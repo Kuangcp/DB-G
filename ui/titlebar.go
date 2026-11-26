@@ -73,6 +73,11 @@ func (a *root) topBar(c *ui.Context) {
 	bar := ui.Row(c).Height(TitleBarHeight).FillWidth().Padding(0, 12).Gap(8).
 		AlignItems(ui.Center).DragWindow().Background(t.Surface)
 	bar.Children(func() {
+		if a.sidebarHidden {
+			if iconButtonPlain(c, iconPanelLeftOpen, locales.SidebarShow(), t.TextMuted).Clicked() {
+				a.sidebarHidden = false
+			}
+		}
 		connID := a.activeConnID()
 		if connID != "" && a.store != nil {
 			if p, ok := a.store.Get(connID); ok {
