@@ -1260,6 +1260,46 @@ func (msgs Messages) ConnFormName() string {
 	return Catalog.Format(msgs.locale, "connFormName", nil)
 }
 
+// ConnFormURLPlaceholder says "Paste a JDBC / connection URL…"
+// in the language the app shows.
+func ConnFormURLPlaceholder() string { return In(i18n.Locale()).ConnFormURLPlaceholder() }
+
+// ConnFormURLPlaceholder says "Paste a JDBC / connection URL…"
+// in the language of msgs.
+func (msgs Messages) ConnFormURLPlaceholder() string {
+	return Catalog.Format(msgs.locale, "connFormURLPlaceholder", nil)
+}
+
+// ConnFormURLFill says "Fill"
+// in the language the app shows.
+func ConnFormURLFill() string { return In(i18n.Locale()).ConnFormURLFill() }
+
+// ConnFormURLFill says "Fill"
+// in the language of msgs.
+func (msgs Messages) ConnFormURLFill() string {
+	return Catalog.Format(msgs.locale, "connFormURLFill", nil)
+}
+
+// ConnFormURLInvalid says "Unrecognized connection URL"
+// in the language the app shows.
+func ConnFormURLInvalid() string { return In(i18n.Locale()).ConnFormURLInvalid() }
+
+// ConnFormURLInvalid says "Unrecognized connection URL"
+// in the language of msgs.
+func (msgs Messages) ConnFormURLInvalid() string {
+	return Catalog.Format(msgs.locale, "connFormURLInvalid", nil)
+}
+
+// ConnFormURLUnsupported says "Unsupported datasource type in the URL"
+// in the language the app shows.
+func ConnFormURLUnsupported() string { return In(i18n.Locale()).ConnFormURLUnsupported() }
+
+// ConnFormURLUnsupported says "Unsupported datasource type in the URL"
+// in the language of msgs.
+func (msgs Messages) ConnFormURLUnsupported() string {
+	return Catalog.Format(msgs.locale, "connFormURLUnsupported", nil)
+}
+
 // ConnFormLocation says "Location"
 // in the language the app shows.
 func ConnFormLocation() string { return In(i18n.Locale()).ConnFormLocation() }

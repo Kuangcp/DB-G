@@ -521,6 +521,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 		a.connDot(c, p.ID)
 		if iconButtonPlain(c, iconSquarePen, locales.ConnEdit(), ui.Transparent).Clicked() {
 			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
+			a.connFormURL, a.connFormURLErr = "", ""
 			a.connFormKind = p.Kind
 			a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
 			a.connFormShowPass = false
@@ -708,6 +709,23 @@ func (a *root) connModal(c *ui.Context) {
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
 			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
 				ui.Text(c, locales.ConnFormTitle(kindLabel(a.connFormKind))).Bold()
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.TextInput(c, &a.connFormURL).Placeholder(locales.ConnFormURLPlaceholder()).Radius(radius).Fill().
+						OnTextKey(func(k ui.TextKey) bool {
+							if k.Key == ui.KeyEnter && k.Mods == 0 {
+								a.applyConnURL()
+								return true
+							}
+							return false
+						})
+					if ui.Button(c, locales.ConnFormURLFill()).Radius(radius).Clicked() {
+						a.applyConnURL()
+					}
+				})
+				if a.connFormURLErr != "" {
+					ui.Text(c, a.connFormURLErr).FontSize(11).TextColor(c.Theme().Danger).
+						SingleLine().Tooltip(a.connFormURLErr)
+				}
 				ui.TextInput(c, &a.connFormName).Placeholder(locales.ConnFormName()).Radius(radius).AutoFocus()
 				if a.store != nil && len(a.store.Folders()) > 0 {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -929,6 +947,7 @@ func (a *root) switchConnKind(kind string) {
 		}
 	}
 	a.connFormErr = ""
+	a.connFormURLErr = ""
 	a.resetConnTest()
 }
 
@@ -958,6 +977,56 @@ func (a *root) deleteModal(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// applyConnURL 解析连接弹窗顶部的 JDBC/URL 并填入表单；失败只提示，
+// 不改动用户已经填好的字段。成功后会清空 URL 输入（通常含密码）。
+func (a *root) applyConnURL() {
+	raw := strings.TrimSpace(a.connFormURL)
+	if raw == "" {
+		a.connFormURLErr = ""
+		return
+	}
+	p, err := app.ParseConnURL(raw)
+	if err != nil {
+		if errors.Is(err, app.ErrConnURLUnsupported) {
+			a.connFormURLErr = locales.ConnFormURLUnsupported()
+		} else {
+			a.connFormURLErr = locales.ConnFormURLInvalid()
+		}
+		return
+	}
+	a.connFormURLErr = ""
+	a.connFormErr = ""
+	a.connFormKind = p.Kind
+	a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
+	a.connFormPath = p.Path
+	a.connFormParams = p.Params
+	a.connProto = 0
+	if p.Kind == "clickhouse" {
+		a.connProto = connProtoIndex(p.Protocol)
+	}
+	a.connFormPort = ""
+	switch {
+	case p.Port > 0:
+		a.connFormPort = strconv.Itoa(p.Port)
+	case p.Kind == "clickhouse":
+		a.connFormPort = strconv.Itoa(clickhouseProtoPort(a.connProto))
+	case p.Kind != "sqlite":
+		if port := defaultPort(p.Kind); port > 0 {
+			a.connFormPort = strconv.Itoa(port)
+		}
+	}
+	if p.Kind == "sqlite" {
+		a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = "", "", "", ""
+		a.connFormParams = ""
+	}
+	if strings.TrimSpace(a.connFormName) == "" && p.Name != "" {
+		a.connFormName = p.Name
+	}
+	a.connFormShowPass = false
+	a.resetConnTest()
+	a.connFormURL = ""
 }
 
 // connFormProfile 把表单当前内容读成一份连接档案（只读，不落盘）：保存、测试连接
@@ -1136,6 +1205,7 @@ func defaultPort(kind string) int {
 // openNewConnForm 重置新建连接表单；folderID 为空表示根级。
 func (a *root) openNewConnForm(folderID string) {
 	a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
+	a.connFormURL, a.connFormURLErr = "", ""
 	a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
 	a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
 	a.connFormShowPass = false

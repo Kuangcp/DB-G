@@ -40,6 +40,8 @@ type root struct {
 	store             *app.ConnStore
 	connErr           string // 顶栏一行错误（最近一次连接失败的原因）
 	connFormOpen      bool
+	connFormURL       string // 从 JDBC/URL 导入的临时输入（不落盘）
+	connFormURLErr    string
 	connFormID        string
 	connFormName      string
 	connFormPath      string
