@@ -47,8 +47,11 @@ func TestOpenSQLiteErrors(t *testing.T) {
 	if err := a.openSQLite(filepath.Join(t.TempDir(), "missing.db")); err == nil {
 		t.Fatal("missing file must fail")
 	}
-	if a.connErr == "" {
-		t.Fatal("connErr must be set")
+	if a.connErrOf("") == "" {
+		t.Fatal("打开失败的原因要记在数据源名下")
+	}
+	if len(a.toastQueue) != 1 {
+		t.Fatalf("打开失败应排队一条浮窗提示: %v", a.toastQueue)
 	}
 }
 

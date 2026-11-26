@@ -573,7 +573,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 // 只落盘一次（Add 内部生成新 ID）。
 func (a *root) duplicateConn(p app.ConnProfile) {
 	if a.store == nil {
-		a.connErr = locales.ConnDupStoreUnavailable()
+		a.toastError(locales.ConnDupStoreUnavailable())
 		return
 	}
 	taken := make(map[string]bool)
@@ -601,7 +601,7 @@ func (a *root) duplicateConn(p app.ConnProfile) {
 		Tags:            p.Tags,
 	}
 	if err := a.store.Add(cloned); err != nil {
-		a.connErr = locales.ConnDupFailed(err.Error())
+		a.toastError(locales.ConnDupFailed(err.Error()))
 		return
 	}
 	app.LogInfo("conn", "duplicate", "from", p.Name, "to", name, "folder", p.FolderID)

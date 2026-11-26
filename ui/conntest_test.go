@@ -185,8 +185,8 @@ func TestDuplicateConnAddsExactlyOneCopy(t *testing.T) {
 			t.Fatalf("副本应继承原数据源字段: %+v", p)
 		}
 	}
-	if a.connErr != "" {
-		t.Fatalf("复制不应报错: %q", a.connErr)
+	if len(a.toastQueue) != 0 {
+		t.Fatalf("复制不应报错: %v", a.toastQueue)
 	}
 	var copies int
 	for _, p := range list {

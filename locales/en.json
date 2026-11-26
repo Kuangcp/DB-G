@@ -136,6 +136,8 @@
   "@connDupNameN": { "placeholders": { "name": { "type": "String" }, "n": { "type": "int" } } },
   "connDupFailed": "Duplicate failed: {err}",
   "@connDupFailed": { "placeholders": { "err": { "type": "String" } } },
+  "connOpenFailed": "Failed to connect to {name}: {err}",
+  "@connOpenFailed": { "placeholders": { "name": { "type": "String" }, "err": { "type": "String" } } },
   "consoleSection": "Consoles",
   "consoleNew": "New Console",
   "consoleCreateFailed": "Failed to create console: {err}",

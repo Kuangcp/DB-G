@@ -123,8 +123,8 @@ func TestOpenConnAndRunEndToEnd(t *testing.T) {
 		t.Fatal("openConn must install a session")
 	}
 	// 没有控制台时顶栏退回「最近用过的」那个数据源
-	if got := a.activeConnName(); got != "本地库" || a.connErr != "" {
-		t.Fatalf("activeConnName=%q connErr=%q", got, a.connErr)
+	if got := a.activeConnName(); got != "本地库" {
+		t.Fatalf("activeConnName=%q", got)
 	}
 	if act, ok := a.store.Active(); !ok || act.ID != stored.ID {
 		t.Fatalf("active: %+v %v", act, ok)
@@ -161,8 +161,8 @@ func TestOpenConnFailureKeepsState(t *testing.T) {
 	if err := a.openConn(bad); err == nil {
 		t.Fatal("missing file must fail")
 	}
-	if a.connErr == "" {
-		t.Fatal("connErr must be set")
+	if len(a.toastQueue) != 1 {
+		t.Fatalf("打开失败应排队一条浮窗提示: %v", a.toastQueue)
 	}
 	if len(a.sessions) != 1 || !a.connected(good.ID) {
 		t.Fatalf("failed open must keep previous session: %d", len(a.sessions))
@@ -183,8 +183,8 @@ func TestRemoveActiveConnClearsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.removeConn(stored.ID)
-	if len(a.sessions) != 0 || a.connErr != "" {
-		t.Fatalf("sessions=%d connErr=%q", len(a.sessions), a.connErr)
+	if len(a.sessions) != 0 {
+		t.Fatalf("删除连接应关掉会话: %d", len(a.sessions))
 	}
 	if _, ok := a.store.Get(stored.ID); ok {
 		t.Fatal("profile must be removed")
@@ -446,8 +446,8 @@ func TestFailedOpenSetsTreeErrAndRemoveClears(t *testing.T) {
 	if err := a.openConn(bad); err == nil {
 		t.Fatal("missing file must fail")
 	}
-	if a.connErrOf(bad.ID) == "" || a.connErr == "" {
-		t.Fatalf("失败原因要记在数据源名下: %q / %q", a.connErrOf(bad.ID), a.connErr)
+	if a.connErrOf(bad.ID) == "" {
+		t.Fatal("失败原因要记在数据源名下")
 	}
 	if !a.connected(good.ID) {
 		t.Fatal("failed open must keep previous session")

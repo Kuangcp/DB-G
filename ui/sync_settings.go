@@ -232,7 +232,6 @@ func (a *root) finishSync(res app.SyncOutcome) {
 func (a *root) refreshAfterSync() {
 	a.closeAllSessions()
 	a.sessionErr = map[string]string{}
-	a.connErr = ""
 	a.reloadTree()
 	a.catalog = newCatalogCache()
 	if m := a.consoleMgr(); m != nil {

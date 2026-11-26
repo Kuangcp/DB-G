@@ -1180,6 +1180,18 @@ func (msgs Messages) ConnDupFailed(err string) string {
 	return Catalog.Format(msgs.locale, "connDupFailed", map[string]any{"err": err})
 }
 
+// ConnOpenFailed says "Failed to connect to {name}: {err}"
+// in the language the app shows.
+func ConnOpenFailed(name string, err string) string {
+	return In(i18n.Locale()).ConnOpenFailed(name, err)
+}
+
+// ConnOpenFailed says "Failed to connect to {name}: {err}"
+// in the language of msgs.
+func (msgs Messages) ConnOpenFailed(name string, err string) string {
+	return Catalog.Format(msgs.locale, "connOpenFailed", map[string]any{"name": name, "err": err})
+}
+
 // ConsoleSection says "Consoles"
 // in the language the app shows.
 func ConsoleSection() string { return In(i18n.Locale()).ConsoleSection() }

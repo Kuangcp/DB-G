@@ -156,9 +156,6 @@ func (a *root) connBar(c *ui.Context) {
 			}
 		}
 		a.schemaPicker(c)
-		if a.connErr != "" {
-			ui.Text(c, a.connErr).TextColor(t.Danger).SingleLine()
-		}
 		if a.consoleErr != "" {
 			if ui.Button(c, a.consoleErr).TextColor(t.Danger).SingleLine().Clicked() {
 				a.consoleErr = ""

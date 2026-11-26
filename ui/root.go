@@ -39,7 +39,8 @@ type root struct {
 	hasSelObj         bool
 	sidebarWidth      float32
 	store             *app.ConnStore
-	connErr           string // 顶栏一行错误（最近一次连接失败的原因）
+	toastQueue        []ui.Toast // 下一帧弹出的浮窗提示（错误自动消失，不再占顶栏）
+	toastSeq          uint64
 	connFormOpen      bool
 	connFormURL       string // 从 JDBC/URL 导入的临时输入（不落盘）
 	connFormURLErr    string
@@ -803,6 +804,7 @@ func rootView(a *root) func(c *ui.Context) {
 func (a *root) view(c *ui.Context) {
 	defer func() { a.pointerDouble = false }()
 	a.applyTheme(c)
+	a.flushToasts(c)
 	{
 		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
 		a.maybeOpenSettings()
@@ -917,6 +919,8 @@ func (a *root) view(c *ui.Context) {
 				a.sidebar(c)
 			}, pane).Fill()
 		})
+		// 最后画：浮窗提示盖在内容与弹窗之上。
+		a.toastViewport(c)
 	}
 }
 

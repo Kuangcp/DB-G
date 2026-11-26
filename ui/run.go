@@ -28,12 +28,7 @@ func engineProfile(p app.ConnProfile) engine.Profile {
 
 // openConn 连上（或复用）一个数据源，供 UI 各处调用；失败时圆点会变红。
 func (a *root) openConn(p app.ConnProfile) error {
-	err := a.connect(p)
-	if err != nil {
-		return err
-	}
-	a.connErr = ""
-	return nil
+	return a.connect(p)
 }
 
 func (a *root) removeConn(id string) {
@@ -54,7 +49,6 @@ func (a *root) removeConn(id string) {
 	a.closeSession(id, "connection removed")
 	if a.connErrOf(id) != "" {
 		delete(a.sessionErr, id)
-		a.connErr = ""
 	}
 	if act, ok := a.store.Active(); ok && act.ID == id {
 		a.store.SetActive("")

@@ -114,6 +114,7 @@
   "connDupName": "副本：{name}",
   "connDupNameN": "{name} (副本{n})",
   "connDupFailed": "复制失败：{err}",
+  "connOpenFailed": "数据源 {name} 连接失败：{err}",
   "consoleSection": "控制台",
   "consoleNew": "新建控制台",
   "consoleCreateFailed": "新建控制台失败: {err}",

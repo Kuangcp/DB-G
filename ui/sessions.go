@@ -212,7 +212,6 @@ func (a *root) connect(p app.ConnProfile) error {
 	}
 	a.installSession(p, sess)
 	a.applyProbe(p, probe)
-	a.connErr = ""
 	return nil
 }
 
@@ -281,7 +280,6 @@ func (a *root) finishConnect(p app.ConnProfile, sess engine.Session, probe connP
 	} else {
 		a.installSession(p, sess)
 		a.applyProbe(p, probe)
-		a.connErr = ""
 	}
 	waiters := a.connWaiters[p.ID]
 	delete(a.connWaiters, p.ID)
@@ -383,7 +381,9 @@ func (a *root) setSessionErr(connID string, err error, p app.ConnProfile) {
 	a.sessionErr[connID] = err.Error()
 	app.LogError("conn", "open failed", "kind", p.Kind, "name", p.Name,
 		"dsn", app.RedactDSN(p.Path), "err", err.Error())
-	a.connErr = err.Error()
+	// 顶栏原本固定显示一行错误，但现在打开的可能不是当前控制台的数据源：
+	// 用浮窗提示并自动消失，圆点/Tooltip 仍按数据源记着失败原因。
+	a.toastError(locales.ConnOpenFailed(p.Name, err.Error()))
 }
 
 // closeSession 关掉一个数据源的会话（LRU 淘汰、删除连接、退出时用）。
@@ -615,7 +615,6 @@ func (a *root) disconnectConn(p app.ConnProfile) {
 	}
 	a.closeSession(p.ID, "user disconnect")
 	delete(a.sessionErr, p.ID)
-	a.connErr = ""
 	if a.catalog != nil {
 		a.catalog.invalidate(p.ID)
 	}
