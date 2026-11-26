@@ -867,25 +867,8 @@ func (a *root) connModal(c *ui.Context) {
 // connPasswordInput 是连接密码框：眼睛按钮叠在输入框内部右侧，
 // 点击在隐藏与明文之间切换（Password 只在隐藏时调用）。
 func (a *root) connPasswordInput(c *ui.Context, radius float32) {
-	t := c.Theme()
-	ui.Box(c).Fill().Children(func() {
-		padX := t.Space(2.5)
-		in := ui.TextInput(c, &a.connFormPass).Placeholder(locales.ConnFormPassword()).
-			Label(locales.ConnFormPassword()).Radius(radius).Fill().
-			Padding(t.Space(1.5), padX+26, t.Space(1.5), padX)
-		if !a.connFormShowPass {
-			in.Password()
-		}
-		icon, label := iconEye, locales.ConnFormShowPassword()
-		if a.connFormShowPass {
-			icon, label = iconEyeOff, locales.ConnFormHidePassword()
-		}
-		eye := iconButtonPlain(c, icon, label, t.TextMuted).
-			AttachTo(in, ui.AnchorRight, ui.AnchorRight).Right(6)
-		if eye.Clicked() {
-			a.connFormShowPass = !a.connFormShowPass
-		}
-	})
+	passwordField(c, &a.connFormPass, &a.connFormShowPass, radius,
+		locales.ConnFormPassword(), locales.ConnFormPassword())
 }
 
 // connKindRow 是左侧数据源类型的一行：走通用的侧边导航样式（无按钮外观、

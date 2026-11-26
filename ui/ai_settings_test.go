@@ -2,7 +2,10 @@ package ui
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
+
+	"db-g/locales"
 )
 
 func TestAISettingsFetchesModelList(t *testing.T) {
@@ -57,5 +60,29 @@ func TestAISettingsManualRefreshModels(t *testing.T) {
 	tt.Frame()
 	if len(a.aiModels) != 1 || a.aiModels[0] != "remote-model" {
 		t.Fatalf("models after refresh = %v", a.aiModels)
+	}
+}
+
+// AI API Key 输入框右侧的眼睛可以切换明文显示。
+func TestAISettingsAPIKeyEye(t *testing.T) {
+	a := newConsoleRoot(t)
+	a.aiPrefsPath = filepath.Join(t.TempDir(), "ai.json")
+	tt := openSettingsSection(t, a, "AI")
+	if a.aiShowKey {
+		t.Fatal("API Key 默认应隐藏")
+	}
+	if err := tt.Click(locales.ConnFormShowPassword()); err != nil {
+		t.Fatalf("API Key 输入框右侧应有显示密码按钮: %v", err)
+	}
+	tt.Frame()
+	if !a.aiShowKey {
+		t.Fatal("点击眼睛后应显示明文")
+	}
+	if err := tt.Click(locales.ConnFormHidePassword()); err != nil {
+		t.Fatalf("显示后按钮应变为隐藏密码: %v", err)
+	}
+	tt.Frame()
+	if a.aiShowKey {
+		t.Fatal("再次点击后应恢复隐藏")
 	}
 }

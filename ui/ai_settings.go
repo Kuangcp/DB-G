@@ -38,12 +38,7 @@ func (a *root) aiSection(c *ui.Context) {
 		TextColor(c.Theme().TextMuted)
 
 	ui.Text(c, locales.AiAPIKey()).FontSize(12).TextColor(c.Theme().TextMuted)
-	if ui.TextInput(c, &a.aiPrefs.APIKey).
-		Placeholder("sk-…").
-		Label("AI API Key").
-		Password().
-		Radius(cr).
-		Changed() {
+	if passwordField(c, &a.aiPrefs.APIKey, &a.aiShowKey, cr, "sk-…", "AI API Key").Changed() {
 		a.saveAIPrefs()
 		a.invalidateAIModels()
 	}

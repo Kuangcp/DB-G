@@ -427,6 +427,7 @@ func (a *root) requestSettings() {
 
 // openSettings 打开（或聚焦）设置窗口（单例）。
 func (a *root) openSettings() {
+	a.aiShowKey = false // 每次打开设置都回到隐藏状态
 	if a.settingsWin != nil {
 		a.settingsWin.Focus()
 		return

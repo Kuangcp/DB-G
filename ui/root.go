@@ -92,6 +92,7 @@ type root struct {
 	localePrefsPath   string // locale.json 的位置（空 = 不落盘）
 	localeWarn        string
 	aiPrefs           app.AIPrefs // AI 服务地址/模型/出网开关
+	aiShowKey         bool        // AI API Key 是否显示明文（纯瞬态）
 	aiPrefsPath       string      // ai.json 的位置（空 = 不落盘）
 	aiWarn            string
 	syncPrefsPath     string        // sync.json 的位置（空 = 不落盘）
