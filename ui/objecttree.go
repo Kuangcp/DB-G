@@ -574,6 +574,12 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 		if leaf.Clicked() {
 			a.treeSelected = selKey
 			a.selConn, a.selObj, a.hasSelObj = p, obj, true
+			// Ctrl+点击表/视图直接打开现有的 DDL 弹窗；双击的第二下跳过，
+			// 避免一次双击发出两次 DDL 请求。
+			if leaf.ClickModifiers()&ui.Ctrl != 0 && !leaf.DoubleClicked() &&
+				(obj.Kind == engine.ObjectTable || obj.Kind == engine.ObjectView) {
+				a.showDDL(p, obj)
+			}
 		}
 		if leaf.DoubleClicked() {
 			a.previewObject(p, obj)
