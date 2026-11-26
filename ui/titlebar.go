@@ -65,9 +65,8 @@ func (a *root) settingsTitleBar(c *ui.Context) {
 	})
 }
 
-// topBar 是主窗口右列顶栏：整条可拖动，双击最大化。左边是当前数据源名与状态、
-// 数据库（schema）切换和提示信息，右边是应用操作与窗口控制按钮。
-// 左侧数据源列表改成通顶全高后，这条只覆盖编辑区一侧。
+// topBar 是主窗口右列顶栏：整条可拖动，双击最大化。左边是控制台标签，
+// 右边是应用操作与窗口控制按钮。左侧数据源列表通顶全高，这条只覆盖编辑区一侧。
 func (a *root) topBar(c *ui.Context) {
 	t := c.Theme()
 	bar := ui.Row(c).Height(TitleBarHeight).FillWidth().Padding(0, 12).Gap(8).
@@ -78,6 +77,50 @@ func (a *root) topBar(c *ui.Context) {
 				a.sidebarHidden = false
 			}
 		}
+		a.consoleTabs(c)
+		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
+			if iconButtonPlain(c, iconFolderOpen, locales.TopOpenSQLFile(), t.TextMuted).Clicked() {
+				a.pickOpenSQLFiles()
+			}
+			if iconButtonPlain(c, iconHistory, locales.TopHistory(), t.TextMuted).Clicked() {
+				a.historyOpen = true
+			}
+			aiColor := t.TextMuted
+			if a.aiChat.open {
+				aiColor = t.Accent
+			}
+			if iconButtonPlain(c, iconSparkles, locales.TopAIAssistant(), aiColor).Clicked() {
+				a.aiChat.open = !a.aiChat.open
+				if a.aiChat.open {
+					a.loadAIChat()
+					a.aiChat.scroll.Y = math.MaxFloat32
+				} else {
+					a.cancelAIPrepare()
+					a.stopAI()
+				}
+			}
+			if iconButtonPlain(c, iconSettings, locales.SettingsTitle(), t.TextMuted).Clicked() {
+				a.requestSettings()
+			}
+		})
+		// 应用操作与窗口控制之间留一点空白，避免误点关闭。
+		ui.Box(c).Width(6)
+		if a.win != nil {
+			windowButtons(c, a.win)
+		}
+	})
+}
+
+// connBarHeight 是顶栏下第二行（数据源与编辑工具）的高度。
+const connBarHeight = 34
+
+// connBar 是控制台标签下的第二行：当前数据源与数据库切换、提示信息、
+// 工作区与执行/分析，最右侧是查找/格式化/AI 补全。编辑区因此只占两行。
+func (a *root) connBar(c *ui.Context) {
+	t := c.Theme()
+	bar := ui.Row(c).Height(connBarHeight).FillWidth().Padding(0, 8).Gap(6).
+		AlignItems(ui.Center)
+	bar.Children(func() {
 		connID := a.activeConnID()
 		if connID != "" && a.store != nil {
 			if p, ok := a.store.Get(connID); ok {
@@ -114,36 +157,30 @@ func (a *root) topBar(c *ui.Context) {
 		if a.installNote != "" {
 			ui.Text(c, a.installNote).FontSize(12).TextColor(t.TextMuted).SingleLine()
 		}
+		ui.Toolbar(c, func() {
+			ui.MenuButton(c, a.workspaceName(), a.workspaceMenu)
+		}).Padding(0).Shrink(0)
+		ui.Toolbar(c, func() {
+			if iconButton(c, iconPlay, locales.TopExec(), t.Success).
+				Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+				a.execPending = true
+			}
+			if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).
+				Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+				a.runExplain(false)
+			}
+		}).Padding(0).Shrink(0).Label(locales.TopActions())
 		ui.Spacer(c)
-		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
-			if iconButtonPlain(c, iconFolderOpen, locales.TopOpenSQLFile(), t.TextMuted).Clicked() {
-				a.pickOpenSQLFiles()
-			}
-			if iconButtonPlain(c, iconHistory, locales.TopHistory(), t.TextMuted).Clicked() {
-				a.historyOpen = true
-			}
-			aiColor := t.TextMuted
-			if a.aiChat.open {
-				aiColor = t.Accent
-			}
-			if iconButtonPlain(c, iconSparkles, locales.TopAIAssistant(), aiColor).Clicked() {
-				a.aiChat.open = !a.aiChat.open
-				if a.aiChat.open {
-					a.loadAIChat()
-					a.aiChat.scroll.Y = math.MaxFloat32
-				} else {
-					a.cancelAIPrepare()
-					a.stopAI()
-				}
-			}
-			if iconButtonPlain(c, iconSettings, locales.SettingsTitle(), t.TextMuted).Clicked() {
-				a.requestSettings()
-			}
-		})
-		// 应用操作与窗口控制之间留一点空白，避免误点关闭。
-		ui.Box(c).Width(6)
-		if a.win != nil {
-			windowButtons(c, a.win)
-		}
+		a.editorToolButtons(c)
 	})
+}
+
+// workspaceName 是工作区切换器上显示的名字；没有工作区时给出占位文案。
+func (a *root) workspaceName() string {
+	if m := a.consoleMgr(); m != nil {
+		if ws, ok := m.ActiveWorkspace(); ok {
+			return ws.Name
+		}
+	}
+	return locales.TabNoWorkspace()
 }

@@ -834,20 +834,14 @@ func (a *root) view(c *ui.Context) {
 		pane := func() {
 			main := func() {
 				ui.Column(c).Fill().Children(func() {
-					// 顶栏：数据源名/状态、数据库切换、应用操作与窗口控制（原来占一整行的标题栏）。
+					// 顶栏（控制台标签 + 窗口控制）与第二行（数据源、数据库、操作、编辑工具）。
 					a.topBar(c)
+					a.connBar(c)
 					ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
-						// 标签条 + 工作区切换器 + 执行/分析
-						a.tabBar(c)
-
 						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
 						editor := func() {
 							a.externalBanner(c)
-							// 查找/格式化/AI 补全悬浮在编辑区右上角，不占一整行。
-							ui.Column(c).Fill().Children(func() {
-								a.code.View(c).Label(locales.TopEditor())
-								a.floatingEditorTools(c)
-							})
+							a.code.View(c).Label(locales.TopEditor())
 							if a.execPending {
 								a.execPending = false
 								a.runSQL()

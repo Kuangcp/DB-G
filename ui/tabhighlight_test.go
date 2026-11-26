@@ -1,10 +1,33 @@
 package ui
 
 import (
+	"image"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
+
+// hasVerticalRun 在矩形里找一列至少有 n 个指定颜色的像素：分隔线是整段竖线，
+// 文字抗锯齿的灰点凑不出这样的连续列。
+func hasVerticalRun(img *image.RGBA, r ui.Rect, want ui.Color, n int) bool {
+	x0, y0 := int(r.X), int(r.Y)
+	x1, y1 := min(int(r.X+r.W), img.Bounds().Dx()), min(int(r.Y+r.H), img.Bounds().Dy())
+	for x := max(x0, 0); x < x1; x++ {
+		run := 0
+		for y := max(y0, 0); y < y1; y++ {
+			c := img.RGBAAt(x, y)
+			if c.R == want.R && c.G == want.G && c.B == want.B {
+				run++
+				if run >= n {
+					return true
+				}
+			} else {
+				run = 0
+			}
+		}
+	}
+	return false
+}
 
 // tabBox 是标签文字周围的一圈，用来找激活标签顶部的 accent 线。
 func tabBox(r ui.Rect) ui.Rect {
@@ -126,11 +149,17 @@ func TestTabBarTabsSeparatedByDivider(t *testing.T) {
 		border = c.Theme().Border
 	}, 1200, 700)
 	tt.Frame()
-	inactive, ok := tt.Find("查询二")
+	firstTab, ok := tt.Find("查询一")
 	if !ok {
-		t.Fatal("inactive tab missing")
+		t.Fatalf("first tab missing: %v", tt.Texts())
 	}
-	if !rectHasColor(tt.Image(), tabBox(inactive), border) {
-		t.Fatal("inactive tab should show a theme border")
+	second, ok := tt.Find("查询二")
+	if !ok {
+		t.Fatalf("second tab missing: %v", tt.Texts())
+	}
+	between := ui.Rect{X: firstTab.X + firstTab.W, Y: second.Y - 3,
+		W: second.X - (firstTab.X + firstTab.W), H: second.H + 4}
+	if !hasVerticalRun(tt.Image(), between, border, 10) {
+		t.Fatal("tabs should be separated by a theme border")
 	}
 }

@@ -9,10 +9,9 @@ import (
 	"db-g/locales"
 )
 
-// tabBar 渲染当前工作区的控制台标签、新建按钮与工作区切换器。
-// 标签放进 Toolbar，由它负责「放不下的收进 More 菜单」；+ 与工作区切换器
-// 在外层 Row 里，永远可见，不参与标签溢出。
-func (a *root) tabBar(c *ui.Context) {
+// consoleTabs 渲染当前工作区的控制台标签，现在放在顶部标题栏里。
+// 标签放进 Toolbar，放不下的收进 More 菜单。
+func (a *root) consoleTabs(c *ui.Context) {
 	m := a.consoleMgr()
 	var open []app.ConsoleRecord
 	if m != nil {
@@ -22,37 +21,16 @@ func (a *root) tabBar(c *ui.Context) {
 	for _, rec := range open {
 		counts[rec.ConnectionID]++
 	}
-	name := locales.TabNoWorkspace()
-	if m != nil {
-		if ws, ok := m.ActiveWorkspace(); ok {
-			name = ws.Name
-		}
+	if len(open) == 0 {
+		ui.Text(c, locales.TabEmptyHint()).TextColor(c.Theme().TextMuted).FontSize(a.tabFontSize()).SingleLine()
+		ui.Spacer(c)
+		return
 	}
-	ui.Row(c).AlignItems(ui.Center).Gap(6).FillWidth().Children(func() {
-		if len(open) == 0 {
-			ui.Text(c, locales.TabEmptyHint()).TextColor(c.Theme().TextMuted).FontSize(a.tabFontSize()).SingleLine()
-			ui.Spacer(c)
-		} else {
-			ui.Toolbar(c, func() {
-				for i, rec := range open {
-					a.tab(c, rec, counts[rec.ConnectionID] > 1, i == 0)
-				}
-			}).Padding(0).Grow(1).Label(locales.TabToolbarLabel())
+	ui.Toolbar(c, func() {
+		for i, rec := range open {
+			a.tab(c, rec, counts[rec.ConnectionID] > 1, i == 0)
 		}
-		// 新建控制台只从左侧数据源下的入口走，这里只留工作区切换器。
-		ui.Toolbar(c, func() {
-			ui.MenuButton(c, name, a.workspaceMenu)
-		}).Padding(0).Shrink(0)
-		// 执行 / 分析：原来占在数据源顶栏，挪到标签行右侧。
-		ui.Toolbar(c, func() {
-			if iconButton(c, iconPlay, locales.TopExec(), c.Theme().Success).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-				a.execPending = true
-			}
-			if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-				a.runExplain(false)
-			}
-		}).Padding(0).Shrink(0).Label(locales.TopActions())
-	})
+	}).Padding(0).Grow(1).Label(locales.TabToolbarLabel())
 }
 
 // tabFontSize 返回控制台标签的字号；配置越界时回退默认值。

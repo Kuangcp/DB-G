@@ -216,14 +216,18 @@ func TestCtrlQIgnoresNonTableWord(t *testing.T) {
 	}
 }
 
-// 左侧数据源列表通顶，顶栏只覆盖编辑区；执行/分析跟着控制台标签行。
-func TestLayoutSidebarFullHeightExecOnTabRow(t *testing.T) {
+// 左侧数据源列表通顶；控制台标签在顶栏，数据源/数据库/执行在第二行。
+func TestLayoutSidebarFullHeightConnRow(t *testing.T) {
 	a, _ := topBarTestRoot(t)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
+	tabs, ok := tt.Find(locales.TabToolbarLabel())
+	if !ok {
+		t.Fatalf("顶栏没有控制台标签: %v", tt.Texts())
+	}
 	conn, ok := tt.Find("数据源 本地")
 	if !ok {
-		t.Fatalf("顶栏没有数据源名: %v", tt.Texts())
+		t.Fatalf("第二行没有数据源名: %v", tt.Texts())
 	}
 	newConn, ok := tt.Find(locales.SidebarNewConn())
 	if !ok {
@@ -232,8 +236,11 @@ func TestLayoutSidebarFullHeightExecOnTabRow(t *testing.T) {
 	if newConn.Y >= TitleBarHeight {
 		t.Fatalf("侧栏应通顶，新建按钮 y=%v 低于顶栏高度 %v", newConn.Y, TitleBarHeight)
 	}
-	if conn.Y >= TitleBarHeight {
-		t.Fatalf("数据源名应在顶栏里，y=%v", conn.Y)
+	if tabs.Y+tabs.H > TitleBarHeight+2 {
+		t.Fatalf("控制台标签应在顶栏里: tabs=%v 顶栏高 %v", tabs, TitleBarHeight)
+	}
+	if conn.Y < TitleBarHeight {
+		t.Fatalf("数据源名应在第二行，y=%v", conn.Y)
 	}
 	exec, ok := tt.Find(locales.TopExec())
 	if !ok {
@@ -243,11 +250,14 @@ func TestLayoutSidebarFullHeightExecOnTabRow(t *testing.T) {
 	if !ok {
 		t.Fatalf("缺少工作区切换器: %v", tt.Texts())
 	}
-	if exec.Y <= conn.Y {
-		t.Fatalf("执行按钮应在标签行（顶栏下方），exec y=%v conn y=%v", exec.Y, conn.Y)
+	if d := exec.Y - conn.Y; d < -8 || d > 8 {
+		t.Fatalf("执行按钮应与数据源同一行: exec=%v conn=%v", exec, conn)
 	}
-	if d := exec.Y - ws.Y; d < -6 || d > 6 {
-		t.Fatalf("执行按钮应与工作区切换器同一行: exec=%v ws=%v", exec, ws)
+	if exec.X <= conn.X {
+		t.Fatalf("执行按钮应在数据源控件右侧: exec=%v conn=%v", exec, conn)
+	}
+	if d := ws.Y - conn.Y; d < -8 || d > 8 {
+		t.Fatalf("工作区切换器应与数据源同一行: ws=%v conn=%v", ws, conn)
 	}
 	if exec.X <= ws.X {
 		t.Fatalf("执行按钮应在工作区切换器右侧: exec=%v ws=%v", exec, ws)
@@ -284,8 +294,8 @@ func TestSidebarToggleHidesAndShowsPanel(t *testing.T) {
 	}
 }
 
-// 查找/格式化/AI 补全悬浮在编辑区内部，不再占一整行。
-func TestFloatingEditorToolsOverEditor(t *testing.T) {
+// 查找/格式化/AI 补全在第二行最右侧，不再悬浮在编辑区上。
+func TestEditorToolsOnConnRow(t *testing.T) {
 	a, _ := topBarTestRoot(t)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -293,16 +303,32 @@ func TestFloatingEditorToolsOverEditor(t *testing.T) {
 	if !ok {
 		t.Fatalf("找不到编辑区: %v", tt.Texts())
 	}
+	conn, ok := tt.Find("数据源 本地")
+	if !ok {
+		t.Fatalf("找不到数据源名: %v", tt.Texts())
+	}
+	exec, ok := tt.Find(locales.TopExec())
+	if !ok {
+		t.Fatalf("缺少执行按钮: %v", tt.Texts())
+	}
+	rightmost := float32(0)
 	for _, label := range []string{locales.TopFind(), locales.KeyFormat(), locales.TopAIComplete()} {
 		tool, ok := tt.Find(label)
 		if !ok {
-			t.Fatalf("找不到悬浮按钮 %q: %v", label, tt.Texts())
+			t.Fatalf("找不到编辑工具 %q: %v", label, tt.Texts())
 		}
-		if tool.Y < editor.Y || tool.Y+tool.H > editor.Y+editor.H {
-			t.Fatalf("%q 应悬浮在编辑区内: tool=%v editor=%v", label, tool, editor)
+		if d := tool.Y - conn.Y; d < -8 || d > 8 {
+			t.Fatalf("%q 应与数据源同一行: tool=%v conn=%v", label, tool, conn)
 		}
-		if tool.X < editor.X || tool.X+tool.W > editor.X+editor.W {
-			t.Fatalf("%q 应悬浮在编辑区内: tool=%v editor=%v", label, tool, editor)
+		if tool.X <= exec.X {
+			t.Fatalf("%q 应在执行按钮右侧: tool=%v exec=%v", label, tool, exec)
 		}
+		if tool.Y+tool.H > editor.Y {
+			t.Fatalf("%q 不该压在编辑区上: tool=%v editor=%v", label, tool, editor)
+		}
+		rightmost = max(rightmost, tool.X+tool.W)
+	}
+	if rightmost < 1400-16 {
+		t.Fatalf("编辑工具应贴在最右侧: right=%v", rightmost)
 	}
 }
