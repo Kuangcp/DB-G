@@ -741,7 +741,12 @@ func (a *root) ddlConnForCaret() (app.ConnProfile, bool) {
 // viewDDLFromEditor 尝试「按 Ctrl+Q 时查光标处的表」：成功返回 true。
 // 失败时不弹任何东西（左侧树选中对象那条路还能走）。
 func (a *root) viewDDLFromEditor() bool {
-	word := editorWordAtCaret(a.code)
+	return a.viewDDLForWord(editorWordAtCaret(a.code))
+}
+
+// viewDDLForWord 查一个标识符的 DDL：Ctrl+Q（光标处）与编辑器 Ctrl+点击共用同一条路径，
+// 包括「只认已知表/视图」的过滤。空词或不成功时不弹任何东西。
+func (a *root) viewDDLForWord(word string) bool {
 	if word == "" {
 		return false
 	}
@@ -768,6 +773,15 @@ func (a *root) viewDDLFromEditor() bool {
 	}
 	a.showDDL(p, engine.DBObject{Kind: kind, Name: word, Schema: a.connSchema[p.ID]})
 	return true
+}
+
+// onEditorDefinition 是编辑器 Ctrl+点击 / F12 的回调：把指针下的标识符当表名查 DDL，
+// 行为与光标停在该词上按 Ctrl+Q 一致；不是已知表/视图时什么也不做。
+func (a *root) onEditorDefinition(offset int) {
+	if a.code == nil {
+		return
+	}
+	a.viewDDLForWord(editorWordAt(a.code, offset))
 }
 
 // knownObjects 返回该连接已知的表/视图名（小写）与类型；
@@ -799,11 +813,25 @@ func (a *root) knownObjects(connID string) map[string]engine.ObjectKind {
 }
 
 // editorWordAtCaret 从编辑器的光标位置提取标识符（表名/列名）。
-// 光标可能停在词的任意位置（甚至词中间），所以向前后各扫一次完整词边界。
 func editorWordAtCaret(c *codeEditor) string {
 	text := c.Text()
 	_, caretRune := c.CaretRunes()
-	pos := runeToByte(text, caretRune)
+	return editorWordAt(c, runeToByte(text, caretRune))
+}
+
+// editorWordAt 从字节偏移提取它所在的标识符；指针可能停在词的任意位置
+// （甚至词中间），所以向前后各扫一次完整词边界。偏移越界时夹紧。
+func editorWordAt(c *codeEditor, pos int) string {
+	text := c.Text()
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > len(text) {
+		pos = len(text)
+	}
+	for pos > 0 && pos < len(text) && !utf8.RuneStart(text[pos]) {
+		pos-- // 落在多字节字符中间时回到该字符起点
+	}
 
 	end := pos
 	for end < len(text) {
