@@ -16,7 +16,7 @@ const resultFooterHeight = 26
 
 // runtimeTiming 返回当前结果 tab 的最近一次执行耗时；执行中/未执行返回空串。
 func (a *root) runtimeTiming() string {
-	rt := a.currentRuntime()
+	rt := a.gridRuntime()
 	if rt == nil || rt.Running() {
 		return ""
 	}

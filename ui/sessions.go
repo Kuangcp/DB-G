@@ -62,6 +62,9 @@ func (a *root) touchSession(connID string) {
 // activeConnID 返回当前的执行目标数据源：优先激活控制台所属的那个；
 // 没有控制台时（临时缓冲执行、脚本导入）退回最近用过的会话。
 func (a *root) activeConnID() string {
+	if t := a.activeViewerTab(); t != nil {
+		return t.connID
+	}
 	if id := a.activeConsoleConnID(); id != "" {
 		return id
 	}

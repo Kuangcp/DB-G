@@ -585,10 +585,13 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 			}
 		}
 		if leaf.DoubleClicked() {
-			a.previewObject(p, obj)
+			a.openViewerTab(p, obj)
 		}
 		leaf.ContextMenu(func(m *ui.Menu) {
 			if m.Item(locales.TreePreviewData()).Chosen() {
+				a.openViewerTab(p, obj)
+			}
+			if m.Item(locales.TreeInsertPreviewSQL()).Chosen() {
 				a.previewObject(p, obj)
 			}
 			if m.Item(locales.TreeViewDDL()).Chosen() {
@@ -677,24 +680,35 @@ func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 	})
 }
 
+// fetchObjectDDL 读取对象 DDL：supported=false 表示驱动不支持该能力。
+// Ctrl+Q 弹窗与表视图 DDL 页共用，保证两处内容一致。
+func fetchObjectDDL(ctx context.Context, sess engine.Session, o engine.DBObject) (string, bool, error) {
+	if sess == nil {
+		return "", false, nil
+	}
+	lister, hasDDL := sess.(engine.ObjectDDLer)
+	scoped, hasScoped := sess.(engine.SchemaObjectDDLer)
+	if !sess.Caps().Has(engine.CapObjectDDL) || (!hasDDL && !hasScoped) {
+		return "", false, nil
+	}
+	if hasScoped {
+		ddl, err := scoped.ObjectDDLIn(ctx, o.Schema, o.Kind, o.Name)
+		return ddl, true, err
+	}
+	ddl, err := lister.ObjectDDL(ctx, o.Kind, o.Name)
+	return ddl, true, err
+}
+
 // loadObjectDDL 在会话就绪后读 DDL；headless 同步，有窗口时后台 + Update。
 func (a *root) loadObjectDDL(p app.ConnProfile, o engine.DBObject) {
 	sess := a.sessionFor(p.ID)
 	load := func() {
-		lister, hasDDL := sess.(engine.ObjectDDLer)
-		scoped, hasScoped := sess.(engine.SchemaObjectDDLer)
-		if sess == nil || !sess.Caps().Has(engine.CapObjectDDL) || (!hasDDL && !hasScoped) {
-			a.setDDLNote(o.Name, locales.TreeDDLUnsupported())
-			return
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		var ddl string
-		var err error
-		if hasScoped {
-			ddl, err = scoped.ObjectDDLIn(ctx, o.Schema, o.Kind, o.Name)
-		} else {
-			ddl, err = lister.ObjectDDL(ctx, o.Kind, o.Name)
+		ddl, supported, err := fetchObjectDDL(ctx, sess, o)
+		if !supported {
+			a.setDDLNote(o.Name, locales.TreeDDLUnsupported())
+			return
 		}
 		apply := func() {
 			if err != nil {

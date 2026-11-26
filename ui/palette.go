@@ -150,6 +150,26 @@ func (a *root) paletteConsoles() []paletteItem {
 			run:   func() { a.pendingActivate = rec.ID },
 		})
 	}
+	// 表视图标签也进面板：搜到就能直接切过去。
+	for _, id := range a.viewerOrder {
+		t := a.viewerTabs[id]
+		if t == nil {
+			continue
+		}
+		name := t.obj.Name
+		if t.schema != "" {
+			name = t.schema + "." + t.obj.Name
+		}
+		label := name
+		if n := a.connName(t.connID); n != "" {
+			label = n + " / " + name
+		}
+		run := t.id
+		items = append(items, paletteItem{
+			label: label,
+			run:   func() { a.pendingActivateViewer = run },
+		})
+	}
 	return items
 }
 

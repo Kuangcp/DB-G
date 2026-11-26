@@ -5214,6 +5214,258 @@ func (msgs Messages) TreeInsertName() string {
 	return Catalog.Format(msgs.locale, "treeInsertName", nil)
 }
 
+// TreeInsertPreviewSQL says "Insert Preview SQL"
+// in the language the app shows.
+func TreeInsertPreviewSQL() string { return In(i18n.Locale()).TreeInsertPreviewSQL() }
+
+// TreeInsertPreviewSQL says "Insert Preview SQL"
+// in the language of msgs.
+func (msgs Messages) TreeInsertPreviewSQL() string {
+	return Catalog.Format(msgs.locale, "treeInsertPreviewSQL", nil)
+}
+
+// ViewerData says "Data"
+// in the language the app shows.
+func ViewerData() string { return In(i18n.Locale()).ViewerData() }
+
+// ViewerData says "Data"
+// in the language of msgs.
+func (msgs Messages) ViewerData() string {
+	return Catalog.Format(msgs.locale, "viewerData", nil)
+}
+
+// ViewerStructure says "Structure"
+// in the language the app shows.
+func ViewerStructure() string { return In(i18n.Locale()).ViewerStructure() }
+
+// ViewerStructure says "Structure"
+// in the language of msgs.
+func (msgs Messages) ViewerStructure() string {
+	return Catalog.Format(msgs.locale, "viewerStructure", nil)
+}
+
+// ViewerDDL says "DDL"
+// in the language the app shows.
+func ViewerDDL() string { return In(i18n.Locale()).ViewerDDL() }
+
+// ViewerDDL says "DDL"
+// in the language of msgs.
+func (msgs Messages) ViewerDDL() string {
+	return Catalog.Format(msgs.locale, "viewerDDL", nil)
+}
+
+// ViewerTabTooltip says "{conn} · {name}"
+// in the language the app shows.
+func ViewerTabTooltip(conn string, name string) string {
+	return In(i18n.Locale()).ViewerTabTooltip(conn, name)
+}
+
+// ViewerTabTooltip says "{conn} · {name}"
+// in the language of msgs.
+func (msgs Messages) ViewerTabTooltip(conn string, name string) string {
+	return Catalog.Format(msgs.locale, "viewerTabTooltip", map[string]any{"conn": conn, "name": name})
+}
+
+// ViewerWherePlaceholder says "e.g. status = 'active'"
+// in the language the app shows.
+func ViewerWherePlaceholder() string { return In(i18n.Locale()).ViewerWherePlaceholder() }
+
+// ViewerWherePlaceholder says "e.g. status = 'active'"
+// in the language of msgs.
+func (msgs Messages) ViewerWherePlaceholder() string {
+	return Catalog.Format(msgs.locale, "viewerWherePlaceholder", nil)
+}
+
+// ViewerWhereLabel says "Filter condition"
+// in the language the app shows.
+func ViewerWhereLabel() string { return In(i18n.Locale()).ViewerWhereLabel() }
+
+// ViewerWhereLabel says "Filter condition"
+// in the language of msgs.
+func (msgs Messages) ViewerWhereLabel() string {
+	return Catalog.Format(msgs.locale, "viewerWhereLabel", nil)
+}
+
+// ViewerWhereInvalid says "The condition must leave one statement: remove any ; that starts another"
+// in the language the app shows.
+func ViewerWhereInvalid() string { return In(i18n.Locale()).ViewerWhereInvalid() }
+
+// ViewerWhereInvalid says "The condition must leave one statement: remove any ; that starts another"
+// in the language of msgs.
+func (msgs Messages) ViewerWhereInvalid() string {
+	return Catalog.Format(msgs.locale, "viewerWhereInvalid", nil)
+}
+
+// ViewerClearWhere says "Clear condition"
+// in the language the app shows.
+func ViewerClearWhere() string { return In(i18n.Locale()).ViewerClearWhere() }
+
+// ViewerClearWhere says "Clear condition"
+// in the language of msgs.
+func (msgs Messages) ViewerClearWhere() string {
+	return Catalog.Format(msgs.locale, "viewerClearWhere", nil)
+}
+
+// ViewerSort says "Sort"
+// in the language the app shows.
+func ViewerSort() string { return In(i18n.Locale()).ViewerSort() }
+
+// ViewerSort says "Sort"
+// in the language of msgs.
+func (msgs Messages) ViewerSort() string {
+	return Catalog.Format(msgs.locale, "viewerSort", nil)
+}
+
+// ViewerSortClear says "Clear sort"
+// in the language the app shows.
+func ViewerSortClear() string { return In(i18n.Locale()).ViewerSortClear() }
+
+// ViewerSortClear says "Clear sort"
+// in the language of msgs.
+func (msgs Messages) ViewerSortClear() string {
+	return Catalog.Format(msgs.locale, "viewerSortClear", nil)
+}
+
+// ViewerRefresh says "Reload data"
+// in the language the app shows.
+func ViewerRefresh() string { return In(i18n.Locale()).ViewerRefresh() }
+
+// ViewerRefresh says "Reload data"
+// in the language of msgs.
+func (msgs Messages) ViewerRefresh() string {
+	return Catalog.Format(msgs.locale, "viewerRefresh", nil)
+}
+
+// ViewerCopySQL says "Copy SQL"
+// in the language the app shows.
+func ViewerCopySQL() string { return In(i18n.Locale()).ViewerCopySQL() }
+
+// ViewerCopySQL says "Copy SQL"
+// in the language of msgs.
+func (msgs Messages) ViewerCopySQL() string {
+	return Catalog.Format(msgs.locale, "viewerCopySQL", nil)
+}
+
+// ViewerOpenInConsole says "Open in Console"
+// in the language the app shows.
+func ViewerOpenInConsole() string { return In(i18n.Locale()).ViewerOpenInConsole() }
+
+// ViewerOpenInConsole says "Open in Console"
+// in the language of msgs.
+func (msgs Messages) ViewerOpenInConsole() string {
+	return Catalog.Format(msgs.locale, "viewerOpenInConsole", nil)
+}
+
+// ViewerCopied says "Copied"
+// in the language the app shows.
+func ViewerCopied() string { return In(i18n.Locale()).ViewerCopied() }
+
+// ViewerCopied says "Copied"
+// in the language of msgs.
+func (msgs Messages) ViewerCopied() string {
+	return Catalog.Format(msgs.locale, "viewerCopied", nil)
+}
+
+// ViewerRetry says "Retry"
+// in the language the app shows.
+func ViewerRetry() string { return In(i18n.Locale()).ViewerRetry() }
+
+// ViewerRetry says "Retry"
+// in the language of msgs.
+func (msgs Messages) ViewerRetry() string {
+	return Catalog.Format(msgs.locale, "viewerRetry", nil)
+}
+
+// ViewerLoading says "Loading…"
+// in the language the app shows.
+func ViewerLoading() string { return In(i18n.Locale()).ViewerLoading() }
+
+// ViewerLoading says "Loading…"
+// in the language of msgs.
+func (msgs Messages) ViewerLoading() string {
+	return Catalog.Format(msgs.locale, "viewerLoading", nil)
+}
+
+// ViewerStartFailed says "The query could not start"
+// in the language the app shows.
+func ViewerStartFailed() string { return In(i18n.Locale()).ViewerStartFailed() }
+
+// ViewerStartFailed says "The query could not start"
+// in the language of msgs.
+func (msgs Messages) ViewerStartFailed() string {
+	return Catalog.Format(msgs.locale, "viewerStartFailed", nil)
+}
+
+// ViewerRowsRead says "{n, number, ::group-off} rows read"
+// in the language the app shows.
+func ViewerRowsRead(n int) string { return In(i18n.Locale()).ViewerRowsRead(n) }
+
+// ViewerRowsRead says "{n, number, ::group-off} rows read"
+// in the language of msgs.
+func (msgs Messages) ViewerRowsRead(n int) string {
+	return Catalog.Format(msgs.locale, "viewerRowsRead", map[string]any{"n": n})
+}
+
+// ViewerColumnsUnsupported says "This datasource does not provide column information"
+// in the language the app shows.
+func ViewerColumnsUnsupported() string { return In(i18n.Locale()).ViewerColumnsUnsupported() }
+
+// ViewerColumnsUnsupported says "This datasource does not provide column information"
+// in the language of msgs.
+func (msgs Messages) ViewerColumnsUnsupported() string {
+	return Catalog.Format(msgs.locale, "viewerColumnsUnsupported", nil)
+}
+
+// ViewerDDLUnsupported says "This datasource does not provide DDL"
+// in the language the app shows.
+func ViewerDDLUnsupported() string { return In(i18n.Locale()).ViewerDDLUnsupported() }
+
+// ViewerDDLUnsupported says "This datasource does not provide DDL"
+// in the language of msgs.
+func (msgs Messages) ViewerDDLUnsupported() string {
+	return Catalog.Format(msgs.locale, "viewerDDLUnsupported", nil)
+}
+
+// ViewerColName says "Column"
+// in the language the app shows.
+func ViewerColName() string { return In(i18n.Locale()).ViewerColName() }
+
+// ViewerColName says "Column"
+// in the language of msgs.
+func (msgs Messages) ViewerColName() string {
+	return Catalog.Format(msgs.locale, "viewerColName", nil)
+}
+
+// ViewerColType says "Type"
+// in the language the app shows.
+func ViewerColType() string { return In(i18n.Locale()).ViewerColType() }
+
+// ViewerColType says "Type"
+// in the language of msgs.
+func (msgs Messages) ViewerColType() string {
+	return Catalog.Format(msgs.locale, "viewerColType", nil)
+}
+
+// ViewerColNullable says "Null"
+// in the language the app shows.
+func ViewerColNullable() string { return In(i18n.Locale()).ViewerColNullable() }
+
+// ViewerColNullable says "Null"
+// in the language of msgs.
+func (msgs Messages) ViewerColNullable() string {
+	return Catalog.Format(msgs.locale, "viewerColNullable", nil)
+}
+
+// ViewerColPrimaryKey says "Key"
+// in the language the app shows.
+func ViewerColPrimaryKey() string { return In(i18n.Locale()).ViewerColPrimaryKey() }
+
+// ViewerColPrimaryKey says "Key"
+// in the language of msgs.
+func (msgs Messages) ViewerColPrimaryKey() string {
+	return Catalog.Format(msgs.locale, "viewerColPrimaryKey", nil)
+}
+
 // TreeShownFirst says "Showing the first {shown, number, ::group-off} of {total, number, ::group-off}"
 // in the language the app shows.
 func TreeShownFirst(shown int, total int) string {
