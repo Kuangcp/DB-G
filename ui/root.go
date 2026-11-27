@@ -100,7 +100,8 @@ type root struct {
 	connDeleteOpen   bool
 	connDeleting     string
 	tree             treeState
-	deferred         []func() // 下一帧帧首执行的动作（FIFO）
+	deferred         []func()      // 下一帧帧首执行的动作（FIFO）
+	modals           modalRegistry // 每帧按顺序询问的弹窗
 
 	appIconPNG []byte       // 窗口图标；自举安装时写入图标目录
 	install    installState // 自举安装/升级（仅发布构建）
@@ -264,6 +265,31 @@ func newRoot(text string) *root {
 	}
 	a.applyEditorBindings()
 	a.applyFontPrefs()
+	a.modals.add(
+		a.tabModal,
+		a.consoleReloadModal,
+		a.cellViewer,
+		a.filterModal,
+		a.exportConfirmModal,
+		a.exportCloseModal,
+		a.historyPanel,
+		a.palette,
+		a.ddlPanel,
+		a.statsPanel,
+		a.aiLintModal,
+		a.editCellModal,
+		a.previewModal,
+		a.installModal,
+		a.externalPickerModal,
+		a.externalResolveModal,
+		a.aiDebugModal,
+		a.aiFixModal,
+		a.aiRewriteModal,
+		a.syncKeyModal,
+		a.syncFindingsModal,
+		a.planConfirmModal,
+		a.guardModal,
+	)
 	return a
 }
 
@@ -789,29 +815,7 @@ func (a *root) view(c *ui.Context) {
 	defer func() { a.pointerDouble = false }()
 	a.frameStart(c)
 	{
-		a.tabModal(c)
-		a.consoleReloadModal(c)
-		a.cellViewer(c)
-		a.filterModal(c)
-		a.exportConfirmModal(c)
-		a.exportCloseModal(c)
-		a.historyPanel(c)
-		a.palette(c)
-		a.ddlPanel(c)
-		a.statsPanel(c)
-		a.aiLintModal(c)
-		a.editCellModal(c)
-		a.previewModal(c)
-		a.installModal(c)
-		a.externalPickerModal(c)
-		a.externalResolveModal(c)
-		a.aiDebugModal(c)
-		a.aiFixModal(c)
-		a.aiRewriteModal(c)
-		a.syncKeyModal(c)
-		a.syncFindingsModal(c)
-		a.planConfirmModal(c)
-		a.guardModal(c)
+		a.modals.draw(c)
 
 		pane := func() {
 			main := func() {

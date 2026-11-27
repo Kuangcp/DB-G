@@ -211,7 +211,8 @@
 `pendingClose/pendingSwitchWS/pendingActivate/pendingActivateViewer/pendingAppend/pendingExec`
 与 `execPending` 全部删除，调用方改用 `deferUI`/`deferActivateConsole`/`deferActivateViewer`/
 `deferCloseConsole`/`deferSwitchWorkspace`；`view` 的 editor 闭包不再执行 `runSQL`。
-队列有 FIFO + 执行中追加排空的单测。**剩余**：弹窗注册表（当前仍是逐帧手写 `xxxModal(c)`）。
+队列有 FIFO + 执行中追加排空的单测。弹窗改为 `modalRegistry`：`newRoot` 按原顺序注册，
+`view` 只调 `a.modals.draw(c)`；新增弹窗只需注册，不再改 `view`。
 
 **证据**：`ui/root.go:826-900`：每帧开头执行 `maybeOpenSettings`、`syncActiveBuffer`、
 `applyEditorLanguage`、`pollExternalFiles`，并依次消费 `pendingClose`、`pendingSwitchWS`、
