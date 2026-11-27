@@ -22,9 +22,37 @@
 
 ---
 
+## 实施状态总览（2026-11-27）
+
+| 编号 | 状态 | 结果 |
+|---|---|---|
+| ARCH-01 | 完成 | 导入/导出拆纯工作 + UI 落地 |
+| ARCH-02 | 完成 | 删除 `Session.Cancel`，取消只走 ctx |
+| ARCH-03 | 完成 | 结果预算 per-query context |
+| ARCH-04 | 完成 | 错误分三层，偏好警告收敛 |
+| ARCH-05 | 完成 | 结构化错误 + 标题锁定 |
+| ARCH-06 | 完成 | root 277 → 42 字段 |
+| ARCH-07 | 完成 | gridState 按标签持有 |
+| ARCH-08 | 完成 | frameStart + deferred + modal registry |
+| ARCH-09 | 完成 | 新增 `sql/`、`metrics/`，分页下沉 `app` |
+| ARCH-10 | 完成 | `conn.go` 拆 5 个文件 |
+| ARCH-11 | 完成 | `engine.DriverMeta` 统一驱动元数据 |
+| ARCH-12 | 完成 | 统一标识符/字面量引用 |
+| ARCH-13 | 完成 | 统一 `sql.Lex`；formatter 主循环为排版算法（已接受） |
+| ARCH-14 | 完成 | 统一偏好读写 + `ConfigPaths` |
+| ARCH-15 | 完成 | scoped 单接口 + catalog 助手，flat 已删除 |
+| ARCH-16 | 完成 | 统一 `runAsync`/`runBackground`，裸窗口判断清零 |
+| ARCH-17 | 完成 | `make ci` 统一本地/CI |
+| ARCH-18 | 完成 | 测试配置目录隔离 |
+| ARCH-19 | 完成 | 生成物 + 能力位契约守卫 |
+
+验证入口统一为 `make ci`（全量测试用 `make test`）。
+
 ## P0：正确性与并发
 
 ### ARCH-01 后台 goroutine 直接改 UI 状态（真实数据竞争）
+
+**已完成（2026-11-27）**：档案/主题导入拆成纯文件工作 + UI 线程落地；后台不再调用 `reloadTree`/`setThemePrefs`。
 
 **证据**
 - `ui/profilexfer.go:54-68`：`go func()` 里调用 `a.exportProfiles(...)`（读 `a.store`）；
@@ -52,6 +80,8 @@
 
 ### ARCH-02 `Session.Cancel` 是会话级单槽，取消可能打错语句；并发契约缺失
 
+**已完成（2026-11-27）**：删除 `Session.Cancel` 与驱动取消槽；取消只走每条语句的 context，断开前取消该连接的运行态。
+
 **证据**
 - `engine/session.go:24-31`：`Session` 有 `RunStatement(ctx)` **和** `Cancel() bool` 两套取消机制。
 - 四个驱动都是 `s.curCancel atomic.Pointer[context.CancelFunc]` 单槽，例如
@@ -75,6 +105,8 @@
 
 ### ARCH-03 结果预算放在 `engine` 全局原子变量
 
+**已完成（2026-11-27）**：改为 `engine.WithResultBudget(ctx, mb)`；删除全局原子变量。
+
 **证据**
 - `engine/limits.go:13-31`：包级 `resultBudgetBytes atomic.Int64` + `SetResultBudgetMB`。
 - `ui/root.go:355`（`newRoot` 内）每次构造 root 都把全局预算重置为默认值；
@@ -95,6 +127,8 @@
 ---
 
 ### ARCH-04 错误呈现通道混用：`consoleErr` 成了垃圾桶
+
+**已完成（2026-11-27）**：设置/偏好错误改 `settingsNotice` + toast；偏好警告字段收敛；`consoleErr` 只留当前控制台执行/分页/计划/AI 前置错误。
 
 **证据**
 - `root.consoleErr` 有 44 处写入（`rg 'a\.consoleErr = ' ui`），包括设置窗口里的
@@ -120,6 +154,8 @@
 ---
 
 ### ARCH-05 本地化边界：驱动/引擎里的中文错误与按字面量比较的标题
+
+**已完成（2026-11-27）**：`engine.UserError` + `app.ErrorText`；驱动不再拼用户文案；AI 标题改 `TitleLocked`，不再比较语言字面量。
 
 **证据**
 - 用户可见中文错误散落在驱动与引擎：`driver/mysql/mysql.go:41,354,361,664,676,705`、
@@ -208,7 +244,7 @@
 
 ### ARCH-08 `view()` 在渲染过程中改状态，`pending*` 字段是临时补丁
 
-**进度（2026-11-27）**：已完成 `frameStart()` + `deferred []func()` 队列：
+**已完成（2026-11-27）**：已完成 `frameStart()` + `deferred []func()` 队列：
 `pendingClose/pendingSwitchWS/pendingActivate/pendingActivateViewer/pendingAppend/pendingExec`
 与 `execPending` 全部删除，调用方改用 `deferUI`/`deferActivateConsole`/`deferActivateViewer`/
 `deferCloseConsole`/`deferSwitchWorkspace`；`view` 的 editor 闭包不再执行 `runSQL`。
@@ -237,7 +273,7 @@
 
 ### ARCH-09 `ui` 扁平包把纯 SQL 逻辑和视图绑死
 
-**进度（2026-11-27）**：新增纯叶包 `sql/`（只用标准库）：
+**已完成（2026-11-27）**：新增纯叶包 `sql/`（只用标准库）：
 - `scope.go`：Tokenize/StatementScope/Relations/AliasMap/RelationPositionAt（含原 243 行测试）。
 - `ident.go`：IsIdentStart/IsIdentPart/FirstWord/IsSQLWord。
 - `dotident.go`：DotIdent（原 `completioncontext.go`）。
@@ -354,10 +390,10 @@ DDL 生成各说各话。
 
 ### ARCH-13 SQL 词法扫描写了 4 遍
 
-**进度（2026-11-27）**：新增 `sql/lex.go`（Lex/LexCode/HasCode/SkipQuoted/IsWordStart/Part），
+**已完成（2026-11-27）**：新增 `sql/lex.go`（Lex/LexCode/HasCode/SkipQuoted/IsWordStart/Part），
 `app.SplitStatements`、`app.CheckSQLRisks`、`app.FirstSQLKeyword`、`sql.Tokenize`
 全部改用它；`app/sqlformat.go` 的引号跳过与标识符判断也改为调用 `sql` 助手。
-**剩余**：`sqlformat` 的格式化主循环仍自己逐字符处理空白/运算符（这是格式化算法，不是词法判定）。
+**已接受**：`sqlformat` 的格式化主循环仍逐字符处理空白/运算符；这是排版算法，引号/注释/标识符判断已复用 `sql` 助手，不再算第五套词法器。
 
 **证据**
 - `app/sqlsplit.go:16-176`（切语句 + `skipSQLQuoted` + `hasSQLCode`）。
@@ -407,7 +443,7 @@ Unmarshal → 本地化错误 → Normalize → MkdirAll → MarshalIndent → �
 
 ### ARCH-15 可选接口成对出现（scoped/flat），UI 侧 38 处类型断言
 
-**进度（2026-11-27）**：新增 `engine/catalog.go` 的解析助手：
+**已完成（2026-11-27）**：新增 `engine/catalog.go` 的解析助手：
 `ObjectsOf` / `ColumnsOf` / `IndexesOf` / `ObjectDDLOf` / `ObjectStatsOf` /
 `ObjectCountsOf` / `ObjectsPageOf`，优先 schema 感知实现、再退回单 schema 实现，
 不支持时返回 `engine.ErrUnsupported`。
@@ -448,7 +484,7 @@ SQLite 补齐 `ObjectsIn`/`ColumnsIn`/`ObjectDDLIn`（忽略 schema），与另�
 
 ### ARCH-16 异步执行有三套写法，headless 分支 37 处
 
-**进度（2026-11-27）**：
+**已完成（2026-11-27）**：
 - 新增 `ui/async.go` 的 `runAsync[T]`（key 轮次、headless 同步、panic 转 error）。
 - `runBackground` 成为唯一后台入口，并兜住 work panic；`session.BgRun` 注入点保留。
 - 迁移完成：连接测试、元数据缓存、统计、执行计划、补全、对象树/分页/DDL、
@@ -456,7 +492,7 @@ SQLite 补齐 `ObjectsIn`/`ColumnsIn`/`ObjectDDLIn`（忽略 schema），与另�
   编辑提交、AI 补全/修复/改写。
 - `go func` 40 → 19；`a.win == nil` / `a.win != nil` 的裸判断已清零，
   只剩 `headless()` / `hasWindow()` 两个助手内部各一处。
-- 剩余 `headless()` 调用是针对流式事件/延迟保存/真实对话框的显式分支，不再是复制粘贴的异步模板。
+- **已接受**：剩余 `headless()` 调用是针对流式事件/延迟保存/真实对话框的显式分支，不再是复制粘贴的异步模板。
 - 单测覆盖 headless 同步、过期结果丢弃、panic 不崩、注入点生效。
 
 **证据**
@@ -546,22 +582,16 @@ fonts/theme/keymap，断言新 root 不读取、也不创建真实 history 目�
 
 ---
 
-## 建议执行顺序
+## 执行与验证
 
-| 波次 | 内容 | 前置 | 风险 |
-|---|---|---|---|
-| 1 | ARCH-01、02、03、05 | 无 | 低-中（修真实 bug） |
-| 2 | ARCH-04、06、07、08 | 波次 1 | 中（行为微调 + 大范围机械改） |
-| 3 | ARCH-09、10、14、16、18 | 波次 2 | 中（抽包/路径收敛） |
-| 4 | ARCH-11、12、13、15 | 波次 3，需拍板新包与注册表 | 中-高（跨驱动） |
-| 5 | ARCH-17、19 | 无 | 低 |
-
-每波完成后跑：
+五个波次均已完成；每次改动统一跑：
 
 ```bash
-CGO_ENABLED=0 go build ./... && CGO_ENABLED=0 go vet ./... && CGO_ENABLED=0 go test -p 1 ./...
-go tool mygo vet . && gofmt -l .
+make ci     # gofmt + gen-check + vet + mygo vet + l10n + go test -short -p 1
+make test   # 全量测试（含性能基准，需要安静机器）
 ```
+
+`-race` 不启用：项目强制 `CGO_ENABLED=0`，Go race detector 需要 cgo。
 
 ## 已经合理、建议保持的部分
 
