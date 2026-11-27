@@ -187,16 +187,16 @@ func (p ThemePrefs) Normalize() (ThemePrefs, []string) {
 
 // LoadThemePrefs 读外观设置；文件不存在用默认值，损坏时用默认值 + 警告。
 func LoadThemePrefs(path string) (ThemePrefs, string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultThemePrefs(), ""
-		}
-		return DefaultThemePrefs(), locales.AppThemeReadFailed(err.Error())
-	}
 	p := DefaultThemePrefs()
-	if err := json.Unmarshal(data, &p); err != nil {
+	found, err := loadJSONFile(path, &p)
+	if err != nil {
+		if !found {
+			return DefaultThemePrefs(), locales.AppThemeReadFailed(err.Error())
+		}
 		return DefaultThemePrefs(), locales.AppThemeCorrupt(err.Error())
+	}
+	if !found {
+		return DefaultThemePrefs(), ""
 	}
 	prefs, warn := p.Normalize()
 	if len(warn) > 0 {
@@ -225,18 +225,7 @@ func ExportThemePrefs(path string, p ThemePrefs) error {
 }
 
 func writeThemeFile(path string, f themeFile) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveJSONFile(path, f, 0o755)
 }
 
 // ImportThemePrefs 读取主题文件并校验：app 必须是 db-g（缺省容忍），

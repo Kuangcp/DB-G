@@ -1,8 +1,6 @@
 package app
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 
 	"db-g/engine"
@@ -62,33 +60,21 @@ func DefaultResultPrefsPath() string {
 
 // LoadResultPrefs 读结果设置；文件不存在或损坏时用默认值。
 func LoadResultPrefs(path string) (ResultPrefs, string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultResultPrefs(), ""
-		}
-		return DefaultResultPrefs(), locales.AppResultReadFailed(err.Error())
-	}
 	prefs := DefaultResultPrefs()
-	if err := json.Unmarshal(data, &prefs); err != nil {
+	found, err := loadJSONFile(path, &prefs)
+	if err != nil {
+		if !found {
+			return DefaultResultPrefs(), locales.AppResultReadFailed(err.Error())
+		}
 		return DefaultResultPrefs(), locales.AppResultCorrupt(err.Error())
+	}
+	if !found {
+		return DefaultResultPrefs(), ""
 	}
 	return NormalizeResultPrefs(prefs), ""
 }
 
 // SaveResultPrefs 写回结果设置（0600，先写临时文件再改名）。
 func SaveResultPrefs(path string, prefs ResultPrefs) error {
-	prefs = NormalizeResultPrefs(prefs)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(prefs, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveJSONFile(path, NormalizeResultPrefs(prefs), 0o755)
 }

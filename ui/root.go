@@ -171,38 +171,39 @@ func NewRoot() *root {
 // newRootWithStore 用指定连接库路径建根状态，并恢复上次激活的工作区、控制台、正文与光标。
 func newRootWithStore(storePath string) *root {
 	r := newRoot("")
-	r.settings.KeymapPath = app.DefaultKeymapPath()
+	paths := app.ConfigPathsForStore(storePath)
+	r.settings.KeymapPath = paths.Keymap()
 	if warn := r.loadKeymap(); warn != "" {
 		r.setSettingsNotice("keymap", warn, true)
 	}
 	r.applyEditorBindings()
-	r.settings.FontPrefsPath = app.DefaultFontPrefsPath()
+	r.settings.FontPrefsPath = paths.Fonts()
 	var fontWarn string
 	r.settings.FontPrefs, fontWarn = app.LoadFontPrefs(r.settings.FontPrefsPath)
 	if fontWarn != "" {
 		r.setSettingsNotice("font", fontWarn, true)
 	}
 	r.applyFontPrefs()
-	r.settings.ResultPrefsPath = filepath.Join(filepath.Dir(storePath), "results.json")
+	r.settings.ResultPrefsPath = paths.Results()
 	var resultWarn string
 	r.settings.ResultPrefs, resultWarn = app.LoadResultPrefs(r.settings.ResultPrefsPath)
 	if resultWarn != "" {
 		r.setSettingsNotice("result", resultWarn, true)
 	}
 	r.applyResultLimits()
-	r.settings.ConsolePrefsPath = filepath.Join(filepath.Dir(storePath), "console.json")
+	r.settings.ConsolePrefsPath = paths.Console()
 	var consoleWarn string
 	r.settings.ConsolePrefs, consoleWarn = app.LoadConsolePrefs(r.settings.ConsolePrefsPath)
 	if consoleWarn != "" {
 		r.setSettingsNotice("console", consoleWarn, true)
 	}
-	r.settings.ThemePath = app.DefaultThemePrefsPath()
+	r.settings.ThemePath = paths.Theme()
 	var themeWarn string
 	r.settings.ThemePrefs, themeWarn = app.LoadThemePrefs(r.settings.ThemePath)
 	if themeWarn != "" {
 		r.setSettingsNotice("theme", themeWarn, true)
 	}
-	r.settings.LocalePrefsPath = filepath.Join(filepath.Dir(storePath), "locale.json")
+	r.settings.LocalePrefsPath = paths.Locale()
 	var localePrefs app.LocalizationPrefs
 	var localeWarn string
 	localePrefs, localeWarn = app.LoadLocalePrefs(r.settings.LocalePrefsPath)
@@ -210,8 +211,8 @@ func newRootWithStore(storePath string) *root {
 		r.setSettingsNotice("locale", localeWarn, true)
 	}
 	r.settings.LocalePref = localePrefs.Locale
-	r.ai.PrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
-	r.gitSync.PrefsPath = filepath.Join(filepath.Dir(storePath), "sync.json")
+	r.ai.PrefsPath = paths.AI()
+	r.gitSync.PrefsPath = paths.Sync()
 	r.gitSync.Prefs, r.gitSync.Warn = app.LoadSyncPrefs(r.gitSync.PrefsPath)
 	if key, ok := app.LoadSyncKey(r.gitSync.PrefsPath); ok {
 		r.gitSync.KeySet = true
@@ -226,8 +227,8 @@ func newRootWithStore(storePath string) *root {
 		r.ai.Warn = warn
 	}
 	r.store = app.LoadStore(storePath)
-	r.tree.MetaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
-	r.history = app.OpenHistory(app.DefaultHistoryDir())
+	r.tree.MetaCache = app.NewMetaCache(paths.MetaDir())
+	r.history = app.OpenHistory(paths.HistoryDir())
 	if err := r.history.MigrateLegacy(filepath.Join(filepath.Dir(storePath), "history.jsonl")); err != nil {
 		app.LogWarn("history", "legacy migration failed", "err", err.Error())
 	}

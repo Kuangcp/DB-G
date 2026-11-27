@@ -1,8 +1,6 @@
 package app
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 
 	"db-g/locales"
@@ -46,33 +44,21 @@ func DefaultConsolePrefsPath() string {
 
 // LoadConsolePrefs 读控制台设置；文件不存在或损坏时用默认值。
 func LoadConsolePrefs(path string) (ConsolePrefs, string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultConsolePrefs(), ""
-		}
-		return DefaultConsolePrefs(), locales.AppConsolePrefsReadFailed(err.Error())
-	}
 	prefs := DefaultConsolePrefs()
-	if err := json.Unmarshal(data, &prefs); err != nil {
+	found, err := loadJSONFile(path, &prefs)
+	if err != nil {
+		if !found {
+			return DefaultConsolePrefs(), locales.AppConsolePrefsReadFailed(err.Error())
+		}
 		return DefaultConsolePrefs(), locales.AppConsolePrefsCorrupt(err.Error())
+	}
+	if !found {
+		return DefaultConsolePrefs(), ""
 	}
 	return NormalizeConsolePrefs(prefs), ""
 }
 
 // SaveConsolePrefs 写回控制台设置（0600，先写临时文件再改名）。
 func SaveConsolePrefs(path string, prefs ConsolePrefs) error {
-	prefs = NormalizeConsolePrefs(prefs)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(prefs, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveJSONFile(path, NormalizeConsolePrefs(prefs), 0o755)
 }

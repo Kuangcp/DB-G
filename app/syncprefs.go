@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -43,15 +42,15 @@ func LoadSyncPrefs(path string) (SyncPrefs, string) {
 	if strings.TrimSpace(path) == "" {
 		return prefs, ""
 	}
-	data, err := os.ReadFile(path)
+	found, err := loadJSONFile(path, &prefs)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return prefs, ""
+		if !found {
+			return prefs, locales.AppSyncPrefsReadFailed(err.Error())
 		}
-		return prefs, locales.AppSyncPrefsReadFailed(err.Error())
-	}
-	if err := json.Unmarshal(data, &prefs); err != nil {
 		return DefaultSyncPrefs(), locales.AppSyncPrefsCorrupt(err.Error())
+	}
+	if !found {
+		return prefs, ""
 	}
 	if strings.TrimSpace(prefs.Branch) == "" {
 		prefs.Branch = "main"
@@ -68,20 +67,7 @@ func SaveSyncPrefs(path string, prefs SyncPrefs) error {
 	if strings.TrimSpace(prefs.Branch) == "" {
 		prefs.Branch = "main"
 	}
-	data, err := json.MarshalIndent(prefs, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveJSONFile(path, prefs, 0o700)
 }
 
 // LoadSyncKey 读取本机同步密钥；不存在时 ok=false。

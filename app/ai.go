@@ -1,9 +1,6 @@
 package app
 
 import (
-	"encoding/json"
-	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -84,15 +81,15 @@ func LoadAIPrefs(path string, vault *Vault) (AIPrefs, string) {
 	if strings.TrimSpace(path) == "" {
 		return prefs, ""
 	}
-	data, err := os.ReadFile(path)
+	found, err := loadJSONFile(path, &prefs)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return prefs, ""
+		if !found {
+			return prefs, locales.AppAIReadFailed(err.Error())
 		}
-		return prefs, locales.AppAIReadFailed(err.Error())
-	}
-	if err := json.Unmarshal(data, &prefs); err != nil {
 		return DefaultAIPrefs(), locales.AppAICorrupt(err.Error())
+	}
+	if !found {
+		return prefs, ""
 	}
 	prefs = NormalizeAIPrefs(prefs)
 	if prefs.BaseURL == "" {
@@ -123,18 +120,5 @@ func SaveAIPrefs(path string, vault *Vault, prefs AIPrefs) error {
 	} else {
 		prefs.APIKeyEnc = ""
 	}
-	data, err := json.MarshalIndent(prefs, "", "  ")
-	if err != nil {
-		return err
-	}
-	if dir := filepath.Dir(path); dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return err
-		}
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveJSONFile(path, prefs, 0o700)
 }

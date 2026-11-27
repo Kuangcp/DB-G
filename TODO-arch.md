@@ -359,6 +359,14 @@ DDL 生成各说各话。
 
 ### ARCH-14 七个偏好文件各自重复实现 Load/Save
 
+**已完成（2026-11-27）**：
+- `app/preffile.go`：统一 `loadJSONFile` / `saveJSONFile`（原子写、0600、目录权限参数）。
+- 7 个偏好文件（字体/结果/控制台/主题/语言/同步/AI）全部改用共享读写，删除各自的
+  `ReadFile/Unmarshal/MkdirAll/MarshalIndent/.tmp/Rename` 复制。
+- `app/config_paths.go`：`ConfigPaths` 从配置根派生全部文件名；`newRootWithStore` 统一从
+  连接库所在目录取 keymap/fonts/results/console/theme/locale/ai/sync/meta/history。
+- 新增 `app/preffile_test.go` 与 `ui/config_paths_test.go`（后者同时覆盖原 ARCH-18 的真实配置泄漏）。
+
 **证据**：`app/fontprefs.go`、`app/resultprefs.go`、`app/consoleprefs.go`、`app/themeprefs.go`、
 `app/locale.go`、`app/syncprefs.go`、`app/ai.go` 各自重复「ReadFile → 不存在用默认 →
 Unmarshal → 本地化错误 → Normalize → MkdirAll → MarshalIndent → 写 `.tmp` → `0600` → Rename」。

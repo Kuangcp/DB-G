@@ -67,15 +67,15 @@ func NormalizeFontPrefs(p FontPrefs) FontPrefs {
 // 损坏时用默认值 + 警告。
 func LoadFontPrefs(path string) (FontPrefs, string) {
 	prefs := DefaultFontPrefs()
-	data, err := os.ReadFile(path)
+	found, err := loadJSONFile(path, &prefs)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return migrateLegacyEditorPrefs(path)
+		if !found {
+			return prefs, locales.AppFontReadFailed(err.Error())
 		}
-		return prefs, locales.AppFontReadFailed(err.Error())
-	}
-	if err := json.Unmarshal(data, &prefs); err != nil {
 		return DefaultFontPrefs(), locales.AppFontCorrupt(err.Error())
+	}
+	if !found {
+		return migrateLegacyEditorPrefs(path)
 	}
 	return NormalizeFontPrefs(prefs), ""
 }
@@ -108,17 +108,5 @@ func migrateLegacyEditorPrefs(path string) (FontPrefs, string) {
 
 // SaveFontPrefs 写回字体设置（0600，先写临时文件再改名）。
 func SaveFontPrefs(path string, prefs FontPrefs) error {
-	prefs = NormalizeFontPrefs(prefs)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(prefs, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveJSONFile(path, NormalizeFontPrefs(prefs), 0o755)
 }

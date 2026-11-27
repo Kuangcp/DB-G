@@ -1,8 +1,6 @@
 package app
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -51,16 +49,16 @@ func DefaultLocalePrefsPath() string {
 
 // LoadLocalePrefs 读语言偏好；文件不存在或损坏时用默认值（跟随系统）。
 func LoadLocalePrefs(path string) (LocalizationPrefs, string) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultLocalePrefs(), ""
-		}
-		return DefaultLocalePrefs(), locales.AppLocaleReadFailed(err.Error())
-	}
 	p := DefaultLocalePrefs()
-	if err := json.Unmarshal(data, &p); err != nil {
+	found, err := loadJSONFile(path, &p)
+	if err != nil {
+		if !found {
+			return DefaultLocalePrefs(), locales.AppLocaleReadFailed(err.Error())
+		}
 		return DefaultLocalePrefs(), locales.AppLocaleCorrupt(err.Error())
+	}
+	if !found {
+		return DefaultLocalePrefs(), ""
 	}
 	prefs, warn := NormalizeLocalePrefs(p)
 	return prefs, warn
@@ -69,16 +67,5 @@ func LoadLocalePrefs(path string) (LocalizationPrefs, string) {
 // SaveLocalePrefs 写回语言偏好（0600，先写临时文件再改名）。
 func SaveLocalePrefs(path string, p LocalizationPrefs) error {
 	prefs, _ := NormalizeLocalePrefs(p)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(prefs, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return saveJSONFile(path, prefs, 0o755)
 }
