@@ -884,13 +884,18 @@ func (a *root) setDDL(title, ddl string) {
 	if out, err := app.FormatSQL(ddl); err == nil {
 		text = out
 	}
-	a.ddlViewState().Buffer.Reset(text)
+	st := a.ddlViewState()
+	st.Buffer.Reset(text)
+	// 每次打开都从顶部看：编辑器状态跨弹窗复用，滚动位置不能跟着上一次的表走。
+	st.SetScrollY(0)
 }
 
 // setDDLNote 在弹窗里显示一行提示（不支持 / 读取失败），不做格式化。
 func (a *root) setDDLNote(title, msg string) {
 	a.ddlTitle, a.ddlText, a.ddlOpen = title, msg, true
-	a.ddlViewState().Buffer.Reset(msg)
+	st := a.ddlViewState()
+	st.Buffer.Reset(msg)
+	st.SetScrollY(0)
 }
 
 // ddlPanel 渲染 DDL 弹窗：只读 SQL 编辑器支持高亮与部分选中复制。

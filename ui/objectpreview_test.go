@@ -144,6 +144,28 @@ func TestShowDDLOpensPanel(t *testing.T) {
 	}
 }
 
+// DDL 弹窗复用同一个编辑器状态：换一张表再打开时必须回到顶部。
+func TestDDLReopenScrollsToTop(t *testing.T) {
+	a := newConsoleRoot(t)
+	var b strings.Builder
+	for range 200 {
+		b.WriteString("-- padding line\n")
+	}
+	a.setDDL("wide", b.String())
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	st := a.ddlViewState()
+	st.SetScrollY(300)
+	tt.Frame()
+	if st.ScrollY() == 0 {
+		t.Fatal("setup: long DDL should be scrollable")
+	}
+	a.setDDL("small", "CREATE TABLE t (id INT)")
+	if got := st.ScrollY(); got != 0 {
+		t.Fatalf("reopened DDL must start at top, got scrollY=%v", got)
+	}
+}
+
 // DDL 弹窗：正文格式化 + SQL 高亮 + 可选中部分复制。
 func TestDDLPanelFormatsAndSupportsPartialCopy(t *testing.T) {
 	a := newConsoleRoot(t)
