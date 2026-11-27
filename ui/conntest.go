@@ -57,16 +57,16 @@ func (a *root) testConnForm() {
 		start := time.Now()
 		sess, err := engine.Open(engineProfile(p))
 		if err != nil {
-			return locales.ConnTestFailed(err.Error()), true
+			return locales.ConnTestFailed(app.ErrorText(err)), true
 		}
 		defer sess.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), connTestTimeout)
 		defer cancel()
 		if err := sess.Open(ctx); err != nil {
-			return locales.ConnTestFailed(err.Error()), true
+			return locales.ConnTestFailed(app.ErrorText(err)), true
 		}
 		if _, err := sess.RunStatement(ctx, "SELECT 1"); err != nil {
-			return locales.ConnTestFailed(err.Error()), true
+			return locales.ConnTestFailed(app.ErrorText(err)), true
 		}
 		return locales.ConnTestOK(int(time.Since(start).Milliseconds())), false
 	}

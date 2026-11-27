@@ -339,7 +339,7 @@ func (a *root) loadServerInfo(connID string, sess engine.Session) {
 			if a.serverInfoErr == nil {
 				a.serverInfoErr = map[string]string{}
 			}
-			a.serverInfoErr[connID] = err.Error()
+			a.serverInfoErr[connID] = app.ErrorText(err)
 			return
 		}
 		if a.serverInfo == nil {
@@ -381,12 +381,12 @@ func (a *root) setSessionErr(connID string, err error, p app.ConnProfile) {
 	if a.sessionErr == nil {
 		a.sessionErr = map[string]string{}
 	}
-	a.sessionErr[connID] = err.Error()
+	a.sessionErr[connID] = app.ErrorText(err)
 	app.LogError("conn", "open failed", "kind", p.Kind, "name", p.Name,
 		"dsn", app.RedactDSN(p.Path), "err", err.Error())
 	// 顶栏原本固定显示一行错误，但现在打开的可能不是当前控制台的数据源：
 	// 用浮窗提示并自动消失，圆点/Tooltip 仍按数据源记着失败原因。
-	a.toastError(locales.ConnOpenFailed(p.Name, err.Error()))
+	a.toastError(locales.ConnOpenFailed(p.Name, app.ErrorText(err)))
 }
 
 // closeSession 关掉一个数据源的会话（LRU 淘汰、删除连接、退出时用）。
@@ -413,9 +413,6 @@ var cancelForceAfter = 3 * time.Second
 // 若宽限期内还没结束，强制把运行态作废并摘掉会话，避免 UI 永远停在“执行中”。
 func (a *root) stopActiveRuns() {
 	connID := a.activeConnID()
-	if sess := a.activeSession(); sess != nil {
-		sess.Cancel()
-	}
 	seen := map[*app.Console]bool{}
 	add := func(rt *app.Console) {
 		if rt == nil || !rt.Running() || seen[rt] {
@@ -613,9 +610,7 @@ func (a *root) disconnectConn(p app.ConnProfile) {
 	if !a.connected(p.ID) {
 		return
 	}
-	if sess := a.sessionFor(p.ID); sess != nil {
-		sess.Cancel()
-	}
+	a.cancelConnRuns(p.ID)
 	a.closeSession(p.ID, "user disconnect")
 	delete(a.sessionErr, p.ID)
 	if a.catalog != nil {
@@ -623,6 +618,24 @@ func (a *root) disconnectConn(p app.ConnProfile) {
 	}
 	a.markConnTreeStale(p.ID)
 	app.LogInfo("conn", "disconnect", "id", p.ID, "name", p.Name)
+}
+
+// cancelConnRuns 取消该数据源上正在执行的语句（断开/关闭连接前调用）。
+// 取消只走运行态自己的 context，不再有会话级取消槽。
+func (a *root) cancelConnRuns(connID string) {
+	for id, rt := range a.consoles {
+		if rt == nil || !rt.Running() {
+			continue
+		}
+		if a.runtimeConnID(id) == connID {
+			rt.Cancel()
+		}
+	}
+	for _, t := range a.viewerTabs {
+		if t != nil && t.connID == connID && t.rt != nil && t.rt.Running() {
+			t.rt.Cancel()
+		}
+	}
 }
 
 // markConnTreeStale 让某连接已加载的树分组在下次展开时替换首页，并丢掉计数。

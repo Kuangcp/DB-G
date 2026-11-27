@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"db-g/engine"
@@ -25,10 +24,9 @@ func init() {
 }
 
 type session struct {
-	path      string
-	db        *sql.DB
-	mu        sync.Mutex
-	curCancel atomic.Pointer[context.CancelFunc]
+	path string
+	db   *sql.DB
+	mu   sync.Mutex
 }
 
 func openSession(p engine.Profile) (engine.Session, error) {
@@ -70,40 +68,27 @@ func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return engine.ServerInfo{}, errors.New("sqlite: session not open")
+		return engine.ServerInfo{}, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	var version string
 	if err := s.db.QueryRowContext(ctx, "SELECT sqlite_version()").Scan(&version); err != nil {
 		return engine.ServerInfo{}, err
 	}
-	name := "内存"
+	name := s.path
 	if s.path != ":memory:" {
 		name = filepath.Base(s.path)
 	}
 	return engine.ServerInfo{Database: name, Version: version}, nil
 }
 
-func (s *session) Cancel() bool {
-	c := s.curCancel.Load()
-	if c == nil {
-		return false
-	}
-	(*c)()
-	return true
-}
-
 func (s *session) RunStatement(parent context.Context, query string) (*engine.QueryResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	ctx, cancel := context.WithCancel(parent)
-	s.curCancel.Store(&cancel)
-	defer func() {
-		cancel()
-		s.curCancel.Store(nil)
-	}()
+	defer cancel()
 	if isQueryLike(query) {
 		return s.query(ctx, query)
 	}
@@ -136,7 +121,7 @@ func isQueryLike(q string) bool {
 // Explain 返回 SQLite 的 EXPLAIN QUERY PLAN；SQLite 没有 EXPLAIN ANALYZE。
 func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
 	if opts.Analyze {
-		return nil, errors.New("sqlite 不支持 EXPLAIN ANALYZE")
+		return nil, engine.NewUserError(engine.ErrAnalyzeUnsupported, "")
 	}
 	return s.RunStatement(ctx, "EXPLAIN QUERY PLAN "+query)
 }
@@ -192,7 +177,7 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 		if len(out.Rows) == 1 || len(out.Rows)%64 == 0 {
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 		}
-		if total > engine.ResultBudgetBytes() {
+		if total > engine.ResultBudget(ctx) {
 			out.Truncated = true
 			break
 		}
@@ -242,7 +227,7 @@ func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.O
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT type, count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' GROUP BY type`)
@@ -278,7 +263,7 @@ func (s *session) ObjectsPage(ctx context.Context, _ string, kind engine.ObjectK
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	q := `SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name`
 	args := []any{t}
@@ -319,7 +304,7 @@ func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	rows, err := s.db.QueryContext(ctx, "PRAGMA table_info("+quoteIdent(table)+")")
 	if err != nil {
@@ -363,7 +348,7 @@ func (s *session) IndexesIn(ctx context.Context, _ string, table string) ([]engi
 
 func (s *session) indexesLocked(ctx context.Context, table string) ([]engine.Index, error) {
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	rows, err := s.db.QueryContext(ctx, "PRAGMA index_list("+quoteIdent(table)+")")
 	if err != nil {
@@ -457,7 +442,7 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return errors.New("sqlite: session not open")
+		return engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -500,7 +485,7 @@ func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name st
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return "", errors.New("sqlite: session not open")
+		return "", engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	var t string
 	switch kind {
@@ -521,12 +506,12 @@ func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name st
 	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("未找到 %s 的 DDL", name)
+			return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 		}
 		return "", err
 	}
 	if !ddl.Valid || ddl.String == "" {
-		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+		return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 	}
 	return ddl.String, nil
 }
@@ -550,7 +535,7 @@ func (s *session) Begin(ctx context.Context) (engine.Tx, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

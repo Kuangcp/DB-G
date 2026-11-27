@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"errors"
-
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
@@ -10,27 +8,29 @@ import (
 	"db-g/locales"
 )
 
-// exportProfiles 导出连接档案（不含密码）。
-func (a *root) exportProfiles(path string) (int, error) {
-	if a.store == nil {
-		return 0, errors.New(locales.ConnStoreUnavailable())
-	}
-	n, err := app.ExportProfiles(path, a.store.List(), false)
+// exportProfilesTo 只把连接档案写到文件，不读 root；list 由 UI 线程传入。
+func exportProfilesTo(path string, list []app.ConnProfile) (int, error) {
+	n, err := app.ExportProfiles(path, list, false)
 	if err == nil {
 		app.LogInfo("export", "profiles", "path", path, "count", n)
 	}
 	return n, err
 }
 
-// importProfiles 导入连接档案（去重 + 冲突 id 重映射），返回新增数量。
-func (a *root) importProfiles(path string) (int, error) {
-	if a.store == nil {
-		return 0, errors.New(locales.ConnStoreUnavailable())
-	}
-	added, err := app.ImportProfiles(path, a.store.List())
+// importProfilesFrom 只解析文件并去重，不碰 root；existing 由 UI 线程传入。
+func importProfilesFrom(path string, existing []app.ConnProfile) ([]app.ConnProfile, error) {
+	added, err := app.ImportProfiles(path, existing)
 	if err != nil {
 		app.LogWarn("import", "profiles failed", "path", path, "err", err.Error())
-		return 0, err
+		return nil, err
+	}
+	return added, nil
+}
+
+// applyImportedProfiles 在 UI 线程把导入结果写进连接库并刷新对象树。
+func (a *root) applyImportedProfiles(added []app.ConnProfile) int {
+	if a.store == nil {
+		return 0
 	}
 	n := 0
 	for _, p := range added {
@@ -41,8 +41,8 @@ func (a *root) importProfiles(path string) (int, error) {
 		n++
 	}
 	a.reloadTree()
-	app.LogInfo("import", "profiles", "path", path, "count", n)
-	return n, nil
+	app.LogInfo("import", "profiles", "count", n)
+	return n
 }
 
 // pickExportProfiles 弹保存框导出连接档案。
@@ -51,12 +51,17 @@ func (a *root) pickExportProfiles() {
 	if win == nil {
 		return
 	}
+	if a.store == nil {
+		a.toastError(locales.ConnStoreUnavailable())
+		return
+	}
+	list := a.store.List()
 	go func() {
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: win, Title: locales.ProfileExport(), DefaultPath: "connections.json"})
 		if err != nil || path == "" {
 			return
 		}
-		n, err := a.exportProfiles(path)
+		n, err := exportProfilesTo(path, list)
 		a.safeUpdate(win, func() {
 			if err != nil {
 				a.consoleErr = locales.ProfileExportFailed(err.Error())
@@ -73,18 +78,23 @@ func (a *root) pickImportProfiles() {
 	if win == nil {
 		return
 	}
+	if a.store == nil {
+		a.toastError(locales.ConnStoreUnavailable())
+		return
+	}
+	existing := a.store.List()
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: win, Title: locales.ProfileImport()})
 		if err != nil || len(paths) == 0 {
 			return
 		}
-		n, err := a.importProfiles(paths[0])
+		added, err := importProfilesFrom(paths[0], existing)
 		a.safeUpdate(win, func() {
 			if err != nil {
 				a.consoleErr = locales.ProfileImportFailed(err.Error())
 				return
 			}
-			a.consoleErr = locales.ProfileImported(n)
+			a.consoleErr = locales.ProfileImported(a.applyImportedProfiles(added))
 		})
 	}()
 }

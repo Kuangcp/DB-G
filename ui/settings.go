@@ -9,7 +9,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
-	"db-g/engine"
 	"db-g/locales"
 )
 
@@ -298,7 +297,7 @@ func (a *root) resultSection(c *ui.Context) {
 func (a *root) setResultPrefs(p app.ResultPrefs) {
 	p = app.NormalizeResultPrefs(p)
 	a.resultPrefs = p
-	engine.SetResultBudgetMB(p.BudgetMB)
+	a.applyResultLimits()
 	if a.resultPrefsPath == "" {
 		return
 	}
@@ -722,25 +721,29 @@ func (a *root) appearanceSection(c *ui.Context) {
 	}
 }
 
-// exportThemeTo 把当前外观写到文件（对话框之外的实现；测试直接调用）。
-func (a *root) exportThemeTo(path string) error {
-	return app.ExportThemePrefs(path, a.themePrefs)
+// exportThemeFile 只把主题写到文件，不读 root。
+func exportThemeFile(path string, prefs app.ThemePrefs) error {
+	return app.ExportThemePrefs(path, prefs)
 }
 
-// importThemeFrom 读入主题文件并应用；返回被忽略项说明。
-func (a *root) importThemeFrom(path string) ([]string, error) {
+// importThemeFile 只解析主题文件，不应用；warn 是被忽略项说明。
+func importThemeFile(path string) (app.ThemePrefs, []string, error) {
 	prefs, warn, err := app.ImportThemePrefs(path)
 	if err != nil {
-		return nil, err
+		return app.ThemePrefs{}, nil, err
 	}
+	return prefs, warn, nil
+}
+
+// applyImportedTheme 在 UI 线程应用导入的主题并给出提示。
+func (a *root) applyImportedTheme(prefs app.ThemePrefs, warn []string) {
 	a.themeHex, a.themeHexErr = "", ""
 	a.paletteLoaded, a.paletteErr = false, ""
 	a.setThemePrefs(prefs)
 	if len(warn) > 0 {
 		a.themeWarn = locales.SettingsImported(strings.Join(warn, "；"))
 	}
-	app.LogInfo("startup", "theme imported", "path", path)
-	return warn, nil
+	app.LogInfo("startup", "theme imported")
 }
 
 // pickExportTheme 弹保存对话框导出主题。
@@ -749,6 +752,7 @@ func (a *root) pickExportTheme() {
 	if win == nil {
 		return
 	}
+	prefs := a.themePrefs
 	go func() {
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
 			Parent: win, Title: locales.SettingsExportThemeTitle(), DefaultPath: "db-g-theme.json",
@@ -756,7 +760,7 @@ func (a *root) pickExportTheme() {
 		if err != nil || path == "" {
 			return
 		}
-		err = a.exportThemeTo(path)
+		err = exportThemeFile(path, prefs)
 		a.safeUpdate(win, func() {
 			if err != nil {
 				a.themeWarn = locales.SettingsExportFailed(err.Error())
@@ -778,11 +782,13 @@ func (a *root) pickImportTheme() {
 		if err != nil || len(paths) == 0 {
 			return
 		}
-		_, err = a.importThemeFrom(paths[0])
+		prefs, warn, err := importThemeFile(paths[0])
 		a.safeUpdate(win, func() {
 			if err != nil {
 				a.themeWarn = locales.SettingsImportFailed(err.Error())
+				return
 			}
+			a.applyImportedTheme(prefs, warn)
 		})
 	}()
 }

@@ -91,7 +91,7 @@ func (a *root) runExplain(analyze bool) {
 	done := func(res *engine.QueryResult, err error) {
 		a.plan.loading = false
 		if err != nil {
-			a.plan.err = err.Error()
+			a.plan.err = app.ErrorText(err)
 			return
 		}
 		a.plan.raw = planRaw(res)

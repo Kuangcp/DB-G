@@ -3,12 +3,10 @@ package mysql
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"db-g/engine"
@@ -23,12 +21,11 @@ func init() {
 }
 
 type session struct {
-	cfg       *mysql.Config
-	db        *sql.DB
-	mu        sync.Mutex
-	curCancel atomic.Pointer[context.CancelFunc]
-	schema    string // 期望的当前库（UseSchema 设置）
-	applied   string // 已应用到连接池的库
+	cfg     *mysql.Config
+	db      *sql.DB
+	mu      sync.Mutex
+	schema  string // 期望的当前库（UseSchema 设置）
+	applied string // 已应用到连接池的库
 }
 
 func openSession(p engine.Profile) (engine.Session, error) {
@@ -38,7 +35,7 @@ func openSession(p engine.Profile) (engine.Session, error) {
 	cfg.Net = "tcp"
 	addr := p.Host
 	if addr == "" {
-		return nil, errors.New("mysql: 主机不能为空")
+		return nil, engine.NewUserError(engine.ErrHostRequired, "")
 	}
 	if p.Port > 0 {
 		addr += ":" + strconv.Itoa(p.Port)
@@ -94,7 +91,7 @@ func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return engine.ServerInfo{}, errors.New("mysql: session not open")
+		return engine.ServerInfo{}, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	var version string
 	var database sql.NullString
@@ -102,15 +99,6 @@ func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
 		return engine.ServerInfo{}, err
 	}
 	return engine.ServerInfo{Database: database.String, Version: version}, nil
-}
-
-func (s *session) Cancel() bool {
-	c := s.curCancel.Load()
-	if c == nil {
-		return false
-	}
-	(*c)()
-	return true
 }
 
 // Explain 返回 MySQL 的 JSON 计划；ANALYZE 走 EXPLAIN ANALYZE（TREE 输出）。
@@ -125,14 +113,10 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	ctx, cancel := context.WithCancel(parent)
-	s.curCancel.Store(&cancel)
-	defer func() {
-		cancel()
-		s.curCancel.Store(nil)
-	}()
+	defer cancel()
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return nil, err
 	}
@@ -233,7 +217,7 @@ func (s *session) query(ctx context.Context, query string) (*engine.QueryResult,
 		if len(out.Rows) == 1 || len(out.Rows)%64 == 0 {
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 		}
-		if total > engine.ResultBudgetBytes() {
+		if total > engine.ResultBudget(ctx) {
 			out.Truncated, cutOff = true, true
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 			break
@@ -279,7 +263,7 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	const q = `SELECT schema_name FROM information_schema.schemata
 		WHERE schema_name NOT IN ('mysql','information_schema','performance_schema','sys') ORDER BY 1`
@@ -316,7 +300,7 @@ func (s *session) UseSchema(ctx context.Context, schema string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return errors.New("mysql: session not open")
+		return engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	s.schema = schema
 	return s.applySchemaLocked(ctx)
@@ -327,7 +311,7 @@ func (s *session) ActiveSchema(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return "", errors.New("mysql: session not open")
+		return "", engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if s.schema != "" {
 		return s.schema, nil
@@ -351,14 +335,14 @@ func (s *session) schemaLocked(ctx context.Context, schema string) (string, erro
 		return s.schema, nil
 	}
 	if s.cfg.DBName == "" {
-		return "", errors.New("mysql: 未选择数据库")
+		return "", engine.NewUserError(engine.ErrNoDatabaseSelected, "")
 	}
 	var name sql.NullString
 	if err := s.db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&name); err != nil {
 		return "", err
 	}
 	if !name.Valid || name.String == "" {
-		return "", errors.New("mysql: 未选择数据库")
+		return "", engine.NewUserError(engine.ErrNoDatabaseSelected, "")
 	}
 	return name.String, nil
 }
@@ -381,7 +365,7 @@ func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.O
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -426,7 +410,7 @@ func (s *session) ObjectsPage(ctx context.Context, schema string, kind engine.Ob
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -486,7 +470,7 @@ func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine
 
 func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -537,7 +521,7 @@ func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine
 
 func (s *session) indexesLocked(ctx context.Context, schema, table string) ([]engine.Index, error) {
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -590,7 +574,7 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return errors.New("mysql: session not open")
+		return engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return err
@@ -647,7 +631,7 @@ func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.Ob
 
 func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
 	if s.db == nil {
-		return "", errors.New("mysql: session not open")
+		return "", engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -661,7 +645,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 	case engine.ObjectView:
 		q = "SHOW CREATE VIEW " + quoted
 	default:
-		return "", errors.New("mysql: 该对象不支持查看 DDL")
+		return "", engine.NewUserError(engine.ErrDDLUnsupported, "")
 	}
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
@@ -673,7 +657,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 		return "", err
 	}
 	if !rows.Next() {
-		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+		return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 	}
 	vals := make([]any, len(cols))
 	ptrs := make([]any, len(cols))
@@ -702,7 +686,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 	case []byte:
 		return string(t), nil
 	}
-	return "", fmt.Errorf("未找到 %s 的 DDL", name)
+	return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 }
 
 // txWrap 把 database/sql 事务包成 engine.Tx。
@@ -724,7 +708,7 @@ func (s *session) Begin(ctx context.Context) (engine.Tx, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return nil, err

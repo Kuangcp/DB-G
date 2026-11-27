@@ -73,7 +73,7 @@ func (a *root) ensureSchemas(p app.ConnProfile) {
 			return
 		}
 		if err != nil {
-			a.setTreeErr(p.ID, err.Error())
+			a.setTreeErr(p.ID, app.ErrorText(err))
 			return
 		}
 		if len(schemas) == 0 {
@@ -143,7 +143,7 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 			if a.connSchema[p.ID] == schema {
 				a.connSchema[p.ID] = prev
 			}
-			a.consoleErr = locales.SchemaSwitchFailed(err.Error())
+			a.consoleErr = locales.SchemaSwitchFailed(app.ErrorText(err))
 			app.LogWarn("conn", "schema switch failed", "conn", p.ID, "schema", schema, "err", err.Error())
 			return
 		}

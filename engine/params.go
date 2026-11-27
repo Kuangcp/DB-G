@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -20,7 +19,7 @@ func Params(raw string) (map[string]string, error) {
 		k, v, ok := strings.Cut(tok, "=")
 		k = strings.TrimSpace(k)
 		if !ok || k == "" {
-			return nil, fmt.Errorf("参数格式应为 key=value：%q", tok)
+			return nil, NewUserError(ErrParamsFormat, tok)
 		}
 		out[k] = strings.TrimSpace(v)
 	}

@@ -629,7 +629,7 @@ func (a *root) syncAIChat() {
 	}
 	changed := !sameAIMessageList(conv.Messages, next)
 	conv.Messages = next
-	if conv.Title == "" || conv.Title == "新会话" || conv.Title == locales.AiNewConversation() {
+	if !conv.TitleLocked {
 		if title := app.AIConversationTitle(conv.Messages); title != "" {
 			conv.Title = title
 		}
@@ -694,6 +694,7 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 		for i := range a.aiChat.store.Conversations {
 			if a.aiChat.store.Conversations[i].ID == convID {
 				a.aiChat.store.Conversations[i].Title = title
+				a.aiChat.store.Conversations[i].TitleLocked = true
 				a.aiChat.store.Conversations[i].UpdatedAt = time.Now().UnixMilli()
 				break
 			}

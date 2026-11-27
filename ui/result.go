@@ -159,7 +159,7 @@ func (a *root) resultPane(c *ui.Context) {
 					return
 				}
 				if r.Truncated {
-					ui.Badge(c, locales.ResultTruncated(engine.ResultBudgetBytes()>>20))
+					ui.Badge(c, locales.ResultTruncated(a.resultPrefs.BudgetMB))
 				}
 				a.resultTable(c, r)
 			default:

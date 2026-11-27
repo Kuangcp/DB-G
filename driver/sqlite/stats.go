@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strconv"
 	"strings"
 
@@ -21,10 +20,10 @@ func (s *session) ObjectStatsIn(ctx context.Context, _ string, kind engine.Objec
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if kind != engine.ObjectTable {
-		return nil, errors.New("sqlite: 仅表支持查看统计")
+		return nil, engine.NewUserError(engine.ErrStatsTableOnly, "")
 	}
 	stats := &engine.ObjectStats{}
 	lit := quoteLiteral(name)

@@ -2,7 +2,6 @@ package mysql
 
 import (
 	"context"
-	"errors"
 
 	"db-g/engine"
 )
@@ -12,7 +11,7 @@ func (s *session) ForeignKeys(ctx context.Context, schema, table string) ([]engi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("mysql: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {

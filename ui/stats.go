@@ -33,7 +33,7 @@ func (a *root) showStats(p app.ConnProfile, o engine.DBObject) {
 	a.stats, a.statsErr, a.statsSQLOpen = nil, "", false
 	a.connectAsync(p, func(err error) {
 		if err != nil {
-			a.setStatsNote(err.Error())
+			a.setStatsNote(app.ErrorText(err))
 			return
 		}
 		a.loadStats(p, o)
@@ -68,7 +68,7 @@ func (a *root) loadStats(p app.ConnProfile, o engine.DBObject) {
 		}
 		apply := func() {
 			if err != nil {
-				a.setStatsNote(locales.StatsFailed(err.Error()))
+				a.setStatsNote(locales.StatsFailed(app.ErrorText(err)))
 				app.LogWarn("catalog", "stats load failed", "object", o.Name, "err", err.Error())
 				return
 			}

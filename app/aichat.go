@@ -24,11 +24,22 @@ type AIMessageRecord struct {
 
 // AIConversation 是一段 AI 会话。
 type AIConversation struct {
-	ID        string            `json:"id"`
-	Title     string            `json:"title,omitempty"`
-	CreatedAt int64             `json:"createdAt,omitempty"`
-	UpdatedAt int64             `json:"updatedAt,omitempty"`
-	Messages  []AIMessageRecord `json:"messages"`
+	ID          string            `json:"id"`
+	Title       string            `json:"title,omitempty"`
+	TitleLocked bool              `json:"titleLocked,omitempty"` // 手工/AI 起的标题，不再按首条消息自动覆盖
+	CreatedAt   int64             `json:"createdAt,omitempty"`
+	UpdatedAt   int64             `json:"updatedAt,omitempty"`
+	Messages    []AIMessageRecord `json:"messages"`
+}
+
+// legacyDefaultTitle 是旧版本可能持久化过的本地化默认标题；
+// 只用于加载时迁移，业务逻辑不再与任何语言的默认文案比较。
+func legacyDefaultTitle(title string) bool {
+	switch title {
+	case "新会话", "New chat":
+		return true
+	}
+	return false
 }
 
 // AIConversationStore 是一个工作区的全部会话。
@@ -144,8 +155,15 @@ func LoadAIConversations(path string) (AIConversationStore, string) {
 			conv.ID = NewAIConversationID()
 		}
 		seen[conv.ID] = true
-		if conv.Title == "" {
-			conv.Title = AIConversationTitle(conv.Messages)
+		derived := AIConversationTitle(conv.Messages)
+		switch {
+		case conv.Title == "" || legacyDefaultTitle(conv.Title):
+			conv.Title = derived
+		case derived != "" && conv.Title == derived:
+			// 旧版本按首条消息自动生成，保持可继续更新。
+		case conv.Title != "":
+			// 手工或 AI 起的标题：旧数据没有标记，加载时补上，避免被首条消息覆盖。
+			conv.TitleLocked = true
 		}
 	}
 	if !seen[store.ActiveID] {

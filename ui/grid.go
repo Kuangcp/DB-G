@@ -74,7 +74,7 @@ func (a *root) activeViewerTab() *viewerTab {
 func (a *root) gridRuntime() *app.Console {
 	if t := a.activeViewerTab(); t != nil {
 		if t.rt == nil {
-			t.rt = app.NewConsole()
+			t.rt = a.newConsole()
 		}
 		return t.rt
 	}

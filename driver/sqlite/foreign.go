@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"db-g/engine"
 )
@@ -13,7 +12,7 @@ func (s *session) ForeignKeys(ctx context.Context, _ string, table string) ([]en
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("sqlite: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	rows, err := s.db.QueryContext(ctx, "PRAGMA foreign_key_list("+quoteIdent(table)+")")
 	if err != nil {

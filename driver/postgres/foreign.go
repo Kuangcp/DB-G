@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"errors"
 
 	"db-g/engine"
 )
@@ -12,14 +11,14 @@ func (s *session) ForeignKeys(ctx context.Context, schema, table string) ([]engi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
 		return nil, err
 	}
 	if schema == "" {
-		return nil, errors.New("postgres: 未选择 schema")
+		return nil, engine.NewUserError(engine.ErrNoSchemaSelected, "")
 	}
 	const q = `
 SELECT a.attname, fn.nspname, fc.relname, fa.attname

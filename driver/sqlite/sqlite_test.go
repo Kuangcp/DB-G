@@ -109,9 +109,10 @@ func TestNotOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.RunStatement(context.Background(), "SELECT 1"); err == nil ||
-		!strings.Contains(err.Error(), "not open") {
-		t.Fatalf("err = %v, want not open", err)
+	if _, err := s.RunStatement(context.Background(), "SELECT 1"); err == nil {
+		t.Fatal("want session closed")
+	} else if ue, ok := engine.AsUserError(err); !ok || ue.Code != engine.ErrSessionClosed {
+		t.Fatalf("want ErrSessionClosed, got %v", err)
 	}
 }
 
@@ -125,9 +126,12 @@ func TestOpenMissingFile(t *testing.T) {
 	}
 }
 
-func TestCancelIdle(t *testing.T) {
-	if newMemSession(t).Cancel() {
-		t.Fatal("idle Cancel must return false")
+func TestCancelBeforeRun(t *testing.T) {
+	s := newMemSession(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.RunStatement(ctx, "SELECT 1"); err == nil {
+		t.Fatal("canceled context must fail")
 	}
 }
 
@@ -136,33 +140,42 @@ func TestCancelRunning(t *testing.T) {
 	if _, err := s.RunStatement(context.Background(), "CREATE TABLE n (i INTEGER)"); err != nil {
 		t.Fatal(err)
 	}
+	started := make(chan struct{})
+	ctx, cancel := context.WithCancel(engine.WithProgress(context.Background(), func(p engine.QueryProgress) {
+		if p.Rows > 0 {
+			select {
+			case <-started:
+			default:
+				close(started)
+			}
+		}
+	}))
+	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, err := s.RunStatement(context.Background(),
-			"WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM c WHERE i<2000000000) SELECT count(*) FROM c")
+		_, err := s.RunStatement(ctx,
+			"WITH RECURSIVE c(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM c WHERE i<2000000000) SELECT i FROM c")
 		done <- err
 	}()
-	deadline := time.Now().Add(2 * time.Second)
-	for !s.Cancel() {
-		if time.Now().After(deadline) {
-			t.Fatal("Cancel never observed a running statement")
-		}
-		time.Sleep(2 * time.Millisecond)
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("statement never reported progress")
 	}
+	cancel()
 	select {
 	case err := <-done:
 		if err == nil {
 			t.Fatal("canceled statement must return an error")
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("statement did not stop after Cancel")
+		t.Fatal("statement did not stop after cancel")
 	}
 }
 
 func TestCellAndResultBudget(t *testing.T) {
-	engine.SetResultBudgetMB(16)
-	t.Cleanup(func() { engine.SetResultBudgetMB(engine.DefaultResultBudgetMB) })
 	ctx := context.Background()
+	budgetCtx := engine.WithResultBudget(ctx, 16)
 	s := newMemSession(t)
 	if _, err := s.RunStatement(ctx, "CREATE TABLE c (v TEXT)"); err != nil {
 		t.Fatal(err)
@@ -171,7 +184,7 @@ func TestCellAndResultBudget(t *testing.T) {
 	if _, err := s.RunStatement(ctx, "INSERT INTO c (v) VALUES ('"+huge+"')"); err != nil {
 		t.Fatal(err)
 	}
-	q, err := s.RunStatement(ctx, "SELECT v FROM c")
+	q, err := s.RunStatement(budgetCtx, "SELECT v FROM c")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +202,7 @@ func TestCellAndResultBudget(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q, err = s.RunStatement(ctx, "SELECT v FROM c")
+	q, err = s.RunStatement(budgetCtx, "SELECT v FROM c")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +547,7 @@ func TestServerInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Database != "内存" {
+	if info.Database != ":memory:" {
 		t.Fatalf("database = %q", info.Database)
 	}
 	if !strings.HasPrefix(info.Version, "3.") {

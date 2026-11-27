@@ -21,11 +21,14 @@ type Profile struct {
 }
 
 // Session 是协议无关的数据源会话契约；实现由 driver 包提供。
+//
+// 并发契约：同一 Session 上的 RunStatement 由驱动内部串行化；调用方可以并发提交，
+// 但会排队。取消只通过传给 RunStatement 的 context 完成，驱动不得依赖会话级取消槽。
+// Close 时若仍有语句在跑，驱动应尽量让 Close 返回而不是永久阻塞。
 type Session interface {
 	Open(ctx context.Context) error
 	Close() error
 	RunStatement(ctx context.Context, sql string) (*QueryResult, error)
-	Cancel() bool
 	Caps() Capabilities
 }
 

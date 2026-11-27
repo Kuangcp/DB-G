@@ -350,9 +350,10 @@ func newRoot(text string) *root {
 		extFiles:         map[string]*extFile{},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
+	a.con.SetPageSize(a.resultPrefs.PageSize)
+	a.con.SetResultBudgetMB(a.resultPrefs.BudgetMB)
 	a.resView = newResultView()
 	a.pageStates = map[string]*pageState{}
-	engine.SetResultBudgetMB(app.DefaultResultBudgetMB)
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
@@ -385,7 +386,7 @@ func newRootWithStore(storePath string) *root {
 	r.applyFontPrefs()
 	r.resultPrefsPath = filepath.Join(filepath.Dir(storePath), "results.json")
 	r.resultPrefs, r.resultPrefsWarn = app.LoadResultPrefs(r.resultPrefsPath)
-	engine.SetResultBudgetMB(r.resultPrefs.BudgetMB)
+	r.applyResultLimits()
 	r.consolePrefsPath = filepath.Join(filepath.Dir(storePath), "console.json")
 	r.consolePrefs, r.consolePrefsWarn = app.LoadConsolePrefs(r.consolePrefsPath)
 	r.themePath = app.DefaultThemePrefsPath()
@@ -471,12 +472,40 @@ func (a *root) execDoneLogger(consoleID string) func(*engine.QueryResult, string
 	}
 }
 
+// newConsole 创建一个带当前结果设置（页大小/预算）的运行态。
+func (a *root) newConsole() *app.Console {
+	c := app.NewConsole()
+	c.SetPageSize(a.resultPrefs.PageSize)
+	c.SetResultBudgetMB(a.resultPrefs.BudgetMB)
+	return c
+}
+
+// applyResultLimits 把结果设置下发给所有已存在的运行态（含表视图）。
+func (a *root) applyResultLimits() {
+	set := func(c *app.Console) {
+		if c == nil {
+			return
+		}
+		c.SetPageSize(a.resultPrefs.PageSize)
+		c.SetResultBudgetMB(a.resultPrefs.BudgetMB)
+	}
+	set(a.con)
+	for _, c := range a.consoles {
+		set(c)
+	}
+	for _, t := range a.viewerTabs {
+		if t != nil {
+			set(t.rt)
+		}
+	}
+}
+
 // runtime 返回某控制台的执行运行态（懒创建，结果按控制台各自保留）。
 func (a *root) runtime(id string) *app.Console {
 	if c, ok := a.consoles[id]; ok {
 		return c
 	}
-	c := app.NewConsole()
+	c := a.newConsole()
 	c.SetOnDone(a.execDoneLogger(id))
 	if a.win != nil {
 		win := a.win

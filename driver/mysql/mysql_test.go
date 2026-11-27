@@ -58,8 +58,10 @@ func TestIsQueryLikeMySQL(t *testing.T) {
 
 func TestObjectsErrors(t *testing.T) {
 	s := &session{cfg: newTestConfig()}
-	if _, err := s.Objects(context.Background(), engine.ObjectTable); err == nil || err.Error() != "mysql: session not open" {
-		t.Fatalf("want session not open, got %v", err)
+	if _, err := s.Objects(context.Background(), engine.ObjectTable); err == nil {
+		t.Fatal("want session not open")
+	} else if ue, ok := engine.AsUserError(err); !ok || ue.Code != engine.ErrSessionClosed {
+		t.Fatalf("want ErrSessionClosed, got %v", err)
 	}
 	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:1)/")
 	if err != nil {
@@ -67,8 +69,10 @@ func TestObjectsErrors(t *testing.T) {
 	}
 	defer db.Close()
 	s2 := &session{cfg: newTestConfig(), db: db}
-	if _, err := s2.Objects(context.Background(), engine.ObjectTable); err == nil || err.Error() != "mysql: 未选择数据库" {
-		t.Fatalf("want 未选择数据库, got %v", err)
+	if _, err := s2.Objects(context.Background(), engine.ObjectTable); err == nil {
+		t.Fatal("want no database selected")
+	} else if ue, ok := engine.AsUserError(err); !ok || ue.Code != engine.ErrNoDatabaseSelected {
+		t.Fatalf("want ErrNoDatabaseSelected, got %v", err)
 	}
 	s2.cfg.DBName = "app"
 	if _, err := s2.Objects(context.Background(), engine.ObjectKind(99)); err == nil {

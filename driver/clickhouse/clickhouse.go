@@ -4,12 +4,10 @@ package clickhouse
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"db-g/engine"
@@ -25,12 +23,11 @@ const maxCellBytes = 1 << 20
 func init() { engine.Register("clickhouse", openSession) }
 
 type session struct {
-	dsn       string
-	db        *sql.DB
-	mu        sync.Mutex
-	curCancel atomic.Pointer[context.CancelFunc]
-	schema    string // 期望的当前库（UseSchema 设置）
-	applied   string // 已应用到连接池的库
+	dsn     string
+	db      *sql.DB
+	mu      sync.Mutex
+	schema  string // 期望的当前库（UseSchema 设置）
+	applied string // 已应用到连接池的库
 }
 
 // schemeFor 把连接协议换成 DSN 的 scheme：clickhouse-go 靠它决定走 native 还是
@@ -109,7 +106,7 @@ func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return engine.ServerInfo{}, errors.New("clickhouse: session not open")
+		return engine.ServerInfo{}, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	var version, database string
 	if err := s.db.QueryRowContext(ctx, "SELECT version(), currentDatabase()").Scan(&version, &database); err != nil {
@@ -118,19 +115,10 @@ func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
 	return engine.ServerInfo{Database: database, Version: version}, nil
 }
 
-func (s *session) Cancel() bool {
-	c := s.curCancel.Load()
-	if c == nil {
-		return false
-	}
-	(*c)()
-	return true
-}
-
 // Explain 返回 ClickHouse 的 JSON 计划；暂不执行 EXPLAIN ANALYZE。
 func (s *session) Explain(ctx context.Context, query string, opts engine.ExplainOptions) (*engine.QueryResult, error) {
 	if opts.Analyze {
-		return nil, errors.New("clickhouse 暂不支持 EXPLAIN ANALYZE")
+		return nil, engine.NewUserError(engine.ErrAnalyzeUnsupported, "")
 	}
 	return s.RunStatement(ctx, "EXPLAIN json=1 "+query)
 }
@@ -139,14 +127,10 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("clickhouse: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	ctx, cancel := context.WithCancel(parent)
-	s.curCancel.Store(&cancel)
-	defer func() {
-		cancel()
-		s.curCancel.Store(nil)
-	}()
+	defer cancel()
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return nil, err
 	}
@@ -213,7 +197,7 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 		if len(out.Rows) == 1 || len(out.Rows)%64 == 0 {
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 		}
-		if total > engine.ResultBudgetBytes() {
+		if total > engine.ResultBudget(ctx) {
 			out.Truncated, cutOff = true, true
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 			break
@@ -254,7 +238,7 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("clickhouse: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT name FROM system.databases WHERE name NOT IN ('system','INFORMATION_SCHEMA','information_schema') ORDER BY name`)
 	if err != nil {
@@ -289,7 +273,7 @@ func (s *session) UseSchema(ctx context.Context, schema string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return errors.New("clickhouse: session not open")
+		return engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	s.schema = schema
 	return s.applySchemaLocked(ctx)
@@ -300,7 +284,7 @@ func (s *session) ActiveSchema(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return "", errors.New("clickhouse: session not open")
+		return "", engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if s.schema != "" {
 		return s.schema, nil
@@ -349,7 +333,7 @@ func (s *session) ObjectCounts(ctx context.Context, database string) (map[engine
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("clickhouse: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	database, err := s.schemaLocked(ctx, database)
 	if err != nil {
@@ -388,7 +372,7 @@ func (s *session) ObjectsPage(ctx context.Context, database string, kind engine.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("clickhouse: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	database, err = s.schemaLocked(ctx, database)
 	if err != nil {
@@ -447,10 +431,10 @@ func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.Ob
 
 func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
 	if s.db == nil {
-		return "", errors.New("clickhouse: session not open")
+		return "", engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if kind != engine.ObjectTable && kind != engine.ObjectView {
-		return "", errors.New("clickhouse: 该对象不支持查看 DDL")
+		return "", engine.NewUserError(engine.ErrDDLUnsupported, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -471,7 +455,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 		return "", err
 	}
 	if !rows.Next() {
-		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+		return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 	}
 	vals := make([]any, len(cols))
 	ptrs := make([]any, len(cols))
@@ -489,7 +473,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 			return string(t), nil
 		}
 	}
-	return "", fmt.Errorf("未找到 %s 的 DDL", name)
+	return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 }
 
 func quoteIdent(name string) string {
@@ -515,7 +499,7 @@ func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine
 
 func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	if s.db == nil {
-		return nil, errors.New("clickhouse: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	database, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -554,7 +538,7 @@ func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine
 
 func (s *session) indexesLocked(ctx context.Context, schema, table string) ([]engine.Index, error) {
 	if s.db == nil {
-		return nil, errors.New("clickhouse: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	database, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -582,7 +566,7 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return errors.New("clickhouse: session not open")
+		return engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return err

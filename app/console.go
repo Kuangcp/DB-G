@@ -27,10 +27,11 @@ type Console struct {
 	progBytes int64
 	progAt    time.Time
 	pageSize  int
+	budgetMB  int
 }
 
 func NewConsole() *Console {
-	return &Console{publish: func(func()) {}, pageSize: engine.DefaultPageSize}
+	return &Console{publish: func(func()) {}, pageSize: engine.DefaultPageSize, budgetMB: engine.DefaultResultBudgetMB}
 }
 
 // SetPageSize 设置本运行态执行语句时单页读取的行数。
@@ -48,6 +49,26 @@ func (c *Console) PageSize() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.pageSize
+}
+
+// SetResultBudgetMB 设置本运行态执行语句时的结果大小预算（MB）。
+func (c *Console) SetResultBudgetMB(mb int) {
+	if mb < engine.MinResultBudgetMB {
+		mb = engine.MinResultBudgetMB
+	}
+	if mb > engine.MaxResultBudgetMB {
+		mb = engine.MaxResultBudgetMB
+	}
+	c.mu.Lock()
+	c.budgetMB = mb
+	c.mu.Unlock()
+}
+
+// ResultBudgetMB 返回本运行态的结果预算（MB）。
+func (c *Console) ResultBudgetMB() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.budgetMB
 }
 
 // SetOnDone 注册「一次执行结束」的回调（异步，主线程之外调用；用于日志/诊断）。
@@ -127,9 +148,10 @@ func (c *Console) RunTimeout(sess engine.Session, query string, timeout time.Dur
 		return false
 	}
 	c.gen++
-	gen, pageSize := c.gen, c.pageSize
+	gen, pageSize, budgetMB := c.gen, c.pageSize, c.budgetMB
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	ctx = engine.WithPageSize(ctx, pageSize)
+	ctx = engine.WithResultBudget(ctx, budgetMB)
 	ctx = engine.WithProgress(ctx, c.reportProgress)
 	c.cancel = cancel
 	c.running, c.canceling, c.result, c.err = true, false, nil, ""

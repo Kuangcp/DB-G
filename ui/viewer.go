@@ -250,7 +250,7 @@ func (a *root) ensureViewerSession(t *viewerTab, then func()) {
 		}
 		t.query.loading = false
 		if err != nil {
-			t.query.err = err.Error()
+			t.query.err = app.ErrorText(err)
 			return
 		}
 		then()
@@ -277,7 +277,7 @@ func (a *root) viewerReload(t *viewerTab, after func()) {
 		return
 	}
 	if t.rt == nil {
-		t.rt = app.NewConsole()
+		t.rt = a.newConsole()
 	}
 	t.seq++
 	seq := t.seq
@@ -373,7 +373,7 @@ func (a *root) viewerLoadColumns(t *viewerTab) {
 			return
 		}
 		if err != nil {
-			t.colsErr = err.Error()
+			t.colsErr = app.ErrorText(err)
 			return
 		}
 		t.cols = cols
@@ -427,7 +427,7 @@ func (a *root) viewerLoadIndexes(t *viewerTab) {
 			return
 		}
 		if err != nil {
-			t.idxErr = err.Error()
+			t.idxErr = app.ErrorText(err)
 			return
 		}
 		if idx == nil {
@@ -472,7 +472,7 @@ func (a *root) viewerLoadDDL(t *viewerTab) {
 		case !supported:
 			t.ddlErr = locales.ViewerDDLUnsupported()
 		case err != nil:
-			t.ddlErr = locales.TreeDDLFailed(err.Error())
+			t.ddlErr = locales.TreeDDLFailed(app.ErrorText(err))
 		default:
 			t.ddl = ddl
 		}
@@ -582,7 +582,7 @@ func (a *root) viewerDataPage(c *ui.Context, t *viewerTab) {
 			ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
 		}
 		if r.Truncated {
-			ui.Badge(c, locales.ResultTruncated(engine.ResultBudgetBytes()>>20))
+			ui.Badge(c, locales.ResultTruncated(a.resultPrefs.BudgetMB))
 		}
 	})
 	a.gridTable(c, r, gridViewer)

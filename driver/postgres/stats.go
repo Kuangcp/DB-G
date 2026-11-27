@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strconv"
 	"strings"
 
@@ -26,17 +25,17 @@ func (s *session) ObjectStatsIn(ctx context.Context, schema string, kind engine.
 
 func (s *session) objectStatsLocked(ctx context.Context, schema string, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if kind != engine.ObjectTable {
-		return nil, errors.New("postgres: 仅表支持查看统计")
+		return nil, engine.NewUserError(engine.ErrStatsTableOnly, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
 		return nil, err
 	}
 	if schema == "" {
-		return nil, errors.New("postgres: 未选择 schema")
+		return nil, engine.NewUserError(engine.ErrNoSchemaSelected, "")
 	}
 	stats := &engine.ObjectStats{}
 	rel := quoteIdent(schema) + "." + quoteIdent(name)

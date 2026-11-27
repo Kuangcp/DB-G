@@ -4,13 +4,11 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"db-g/engine"
@@ -23,12 +21,11 @@ const maxCellBytes = 1 << 20
 func init() { engine.Register("postgres", openSession) }
 
 type session struct {
-	dsn       string
-	db        *sql.DB
-	mu        sync.Mutex
-	curCancel atomic.Pointer[context.CancelFunc]
-	schema    string // 期望的 search_path 首项（UseSchema 设置）
-	applied   string // 已应用到连接池的 schema
+	dsn     string
+	db      *sql.DB
+	mu      sync.Mutex
+	schema  string // 期望的 search_path 首项（UseSchema 设置）
+	applied string // 已应用到连接池的 schema
 }
 
 func openSession(p engine.Profile) (engine.Session, error) {
@@ -88,7 +85,7 @@ func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return engine.ServerInfo{}, errors.New("postgres: session not open")
+		return engine.ServerInfo{}, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	var version, database string
 	if err := s.db.QueryRowContext(ctx,
@@ -96,15 +93,6 @@ func (s *session) ServerInfo(ctx context.Context) (engine.ServerInfo, error) {
 		return engine.ServerInfo{}, err
 	}
 	return engine.ServerInfo{Database: database, Version: version}, nil
-}
-
-func (s *session) Cancel() bool {
-	c := s.curCancel.Load()
-	if c == nil {
-		return false
-	}
-	(*c)()
-	return true
 }
 
 // Explain 返回 PostgreSQL 的 JSON 执行计划；ANALYZE 会真实执行查询。
@@ -124,14 +112,10 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	ctx, cancel := context.WithCancel(parent)
-	s.curCancel.Store(&cancel)
-	defer func() {
-		cancel()
-		s.curCancel.Store(nil)
-	}()
+	defer cancel()
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return nil, err
 	}
@@ -199,7 +183,7 @@ func (s *session) RunStatement(parent context.Context, query string) (*engine.Qu
 		if len(out.Rows) == 1 || len(out.Rows)%64 == 0 {
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 		}
-		if total > engine.ResultBudgetBytes() {
+		if total > engine.ResultBudget(ctx) {
 			out.Truncated, cutOff = true, true
 			engine.ReportProgress(ctx, engine.QueryProgress{Rows: len(out.Rows), Bytes: int64(total)})
 			break
@@ -240,7 +224,7 @@ func (s *session) Schemas(ctx context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	const q = `SELECT schema_name FROM information_schema.schemata
 		WHERE schema_name NOT IN ('pg_catalog','information_schema')
@@ -278,7 +262,7 @@ func (s *session) UseSchema(ctx context.Context, schema string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return errors.New("postgres: session not open")
+		return engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	s.schema = schema
 	return s.applySchemaLocked(ctx)
@@ -289,7 +273,7 @@ func (s *session) ActiveSchema(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return "", errors.New("postgres: session not open")
+		return "", engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if s.schema != "" {
 		return s.schema, nil
@@ -340,7 +324,7 @@ func (s *session) ObjectCounts(ctx context.Context, schema string) (map[engine.O
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -385,7 +369,7 @@ func (s *session) ObjectsPage(ctx context.Context, schema string, kind engine.Ob
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -441,7 +425,7 @@ func (s *session) currentSchema(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if !schema.Valid {
-		return "", errors.New("postgres: 未选择 schema")
+		return "", engine.NewUserError(engine.ErrNoSchemaSelected, "")
 	}
 	return schema.String, nil
 }
@@ -462,7 +446,7 @@ func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.Ob
 
 func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
 	if s.db == nil {
-		return "", errors.New("postgres: session not open")
+		return "", engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -489,7 +473,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 		return strings.TrimRight(def, "; \t\n") + ";", nil
 	}
 	if kind != engine.ObjectTable {
-		return "", errors.New("postgres: 该对象不支持查看 DDL")
+		return "", engine.NewUserError(engine.ErrDDLUnsupported, "")
 	}
 	const q = `
 SELECT c.column_name, c.data_type, c.is_nullable, coalesce(c.column_default,''), coalesce(c.character_maximum_length,0),
@@ -523,7 +507,7 @@ WHERE c.table_schema=$1 AND c.table_name=$2 ORDER BY c.ordinal_position`
 		return "", err
 	}
 	if len(cols) == 0 {
-		return "", fmt.Errorf("未找到 %s 的 DDL", name)
+		return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "CREATE TABLE %s.%s (\n", quoteIdent(schema), quoteIdent(name))
@@ -574,7 +558,7 @@ func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine
 
 func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -634,7 +618,7 @@ func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine
 
 func (s *session) indexesLocked(ctx context.Context, schema, table string) ([]engine.Index, error) {
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	schema, err := s.schemaLocked(ctx, schema)
 	if err != nil {
@@ -680,7 +664,7 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return errors.New("postgres: session not open")
+		return engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return err
@@ -736,7 +720,7 @@ func (s *session) Begin(ctx context.Context) (engine.Tx, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
-		return nil, errors.New("postgres: session not open")
+		return nil, engine.NewUserError(engine.ErrSessionClosed, "")
 	}
 	if err := s.applySchemaLocked(ctx); err != nil {
 		return nil, err

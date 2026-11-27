@@ -9,7 +9,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
-	"db-g/engine"
 	"db-g/locales"
 )
 
@@ -343,14 +342,15 @@ func TestThemeExportImport(t *testing.T) {
 	a := newConsoleRoot(t)
 	path := filepath.Join(t.TempDir(), "theme.json")
 	a.setThemePrefs(app.ThemePrefs{Mode: "light", Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15})
-	if err := a.exportThemeTo(path); err != nil {
+	if err := exportThemeFile(path, a.themePrefs); err != nil {
 		t.Fatal(err)
 	}
 	a.setThemePrefs(app.DefaultThemePrefs())
-	warn, err := a.importThemeFrom(path)
+	prefs, warn, err := importThemeFile(path)
 	if err != nil || len(warn) != 0 {
 		t.Fatalf("import: warn=%v err=%v", warn, err)
 	}
+	a.applyImportedTheme(prefs, warn)
 	want := app.ThemePrefs{Mode: "light", Scheme: app.ThemeSchemeDefault, Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15}
 	if a.themePrefs != want {
 		t.Fatalf("imported: %+v want %+v", a.themePrefs, want)
@@ -372,8 +372,11 @@ func TestSettingsTitleBarControls(t *testing.T) {
 func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.resultPrefsPath = filepath.Join(t.TempDir(), "results.json")
-	if got := engine.ResultBudgetBytes(); got != 8<<20 {
+	if got := a.resultPrefs.BudgetMB; got != 8 {
 		t.Fatalf("default budget = %d", got)
+	}
+	if got := a.newConsole().ResultBudgetMB(); got != 8 {
+		t.Fatalf("new console budget = %d", got)
 	}
 	tt := openSettingsSection(t, a, "结果")
 	for _, want := range []string{"结果大小预算", "每页行数", "MB", "恢复默认"} {
@@ -385,8 +388,11 @@ func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if got := engine.ResultBudgetBytes(); got != 9<<20 {
+	if got := a.resultPrefs.BudgetMB; got != 9 {
 		t.Fatalf("budget after + = %d, want 9MB", got)
+	}
+	if got := a.runtime("live").ResultBudgetMB(); got != 9 {
+		t.Fatalf("live console budget = %d, want 9MB", got)
 	}
 	prefs, warn := app.LoadResultPrefs(a.resultPrefsPath)
 	if warn != "" || prefs.BudgetMB != 9 {
@@ -396,8 +402,11 @@ func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if got := engine.ResultBudgetBytes(); got != 8<<20 {
+	if got := a.resultPrefs.BudgetMB; got != 8 {
 		t.Fatalf("budget after reset = %d", got)
+	}
+	if got := a.runtime("live").ResultBudgetMB(); got != 8 {
+		t.Fatalf("live console budget after reset = %d", got)
 	}
 }
 

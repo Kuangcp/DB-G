@@ -48,7 +48,7 @@ var allowedFile = map[string]string{
 
 // allowedText 是文件里允许保留的特定字面量（兼容旧持久化数据等）。
 var allowedText = map[string]map[string]bool{
-	"ui/ai_chat.go": {"新会话": true}, // 旧会话标题，用于识别并重新生成
+	"app/aichat.go": {"新会话": true}, // 旧版本持久化的默认标题，仅用于加载迁移
 }
 
 func main() {

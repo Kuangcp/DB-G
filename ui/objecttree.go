@@ -206,7 +206,7 @@ func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
 			return
 		}
 		if err != nil {
-			a.setTreeErr(base, err.Error())
+			a.setTreeErr(base, app.ErrorText(err))
 			return
 		}
 		if data == nil {
@@ -278,7 +278,7 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 			return
 		}
 		if err != nil {
-			a.setTreeErr(base, err.Error())
+			a.setTreeErr(base, app.ErrorText(err))
 			return
 		}
 		if a.treeCounts == nil {
@@ -380,7 +380,7 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 			return
 		}
 		if err != nil {
-			a.setTreeErr(groupKey, err.Error())
+			a.setTreeErr(groupKey, app.ErrorText(err))
 			return
 		}
 		if a.treeData == nil {
@@ -712,7 +712,7 @@ func (a *root) loadObjectDDL(p app.ConnProfile, o engine.DBObject) {
 		}
 		apply := func() {
 			if err != nil {
-				a.setDDLNote(o.Name, locales.TreeDDLFailed(err.Error()))
+				a.setDDLNote(o.Name, locales.TreeDDLFailed(app.ErrorText(err)))
 				app.LogWarn("ddl", "load failed", "object", o.Name, "err", err.Error())
 				return
 			}

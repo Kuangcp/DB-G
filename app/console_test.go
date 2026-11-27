@@ -208,3 +208,28 @@ func TestProgressAndCancelingState(t *testing.T) {
 	close(p.release)
 	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
 }
+
+type budgetSession struct {
+	got int
+}
+
+func (s *budgetSession) Open(context.Context) error { return nil }
+func (s *budgetSession) Close() error               { return nil }
+func (s *budgetSession) Caps() engine.Capabilities  { return 0 }
+func (s *budgetSession) RunStatement(ctx context.Context, _ string) (*engine.QueryResult, error) {
+	s.got = engine.ResultBudget(ctx)
+	return &engine.QueryResult{Affected: 1}, nil
+}
+
+func TestConsolePassesResultBudget(t *testing.T) {
+	c := NewConsole()
+	c.SetResultBudgetMB(16)
+	s := &budgetSession{}
+	if !c.Run(s, "UPDATE t SET x=1") {
+		t.Fatal("run must start")
+	}
+	waitFor(t, 2*time.Second, func() bool { return !c.Running() })
+	if s.got != 16<<20 {
+		t.Fatalf("session saw budget %d, want %d", s.got, 16<<20)
+	}
+}

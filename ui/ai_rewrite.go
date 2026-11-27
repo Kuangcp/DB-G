@@ -163,10 +163,11 @@ func (a *root) recordAIRewriteConversation() {
 	now := time.Now().UnixMilli()
 	title := locales.AiRewriteTitleFor(truncateRunes(firstLine(instruction), 28))
 	conv := app.AIConversation{
-		ID:        app.NewAIConversationID(),
-		Title:     title,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          app.NewAIConversationID(),
+		Title:       title,
+		TitleLocked: true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 		Messages: []app.AIMessageRecord{
 			{Role: "user", Text: rewriteConversationUser(st.target, instruction), Done: true, Time: now},
 			{Role: "assistant", Text: "```sql\n" + st.result + "\n```", Done: true, Time: now},

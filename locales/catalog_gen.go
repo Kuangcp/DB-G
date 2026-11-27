@@ -8518,6 +8518,96 @@ func (msgs Messages) AppConnTimeoutRange() string {
 	return Catalog.Format(msgs.locale, "appConnTimeoutRange", nil)
 }
 
+// AppErrParamsFormat says "Connection parameters must be key=value: {param}"
+// in the language the app shows.
+func AppErrParamsFormat(param string) string { return In(i18n.Locale()).AppErrParamsFormat(param) }
+
+// AppErrParamsFormat says "Connection parameters must be key=value: {param}"
+// in the language of msgs.
+func (msgs Messages) AppErrParamsFormat(param string) string {
+	return Catalog.Format(msgs.locale, "appErrParamsFormat", map[string]any{"param": param})
+}
+
+// AppErrSessionClosed says "The datasource session is not open"
+// in the language the app shows.
+func AppErrSessionClosed() string { return In(i18n.Locale()).AppErrSessionClosed() }
+
+// AppErrSessionClosed says "The datasource session is not open"
+// in the language of msgs.
+func (msgs Messages) AppErrSessionClosed() string {
+	return Catalog.Format(msgs.locale, "appErrSessionClosed", nil)
+}
+
+// AppErrHostRequired says "Host cannot be empty"
+// in the language the app shows.
+func AppErrHostRequired() string { return In(i18n.Locale()).AppErrHostRequired() }
+
+// AppErrHostRequired says "Host cannot be empty"
+// in the language of msgs.
+func (msgs Messages) AppErrHostRequired() string {
+	return Catalog.Format(msgs.locale, "appErrHostRequired", nil)
+}
+
+// AppErrNoDatabaseSelected says "No database selected"
+// in the language the app shows.
+func AppErrNoDatabaseSelected() string { return In(i18n.Locale()).AppErrNoDatabaseSelected() }
+
+// AppErrNoDatabaseSelected says "No database selected"
+// in the language of msgs.
+func (msgs Messages) AppErrNoDatabaseSelected() string {
+	return Catalog.Format(msgs.locale, "appErrNoDatabaseSelected", nil)
+}
+
+// AppErrNoSchemaSelected says "No schema selected"
+// in the language the app shows.
+func AppErrNoSchemaSelected() string { return In(i18n.Locale()).AppErrNoSchemaSelected() }
+
+// AppErrNoSchemaSelected says "No schema selected"
+// in the language of msgs.
+func (msgs Messages) AppErrNoSchemaSelected() string {
+	return Catalog.Format(msgs.locale, "appErrNoSchemaSelected", nil)
+}
+
+// AppErrStatsTableOnly says "Statistics are only available for tables"
+// in the language the app shows.
+func AppErrStatsTableOnly() string { return In(i18n.Locale()).AppErrStatsTableOnly() }
+
+// AppErrStatsTableOnly says "Statistics are only available for tables"
+// in the language of msgs.
+func (msgs Messages) AppErrStatsTableOnly() string {
+	return Catalog.Format(msgs.locale, "appErrStatsTableOnly", nil)
+}
+
+// AppErrDDLUnsupported says "DDL is not available for this object type"
+// in the language the app shows.
+func AppErrDDLUnsupported() string { return In(i18n.Locale()).AppErrDDLUnsupported() }
+
+// AppErrDDLUnsupported says "DDL is not available for this object type"
+// in the language of msgs.
+func (msgs Messages) AppErrDDLUnsupported() string {
+	return Catalog.Format(msgs.locale, "appErrDDLUnsupported", nil)
+}
+
+// AppErrDDLNotFound says "DDL not found for {name}"
+// in the language the app shows.
+func AppErrDDLNotFound(name string) string { return In(i18n.Locale()).AppErrDDLNotFound(name) }
+
+// AppErrDDLNotFound says "DDL not found for {name}"
+// in the language of msgs.
+func (msgs Messages) AppErrDDLNotFound(name string) string {
+	return Catalog.Format(msgs.locale, "appErrDDLNotFound", map[string]any{"name": name})
+}
+
+// AppErrAnalyzeUnsupported says "This datasource does not support EXPLAIN ANALYZE"
+// in the language the app shows.
+func AppErrAnalyzeUnsupported() string { return In(i18n.Locale()).AppErrAnalyzeUnsupported() }
+
+// AppErrAnalyzeUnsupported says "This datasource does not support EXPLAIN ANALYZE"
+// in the language of msgs.
+func (msgs Messages) AppErrAnalyzeUnsupported() string {
+	return Catalog.Format(msgs.locale, "appErrAnalyzeUnsupported", nil)
+}
+
 // AppConnFolderMissing says "Folder not found: {id}"
 // in the language the app shows.
 func AppConnFolderMissing(id string) string { return In(i18n.Locale()).AppConnFolderMissing(id) }

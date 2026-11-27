@@ -385,7 +385,7 @@ func (a *root) applyConfirmedEdits() {
 		a.editBusy = false
 		if err != nil {
 			a.setEditStatus("")
-			a.gridErr(locales.EditCommitFailed(err.Error()))
+			a.gridErr(locales.EditCommitFailed(app.ErrorText(err)))
 			app.LogWarn("write", "commit failed", "err", err.Error())
 			return
 		}
