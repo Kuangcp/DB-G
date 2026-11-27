@@ -592,8 +592,13 @@ SELECT c.column_name, c.data_type, c.is_nullable,
            AND tc.table_schema = $1
            AND tc.table_name = c.table_name
            AND k.column_name = c.column_name
-       )
+       ),
+       COALESCE(d.description, '')
 FROM information_schema.columns c
+LEFT JOIN pg_catalog.pg_namespace n ON n.nspname = c.table_schema
+LEFT JOIN pg_catalog.pg_class cl ON cl.relnamespace = n.oid AND cl.relname = c.table_name
+LEFT JOIN pg_catalog.pg_description d
+       ON d.objoid = cl.oid AND d.objsubid = c.ordinal_position
 WHERE c.table_schema = $1 AND c.table_name = $2
 ORDER BY c.ordinal_position`
 	rows, err := s.db.QueryContext(ctx, q, schema, table)
@@ -603,12 +608,12 @@ ORDER BY c.ordinal_position`
 	defer rows.Close()
 	var out []engine.Column
 	for rows.Next() {
-		var name, typ, nullable string
+		var name, typ, nullable, comment string
 		var pk bool
-		if err := rows.Scan(&name, &typ, &nullable, &pk); err != nil {
+		if err := rows.Scan(&name, &typ, &nullable, &pk, &comment); err != nil {
 			return nil, err
 		}
-		out = append(out, engine.Column{Name: name, Type: typ, Nullable: nullable == "YES", PrimaryKey: pk})
+		out = append(out, engine.Column{Name: name, Type: typ, Nullable: nullable == "YES", PrimaryKey: pk, Comment: comment})
 	}
 	return out, rows.Err()
 }

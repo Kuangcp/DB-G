@@ -540,6 +540,7 @@
   "viewerColType": "类型",
   "viewerColNullable": "可空",
   "viewerColPrimaryKey": "主键",
+  "viewerColComment": "备注",
   "treeShownFirst": "已显示前 {shown, number, ::group-off} 个，共 {total, number, ::group-off} 个",
   "treeLoadMore": "继续加载（已 {loaded, number, ::group-off} / 共 {total, number, ::group-off}）",
   "treePreviewConsole": "预览 {name}",

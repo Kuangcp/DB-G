@@ -232,7 +232,7 @@ func TestViewerStructureAndDDL(t *testing.T) {
 		result: &engine.QueryResult{IsQuery: true, Columns: []string{"id", "name"}},
 		cols: []engine.Column{
 			{Name: "id", Type: "INTEGER", PrimaryKey: true},
-			{Name: "name", Type: "TEXT", Nullable: true},
+			{Name: "name", Type: "TEXT", Nullable: true, Comment: "用户姓名"},
 		},
 		ddl: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
 	}
@@ -245,7 +245,7 @@ func TestViewerStructureAndDDL(t *testing.T) {
 	tb.page = viewerStructure
 	a.ensureViewerPage(tb)
 	tt.Frame()
-	for _, want := range []string{"id", "INTEGER", "name", "TEXT", "PK"} {
+	for _, want := range []string{"id", "INTEGER", "name", "TEXT", "PK", locales.ViewerColComment(), "用户姓名"} {
 		if !tt.HasText(want) {
 			t.Fatalf("结构页缺少 %q: %q", want, tt.Texts())
 		}

@@ -492,7 +492,7 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 	if err != nil {
 		return nil, err
 	}
-	const q = `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY FROM information_schema.COLUMNS
+	const q = `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_COMMENT FROM information_schema.COLUMNS
 		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`
 	rows, err := s.db.QueryContext(ctx, q, schema, table)
 	if err != nil {
@@ -502,9 +502,9 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 	var out []engine.Column
 	for rows.Next() {
 		var (
-			name, typ, nullable, key string
+			name, typ, nullable, key, comment string
 		)
-		if err := rows.Scan(&name, &typ, &nullable, &key); err != nil {
+		if err := rows.Scan(&name, &typ, &nullable, &key, &comment); err != nil {
 			return nil, err
 		}
 		out = append(out, engine.Column{
@@ -512,6 +512,7 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 			Type:       typ,
 			Nullable:   nullable == "YES",
 			PrimaryKey: key == "PRI",
+			Comment:    comment,
 		})
 	}
 	if err := rows.Err(); err != nil {

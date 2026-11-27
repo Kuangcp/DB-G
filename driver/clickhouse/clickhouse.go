@@ -521,7 +521,7 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 	if err != nil {
 		return nil, err
 	}
-	const q = `SELECT name, type FROM system.columns WHERE database = ? AND table = ? ORDER BY position`
+	const q = `SELECT name, type, ifNull(comment, '') FROM system.columns WHERE database = ? AND table = ? ORDER BY position`
 	rows, err := s.db.QueryContext(ctx, q, database, table)
 	if err != nil {
 		return nil, err
@@ -529,11 +529,11 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 	defer rows.Close()
 	var out []engine.Column
 	for rows.Next() {
-		var name, typ string
-		if err := rows.Scan(&name, &typ); err != nil {
+		var name, typ, comment string
+		if err := rows.Scan(&name, &typ, &comment); err != nil {
 			return nil, err
 		}
-		out = append(out, engine.Column{Name: name, Type: typ})
+		out = append(out, engine.Column{Name: name, Type: typ, Comment: comment})
 	}
 	return out, rows.Err()
 }

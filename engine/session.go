@@ -47,6 +47,7 @@ type Column struct {
 	Type       string
 	Nullable   bool
 	PrimaryKey bool
+	Comment    string // 数据库里的列备注；没有则为空
 }
 
 // ColumnLister 是可选能力接口：按表名列出一个表的列。

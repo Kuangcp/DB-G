@@ -632,6 +632,7 @@
   "viewerColType": "Type",
   "viewerColNullable": "Null",
   "viewerColPrimaryKey": "Key",
+  "viewerColComment": "Comment",
   "treeShownFirst": "Showing the first {shown, number, ::group-off} of {total, number, ::group-off}",
   "@treeShownFirst": { "placeholders": { "shown": { "type": "int" }, "total": { "type": "int" } } },
   "treeLoadMore": "Load more ({loaded, number, ::group-off} of {total, number, ::group-off})",

@@ -5466,6 +5466,16 @@ func (msgs Messages) ViewerColPrimaryKey() string {
 	return Catalog.Format(msgs.locale, "viewerColPrimaryKey", nil)
 }
 
+// ViewerColComment says "Comment"
+// in the language the app shows.
+func ViewerColComment() string { return In(i18n.Locale()).ViewerColComment() }
+
+// ViewerColComment says "Comment"
+// in the language of msgs.
+func (msgs Messages) ViewerColComment() string {
+	return Catalog.Format(msgs.locale, "viewerColComment", nil)
+}
+
 // TreeShownFirst says "Showing the first {shown, number, ::group-off} of {total, number, ::group-off}"
 // in the language the app shows.
 func TreeShownFirst(shown int, total int) string {

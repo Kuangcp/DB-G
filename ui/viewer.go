@@ -538,7 +538,7 @@ func (a *root) gridRuntimeResult(t *viewerTab) *engine.QueryResult {
 func (a *root) viewerDataToolbar(c *ui.Context, t *viewerTab, r *engine.QueryResult) {
 	th := c.Theme()
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		box := ui.Row(c).Gap(6).Grow(1).Padding(0, 6).Radius(th.Radius).Background(th.Surface).
+		box := ui.Row(c).Gap(6).Grow(1).Padding(3, 6).Radius(th.Radius).Background(th.Surface).
 			Border(1, th.Border)
 		box.Children(func() {
 			ui.Icon(c, iconSearch).FontSize(13).TextColor(th.TextMuted)
@@ -771,6 +771,7 @@ func (a *root) viewerStructurePage(c *ui.Context, t *viewerTab) {
 		{Title: locales.ViewerColType(), ID: "type", Width: 220},
 		{Title: locales.ViewerColNullable(), ID: "null", Width: 90, Fixed: true},
 		{Title: locales.ViewerColPrimaryKey(), ID: "pk", Width: 90, Fixed: true},
+		{Title: locales.ViewerColComment(), ID: "comment", MinWidth: 160},
 	}
 	ui.Table(c, &t.colsState, cols, len(t.cols), func(row, col int) {
 		if row < 0 || row >= len(t.cols) {
@@ -792,6 +793,9 @@ func (a *root) viewerStructurePage(c *ui.Context, t *viewerTab) {
 			if cl.PrimaryKey {
 				ui.Text(c, "PK").FontSize(12).TextColor(c.Theme().Warning)
 			}
+		case 4:
+			ui.Text(c, cl.Comment).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().
+				Tooltip(cl.Comment)
 		}
 	}).Grow(1)
 }
