@@ -177,6 +177,10 @@ type root struct {
 	extResolveOpen bool
 	extMsg         string
 
+	reloadConfirmOpen bool
+	reloadConsoleID   string
+	reloadPausedID    string
+
 	mgr                   *app.ConsoleManager
 	catalog               *catalogCache
 	sessions              map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
@@ -870,6 +874,7 @@ func (a *root) view(c *ui.Context) {
 		a.dispatchKeys(c)
 
 		a.tabModal(c)
+		a.consoleReloadModal(c)
 		a.cellViewer(c)
 		a.filterModal(c)
 		a.exportConfirmModal(c)

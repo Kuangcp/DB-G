@@ -520,6 +520,108 @@ func (a *root) reloadExternal() {
 	a.lastVer[rec.ID] = a.code.Version()
 }
 
+// requestReloadConsole 从磁盘重新加载一个控制台；本地有未保存改动时先确认。
+func (a *root) requestReloadConsole(id string) {
+	if _, ok := a.store.GetConsole(id); !ok {
+		return
+	}
+	if m := a.consoleMgr(); m != nil && m.Dirty(id) {
+		m.SetSavePaused(id, true)
+		a.reloadPausedID = id
+		a.reloadConsoleID = id
+		a.reloadConfirmOpen = true
+		return
+	}
+	a.reloadConsoleFromDisk(id)
+}
+
+// reloadConsoleFromDisk 用磁盘上的正文替换控制台缓冲（丢弃当前改动）。
+func (a *root) reloadConsoleFromDisk(id string) {
+	rec, ok := a.store.GetConsole(id)
+	if !ok {
+		return
+	}
+	files := app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store}
+	text, err := files.Read(id)
+	if err != nil {
+		if rec.External {
+			a.externalState(id).missing = true
+		}
+		a.toastError(locales.ConsoleReloadFailed(err.Error()))
+		return
+	}
+	m := a.consoleMgr()
+	if m == nil {
+		return
+	}
+	m.SetDiskText(id, text)
+	if rec.External {
+		st := a.externalState(id)
+		st.path = rec.FilePath
+		st.lastDisk = text
+		st.known, st.conflict, st.missing = true, false, false
+		fs := app.StatExternalSQL(rec.FilePath)
+		st.mod, st.size = fs.ModTime, fs.Size
+	}
+	if id == a.activeConsole {
+		a.code.SetActive(id, text)
+		a.lastVer[id] = a.code.Version()
+		a.refreshStmtMarks()
+	} else {
+		a.code.Reload(id, text)
+	}
+	app.LogInfo("console", "reloaded from disk", "console", id, "path", files.Path(id))
+}
+
+// consoleReloadModal 是「重新加载」覆盖未保存改动前的确认。
+func (a *root) consoleReloadModal(c *ui.Context) {
+	if !a.reloadConfirmOpen {
+		a.resumeReloadPause()
+		return
+	}
+	id := a.reloadConsoleID
+	rec, ok := a.store.GetConsole(id)
+	if !ok {
+		a.reloadConfirmOpen = false
+		a.resumeReloadPause()
+		return
+	}
+	ui.Modal(c, &a.reloadConfirmOpen, func() {
+		ui.Text(c, locales.ConsoleReloadTitle()).Bold()
+		if rec.External {
+			ui.Text(c, rec.FilePath).Font("monospace").FontSize(11).
+				TextColor(c.Theme().TextMuted).SingleLine().Tooltip(rec.FilePath)
+		}
+		ui.Text(c, locales.ConsoleReloadBody()).FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Spacer(c)
+		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
+			if ui.Button(c, locales.CommonCancel()).Clicked() {
+				a.reloadConfirmOpen = false
+			}
+			if ui.PrimaryButton(c, locales.ExtReload()).Clicked() {
+				a.reloadConfirmOpen = false
+				a.reloadPausedID = ""
+				a.reloadConsoleFromDisk(id)
+			}
+		})
+	}).Width(560).Height(220)
+}
+
+// resumeReloadPause 在确认弹窗取消/关闭后恢复自动写盘；外部文件仍冲突或缺失时保持暂停。
+func (a *root) resumeReloadPause() {
+	id := a.reloadPausedID
+	if id == "" {
+		return
+	}
+	a.reloadPausedID = ""
+	if st, ok := a.extFiles[id]; ok && (st.conflict || st.missing) {
+		return
+	}
+	if m := a.consoleMgr(); m != nil {
+		m.SetSavePaused(id, false)
+	}
+}
+
 // keepLocalExternal 明确选择本地版本：恢复写盘并立即覆盖磁盘。
 func (a *root) keepLocalExternal() {
 	rec, st, ok := a.activeExternal()

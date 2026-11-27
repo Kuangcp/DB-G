@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 // externalRoot 建一个有数据源和 ConsoleManager 的根状态，并绑定一个外部 .sql。
@@ -48,6 +49,52 @@ func TestDropExternalSQLBinds(t *testing.T) {
 	a.handleDroppedFiles([]string{path})
 	if a.extPickOpen || len(a.store.ListConsoles(prof.ID)) != before {
 		t.Fatalf("重复拖入不应新建: pick=%v n=%d", a.extPickOpen, len(a.store.ListConsoles(prof.ID)))
+	}
+}
+
+// 控制台右键「重新加载」：有未保存改动时先确认，再覆盖为磁盘内容。
+func TestConsoleReloadConfirmsDirtyChanges(t *testing.T) {
+	a, prof, path := externalRoot(t, "SELECT 1\n")
+	id := a.activeConsole
+	if _, err := a.consoleMgr().Create(prof.ID, "其他"); err != nil {
+		t.Fatal(err)
+	}
+	a.setActiveText("local edit\n")
+	a.syncActiveBuffer()
+	if !a.consoleMgr().Dirty(id) {
+		t.Fatal("setup: console should be dirty")
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.RightClick("note.sql"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(locales.TabMenuReload()); err != nil {
+		t.Fatalf("右键菜单缺少重新加载: %v", err)
+	}
+	tt.Frame()
+	if !a.reloadConfirmOpen {
+		t.Fatal("未保存改动应先弹确认")
+	}
+	if got := a.code.Text(); got != "local edit\n" {
+		t.Fatalf("确认前不应改动正文: %q", got)
+	}
+	// 确认期间暂停自动保存，别把本地改动先写回磁盘。
+	if err := a.flushActive(); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != "SELECT 1\n" {
+		t.Fatalf("确认期间不应写盘: %q", data)
+	}
+	if err := tt.Click(locales.ExtReload()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := a.code.Text(); got != "SELECT 1\n" {
+		t.Fatalf("确认后应载入磁盘内容: %q", got)
+	}
+	if a.consoleMgr().Dirty(id) {
+		t.Fatal("重新加载后不应再是脏的")
 	}
 }
 

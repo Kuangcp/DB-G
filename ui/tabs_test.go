@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/locales"
 )
 
 func newConsoleRoot(t *testing.T) *root {
@@ -436,5 +437,40 @@ func TestCtrlTabSwitchesRecentConsole(t *testing.T) {
 	tt.Frame()
 	if a.activeConsole != c2.ID {
 		t.Fatalf("Ctrl+Tab again should toggle back: %q", a.activeConsole)
+	}
+}
+
+// 没有未保存改动时，右键「重新加载」直接读盘，不弹确认。
+func TestConsoleReloadCleanWithoutConfirm(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	first, err := a.consoleMgr().Create(prof.ID, "查询一")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.consoleMgr().Create(prof.ID, "查询二"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(first.ID) {
+		t.Fatal("activate")
+	}
+	files := app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store}
+	if err := files.Write(first.ID, "SELECT 88;\n"); err != nil {
+		t.Fatal(err)
+	}
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	if err := tt.RightClick("查询一"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(locales.TabMenuReload()); err != nil {
+		t.Fatalf("右键菜单缺少重新加载: %v", err)
+	}
+	tt.Frame()
+	if a.reloadConfirmOpen {
+		t.Fatal("没有未保存改动时不应弹确认")
+	}
+	if got := a.code.Text(); got != "SELECT 88;\n" {
+		t.Fatalf("应从磁盘重新加载: %q", got)
 	}
 }

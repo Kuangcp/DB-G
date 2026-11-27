@@ -177,6 +177,9 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 	attachTabDrag(c, btn, rec.ID)
 	a.attachTabDrop(c, btn, rec)
 	btn.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item(locales.TabMenuReload()).Chosen() {
+			a.requestReloadConsole(rec.ID)
+		}
 		if menu.Item(locales.TabMenuClose()).Chosen() {
 			a.pendingClose = rec.ID
 		}

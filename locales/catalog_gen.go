@@ -354,6 +354,46 @@ func (msgs Messages) TabMenuClose() string {
 	return Catalog.Format(msgs.locale, "tabMenuClose", nil)
 }
 
+// TabMenuReload says "Reload from Disk"
+// in the language the app shows.
+func TabMenuReload() string { return In(i18n.Locale()).TabMenuReload() }
+
+// TabMenuReload says "Reload from Disk"
+// in the language of msgs.
+func (msgs Messages) TabMenuReload() string {
+	return Catalog.Format(msgs.locale, "tabMenuReload", nil)
+}
+
+// ConsoleReloadTitle says "Reload console?"
+// in the language the app shows.
+func ConsoleReloadTitle() string { return In(i18n.Locale()).ConsoleReloadTitle() }
+
+// ConsoleReloadTitle says "Reload console?"
+// in the language of msgs.
+func (msgs Messages) ConsoleReloadTitle() string {
+	return Catalog.Format(msgs.locale, "consoleReloadTitle", nil)
+}
+
+// ConsoleReloadBody says "This console has unsaved changes. Reloading from disk will discard them."
+// in the language the app shows.
+func ConsoleReloadBody() string { return In(i18n.Locale()).ConsoleReloadBody() }
+
+// ConsoleReloadBody says "This console has unsaved changes. Reloading from disk will discard them."
+// in the language of msgs.
+func (msgs Messages) ConsoleReloadBody() string {
+	return Catalog.Format(msgs.locale, "consoleReloadBody", nil)
+}
+
+// ConsoleReloadFailed says "Could not reload the console: {err}"
+// in the language the app shows.
+func ConsoleReloadFailed(err string) string { return In(i18n.Locale()).ConsoleReloadFailed(err) }
+
+// ConsoleReloadFailed says "Could not reload the console: {err}"
+// in the language of msgs.
+func (msgs Messages) ConsoleReloadFailed(err string) string {
+	return Catalog.Format(msgs.locale, "consoleReloadFailed", map[string]any{"err": err})
+}
+
 // TabMenuRename says "Rename…"
 // in the language the app shows.
 func TabMenuRename() string { return In(i18n.Locale()).TabMenuRename() }

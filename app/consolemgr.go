@@ -181,16 +181,28 @@ func (m *ConsoleManager) SetSavePaused(id string, paused bool) {
 		return
 	}
 	delete(m.paused, id)
+	if m.dirty[id] {
+		// 暂停期间攒下的改动在恢复后继续按防抖写盘。
+		m.stopSaveTimerLocked(id)
+		delay := m.SaveDelay
+		m.saveTimers[id] = time.AfterFunc(delay, func() { _ = m.Flush(id) })
+	}
 }
 
-// SetExternalText 用磁盘内容重置内存缓冲（外部文件干净时自动重载）。
-func (m *ConsoleManager) SetExternalText(id, text string) {
+// SetDiskText 用磁盘内容重置内存缓冲，丢弃未保存改动并停止自动写盘。
+func (m *ConsoleManager) SetDiskText(id, text string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.stopSaveTimerLocked(id)
 	m.cache[id] = text
 	m.lastSaved[id] = text
 	delete(m.dirty, id)
+	delete(m.paused, id)
+}
+
+// SetExternalText 用磁盘内容重置内存缓冲（外部文件干净时自动重载）。
+func (m *ConsoleManager) SetExternalText(id, text string) {
+	m.SetDiskText(id, text)
 }
 
 // isExternal 报告控制台是否绑定外部文件（需要写前一致性校验）。
