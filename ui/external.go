@@ -210,7 +210,7 @@ func (a *root) OpenSQLFiles(paths []string) {
 
 // FocusWindow 把主窗口带到前台（第二个实例启动时用）。
 func (a *root) FocusWindow() {
-	if a.win != nil {
+	if a.hasWindow() {
 		a.win.Focus()
 	}
 }
@@ -244,7 +244,7 @@ func (a *root) handleDroppedFiles(paths []string) {
 	}
 	if len(pending) > 0 {
 		// 文件管理器拖入后窗口可能不在最前：先把主窗口带到前台，方便直接选数据源。
-		if a.win != nil {
+		if a.hasWindow() {
 			a.win.Focus()
 		}
 		a.external.PickPaths = pending
@@ -442,7 +442,7 @@ func (a *root) externalPickerModal(c *ui.Context) {
 // pickExternalSaveAs 弹保存框，把当前缓冲写到新文件并改绑控制台。
 func (a *root) pickExternalSaveAs() {
 	rec, _, ok := a.activeExternal()
-	if !ok || a.win == nil {
+	if !ok || a.headless() {
 		return
 	}
 	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{

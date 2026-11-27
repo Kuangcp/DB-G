@@ -75,35 +75,27 @@ func (a *root) fixErrorSQL() {
 		}
 		return b.String(), streamErr
 	}
-	if a.win == nil {
-		ch, err := openAIStream(ctx, cancel, provider, req)
-		if err != nil {
-			a.ai.Fix.loading = false
-			a.ai.Fix.err = err.Error()
-			a.ai.Fix.cancel = nil
-			cancel()
-			app.LogWarn("ai", "fix stream failed", "err", err.Error())
-			return
-		}
-		text, err := read(ch)
-		a.finishAIFix(seq, text, err)
-		return
-	}
-	win := a.win
-	go func() {
-		ch, err := openAIStream(ctx, cancel, provider, req)
-		if err != nil {
-			if ctx.Err() == nil {
-				app.LogWarn("ai", "fix stream failed", "err", err.Error())
-				a.safeUpdate(win, func() { a.finishAIFix(seq, "", err) })
-			}
+	var (
+		text      string
+		streamErr error
+	)
+	a.runBackground(func() {
+		ch, openErr := openAIStream(ctx, cancel, provider, req)
+		if openErr != nil {
+			streamErr = openErr
 			return
 		}
 		app.LogInfo("ai", "fix request", "model", a.aiTaskModel("fix"), "sql_len", len(sql))
-		text, err := read(ch)
-		a.safeUpdate(win, func() { a.finishAIFix(seq, text, err) })
-	}()
-
+		text, streamErr = read(ch)
+	}, func() {
+		if streamErr != nil && ctx.Err() != nil {
+			return
+		}
+		if streamErr != nil {
+			app.LogWarn("ai", "fix stream failed", "err", streamErr.Error())
+		}
+		a.finishAIFix(seq, text, streamErr)
+	})
 }
 
 // finishAIFix 在主线程落定模型结果。

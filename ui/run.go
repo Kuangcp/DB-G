@@ -425,7 +425,7 @@ func (a *root) rerunDone(rtID, sql string) func(*engine.QueryResult, string, tim
 			a.recordPageState(rtID, sql, res)
 			a.refreshStmtMarks()
 		}
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			a.safeUpdate(win, rec)
 			return
@@ -559,7 +559,7 @@ func (a *root) stmtDoneFor(rtID, sql, connID string) func(*engine.QueryResult, s
 			_ = a.history.Add(e)
 		}
 		rec := func() { a.recordPageState(rtID, sql, res) }
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			a.safeUpdate(win, rec)
 		} else {
@@ -583,7 +583,7 @@ func (a *root) stmtDoneFor(rtID, sql, connID string) func(*engine.QueryResult, s
 				}
 			}
 		}
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			a.safeUpdate(win, advance)
 			return

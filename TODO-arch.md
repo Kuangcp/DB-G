@@ -420,8 +420,12 @@ Unmarshal → 本地化错误 → Normalize → MkdirAll → MarshalIndent → �
 **进度（2026-11-27）**：
 - 新增 `ui/async.go` 的 `runAsync[T]`（key 轮次、headless 同步、panic 转 error）。
 - `runBackground` 成为唯一后台入口，并兜住 work panic；`session.BgRun` 注入点保留。
-- 已迁移：连接测试、元数据缓存读写/刷新、统计、执行计划、补全目录/列、会话池之外的 8 处。
-- `a.win == nil` 从 37 降到 29；剩余主要是对话框、主题延迟保存等特例。
+- 迁移完成：连接测试、元数据缓存、统计、执行计划、补全、对象树/分页/DDL、
+  表视图列/索引/DDL、schema 列表/切换、服务器信息、安装、同步、AI 上下文/模型、
+  编辑提交、AI 补全/修复/改写。
+- `go func` 40 → 19；`a.win == nil` / `a.win != nil` 的裸判断已清零，
+  只剩 `headless()` / `hasWindow()` 两个助手内部各一处。
+- 剩余 `headless()` 调用是针对流式事件/延迟保存/真实对话框的显式分支，不再是复制粘贴的异步模板。
 - 单测覆盖 headless 同步、过期结果丢弃、panic 不崩、注入点生效。
 
 **证据**

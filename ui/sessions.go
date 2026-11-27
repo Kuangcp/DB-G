@@ -312,7 +312,7 @@ func (a *root) runBackground(work, done func()) {
 		a.session.BgRun(run, done)
 		return
 	}
-	if a.win == nil {
+	if a.headless() {
 		run()
 		done()
 		return
@@ -362,16 +362,15 @@ func (a *root) loadServerInfo(connID string, sess engine.Session) {
 		defer cancel()
 		return si.ServerInfo(ctx)
 	}
-	if a.win == nil {
-		info, err := run()
+	var (
+		info engine.ServerInfo
+		err  error
+	)
+	a.runBackground(func() {
+		info, err = run()
+	}, func() {
 		apply(info, err)
-		return
-	}
-	win := a.win
-	go func() {
-		info, err := run()
-		win.Update(func() { apply(info, err) })
-	}()
+	})
 }
 
 // clearServerInfo 丢弃某个数据源的版本信息；会话关闭/重连时调用，
@@ -431,7 +430,7 @@ func (a *root) stopActiveRuns() {
 		gen := rt.Generation()
 		rt.Cancel()
 		app.LogInfo("exec", "cancel", "conn", a.activeConnName(), "console", a.tabs.ActiveConsole)
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			go func() {
 				time.Sleep(cancelForceAfter)

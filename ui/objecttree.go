@@ -226,16 +226,15 @@ func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
 		a.tree.Counts[base] = counts
 		a.saveMetaCache(p)
 	}
-	if a.win == nil {
-		data, err := a.loadAllObjectKinds(sess, schema)
+	var (
+		data map[engine.ObjectKind][]engine.DBObject
+		err  error
+	)
+	a.runBackground(func() {
+		data, err = a.loadAllObjectKinds(sess, schema)
+	}, func() {
 		done(data, err)
-		return
-	}
-	win := a.win
-	go func() {
-		data, err := a.loadAllObjectKinds(sess, schema)
-		a.safeUpdate(win, func() { done(data, err) })
-	}()
+	})
 }
 
 // ensureObjectCounts 只取各类型数量；有 ObjectCounter 用 count 查询，
@@ -287,16 +286,15 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 		a.tree.Counts[base] = counts
 		a.saveMetaCache(p)
 	}
-	if a.win == nil {
-		counts, err := load()
+	var (
+		counts map[engine.ObjectKind]int
+		err    error
+	)
+	a.runBackground(func() {
+		counts, err = load()
+	}, func() {
 		done(counts, err)
-		return
-	}
-	win := a.win
-	go func() {
-		counts, err := load()
-		a.safeUpdate(win, func() { done(counts, err) })
-	}()
+	})
 }
 
 // ensureObjectPage 只在分组第一次展开时加载第一页，之后由「继续加载」显式追加；
@@ -396,16 +394,15 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 		}
 		a.saveMetaCache(p)
 	}
-	if a.win == nil {
-		objs, err := load()
+	var (
+		objs []engine.DBObject
+		err  error
+	)
+	a.runBackground(func() {
+		objs, err = load()
+	}, func() {
 		done(objs, err)
-		return
-	}
-	win := a.win
-	go func() {
-		objs, err := load()
-		a.safeUpdate(win, func() { done(objs, err) })
-	}()
+	})
 }
 
 // loadGroupsIn 保留为同步入口（测试/兼容）：取计数并把每个类型的第一页装好。
@@ -698,34 +695,27 @@ func fetchObjectDDL(ctx context.Context, sess engine.Session, o engine.DBObject)
 // loadObjectDDL 在会话就绪后读 DDL；headless 同步，有窗口时后台 + Update。
 func (a *root) loadObjectDDL(p app.ConnProfile, o engine.DBObject) {
 	sess := a.sessionFor(p.ID)
-	load := func() {
+	var (
+		ddl       string
+		supported bool
+		err       error
+	)
+	a.runBackground(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		ddl, supported, err := fetchObjectDDL(ctx, sess, o)
+		ddl, supported, err = fetchObjectDDL(ctx, sess, o)
+	}, func() {
 		if !supported {
 			a.setDDLNote(o.Name, locales.TreeDDLUnsupported())
 			return
 		}
-		apply := func() {
-			if err != nil {
-				a.setDDLNote(o.Name, locales.TreeDDLFailed(app.ErrorText(err)))
-				app.LogWarn("ddl", "load failed", "object", o.Name, "err", err.Error())
-				return
-			}
-			a.setDDL(o.Name, ddl)
-		}
-		if a.win != nil {
-			win := a.win
-			a.safeUpdate(win, apply)
+		if err != nil {
+			a.setDDLNote(o.Name, locales.TreeDDLFailed(app.ErrorText(err)))
+			app.LogWarn("ddl", "load failed", "object", o.Name, "err", err.Error())
 			return
 		}
-		apply()
-	}
-	if a.win == nil {
-		load()
-		return
-	}
-	go load()
+		a.setDDL(o.Name, ddl)
+	})
 }
 
 // DDL 弹窗的固定尺寸：正文是可滚动编辑器，面板不随 DDL 长短跳动。

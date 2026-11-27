@@ -48,3 +48,10 @@ func safeAsyncWork[T any](work func() (T, error)) (val T, err error) {
 	}()
 	return work()
 }
+
+// headless 报告当前 root 是否没有真实窗口（测试/无界面路径）。
+// 所有需要区分「有没有窗口」的代码统一走这里，避免散落 a.win == nil。
+func (a *root) headless() bool { return a.win == nil }
+
+// hasWindow 是 headless 的反面；窗口相关逻辑统一走这两个助手。
+func (a *root) hasWindow() bool { return a.win != nil }

@@ -310,7 +310,7 @@ func (a *root) viewerReload(t *viewerTab, after func()) {
 				after()
 			}
 		}
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			a.safeUpdate(win, apply)
 			return
@@ -386,16 +386,15 @@ func (a *root) viewerLoadColumns(t *viewerTab) {
 		}
 		t.cols = cols
 	}
-	if a.win == nil {
-		cols, err := load()
+	var (
+		cols []engine.Column
+		err  error
+	)
+	a.runBackground(func() {
+		cols, err = load()
+	}, func() {
 		done(cols, err)
-		return
-	}
-	win := a.win
-	go func() {
-		cols, err := load()
-		a.safeUpdate(win, func() { done(cols, err) })
-	}()
+	})
 }
 
 // viewerLoadIndexes 读索引清单（结构页）。
@@ -443,16 +442,15 @@ func (a *root) viewerLoadIndexes(t *viewerTab) {
 		}
 		t.idx = idx
 	}
-	if a.win == nil {
-		idx, err := load()
+	var (
+		idx []engine.Index
+		err error
+	)
+	a.runBackground(func() {
+		idx, err = load()
+	}, func() {
 		done(idx, err)
-		return
-	}
-	win := a.win
-	go func() {
-		idx, err := load()
-		a.safeUpdate(win, func() { done(idx, err) })
-	}()
+	})
 }
 
 // viewerLoadDDL 读对象 DDL（与 Ctrl+Q 弹窗同源）。
@@ -485,16 +483,16 @@ func (a *root) viewerLoadDDL(t *viewerTab) {
 			t.ddl = ddl
 		}
 	}
-	if a.win == nil {
-		ddl, ok, err := load()
+	var (
+		ddl string
+		ok  bool
+		err error
+	)
+	a.runBackground(func() {
+		ddl, ok, err = load()
+	}, func() {
 		done(ddl, ok, err)
-		return
-	}
-	win := a.win
-	go func() {
-		ddl, ok, err := load()
-		a.safeUpdate(win, func() { done(ddl, ok, err) })
-	}()
+	})
 }
 
 // viewerPane 渲染表视图标签的内容区。

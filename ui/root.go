@@ -323,7 +323,7 @@ func (a *root) runtime(id string) *app.Console {
 	}
 	c := a.newConsole()
 	c.SetOnDone(a.execDoneLogger(id))
-	if a.win != nil {
+	if a.hasWindow() {
 		win := a.win
 		c.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
 	}

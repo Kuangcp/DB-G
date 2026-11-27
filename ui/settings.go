@@ -71,7 +71,7 @@ func (a *root) setLocalePref(tag string) {
 			a.setSettingsNotice("locale", locales.SettingsSaveLocaleFailed(err.Error()), true)
 		}
 	}
-	if a.win != nil {
+	if a.hasWindow() {
 		mygo.App.SetLocale(prefs.Locale)
 	}
 }
@@ -414,7 +414,7 @@ type settingsWin interface {
 // 有宿主窗口时通过 win.Update 排队到主循环（不在帧构建中途建窗）；
 // 没有宿主窗口（headless 测试）时记请求，由帧首 maybeOpenSettings 处理。
 func (a *root) requestSettings() {
-	if a.win != nil {
+	if a.hasWindow() {
 		win := a.win
 		a.safeUpdate(win, func() { a.openSettings() })
 		return
@@ -451,7 +451,7 @@ func (a *root) maybeOpenSettings() {
 		return
 	}
 	a.settings.Requested = false
-	if a.settings.OpenWin == nil && a.win == nil {
+	if a.settings.OpenWin == nil && a.headless() {
 		return
 	}
 	a.openSettings()

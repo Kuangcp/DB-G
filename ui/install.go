@@ -80,14 +80,13 @@ func (a *root) startInstall() {
 		a.install.Note = locales.InstallDone(st.Running)
 		app.LogInfo("install", "self install", "bin", st.BinPath, "version", st.Installed)
 	}
-	if a.win == nil {
-		st, err := run()
+	var (
+		st  app.InstallStatus
+		err error
+	)
+	a.runBackground(func() {
+		st, err = run()
+	}, func() {
 		done(st, err)
-		return
-	}
-	win := a.win
-	go func() {
-		st, err := run()
-		a.safeUpdate(win, func() { done(st, err) })
-	}()
+	})
 }

@@ -193,15 +193,12 @@ func (a *root) startSync(kind string) {
 		defer cancel()
 		return svc.Run(ctx, kind)
 	}
-	if a.win == nil {
-		a.finishSync(run())
-		return
-	}
-	win := a.win
-	go func() {
-		res := run()
-		win.Update(func() { a.finishSync(res) })
-	}()
+	var res app.SyncOutcome
+	a.runBackground(func() {
+		res = run()
+	}, func() {
+		a.finishSync(res)
+	})
 }
 
 func (a *root) finishSync(res app.SyncOutcome) {

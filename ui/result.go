@@ -1093,7 +1093,7 @@ func (a *root) changePage(delta int) {
 				a.editSet().Clear()
 			}
 		}
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			a.safeUpdate(win, apply)
 			return
@@ -1142,7 +1142,7 @@ func (a *root) countRows() {
 			}
 			ps.Total, ps.TotalKnown = n, true
 		}
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			a.safeUpdate(win, apply)
 			return
@@ -1286,7 +1286,7 @@ func (a *root) exportCloseModal(c *ui.Context) {
 			if ui.Button(c, locales.ExportExitAnyway()).TextColor(c.Theme().Danger).Clicked() {
 				a.exportState.CloseConfirm = false
 				a.exportState.Busy = false
-				if a.win != nil {
+				if a.hasWindow() {
 					a.win.Close()
 				}
 			}

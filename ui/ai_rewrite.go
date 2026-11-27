@@ -88,32 +88,26 @@ func (a *root) startAIRewrite() {
 		}
 		return b.String(), streamErr
 	}
-	if a.win == nil {
-		ch, err := openAIStream(ctx, cancel, provider, req)
-		if err != nil {
-			st.loading, st.cancel = false, nil
-			cancel()
-			st.err = err.Error()
-			app.LogWarn("ai", "rewrite stream failed", "err", err.Error())
+	var (
+		text      string
+		streamErr error
+	)
+	a.runBackground(func() {
+		ch, openErr := openAIStream(ctx, cancel, provider, req)
+		if openErr != nil {
+			streamErr = openErr
 			return
 		}
-		text, err := read(ch)
-		a.finishAIRewrite(seq, text, err)
-		return
-	}
-	win := a.win
-	go func() {
-		ch, err := openAIStream(ctx, cancel, provider, req)
-		if err != nil {
-			if ctx.Err() == nil {
-				app.LogWarn("ai", "rewrite stream failed", "err", err.Error())
-				a.safeUpdate(win, func() { a.finishAIRewrite(seq, "", err) })
-			}
+		text, streamErr = read(ch)
+	}, func() {
+		if streamErr != nil && ctx.Err() != nil {
 			return
 		}
-		text, err := read(ch)
-		a.safeUpdate(win, func() { a.finishAIRewrite(seq, text, err) })
-	}()
+		if streamErr != nil {
+			app.LogWarn("ai", "rewrite stream failed", "err", streamErr.Error())
+		}
+		a.finishAIRewrite(seq, text, streamErr)
+	})
 }
 
 // finishAIRewrite 在主线程落定模型结果并生成 diff。

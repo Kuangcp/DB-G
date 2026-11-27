@@ -1134,7 +1134,7 @@ func (a *root) saveConnForm() {
 }
 
 func (a *root) browsePath() {
-	if a.win == nil {
+	if a.headless() {
 		return
 	}
 	win := a.win

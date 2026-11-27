@@ -359,7 +359,7 @@ func (a *root) commitEdits() {
 func (a *root) setEditStatus(msg string) {
 	a.edit.Status = msg
 	seq := a.edit.StatusSeq.Add(1)
-	if msg == "" || a.win == nil {
+	if msg == "" || a.headless() {
 		return
 	}
 	win := a.win
@@ -394,15 +394,12 @@ func (a *root) applyConfirmedEdits() {
 		a.grid.editKey = ""
 		a.refreshGrid(func() { a.setEditStatus(locales.EditCommitOK()) })
 	}
-	if a.win == nil {
-		done(a.applyEditsSync())
-		return
-	}
-	go func() {
-		err := a.applyEditsSync()
-		win := a.win
-		a.safeUpdate(win, func() { done(err) })
-	}()
+	var err error
+	a.runBackground(func() {
+		err = a.applyEditsSync()
+	}, func() {
+		done(err)
+	})
 }
 
 // refreshResult 重跑最近一次语句（刷新结果，保持排序/筛选与分页状态）。
@@ -428,7 +425,7 @@ func (a *root) refreshResult(onDone func()) {
 				onDone()
 			}
 		}
-		if a.win != nil {
+		if a.hasWindow() {
 			win := a.win
 			a.safeUpdate(win, apply)
 			return

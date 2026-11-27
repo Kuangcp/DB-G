@@ -201,7 +201,7 @@ func (a *root) aiCanFetchModels() bool {
 
 // maybeFetchAIModels 在设置页首次显示、或地址/密钥改完后自动拉一次列表。
 func (a *root) maybeFetchAIModels() {
-	if a.win == nil && a.ai.TestProvider == nil {
+	if a.headless() && a.ai.TestProvider == nil {
 		return // headless 测试不主动访问网络
 	}
 	if a.ai.ModelsLoading || len(a.ai.Models) > 0 || a.ai.ModelsErr != "" {
@@ -259,17 +259,14 @@ func (a *root) fetchAIModels() {
 			a.ai.ModelsErr = locales.AiNoModelsReturned()
 		}
 	}
-	if a.win == nil {
-		models, err := run()
+	var (
+		models []string
+		err    error
+	)
+	a.runBackground(func() {
+		models, err = run()
+	}, func() {
 		apply(models, err)
-		return
-	}
-	win := a.win
-	go func() {
-		models, err := run()
-		a.safeUpdate(win, func() {
-			apply(models, err)
-			a.updateSettingsWindow()
-		})
-	}()
+		a.updateSettingsWindow()
+	})
 }

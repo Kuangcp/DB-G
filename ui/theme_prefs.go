@@ -51,7 +51,7 @@ func (a *root) setThemePrefs(p app.ThemePrefs) {
 	a.saveThemePrefs()
 	a.updateSettingsWindow()
 	bg := WindowBackgroundColor(prefs)
-	if a.win != nil {
+	if a.hasWindow() {
 		_ = a.win.SetBackgroundColor(bg)
 		win := a.win
 		a.safeUpdate(win, func() {})
@@ -69,7 +69,7 @@ func (a *root) saveThemePrefs() {
 		return
 	}
 	prefs := a.settings.ThemePrefs
-	if a.win == nil {
+	if a.headless() {
 		if err := app.SaveThemePrefs(path, prefs); err != nil {
 			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
 			a.setSettingsNotice("theme", locales.ThemeSaveFailed(err.Error()), true)

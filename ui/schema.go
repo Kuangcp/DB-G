@@ -88,16 +88,15 @@ func (a *root) ensureSchemas(p app.ConnProfile) {
 		}
 		a.saveMetaCache(p)
 	}
-	if a.win == nil {
-		schemas, err := load()
+	var (
+		schemas []string
+		err     error
+	)
+	a.runBackground(func() {
+		schemas, err = load()
+	}, func() {
 		done(schemas, err)
-		return
-	}
-	win := a.win
-	go func() {
-		schemas, err := load()
-		win.Update(func() { done(schemas, err) })
-	}()
+	})
 }
 
 // setActiveSchema 切换当前 schema/库：更新下拉状态、失效补全缓存、展开树里的 schema 节点，
@@ -152,15 +151,12 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 		}
 		app.LogInfo("conn", "schema switched", "conn", p.ID, "schema", schema)
 	}
-	if a.win == nil {
-		done(run())
-		return
-	}
-	win := a.win
-	go func() {
-		err := run()
-		win.Update(func() { done(err) })
-	}()
+	var err error
+	a.runBackground(func() {
+		err = run()
+	}, func() {
+		done(err)
+	})
 }
 
 // schemaPicker 是顶栏数据源名旁边的 schema/库下拉：只在会话支持多 schema 且能切换时显示。

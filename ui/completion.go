@@ -203,7 +203,7 @@ func (a *root) ensureColumnsKey(key, connID, schema, table string) {
 	}
 	a.runBackground(load, func() {
 		a.requestRetrigger()
-		if a.win != nil && a.completionStillWanted() {
+		if a.hasWindow() && a.completionStillWanted() {
 			a.showCompletionsAtCursor()
 		}
 	})
@@ -471,7 +471,7 @@ func (a *root) retriggerCompletions() { a.requestRetrigger() }
 // 不能用 Run(ShowCompletions)：编辑器在同一词起点已有弹层时会短路成「本地重过滤」，
 // 不会再问一次 onCompletion（目录就永远补不进去）。
 func (a *root) showCompletionsAtCursor() {
-	if a.win == nil && !a.code.state.Focused() {
+	if a.headless() && !a.code.state.Focused() {
 		return
 	}
 	kind := a.connKindOf(a.activeConsoleConnID())

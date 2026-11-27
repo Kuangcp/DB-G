@@ -63,3 +63,13 @@ func TestRunBackgroundInjection(t *testing.T) {
 		t.Fatal("bgRun injection not used")
 	}
 }
+
+func TestHeadlessHelper(t *testing.T) {
+	a := newRoot("")
+	if !a.headless() {
+		t.Fatal("newRoot without window must be headless")
+	}
+	if a.hasWindow() {
+		t.Fatal("hasWindow must agree with headless")
+	}
+}

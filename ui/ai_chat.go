@@ -291,7 +291,7 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 		Temperature: a.aiChatTemperature(),
 		MaxTokens:   a.aiTaskMaxTokens("chat"),
 	}
-	if a.win == nil {
+	if a.headless() {
 		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
 			a.ai.Chat.streaming = false
@@ -324,7 +324,7 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 
 // consumeAI 消费事件流；真机把增量合并后回主线程，headless 同步应用。
 func (a *root) consumeAI(seq uint64, ch <-chan ai.Event) {
-	if a.win == nil {
+	if a.headless() {
 		for ev := range ch {
 			a.applyAIEvent(seq, ev)
 		}
@@ -711,7 +711,7 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 		return b.String()
 	}
 	req := ai.Request{Model: a.aiTaskModel("chat"), Messages: msgs, Temperature: 0, MaxTokens: 48}
-	if a.win == nil {
+	if a.headless() {
 		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err == nil {
 			apply(read(ch))

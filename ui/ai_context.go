@@ -541,13 +541,10 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowD
 		a.attachAIRelations(&snap, relReqs)
 		done(snap)
 	}
-	if a.win == nil {
-		apply(load())
-		return
-	}
-	win := a.win
-	go func() {
-		got := load()
-		a.safeUpdate(win, func() { apply(got) })
-	}()
+	var got prepared
+	a.runBackground(func() {
+		got = load()
+	}, func() {
+		apply(got)
+	})
 }

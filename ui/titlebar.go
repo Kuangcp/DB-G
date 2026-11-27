@@ -101,7 +101,7 @@ func (a *root) topBar(c *ui.Context) {
 		})
 		// 应用操作与窗口控制之间留一点空白，避免误点关闭。
 		ui.Box(c).Width(6)
-		if a.win != nil {
+		if a.hasWindow() {
 			windowButtons(c, a.win)
 		}
 	})
