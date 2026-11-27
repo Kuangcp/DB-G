@@ -353,6 +353,11 @@ DDL 生成各说各话。
 
 ### ARCH-13 SQL 词法扫描写了 4 遍
 
+**进度（2026-11-27）**：新增 `sql/lex.go`（Lex/LexCode/HasCode/SkipQuoted/IsWordStart/Part），
+`app.SplitStatements`、`app.CheckSQLRisks`、`app.FirstSQLKeyword`、`sql.Tokenize`
+全部改用它；`app/sqlformat.go` 的引号跳过与标识符判断也改为调用 `sql` 助手。
+**剩余**：`sqlformat` 的格式化主循环仍自己逐字符处理空白/运算符（这是格式化算法，不是词法判定）。
+
 **证据**
 - `app/sqlsplit.go:16-176`（切语句 + `skipSQLQuoted` + `hasSQLCode`）。
 - `app/sqlformat.go:44-240`（格式化时再扫一遍引号/注释）。

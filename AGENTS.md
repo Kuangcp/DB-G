@@ -46,7 +46,7 @@ main.go ──> ui ──> app ──> engine
 | `sql/` | **纯叶层**：SQL 词法/作用域/关系解析/标识符规则/示例 SQL | 只用标准库，**禁止 import mygo/ui/app/engine** |
 | `driver/<kind>/` | 各数据源实现（`sqlite` `mysql` `postgres` `clickhouse`），`init()` 里 `engine.Register` | `engine` + 驱动库，**禁止 import app/ui** |
 | `ai/` | **纯叶层**：Provider 接口、go-openai SDK 封装、上下文 DTO、提示词、检索、计划解析 | 标准库 + go-openai，**禁止 import ui/app/engine** |
-| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划、git 同步编排 | `engine`、`ai`、`sync`、`locales`，**禁止 import ui / mygo** |
+| `app/` | 纯逻辑与落盘：连接库、控制台文件、历史、日志、加解密、导出、SQL 切分/格式化/编辑计划、git 同步编排 | `engine`、`ai`、`sync`、`sql`、`locales`，**禁止 import ui / mygo** |
 | `sync/` | **纯叶层**：系统 git 封装、AES-GCM/KCV、仓库路径与 DTO、工作树读写 | 只用标准库 |
 | `ui/` | mygo 视图层（唯一 import mygo 的地方）：`root` 编排一切交互 | `ai`、`app`、`engine`、`sql`、`mygo` |
 | `tools/` | 生成器（`genicon` 应用图标、`lucideicons` 图标代码），不是运行时代码 | 标准库 / mygo |

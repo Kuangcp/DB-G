@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"db-g/locales"
+	"db-g/sql"
 )
 
 // SQLRisk 是高危 SQL 检查结果；Level 2 表示默认就应重点提醒。
@@ -26,12 +27,12 @@ func CheckSQLRisks(sql string) []SQLRisk {
 	return out
 }
 
-func checkStatementRisk(sql string) []SQLRisk {
-	toks := lexSQL(sql)
+func checkStatementRisk(stmt string) []SQLRisk {
+	toks := sql.LexCode(stmt)
 	if len(toks) == 0 {
 		return nil
 	}
-	head := strings.ToUpper(toks[0].text)
+	head := strings.ToUpper(toks[0].Text)
 	switch head {
 	case "UPDATE", "DELETE":
 		where := topLevelToken(toks, "WHERE")
@@ -41,7 +42,7 @@ func checkStatementRisk(sql string) []SQLRisk {
 				Message: locales.AppGuardNoWhere(head),
 			}}
 		}
-		rest := strings.TrimSpace(sql[toks[where].end:])
+		rest := strings.TrimSpace(stmt[toks[where].End:])
 		if isTautology(rest) {
 			return []SQLRisk{{
 				Level: 2, Rule: head + "-tautology",
@@ -67,11 +68,11 @@ func isTautology(rest string) bool {
 	return false
 }
 
-func topLevelToken(toks []sqlToken, want string) int {
+func topLevelToken(toks []sql.LexToken, want string) int {
 	depth := 0
 	for i, tok := range toks {
-		if tok.kind == 'p' {
-			switch tok.text {
+		if tok.Kind == sql.LexPunct {
+			switch tok.Text {
 			case "(":
 				depth++
 			case ")":
@@ -81,58 +82,9 @@ func topLevelToken(toks []sqlToken, want string) int {
 			}
 			continue
 		}
-		if depth == 0 && strings.EqualFold(tok.text, want) {
+		if depth == 0 && strings.EqualFold(tok.Text, want) {
 			return i
 		}
 	}
 	return -1
-}
-
-// sqlToken 是 app 内部的轻量词：标识符/数字 'i'、标点 'p'。
-// 字符串与注释整体跳过，避免把 WHERE 1=1 里的内容误判。
-type sqlToken struct {
-	kind       byte
-	text       string
-	start, end int
-}
-
-func lexSQL(s string) []sqlToken {
-	var out []sqlToken
-	for i := 0; i < len(s); {
-		c := s[i]
-		switch {
-		case c == ' ' || c == '\t' || c == '\r' || c == '\n':
-			i++
-		case c == '-' && i+1 < len(s) && s[i+1] == '-':
-			for i < len(s) && s[i] != '\n' {
-				i++
-			}
-		case c == '/' && i+1 < len(s) && s[i+1] == '*':
-			i += 2
-			for i < len(s) && !(s[i] == '*' && i+1 < len(s) && s[i+1] == '/') {
-				i++
-			}
-			if i < len(s) {
-				i += 2
-			}
-		case c == '\'' || c == '"' || c == '`':
-			i = skipSQLQuoted(s, i, c)
-		case isSQLWordStart(c):
-			start := i
-			for i < len(s) && isSQLWordPart(s[i]) {
-				i++
-			}
-			out = append(out, sqlToken{kind: 'i', text: s[start:i], start: start, end: i})
-		case c >= '0' && c <= '9':
-			start := i
-			for i < len(s) && (s[i] >= '0' && s[i] <= '9' || s[i] == '.') {
-				i++
-			}
-			out = append(out, sqlToken{kind: 'i', text: s[start:i], start: start, end: i})
-		default:
-			out = append(out, sqlToken{kind: 'p', text: string(c)})
-			i++
-		}
-	}
-	return out
 }

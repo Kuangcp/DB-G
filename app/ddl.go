@@ -1,6 +1,10 @@
 package app
 
-import "strings"
+import (
+	"strings"
+
+	"db-g/sql"
+)
 
 // IsSchemaChangeSQL 报告语句是否可能改变表/列/索引等元数据。
 // 只看首个关键字（跳过空白与注释），覆盖常见 DDL：
@@ -15,31 +19,10 @@ func IsSchemaChangeSQL(sql string) bool {
 }
 
 // FirstSQLKeyword 返回去掉前导空白与注释后的第一个 SQL 关键字（大写）。
-func FirstSQLKeyword(sql string) string {
-	i := 0
-	for i < len(sql) {
-		switch {
-		case isSQLSpace(sql[i]):
-			i++
-		case sql[i] == '-' && i+1 < len(sql) && sql[i+1] == '-':
-			for i < len(sql) && sql[i] != '\n' {
-				i++
-			}
-		case sql[i] == '/' && i+1 < len(sql) && sql[i+1] == '*':
-			i += 2
-			for i < len(sql) && !(sql[i] == '*' && i+1 < len(sql) && sql[i+1] == '/') {
-				i++
-			}
-			if i < len(sql) {
-				i += 2
-			}
-		default:
-			start := i
-			for i < len(sql) && isSQLWordPart(sql[i]) {
-				i++
-			}
-			return strings.ToUpper(sql[start:i])
-		}
+func FirstSQLKeyword(text string) string {
+	toks := sql.LexCode(text)
+	if len(toks) == 0 {
+		return ""
 	}
-	return ""
+	return strings.ToUpper(toks[0].Text)
 }

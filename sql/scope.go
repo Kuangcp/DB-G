@@ -21,59 +21,28 @@ type Token struct {
 }
 
 // Tokenize 做补全所需的词法近似：标识符、标点；字符串与注释整体跳过。
-// 带引号的标识符（"x" / `x` / [x]）按标识符返回并去掉包裹。
+// 带引号的标识符（"x" / `x`）按标识符返回并去掉包裹；数字不参与补全。
 func Tokenize(s string) []Token {
 	var out []Token
-	for i := 0; i < len(s); {
-		c := s[i]
-		switch {
-		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
-			i++
-		case c == '-' && i+1 < len(s) && s[i+1] == '-':
-			for i < len(s) && s[i] != '\n' {
-				i++
+	for _, tok := range Lex(s) {
+		switch tok.Kind {
+		case LexWord:
+			out = append(out, Token{Kind: 'i', Text: tok.Text})
+		case LexString:
+			if tok.Text == "" {
+				continue
 			}
-		case c == '/' && i+1 < len(s) && s[i+1] == '*':
-			i += 2
-			for i < len(s) && !(s[i] == '*' && i+1 < len(s) && s[i+1] == '/') {
-				i++
-			}
-			if i < len(s) {
-				i += 2
-			}
-		case c == '\'':
-			i = skipQuoted(s, i, '\'')
-		case c == '"' || c == '`':
-			end := skipQuoted(s, i, c)
-			if end > i+1 {
-				if inner := s[i+1 : end-1]; inner != "" {
+			switch tok.Text[0] {
+			case '"', '`':
+				if len(tok.Text) < 2 {
+					continue
+				}
+				if inner := tok.Text[1 : len(tok.Text)-1]; inner != "" {
 					out = append(out, Token{Kind: 'i', Text: inner})
 				}
 			}
-			i = end
-		case c == '[': // MSSQL 风格的引号标识符（顺手支持）
-			end := strings.IndexByte(s[i:], ']')
-			if end < 0 {
-				i = len(s)
-				continue
-			}
-			if end > 1 {
-				out = append(out, Token{Kind: 'i', Text: s[i+1 : i+end]})
-			}
-			i += end + 1
-		case IsIdentStart(c):
-			start := i
-			for i < len(s) && IsIdentPart(s[i]) {
-				i++
-			}
-			out = append(out, Token{Kind: 'i', Text: s[start:i]})
-		case c >= '0' && c <= '9':
-			for i < len(s) && (s[i] >= '0' && s[i] <= '9' || s[i] == '.') {
-				i++
-			}
-		default:
-			out = append(out, Token{Kind: 'p', Text: string(c)})
-			i++
+		case LexPunct:
+			out = append(out, Token{Kind: 'p', Text: tok.Text})
 		}
 	}
 	return out

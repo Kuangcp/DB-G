@@ -1,6 +1,10 @@
 package app
 
-import "strings"
+import (
+	"strings"
+
+	"db-g/sql"
+)
 
 // formatKeywords 会被大写的关键字（只影响大小写，不改变语义）。
 var formatKeywords = func() map[string]bool {
@@ -108,7 +112,7 @@ func formatOne(text string) (string, int, bool) {
 				writeSpace()
 				pendingSpace = false
 			}
-			end := skipSQLQuoted(text, i, c)
+			end := sql.SkipQuoted(text, i, c)
 			if end == len(text) && text[end-1] != c {
 				return "", 0, false // 引号未闭合
 			}
@@ -197,9 +201,9 @@ func formatOne(text string) (string, int, bool) {
 				newline()
 			}
 			i++
-		case isSQLWordStart(c):
+		case sql.IsWordStart(c):
 			end := i
-			for end < len(text) && isSQLWordPart(text[end]) {
+			for end < len(text) && sql.IsWordPart(text[end]) {
 				end++
 			}
 			word := strings.ToUpper(text[i:end])
