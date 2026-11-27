@@ -2,15 +2,67 @@ package ui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
+
+	"db-g/locales"
 )
 
-func newTestCode() *codeEditor { return newCodeEditor("在左侧数据源下新建或打开控制台") }
+// 选中 SQL 后右键菜单里有「运行」，选择后只执行选区。
+func TestEditorSelectionContextMenuRunsSelection(t *testing.T) {
+	a := newConsoleRoot(t)
+	prof := seedConsoleConn(t, a, "本地")
+	if err := a.openConn(prof); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := a.consoleMgr().Create(prof.ID, "查询")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.activateConsole(rec.ID) {
+		t.Fatal("activate console")
+	}
+	a.setActiveText("SELECT 1;\nSELECT 2;")
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	// 选中第一条语句，Shift+F10 打开编辑器菜单。
+	rect, ok := tt.Find(locales.TopEditor())
+	if !ok {
+		t.Fatalf("editor missing: %q", tt.Texts())
+	}
+	tt.ClickAt(rect.X+90, rect.Y+20)
+	tt.Frame()
+	a.setSelection(0, len([]rune("SELECT 1")))
+	tt.Frame()
+	if _, _, has := a.code.Selection(); !has {
+		t.Fatal("setup: selection missing")
+	}
+	tt.Key(ui.Shift, ui.KeyF10)
+	tt.Frame()
+	menu := tt.Menu()
+	if !slices.Contains(menu, locales.EditorRun()) {
+		t.Fatalf("Run missing from menu: %v", menu)
+	}
+	if err := tt.ChooseMenuItem(locales.EditorRun()); err != nil {
+		t.Fatal(err)
+	}
+	waitStmts(t, a, tt, 1)
+	ran := false
+	for _, run := range a.stmtRuns {
+		if strings.Contains(run.sql, "SELECT 1") && !strings.Contains(run.sql, "SELECT 2") {
+			ran = true
+		}
+	}
+	if !ran {
+		t.Fatalf("menu Run should execute the selection: %+v", a.stmtRuns)
+	}
+}
 
+func newTestCode() *codeEditor { return newCodeEditor("在左侧数据源下新建或打开控制台") }
 func TestCodeEditorRuneByteRoundTrip(t *testing.T) {
 	c := newTestCode()
 	text := "SELECT '你好😀' AS s" // 含 CJK 与 4 字节 emoji

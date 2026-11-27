@@ -354,6 +354,12 @@ func newRoot(text string) *root {
 	a.code.state.OnCompletion = a.onCompletion
 	// 编辑器里 Ctrl+点击 / F12 标识符 = Ctrl+Q：打开该表/视图的 DDL。
 	a.code.state.OnDefinition = a.onEditorDefinition
+	// 右键菜单末尾追加「运行」；编辑器自带的编辑项由 mygo 放在前面。
+	a.code.state.ContextMenu = func(m *ui.Menu) {
+		if m.Item(locales.EditorRun()).Shortcut(ui.Ctrl, ui.KeyEnter).Chosen() {
+			a.runSQL()
+		}
+	}
 	a.applyEditorBindings()
 	a.applyFontPrefs()
 	return a

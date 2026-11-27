@@ -3106,6 +3106,16 @@ func (msgs Messages) KeyCompletion() string {
 	return Catalog.Format(msgs.locale, "keyCompletion", nil)
 }
 
+// EditorRun says "Run"
+// in the language the app shows.
+func EditorRun() string { return In(i18n.Locale()).EditorRun() }
+
+// EditorRun says "Run"
+// in the language of msgs.
+func (msgs Messages) EditorRun() string {
+	return Catalog.Format(msgs.locale, "editorRun", nil)
+}
+
 // KeyAIComplete says "AI Completion"
 // in the language the app shows.
 func KeyAIComplete() string { return In(i18n.Locale()).KeyAIComplete() }

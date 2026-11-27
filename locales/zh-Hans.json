@@ -306,6 +306,7 @@
   "keyToggleResults": "显示/隐藏查询结果",
   "keyViewDDL": "查看所选对象的 DDL",
   "keyCompletion": "SQL 补全",
+  "editorRun": "运行",
   "keyAIComplete": "AI 补全",
   "keyAIRewrite": "AI 改写选中 SQL",
   "keymapInvalid": "快捷键 {label} 无效（{err}），用默认值",

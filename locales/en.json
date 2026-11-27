@@ -363,6 +363,7 @@
   "keyToggleResults": "Show/Hide Query Results",
   "keyViewDDL": "View DDL of Selected Object",
   "keyCompletion": "SQL Completion",
+  "editorRun": "Run",
   "keyAIComplete": "AI Completion",
   "keyAIRewrite": "Rewrite Selected SQL with AI",
   "keymapInvalid": "Shortcut “{label}” is invalid ({err}); using the default",
