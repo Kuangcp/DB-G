@@ -293,15 +293,16 @@ func (s *session) ObjectsPage(ctx context.Context, _ string, kind engine.ObjectK
 	return out, rows.Err()
 }
 
-func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
+func (s *session) ObjectsIn(ctx context.Context, _ string, kind engine.ObjectKind) ([]engine.DBObject, error) {
 	return s.ObjectsPage(ctx, "", kind, 0, 0)
 }
 
 // quoteIdent 把 SQL 标识符包成双引号并转义内部双引号（PRAGMA 不吃占位符）。
 func quoteIdent(name string) string { return engine.QuoteIdent("sqlite", name) }
 
-// Columns 列出一个表的列（PRAGMA table_info）；表不存在时返回空列表。
-func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
+// ColumnsIn 列出一个表的列（PRAGMA table_info）；表不存在时返回空列表。
+// SQLite 没有 schema 概念，忽略 schema。
+func (s *session) ColumnsIn(ctx context.Context, _ string, table string) ([]engine.Column, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {
@@ -333,14 +334,7 @@ func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, e
 	return out, nil
 }
 
-// Indexes 列出一个表的索引（PRAGMA index_list + index_xinfo）。
-func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.indexesLocked(ctx, table)
-}
-
-// IndexesIn 与 Indexes 相同：SQLite 的临时表视图不区分 schema。
+// IndexesIn 列出一个表的索引（PRAGMA index_list + index_xinfo）。
 func (s *session) IndexesIn(ctx context.Context, _ string, table string) ([]engine.Index, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -481,8 +475,9 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 	return rows.Err()
 }
 
-// ObjectDDL 返回表/视图/索引的建对象语句（sqlite_master.sql）。
-func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
+// ObjectDDLIn 返回表/视图/索引的建对象语句（sqlite_master.sql）。
+// SQLite 没有 schema 概念，忽略 schema。
+func (s *session) ObjectDDLIn(ctx context.Context, _ string, kind engine.ObjectKind, name string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.db == nil {

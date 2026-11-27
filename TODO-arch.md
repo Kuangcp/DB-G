@@ -413,8 +413,9 @@ Unmarshal → 本地化错误 → Normalize → MkdirAll → MarshalIndent → �
 UI 的成对断言已全部改为调用助手；`sess.(engine.Xxx)` 从 38 降到 19，
 剩下都是单接口能力探测（SchemaLister/Switcher/Transactional/PlanExplainer/RowStreamer/
 ServerInfoer/ForeignKeyer 等），不再有 scoped/flat 双分支。
-**剩余**：四个驱动仍保留 flat 包装方法（helper 会优先走 scoped），可按需再删；
-新增驱动只需实现 schema 感知一套即可被 helper 选中。
+**已完成（2026-11-27 追加）**：四个驱动的 flat 包装方法已全部删除；
+SQLite 补齐 `ObjectsIn`/`ColumnsIn`/`ObjectDDLIn`（忽略 schema），与另外三个驱动一致。
+现在驱动只实现 schema 感知一套，`engine` 的 flat 回退仅用于旧的测试假会话。
 
 **证据**
 - `engine` 有 10 对「单 schema / 带 schema」接口：`ObjectLister`/`SchemaLister`、

@@ -451,16 +451,7 @@ func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.Obje
 	return s.ObjectsPage(ctx, schema, kind, 0, 0)
 }
 
-func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
-	return s.ObjectsPage(ctx, "", kind, 0, 0)
-}
-
 // Columns 列出一个表的列；没选库时用当前库，当前库也没有就报错。
-func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.columnsLocked(ctx, "", table)
-}
 
 // ColumnsIn 按库列出列：补全和多库对象树走这里，连接没填数据库也能用。
 func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine.Column, error) {
@@ -507,11 +498,6 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 }
 
 // Indexes 列出一个表的索引；没选库时用当前库。
-func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.indexesLocked(ctx, "", table)
-}
 
 // IndexesIn 按库列出索引。
 func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine.Index, error) {
@@ -617,11 +603,6 @@ func (s *session) Stream(ctx context.Context, query string, onColumns func([]str
 }
 
 // ObjectDDL 返回表/视图的建对象语句（SHOW CREATE）；索引不支持。
-func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.objectDDLLocked(ctx, "", kind, name)
-}
 
 // ObjectDDLIn 按库取 DDL：对象树跨库时不会被当前库带偏。
 func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {

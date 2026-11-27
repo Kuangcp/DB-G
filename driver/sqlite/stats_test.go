@@ -20,11 +20,11 @@ func TestObjectStats(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	statter, ok := s.(engine.ObjectStatter)
+	statter, ok := s.(engine.SchemaObjectStatter)
 	if !ok || !s.Caps().Has(engine.CapObjectStats) {
 		t.Fatal("sqlite must provide object stats")
 	}
-	stats, err := statter.ObjectStats(ctx, engine.ObjectTable, "t")
+	stats, err := statter.ObjectStatsIn(ctx, "", engine.ObjectTable, "t")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,14 +55,14 @@ func TestObjectStats(t *testing.T) {
 	if _, err := s.RunStatement(ctx, "ANALYZE"); err != nil {
 		t.Fatal(err)
 	}
-	stats, err = statter.ObjectStats(ctx, engine.ObjectTable, "t")
+	stats, err = statter.ObjectStatsIn(ctx, "", engine.ObjectTable, "t")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stats.Rows == nil || *stats.Rows != 2 {
 		t.Fatalf("estimated rows after ANALYZE = %v", stats.Rows)
 	}
-	if _, err := statter.ObjectStats(ctx, engine.ObjectView, "t"); err == nil {
+	if _, err := statter.ObjectStatsIn(ctx, "", engine.ObjectView, "t"); err == nil {
 		t.Fatal("non-table must be rejected")
 	}
 }

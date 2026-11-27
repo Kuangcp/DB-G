@@ -423,11 +423,6 @@ func (s *session) ObjectsIn(ctx context.Context, database string, kind engine.Ob
 }
 
 // ObjectDDL 用 SHOW CREATE TABLE 取建表语句。
-func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.objectDDLLocked(ctx, "", kind, name)
-}
 
 // ObjectDDLIn 按库取 DDL。
 func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
@@ -485,16 +480,6 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 
 func quoteIdent(name string) string { return engine.QuoteIdent("clickhouse", name) }
 
-func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
-	return s.ObjectsPage(ctx, "", kind, 0, 0)
-}
-
-func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.columnsLocked(ctx, "", table)
-}
-
 // ColumnsIn 按库列出列；多库补全走这里。
 func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	s.mu.Lock()
@@ -528,11 +513,6 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 }
 
 // Indexes 列出一个表的数据跳过索引（system.data_skipping_indices）。
-func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.indexesLocked(ctx, "", table)
-}
 
 // IndexesIn 按库列出索引。
 func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine.Index, error) {

@@ -9,11 +9,6 @@ import (
 )
 
 // ObjectStats 返回当前 schema 中表的统计；行数取 pg_class.reltuples 估算值。
-func (s *session) ObjectStats(ctx context.Context, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.objectStatsLocked(ctx, "", kind, name)
-}
 
 // ObjectStatsIn 按 schema 取统计：对象树跨 schema 时不会被当前 schema 带偏。
 func (s *session) ObjectStatsIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {

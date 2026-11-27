@@ -25,8 +25,8 @@ func openEditSession(t *testing.T) engine.Session {
 
 func tableColumns(t *testing.T, s engine.Session, table string) []app.ColumnInfo {
 	t.Helper()
-	lister := s.(engine.ColumnLister)
-	cols, err := lister.Columns(context.Background(), table)
+	lister := s.(engine.SchemaColumnLister)
+	cols, err := lister.ColumnsIn(context.Background(), "", table)
 	if err != nil {
 		t.Fatal(err)
 	}

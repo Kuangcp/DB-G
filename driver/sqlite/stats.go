@@ -9,13 +9,8 @@ import (
 	"db-g/engine"
 )
 
-// ObjectStats 返回表的估算行数、列数与占用空间；尺寸依赖 dbstat 虚拟表，
-// 编译时未开启时只跳过尺寸，其余统计照常返回。
-func (s *session) ObjectStats(ctx context.Context, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
-	return s.ObjectStatsIn(ctx, "", kind, name)
-}
-
-// ObjectStatsIn 与 ObjectStats 相同；SQLite 没有 schema 概念，忽略 schema。
+// ObjectStatsIn 返回表的估算行数、列数与占用空间；尺寸依赖 dbstat 虚拟表，
+// 编译时未开启时只跳过尺寸，其余统计照常返回。SQLite 没有 schema 概念，忽略 schema。
 func (s *session) ObjectStatsIn(ctx context.Context, _ string, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

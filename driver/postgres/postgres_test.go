@@ -58,7 +58,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if _, err := s.RunStatement(ctx, `INSERT INTO pg_smoke (id, name) VALUES (1, 'a')`); err != nil {
 		t.Fatalf("Insert: %v", err)
 	}
-	cols, err := s.(engine.ColumnLister).Columns(ctx, "pg_smoke")
+	cols, err := s.(engine.SchemaColumnLister).ColumnsIn(ctx, "", "pg_smoke")
 	if err != nil {
 		t.Fatal(err)
 	}

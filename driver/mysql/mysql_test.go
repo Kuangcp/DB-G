@@ -58,7 +58,7 @@ func TestIsQueryLikeMySQL(t *testing.T) {
 
 func TestObjectsErrors(t *testing.T) {
 	s := &session{cfg: newTestConfig()}
-	if _, err := s.Objects(context.Background(), engine.ObjectTable); err == nil {
+	if _, err := s.ObjectsIn(context.Background(), "", engine.ObjectTable); err == nil {
 		t.Fatal("want session not open")
 	} else if ue, ok := engine.AsUserError(err); !ok || ue.Code != engine.ErrSessionClosed {
 		t.Fatalf("want ErrSessionClosed, got %v", err)
@@ -69,13 +69,13 @@ func TestObjectsErrors(t *testing.T) {
 	}
 	defer db.Close()
 	s2 := &session{cfg: newTestConfig(), db: db}
-	if _, err := s2.Objects(context.Background(), engine.ObjectTable); err == nil {
+	if _, err := s2.ObjectsIn(context.Background(), "", engine.ObjectTable); err == nil {
 		t.Fatal("want no database selected")
 	} else if ue, ok := engine.AsUserError(err); !ok || ue.Code != engine.ErrNoDatabaseSelected {
 		t.Fatalf("want ErrNoDatabaseSelected, got %v", err)
 	}
 	s2.cfg.DBName = "app"
-	if _, err := s2.Objects(context.Background(), engine.ObjectKind(99)); err == nil {
+	if _, err := s2.ObjectsIn(context.Background(), "", engine.ObjectKind(99)); err == nil {
 		t.Fatal("unknown kind must error")
 	}
 }
@@ -114,11 +114,11 @@ func TestMySQLIntegration(t *testing.T) {
 	if res == nil || !res.IsQuery || len(res.Rows) != 1 {
 		t.Fatalf("SELECT 1: %+v", res)
 	}
-	lister, ok := s.(engine.ObjectLister)
+	lister, ok := s.(engine.SchemaObjectLister)
 	if !ok {
-		t.Fatal("mysql session must implement engine.ObjectLister")
+		t.Fatal("mysql session must implement engine.SchemaObjectLister")
 	}
-	if _, err := lister.Objects(ctx, engine.ObjectTable); err != nil {
+	if _, err := lister.ObjectsIn(ctx, "", engine.ObjectTable); err != nil {
 		t.Fatalf("Objects: %v", err)
 	}
 }
@@ -133,7 +133,7 @@ func TestColumnsRequiresOpenSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 未 Open（或未选库）都必须报错，而不是返回空列表假装成功。
-	if _, err := s.(engine.ColumnLister).Columns(context.Background(), "users"); err == nil {
+	if _, err := s.(engine.SchemaColumnLister).ColumnsIn(context.Background(), "", "users"); err == nil {
 		t.Fatal("listing columns without an open session must fail")
 	}
 }

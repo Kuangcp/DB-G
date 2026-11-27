@@ -9,11 +9,6 @@ import (
 )
 
 // ObjectStats 返回当前库中表的统计；行数取 information_schema 的估算值。
-func (s *session) ObjectStats(ctx context.Context, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.objectStatsLocked(ctx, "", kind, name)
-}
 
 // ObjectStatsIn 按库取统计：对象树跨库时不会被当前库带偏。
 func (s *session) ObjectStatsIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (*engine.ObjectStats, error) {

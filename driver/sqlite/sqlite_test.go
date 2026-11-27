@@ -217,7 +217,7 @@ func TestCellAndResultBudget(t *testing.T) {
 func TestObjects(t *testing.T) {
 	ctx := context.Background()
 	s := newMemSession(t)
-	lister, ok := s.(engine.ObjectLister)
+	lister, ok := s.(engine.SchemaObjectLister)
 	if !ok {
 		t.Fatal("sqlite session must implement engine.ObjectLister")
 	}
@@ -236,21 +236,21 @@ func TestObjects(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	tables, err := lister.Objects(ctx, engine.ObjectTable)
+	tables, err := lister.ObjectsIn(ctx, "", engine.ObjectTable)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if names := objectNames(tables); !equalStrings(names, []string{"a", "b", "seq"}) {
 		t.Fatalf("tables = %v, want [a b seq]（sqlite_sequence 已被过滤）", names)
 	}
-	views, err := lister.Objects(ctx, engine.ObjectView)
+	views, err := lister.ObjectsIn(ctx, "", engine.ObjectView)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if names := objectNames(views); !equalStrings(names, []string{"v"}) {
 		t.Fatalf("views = %v, want [v]", names)
 	}
-	indexes, err := lister.Objects(ctx, engine.ObjectIndex)
+	indexes, err := lister.ObjectsIn(ctx, "", engine.ObjectIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,11 +285,11 @@ func TestColumns(t *testing.T) {
 	if _, err := s.RunStatement(ctx, `CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, score REAL)`); err != nil {
 		t.Fatal(err)
 	}
-	lister, ok := s.(engine.ColumnLister)
+	lister, ok := s.(engine.SchemaColumnLister)
 	if !ok || !s.Caps().Has(engine.CapColumns) {
 		t.Fatal("sqlite must list columns")
 	}
-	cols, err := lister.Columns(ctx, "users")
+	cols, err := lister.ColumnsIn(ctx, "", "users")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,11 +318,11 @@ func TestIndexes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	lister, ok := s.(engine.IndexLister)
+	lister, ok := s.(engine.SchemaIndexLister)
 	if !ok || !s.Caps().Has(engine.CapIndexes) {
 		t.Fatal("sqlite must list indexes")
 	}
-	indexes, err := lister.Indexes(ctx, "users")
+	indexes, err := lister.IndexesIn(ctx, "", "users")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestColumnsQuotesIdentifier(t *testing.T) {
 	if _, err := s.RunStatement(ctx, `CREATE TABLE "weird""name" (c TEXT)`); err != nil {
 		t.Fatal(err)
 	}
-	cols, err := s.(engine.ColumnLister).Columns(ctx, `weird"name`)
+	cols, err := s.(engine.SchemaColumnLister).ColumnsIn(ctx, "", `weird"name`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestColumnsQuotesIdentifier(t *testing.T) {
 }
 
 func TestColumnsUnknownTable(t *testing.T) {
-	cols, err := newMemSession(t).(engine.ColumnLister).Columns(context.Background(), "nope")
+	cols, err := newMemSession(t).(engine.SchemaColumnLister).ColumnsIn(context.Background(), "", "nope")
 	if err != nil {
 		t.Fatal("unknown table must not error:", err)
 	}
@@ -423,24 +423,24 @@ func TestObjectDDL(t *testing.T) {
 	if _, err := s.RunStatement(ctx, `CREATE VIEW ddl_v AS SELECT id FROM ddl_t`); err != nil {
 		t.Fatal(err)
 	}
-	lister, ok := s.(engine.ObjectDDLer)
+	lister, ok := s.(engine.SchemaObjectDDLer)
 	if !ok || !s.Caps().Has(engine.CapObjectDDL) {
 		t.Fatal("sqlite must provide DDL")
 	}
-	ddl, err := lister.ObjectDDL(ctx, engine.ObjectTable, "ddl_t")
+	ddl, err := lister.ObjectDDLIn(ctx, "", engine.ObjectTable, "ddl_t")
 	if err != nil || !strings.HasPrefix(strings.ToUpper(ddl), "CREATE TABLE") {
 		t.Fatalf("table ddl: %q err=%v", ddl, err)
 	}
-	ddl, err = lister.ObjectDDL(ctx, engine.ObjectView, "ddl_v")
+	ddl, err = lister.ObjectDDLIn(ctx, "", engine.ObjectView, "ddl_v")
 	if err != nil || !strings.Contains(strings.ToUpper(ddl), "CREATE VIEW") {
 		t.Fatalf("view ddl: %q err=%v", ddl, err)
 	}
 	// Ctrl+Q 不认识类型时按表来问，也要能落到视图上。
-	ddl, err = lister.ObjectDDL(ctx, engine.ObjectTable, "ddl_v")
+	ddl, err = lister.ObjectDDLIn(ctx, "", engine.ObjectTable, "ddl_v")
 	if err != nil || !strings.Contains(strings.ToUpper(ddl), "CREATE VIEW") {
 		t.Fatalf("view ddl via table kind: %q err=%v", ddl, err)
 	}
-	if _, err := lister.ObjectDDL(ctx, engine.ObjectTable, "nope"); err == nil {
+	if _, err := lister.ObjectDDLIn(ctx, "", engine.ObjectTable, "nope"); err == nil {
 		t.Fatal("missing object must error")
 	}
 }

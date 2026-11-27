@@ -415,13 +415,6 @@ func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.Obje
 }
 
 // Objects 列出当前 schema 的对象（保持 ObjectLister 兼容）。
-func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
-	schema, err := s.currentSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return s.ObjectsIn(ctx, schema, kind)
-}
 
 func (s *session) currentSchema(ctx context.Context) (string, error) {
 	var schema sql.NullString
@@ -436,11 +429,6 @@ func (s *session) currentSchema(ctx context.Context) (string, error) {
 }
 
 // ObjectDDL 尽力拼出建表语句（列/类型/非空/默认/主键）；视图用 pg_get_viewdef。
-func (s *session) ObjectDDL(ctx context.Context, kind engine.ObjectKind, name string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.objectDDLLocked(ctx, "", kind, name)
-}
 
 // ObjectDDLIn 按 schema 取 DDL：对象树跨 schema 时不会拿当前 schema 去查。
 func (s *session) ObjectDDLIn(ctx context.Context, schema string, kind engine.ObjectKind, name string) (string, error) {
@@ -546,12 +534,6 @@ WHERE c.table_schema=$1 AND c.table_name=$2 ORDER BY c.ordinal_position`
 
 func quoteIdent(s string) string { return engine.QuoteIdent("postgres", s) }
 
-func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.columnsLocked(ctx, "", table)
-}
-
 // ColumnsIn 按 schema 列出列；多 schema 补全走这里。
 func (s *session) ColumnsIn(ctx context.Context, schema, table string) ([]engine.Column, error) {
 	s.mu.Lock()
@@ -606,11 +588,6 @@ ORDER BY c.ordinal_position`
 }
 
 // Indexes 列出一个表的索引。
-func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.indexesLocked(ctx, "", table)
-}
 
 // IndexesIn 按 schema 列出索引。
 func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine.Index, error) {
