@@ -124,7 +124,7 @@ func TestMetaCacheRendersCachedSchemaTree(t *testing.T) {
 	*a.groupOpenPtr(p.ID+"|db1|"+kindKey(engine.ObjectTable), false) = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if !tt.HasText("▣ db1") || !tt.HasText("表 (1)") || !tt.HasText("cached_schema_table") {
+	if !tt.HasText("db1") || !tt.HasText("表 (1)") || !tt.HasText("cached_schema_table") {
 		t.Fatalf("cached schema tree missing: %q", tt.Texts())
 	}
 }

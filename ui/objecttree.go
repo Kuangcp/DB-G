@@ -478,7 +478,7 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 		key := p.ID + "|" + schema
 		base := objectTreeKey(p.ID, schema)
 		open := a.groupOpen(key+"|schema", false)
-		row := treeGroupRow(c, "▣ "+schema, open, depth, nil, c.Theme().TextMuted, nil)
+		row := treeGroupRow(c, schema, open, depth, iconDatabase, c.Theme().TextMuted, nil)
 		if row.Clicked() {
 			a.setActiveSchema(p, schema)
 		}

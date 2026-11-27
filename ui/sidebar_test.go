@@ -756,7 +756,7 @@ func TestSchemaTreeRendersSchemasThenObjects(t *testing.T) {
 	a.treeExpand[stored.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	for _, want := range []string{"▣ app", "▣ public"} {
+	for _, want := range []string{"app", "public"} {
 		if !tt.HasText(want) {
 			t.Fatalf("schema %q missing: %q", want, tt.Texts())
 		}
@@ -766,7 +766,7 @@ func TestSchemaTreeRendersSchemasThenObjects(t *testing.T) {
 	if !ok {
 		t.Fatalf("console group missing: %q", tt.Texts())
 	}
-	schemaRect, ok := tt.Find("▣ app")
+	schemaRect, ok := tt.Find("app")
 	if !ok {
 		t.Fatalf("schema row missing: %q", tt.Texts())
 	}

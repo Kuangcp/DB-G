@@ -253,7 +253,7 @@ func (a *root) refreshStaleMeta(p app.ConnProfile) {
 			return
 		}
 		// 默认 schema 用空串作缓存键，但不要把它写进 schema 列表，
-		// 否则无 schema 的驱动会多出一个「▣ 」节点。
+		// 否则无 schema 的驱动会多出一个空的库节点。
 		if len(schemas) > 0 && !(len(schemas) == 1 && schemas[0] == "") {
 			if a.treeSchemas == nil {
 				a.treeSchemas = map[string][]string{}
