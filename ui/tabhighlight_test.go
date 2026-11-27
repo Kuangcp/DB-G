@@ -113,7 +113,7 @@ func TestTabBarActiveTabKeepsLayout(t *testing.T) {
 	// 换成激活第二个。
 	for _, rec := range a.consoleMgr().Open() {
 		if rec.Name == "查询二" {
-			a.pendingActivate = rec.ID
+			a.deferActivateConsole(rec.ID, "")
 		}
 	}
 	tt.Frame()

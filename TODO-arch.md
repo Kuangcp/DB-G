@@ -207,6 +207,12 @@
 
 ### ARCH-08 `view()` 在渲染过程中改状态，`pending*` 字段是临时补丁
 
+**进度（2026-11-27）**：已完成 `frameStart()` + `deferred []func()` 队列：
+`pendingClose/pendingSwitchWS/pendingActivate/pendingActivateViewer/pendingAppend/pendingExec`
+与 `execPending` 全部删除，调用方改用 `deferUI`/`deferActivateConsole`/`deferActivateViewer`/
+`deferCloseConsole`/`deferSwitchWorkspace`；`view` 的 editor 闭包不再执行 `runSQL`。
+队列有 FIFO + 执行中追加排空的单测。**剩余**：弹窗注册表（当前仍是逐帧手写 `xxxModal(c)`）。
+
 **证据**：`ui/root.go:826-900`：每帧开头执行 `maybeOpenSettings`、`syncActiveBuffer`、
 `applyEditorLanguage`、`pollExternalFiles`，并依次消费 `pendingClose`、`pendingSwitchWS`、
 `pendingActivate`、`pendingActivateViewer`、`pendingAppend`、`pendingExec`；

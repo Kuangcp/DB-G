@@ -147,7 +147,7 @@ func (a *root) paletteConsoles() []paletteItem {
 		rec := rec
 		items = append(items, paletteItem{
 			label: a.consoleLabel(rec),
-			run:   func() { a.pendingActivate = rec.ID },
+			run:   func() { a.deferActivateConsole(rec.ID, "") },
 		})
 	}
 	// 表视图标签也进面板：搜到就能直接切过去。
@@ -167,7 +167,7 @@ func (a *root) paletteConsoles() []paletteItem {
 		run := t.id
 		items = append(items, paletteItem{
 			label: label,
-			run:   func() { a.pendingActivateViewer = run },
+			run:   func() { a.deferActivateViewer(run) },
 		})
 	}
 	return items
@@ -209,7 +209,7 @@ func (a *root) paletteSQL(q string) []paletteItem {
 				label: label,
 				hint:  fmt.Sprintf("%d: %s", i+1, snippet),
 				run: func() {
-					a.pendingActivate = id
+					a.deferActivateConsole(id, "")
 					a.paletteJumpID = id
 					a.paletteJumpSel = [2]int{selStart, selEnd}
 				},

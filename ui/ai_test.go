@@ -391,7 +391,7 @@ func TestAIChatCtrlEnterSendsFromInput(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyEnter)
 	tt.Frame()
-	if a.execPending {
+	if a.con.Result() != nil || a.con.Running() {
 		t.Fatal("Ctrl+Enter in AI input must not execute the editor")
 	}
 	if len(a.aiChat.messages) != 2 || a.aiChat.messages[0].text != "hello" {

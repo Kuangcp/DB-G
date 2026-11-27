@@ -625,7 +625,7 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 				a.reportBackgroundError(locales.ConsoleCreateFailed(err.Error()))
 				return
 			}
-			a.pendingActivate = rec.ID
+			a.deferActivateConsole(rec.ID, "")
 		}
 	})
 	if !*open {
@@ -655,11 +655,11 @@ func (a *root) consoleRow(c *ui.Context, rec app.ConsoleRecord, isOpen bool, dep
 		ui.Spacer(c)
 	})
 	if row.Clicked() {
-		a.pendingActivate = rec.ID
+		a.deferActivateConsole(rec.ID, "")
 	}
 	row.ContextMenu(func(menu *ui.Menu) {
 		if menu.Item(locales.TabMenuClose()).Disabled(!isOpen).Chosen() {
-			a.pendingClose = rec.ID
+			a.deferCloseConsole(rec.ID)
 		}
 		if menu.Item(locales.TabMenuRename()).Chosen() {
 			a.openModal("rename", rec.ID, rec.Name)

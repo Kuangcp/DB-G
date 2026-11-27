@@ -185,7 +185,7 @@ func TestExecChordStillTakenFromEditor(t *testing.T) {
 	if got := a.code.Text(); got != "SELECT 1" {
 		t.Fatalf("Ctrl+Enter 不该改正文: %q", got)
 	}
-	// 真的执行了（execPending 当帧就被消费掉，结果在控制台自己的运行态里）
+	// 真的执行了（帧首的 deferred 队列消费掉执行意图，结果在控制台自己的运行态里）
 	for range 200 {
 		if rt := a.currentRuntime(); rt.Result() != nil || rt.Err() != "" {
 			if rt.Err() != "" {

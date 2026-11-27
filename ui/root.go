@@ -100,7 +100,7 @@ type root struct {
 	connDeleteOpen   bool
 	connDeleting     string
 	tree             treeState
-	execPending      bool
+	deferred         []func() // 下一帧帧首执行的动作（FIFO）
 
 	appIconPNG []byte       // 窗口图标；自举安装时写入图标目录
 	install    installState // 自举安装/升级（仅发布构建）
@@ -116,94 +116,88 @@ type root struct {
 	reloadConsoleID   string
 	reloadPausedID    string
 
-	mgr                   *app.ConsoleManager
-	catalog               *catalogCache
-	sessions              map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
-	sessionUse            map[string]uint64         // connID → 最近使用序号（LRU）
-	sessionErr            map[string]string         // connID → 上次打开失败的原因
-	connOpening           map[string]bool           // connID → 后台建连中
-	connWaiters           map[string][]func(error)  // connID → 等这次建连结果的回调（UI 线程执行）
-	bgRun                 func(work, done func())   // 后台执行 + 回投 UI 的注入点（测试用；nil = 按窗口有无决定）
-	useSeq                uint64
-	consoles              map[string]*app.Console // consoleID → 运行态
-	activeConsole         string
-	consoleMRU            []string // 最近使用过的标签（控制台 id 或 "vw:"+viewerID；Ctrl+Tab 用，队首最新）
-	pendingActivate       string
-	pendingActivateViewer string                // 下一帧要激活的表视图标签
-	viewerTabs            map[string]*viewerTab // 表/视图临时标签（只在内存，关应用即丢）
-	viewerOrder           []string              // 表视图标签的创建顺序（标签行渲染用）
-	activeViewer          string                // 非空 = 当前展示表视图
-	consoleGrid           *gridState            // 控制台自己的结果网格状态
-	pendingClose          string
-	pendingSwitchWS       string
-	lastVer               map[string]uint64
-	lastCaret             [2]int
-	stmtRuns              []stmtRun              // 当前控制台的结果 tab：pinned 固定在最左，新执行追加到右侧
-	nextTabNo             int                    // 结果编号分配器（结果 N：pin/重排都不改名）
-	runsByConsole         map[string]consoleRuns // consoleID → 该控制台最近一次的结果 tab（对照 db-k 的 runSlots）
-	activeStmt            int
-	lastExecSQL           string                // 最近一次执行的语句文本（取更多/复制 INSERT 用）
-	pageStates            map[string]*pageState // runtimeID → 分页状态
-	filterOpen            bool
-	filterCol             int
-	filterText            string
-	history               *app.History
-	pendingAppend         string // 激活控制台后，在其光标处追加的正文（对象预览用）
-	pendingExec           bool   // 写入正文后是否立即执行
-	editSets              map[string]*app.EditSet
-	editBusy              bool
-	editCellOpen          bool
-	editCellRow           int
-	editCellCol           int
-	editCellText          string
-	inlineEditOn          bool // 结果表格内联编辑进行中
-	inlineEditRow         int  // 数据行下标
-	inlineEditCol         int  // 数据列下标
-	inlineEditText        string
-	inlineEditHadFocus    bool // 输入框已经拿到过焦点（用于失焦提交）
-	previewOpen           bool
-	previewLines          []string
-	ddlOpen               bool
-	ddlTitle              string
-	ddlText               string
-	ddlState              *myeditor.State // DDL 弹窗的只读高亮编辑器（惰性创建）
-	statsOpen             bool
-	statsLoading          bool
-	statsTitle            string
-	statsKind             string // 打开统计弹窗时数据源类型（决定 SQL 高亮方言）
-	stats                 *engine.ObjectStats
-	statsErr              string
-	statsSQLOpen          bool
-	statsSQLState         *myeditor.State // 统计 SQL 的只读高亮编辑器（惰性创建）
-	historyOpen           bool
-	paletteOpen           bool   // 命令面板（标题栏搜索框 / Ctrl+P）
-	paletteQuery          string // 命令面板当前查询
-	paletteJumpID         string // 面板选中的 SQL 命中所在控制台（待跳转）
-	paletteJumpSel        [2]int // 跳转后要选中的 rune 范围
-	exportState           exportState
-	revealPath            func(string) error // 测试注入；nil = app.RevealPath
-	editStatus            string
-	editStatusSeq         atomic.Uint64
-	cellView              cellViewState
-	consoleErr            string
-	computingCompletion   bool
-	retriggerPending      bool
-	completionWanted      bool // 编辑器正在等/持有补全弹层（用户触发）
-	completionWordStart   int  // 触发时词起点的字节偏移；光标离开这个词就不再重弹
-	settingsRequested     bool
-	settingsWin           settingsWin
-	openSettingsWin       func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
-	tabMenuAction         string                               // "close" / "rename" / "delete"
-	tabMenuTarget         string
-	modalKind             string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
-	modalTarget           string
-	modalText             string
-	modalErr              string
-	folderModalKind       string // "" / "new" / "rename" / "delete"
-	folderModalTarget     string
-	folderModalText       string
-	folderModalErr        string
-	ddlConn               app.ConnProfile // DDL 查询用的连接（可能来自编辑器光标）
+	mgr                 *app.ConsoleManager
+	catalog             *catalogCache
+	sessions            map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
+	sessionUse          map[string]uint64         // connID → 最近使用序号（LRU）
+	sessionErr          map[string]string         // connID → 上次打开失败的原因
+	connOpening         map[string]bool           // connID → 后台建连中
+	connWaiters         map[string][]func(error)  // connID → 等这次建连结果的回调（UI 线程执行）
+	bgRun               func(work, done func())   // 后台执行 + 回投 UI 的注入点（测试用；nil = 按窗口有无决定）
+	useSeq              uint64
+	consoles            map[string]*app.Console // consoleID → 运行态
+	activeConsole       string
+	consoleMRU          []string              // 最近使用过的标签（控制台 id 或 "vw:"+viewerID；Ctrl+Tab 用，队首最新）
+	viewerTabs          map[string]*viewerTab // 表/视图临时标签（只在内存，关应用即丢）
+	viewerOrder         []string              // 表视图标签的创建顺序（标签行渲染用）
+	activeViewer        string                // 非空 = 当前展示表视图
+	consoleGrid         *gridState            // 控制台自己的结果网格状态
+	lastVer             map[string]uint64
+	lastCaret           [2]int
+	stmtRuns            []stmtRun              // 当前控制台的结果 tab：pinned 固定在最左，新执行追加到右侧
+	nextTabNo           int                    // 结果编号分配器（结果 N：pin/重排都不改名）
+	runsByConsole       map[string]consoleRuns // consoleID → 该控制台最近一次的结果 tab（对照 db-k 的 runSlots）
+	activeStmt          int
+	lastExecSQL         string                // 最近一次执行的语句文本（取更多/复制 INSERT 用）
+	pageStates          map[string]*pageState // runtimeID → 分页状态
+	filterOpen          bool
+	filterCol           int
+	filterText          string
+	history             *app.History
+	editSets            map[string]*app.EditSet
+	editBusy            bool
+	editCellOpen        bool
+	editCellRow         int
+	editCellCol         int
+	editCellText        string
+	inlineEditOn        bool // 结果表格内联编辑进行中
+	inlineEditRow       int  // 数据行下标
+	inlineEditCol       int  // 数据列下标
+	inlineEditText      string
+	inlineEditHadFocus  bool // 输入框已经拿到过焦点（用于失焦提交）
+	previewOpen         bool
+	previewLines        []string
+	ddlOpen             bool
+	ddlTitle            string
+	ddlText             string
+	ddlState            *myeditor.State // DDL 弹窗的只读高亮编辑器（惰性创建）
+	statsOpen           bool
+	statsLoading        bool
+	statsTitle          string
+	statsKind           string // 打开统计弹窗时数据源类型（决定 SQL 高亮方言）
+	stats               *engine.ObjectStats
+	statsErr            string
+	statsSQLOpen        bool
+	statsSQLState       *myeditor.State // 统计 SQL 的只读高亮编辑器（惰性创建）
+	historyOpen         bool
+	paletteOpen         bool   // 命令面板（标题栏搜索框 / Ctrl+P）
+	paletteQuery        string // 命令面板当前查询
+	paletteJumpID       string // 面板选中的 SQL 命中所在控制台（待跳转）
+	paletteJumpSel      [2]int // 跳转后要选中的 rune 范围
+	exportState         exportState
+	revealPath          func(string) error // 测试注入；nil = app.RevealPath
+	editStatus          string
+	editStatusSeq       atomic.Uint64
+	cellView            cellViewState
+	consoleErr          string
+	computingCompletion bool
+	retriggerPending    bool
+	completionWanted    bool // 编辑器正在等/持有补全弹层（用户触发）
+	completionWordStart int  // 触发时词起点的字节偏移；光标离开这个词就不再重弹
+	settingsRequested   bool
+	settingsWin         settingsWin
+	openSettingsWin     func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
+	tabMenuAction       string                               // "close" / "rename" / "delete"
+	tabMenuTarget       string
+	modalKind           string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
+	modalTarget         string
+	modalText           string
+	modalErr            string
+	folderModalKind     string // "" / "new" / "rename" / "delete"
+	folderModalTarget   string
+	folderModalText     string
+	folderModalErr      string
+	ddlConn             app.ConnProfile // DDL 查询用的连接（可能来自编辑器光标）
 }
 
 func newRoot(text string) *root {
@@ -709,7 +703,7 @@ func (a *root) Attach(win *mygo.Window) {
 		// 外部文件有未解决冲突/缺失且本地有改动时，先让用户选择，别默默丢内容。
 		if id := a.firstBlockedExternal(); id != "" {
 			e.PreventDefault()
-			a.pendingActivate = id
+			a.deferActivateConsole(id, "")
 			a.extResolveOpen = true
 			return
 		}
@@ -776,57 +770,25 @@ func rootView(a *root) func(c *ui.Context) {
 	}
 }
 
+// frameStart 是一帧开始时的状态迁移阶段：主题、编辑器缓冲、外部文件轮询，
+// 以及上一帧排队的延迟动作。渲染分支此后只读，不再消费 pending* 字段。
+func (a *root) frameStart(c *ui.Context) {
+	a.applyTheme(c)
+	a.flushToasts(c)
+	a.maybeOpenSettings()
+	a.syncActiveBuffer()
+	a.applyEditorLanguage()
+	a.pollExternalFiles(false)
+	a.drainDeferred()
+	a.applyPaletteJump()
+	a.dispatchKeys(c)
+}
+
 // view 是一帧的真正构建（由 guardView 包裹）。
 func (a *root) view(c *ui.Context) {
 	defer func() { a.pointerDouble = false }()
-	a.applyTheme(c)
-	a.flushToasts(c)
+	a.frameStart(c)
 	{
-		// 帧首：同步上一帧的编辑/选区，并执行菜单排队的激活（不能在构建中途换 buffer）。
-		a.maybeOpenSettings()
-		a.syncActiveBuffer()
-		a.applyEditorLanguage()
-		a.pollExternalFiles(false)
-		if a.pendingClose != "" {
-			id := a.pendingClose
-			a.pendingClose = ""
-			a.closeConsole(id)
-		}
-		if a.pendingSwitchWS != "" {
-			id := a.pendingSwitchWS
-			a.pendingSwitchWS = ""
-			if m := a.consoleMgr(); m != nil {
-				if _, ok := m.SetActiveWorkspace(id); ok {
-					if rec, ok := m.Active(); ok {
-						a.pendingActivate = rec.ID
-					} else {
-						a.clearEditorConsole()
-					}
-				}
-			}
-		}
-		if a.pendingActivate != "" {
-			id := a.pendingActivate
-			a.pendingActivate = ""
-			a.activateConsole(id)
-		}
-		if a.pendingActivateViewer != "" {
-			id := a.pendingActivateViewer
-			a.pendingActivateViewer = ""
-			a.activateViewer(id)
-		}
-		a.applyPaletteJump()
-		if a.pendingAppend != "" {
-			sql := a.pendingAppend
-			a.pendingAppend = ""
-			a.insertSQLAtCaret(sql)
-		}
-		if a.pendingExec {
-			a.pendingExec = false
-			a.execPending = true
-		}
-		a.dispatchKeys(c)
-
 		a.tabModal(c)
 		a.consoleReloadModal(c)
 		a.cellViewer(c)
@@ -869,10 +831,6 @@ func (a *root) view(c *ui.Context) {
 						editor := func() {
 							a.externalBanner(c)
 							a.code.ViewWithDots(c).Label(locales.TopEditor())
-							if a.execPending {
-								a.execPending = false
-								a.runSQL()
-							}
 						}
 						if a.resultsHidden {
 							ui.Column(c).Grow(1).Children(editor)

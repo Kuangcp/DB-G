@@ -71,7 +71,7 @@ func (a *root) viewerTabButton(c *ui.Context, t *viewerTab, first bool) {
 	})
 	btn.Tooltip(locales.ViewerTabTooltip(a.connName(t.connID), label))
 	if btn.Clicked() {
-		a.pendingActivateViewer = t.id
+		a.deferActivateViewer(t.id)
 	}
 	btn.ContextMenu(func(menu *ui.Menu) {
 		if menu.Item(locales.ViewerRefresh()).Chosen() {
@@ -172,7 +172,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 		}
 	})
 	if btn.Clicked() {
-		a.pendingActivate = rec.ID
+		a.deferActivateConsole(rec.ID, "")
 	}
 	attachTabDrag(c, btn, rec.ID)
 	a.attachTabDrop(c, btn, rec)
@@ -181,7 +181,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 			a.requestReloadConsole(rec.ID)
 		}
 		if menu.Item(locales.TabMenuClose()).Chosen() {
-			a.pendingClose = rec.ID
+			a.deferCloseConsole(rec.ID)
 		}
 		if menu.Item(locales.TabMenuRename()).Chosen() {
 			a.openModal("rename", rec.ID, rec.Name)
@@ -314,13 +314,13 @@ func (a *root) switchToRecentConsole() {
 		}
 		if id, ok := strings.CutPrefix(key, "vw:"); ok {
 			if _, exists := a.viewerTabs[id]; exists {
-				a.pendingActivateViewer = id
+				a.deferActivateViewer(id)
 				return
 			}
 			continue
 		}
 		if open[key] {
-			a.pendingActivate = key
+			a.deferActivateConsole(key, "")
 			return
 		}
 	}
@@ -341,7 +341,7 @@ func (a *root) closeConsole(id string) {
 		return
 	}
 	if a.externalHasLocalChanges(id) {
-		a.pendingActivate = id
+		a.deferActivateConsole(id, "")
 		a.extResolveOpen = true
 		a.extMsg = locales.TabExtUnresolved()
 		return
@@ -366,7 +366,7 @@ func (a *root) afterActiveRemoved() {
 		return
 	}
 	if rec, ok := m.Active(); ok {
-		a.pendingActivate = rec.ID
+		a.deferActivateConsole(rec.ID, "")
 		return
 	}
 	a.clearEditorConsole()
@@ -391,7 +391,7 @@ func (a *root) workspaceMenu(menu *ui.Menu) {
 	active, hasActive := m.ActiveWorkspace()
 	for _, ws := range m.Workspaces() {
 		if menu.Item(ws.Name).Checked(hasActive && ws.ID == active.ID).Chosen() {
-			a.pendingSwitchWS = ws.ID
+			a.deferSwitchWorkspace(ws.ID)
 		}
 	}
 	menu.Separator()
@@ -497,7 +497,7 @@ func (a *root) tabModal(c *ui.Context) {
 				}
 				a.modalKind = ""
 				if rec, ok := m.Active(); ok {
-					a.pendingActivate = rec.ID
+					a.deferActivateConsole(rec.ID, "")
 				} else {
 					a.clearEditorConsole()
 				}

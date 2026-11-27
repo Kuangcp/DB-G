@@ -655,8 +655,7 @@ func (a *root) previewObjectNow(p app.ConnProfile, o engine.DBObject, m *app.Con
 		if cur, ok := a.store.GetConsole(a.activeConsole); ok && cur.ConnectionID == p.ID {
 			target = cur
 		}
-		a.pendingActivate = target.ID
-		a.pendingAppend = sql
+		a.deferActivateConsole(target.ID, sql)
 		return
 	}
 	rec, err := m.Create(p.ID, locales.TreePreviewConsole(o.Name))
@@ -664,8 +663,7 @@ func (a *root) previewObjectNow(p app.ConnProfile, o engine.DBObject, m *app.Con
 		a.reportBackgroundError(locales.TreePreviewFailed(err.Error()))
 		return
 	}
-	a.pendingActivate = rec.ID
-	a.pendingAppend = sql
+	a.deferActivateConsole(rec.ID, sql)
 }
 
 // showDDL 取对象的 DDL 并弹窗（headless 同步，有窗口时后台 + Update）。

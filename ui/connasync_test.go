@@ -217,7 +217,7 @@ func TestEnsureConsoleConnAsyncConnectsBeforeRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a.pendingActivate = rec.ID
+	a.deferActivateConsole(rec.ID, "")
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
 	if a.connected(prof.ID) {

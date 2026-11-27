@@ -193,8 +193,12 @@ func TestViewerOpenInConsole(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.openSQLInConsole(p.ID, sql+"\n")
-	if a.pendingAppend != sql+"\n" || a.pendingActivate == "" {
-		t.Fatalf("应排队在控制台追加: activate=%q append=%q", a.pendingActivate, a.pendingAppend)
+	if len(a.deferred) != 1 {
+		t.Fatalf("应排队在控制台追加，deferred=%d", len(a.deferred))
+	}
+	a.drainDeferred()
+	if a.activeConsole == "" || !strings.Contains(a.activeText(), sql) {
+		t.Fatalf("应在控制台追加: active=%q text=%q", a.activeConsole, a.activeText())
 	}
 }
 

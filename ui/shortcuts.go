@@ -66,7 +66,7 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 	}
 	switch id {
 	case "exec":
-		a.execPending = true
+		a.deferUI(a.runSQL)
 	case "commandPalette":
 		a.openPalette()
 	case "save":

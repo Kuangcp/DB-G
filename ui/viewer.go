@@ -974,8 +974,7 @@ func (a *root) openSQLInConsole(connID, sql string) {
 		if cur, ok := a.store.GetConsole(a.activeConsole); ok && cur.ConnectionID == connID {
 			target = cur
 		}
-		a.pendingActivate = target.ID
-		a.pendingAppend = sql
+		a.deferActivateConsole(target.ID, sql)
 		return
 	}
 	rec, err := m.Create(connID, "")
@@ -983,6 +982,5 @@ func (a *root) openSQLInConsole(connID, sql string) {
 		a.toastError(locales.ConsoleCreateFailed(err.Error()))
 		return
 	}
-	a.pendingActivate = rec.ID
-	a.pendingAppend = sql
+	a.deferActivateConsole(rec.ID, sql)
 }

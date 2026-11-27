@@ -199,7 +199,7 @@ func TestWorkspaceCreateAndSwitch(t *testing.T) {
 		t.Fatalf("empty hint missing: %q", tt.Texts())
 	}
 
-	a.pendingSwitchWS = firstWS.ID
+	a.deferSwitchWorkspace(firstWS.ID)
 	tt.Frame()
 	tt.Frame()
 	if a.activeConsole != recA.ID {

@@ -187,7 +187,7 @@ func (a *root) connBar(c *ui.Context) {
 			ui.Toolbar(c, func() {
 				if iconButton(c, iconPlay, locales.TopExec(), t.Success).
 					Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-					a.execPending = true
+					a.deferUI(a.runSQL)
 				}
 				if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).
 					Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {

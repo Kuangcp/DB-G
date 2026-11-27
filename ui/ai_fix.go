@@ -162,7 +162,7 @@ func (a *root) applyAIFix(run bool) {
 	}
 	a.aiFix.open = false
 	if run {
-		a.execPending = true
+		a.deferUI(a.runSQL)
 	}
 }
 
