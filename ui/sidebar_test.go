@@ -229,7 +229,7 @@ func TestObjectTreeRendersLeaves(t *testing.T) {
 	}
 }
 
-func TestObjectTreeConsoleAndDatabaseGroups(t *testing.T) {
+func TestObjectTreeConsolesAndKindsAreSiblings(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := app.ConnProfile{Name: "lib", Kind: "sqlite", Path: seedConnFile(t)}
 	if err := a.store.Add(p); err != nil {
@@ -245,29 +245,20 @@ func TestObjectTreeConsoleAndDatabaseGroups(t *testing.T) {
 	a.treeExpand[stored.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	// 控制台与数据库是数据源下的两个并列汇总。
-	if !tt.HasText("控制台") || !tt.HasText("查询") || !tt.HasText("数据库") {
-		t.Fatalf("console/database groups missing: %q", tt.Texts())
+	// 控制台与表/视图分组是数据源下的同级项，不再套「数据库」虚拟文件夹。
+	if !tt.HasText("控制台") || !tt.HasText("查询") || !tt.HasText("表 (1)") {
+		t.Fatalf("console/table groups missing: %q", tt.Texts())
 	}
-	if !tt.HasText("表 (1)") {
-		t.Fatalf("database group must open by default: %q", tt.Texts())
+	consoleRow, ok := tt.Find("控制台")
+	if !ok {
+		t.Fatalf("console group missing: %q", tt.Texts())
 	}
-	if err := tt.Click("收起 数据库"); err != nil {
-		t.Fatal(err)
+	tableRow, ok := tt.Find("表 (1)")
+	if !ok {
+		t.Fatalf("table group missing: %q", tt.Texts())
 	}
-	tt.Frame()
-	if tt.HasText("表 (1)") || tt.HasText("users") {
-		t.Fatalf("collapsed database still shows objects: %q", tt.Texts())
-	}
-	if !tt.HasText("查询") {
-		t.Fatalf("collapsing database must not hide consoles: %q", tt.Texts())
-	}
-	if err := tt.Click("展开 数据库"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if !tt.HasText("表 (1)") {
-		t.Fatalf("database did not reopen: %q", tt.Texts())
+	if consoleRow.X != tableRow.X {
+		t.Fatalf("console and table groups should be siblings: console x=%v table x=%v", consoleRow.X, tableRow.X)
 	}
 	if err := tt.Click("收起 控制台"); err != nil {
 		t.Fatal(err)
@@ -277,7 +268,14 @@ func TestObjectTreeConsoleAndDatabaseGroups(t *testing.T) {
 		t.Fatalf("collapsed console group still shows rows: %q", tt.Texts())
 	}
 	if !tt.HasText("表 (1)") {
-		t.Fatalf("collapsing consoles must not hide database: %q", tt.Texts())
+		t.Fatalf("collapsing consoles must not hide tables: %q", tt.Texts())
+	}
+	if err := tt.Click("展开 控制台"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("查询") {
+		t.Fatalf("console group did not reopen: %q", tt.Texts())
 	}
 }
 
@@ -762,6 +760,18 @@ func TestSchemaTreeRendersSchemasThenObjects(t *testing.T) {
 		if !tt.HasText(want) {
 			t.Fatalf("schema %q missing: %q", want, tt.Texts())
 		}
+	}
+	// 具体数据库节点与控制台同级：不再有中间一层「数据库」虚拟文件夹。
+	consoleRect, ok := tt.Find("控制台")
+	if !ok {
+		t.Fatalf("console group missing: %q", tt.Texts())
+	}
+	schemaRect, ok := tt.Find("▣ app")
+	if !ok {
+		t.Fatalf("schema row missing: %q", tt.Texts())
+	}
+	if consoleRect.X != schemaRect.X {
+		t.Fatalf("console and schema should be siblings: console x=%v schema x=%v", consoleRect.X, schemaRect.X)
 	}
 	// 展开 app schema → 出现它的表（测试里直接置展开态，再走两帧让懒加载完成）
 	*a.groupOpenPtr(stored.ID+"|app|schema", true) = true

@@ -564,7 +564,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 	if expanded {
 		ui.Column(c).PaddingStart(float32((depth + 1) * folderIndent)).Children(func() {
 			a.consoleSection(c, p)
-			a.databaseSection(c, p)
+			a.objectGroups(c, p, 0)
 		})
 	}
 }
@@ -634,16 +634,6 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 	for _, rec := range recs {
 		a.consoleRow(c, rec, m.IsOpen(rec.ID), 1)
 	}
-}
-
-// databaseSection 是数据源下的「数据库」汇总：展开后进入对象树（表/视图/索引）。
-func (a *root) databaseSection(c *ui.Context, p app.ConnProfile) {
-	open := a.groupOpen(p.ID+"|database", true)
-	treeGroupRow(c, locales.TreeDatabase(), open, 0, iconDatabase, c.Theme().TextMuted, nil)
-	if !*open {
-		return
-	}
-	a.objectGroups(c, p, 1)
 }
 
 // consoleRow 渲染一个控制台：已打开加粗，点击打开或激活，右键关闭/重命名/删除。
