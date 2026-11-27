@@ -479,6 +479,13 @@ go tool mygo vet . && gofmt -l .
 5. **驱动注册表**：允许 `engine.Register(kind, meta, factory)`，4 个驱动 `init()` 一并改。
 6. **执行节奏**：波次 1 先补失败测试再开工。
 
+**波次 2 进度（2026-11-27）**：
+
+- ARCH-04 完成：设置窗口/偏好错误统一走 `settingsNotice` + toast，不再写 `consoleErr`；
+  `keymapWarn`、`fontPrefsWarn`、`resultPrefsWarn`、`consolePrefsWarn`、`themeWarn`、`localeWarn`
+  收敛为 `settingsNotice map[string]settingsNotice`；对象预览/建连、控制台创建、标签关闭失败改 toast。
+  `consoleErr` 只保留当前控制台的执行/分页/计划/AI 前置错误。
+
 **波次 1 完成（2026-11-27）**：
 
 - ARCH-01：档案/主题导入导出拆成「纯文件工作 + UI 线程落地」；`importProfilesFrom` /

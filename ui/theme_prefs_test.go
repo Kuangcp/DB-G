@@ -144,8 +144,8 @@ func TestSetThemePrefsPersists(t *testing.T) {
 	if got != want {
 		t.Fatalf("persisted: %+v want %+v", got, want)
 	}
-	if a.themeWarn != "" {
-		t.Fatalf("unexpected warn: %s", a.themeWarn)
+	if n, ok := a.settingsNoticeOf("theme"); ok {
+		t.Fatalf("unexpected warning: %s", n.text)
 	}
 }
 

@@ -44,9 +44,9 @@ func (a *root) setThemePrefs(p app.ThemePrefs) {
 		a.themeHex = ""
 	}
 	if len(warn) > 0 {
-		a.themeWarn = strings.Join(warn, "；")
+		a.setSettingsNotice("theme", strings.Join(warn, "；"), true)
 	} else {
-		a.themeWarn = ""
+		a.setSettingsNotice("theme", "", false)
 	}
 	a.saveThemePrefs()
 	a.updateSettingsWindow()
@@ -72,7 +72,7 @@ func (a *root) saveThemePrefs() {
 	if a.win == nil {
 		if err := app.SaveThemePrefs(path, prefs); err != nil {
 			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
-			a.themeWarn = locales.ThemeSaveFailed(err.Error())
+			a.setSettingsNotice("theme", locales.ThemeSaveFailed(err.Error()), true)
 		}
 		return
 	}
@@ -85,7 +85,7 @@ func (a *root) saveThemePrefs() {
 		}
 		if err := app.SaveThemePrefs(path, prefs); err != nil {
 			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
-			a.safeUpdate(win, func() { a.themeWarn = locales.ThemeSaveFailed(err.Error()) })
+			a.safeUpdate(win, func() { a.setSettingsNotice("theme", locales.ThemeSaveFailed(err.Error()), true) })
 		}
 	}()
 }

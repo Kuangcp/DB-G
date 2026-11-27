@@ -53,18 +53,21 @@ func (a *root) languageSection(c *ui.Context) {
 		tag := []string{app.LocaleSystem, app.LocaleZhHans, app.LocaleEn}[idx]
 		a.setLocalePref(tag)
 	}
-	if a.localeWarn != "" {
-		ui.Text(c, a.localeWarn).FontSize(12).TextColor(c.Theme().Danger)
-	}
+	a.settingsNoticeLine(c, "locale")
 }
 
 // setLocalePref 保存语言选择并让 mygo 立即切换；headless 测试不碰窗口。
 func (a *root) setLocalePref(tag string) {
 	prefs, warn := app.NormalizeLocalePrefs(app.LocalizationPrefs{Locale: tag})
-	a.localePref, a.localeWarn = prefs.Locale, warn
+	a.localePref = prefs.Locale
+	if warn != "" {
+		a.setSettingsNotice("locale", warn, true)
+	} else {
+		a.setSettingsNotice("locale", "", false)
+	}
 	if a.localePrefsPath != "" {
 		if err := app.SaveLocalePrefs(a.localePrefsPath, prefs); err != nil {
-			a.localeWarn = locales.SettingsSaveLocaleFailed(err.Error())
+			a.setSettingsNotice("locale", locales.SettingsSaveLocaleFailed(err.Error()), true)
 		}
 	}
 	if a.win != nil {
@@ -195,9 +198,7 @@ func (a *root) fontSection(c *ui.Context) {
 		Placeholder(locales.SettingsFontUiPlaceholder()).Radius(cr).Changed() {
 		a.applyFontPrefs()
 	}
-	if a.fontPrefsWarn != "" {
-		ui.Text(c, a.fontPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
-	}
+	a.settingsNoticeLine(c, "font")
 }
 
 // consolePrefsSection 是控制台正文自动保存设置。
@@ -223,9 +224,7 @@ func (a *root) consolePrefsSection(c *ui.Context) {
 		ui.Text(c, locales.SettingsSeconds(a.consolePrefs.SaveDelaySeconds)).FontSize(12).
 			TextColor(c.Theme().TextMuted)
 	})
-	if a.consolePrefsWarn != "" {
-		ui.Text(c, a.consolePrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
-	}
+	a.settingsNoticeLine(c, "console")
 }
 
 // setConsolePrefs 更新控制台设置并应用到当前管理器。
@@ -237,9 +236,9 @@ func (a *root) setConsolePrefs(p app.ConsolePrefs) {
 		return
 	}
 	if err := app.SaveConsolePrefs(a.consolePrefsPath, p); err != nil {
-		a.consolePrefsWarn = locales.SettingsSaveConsoleFailed(err.Error())
+		a.setSettingsNotice("console", locales.SettingsSaveConsoleFailed(err.Error()), true)
 	} else {
-		a.consolePrefsWarn = ""
+		a.setSettingsNotice("console", "", false)
 	}
 	a.updateSettingsWindow()
 }
@@ -288,9 +287,7 @@ func (a *root) resultSection(c *ui.Context) {
 			a.resultPrefs.PageSize, app.MinResultPageSize, app.MaxResultPageSize)).
 			FontSize(12).TextColor(c.Theme().TextMuted)
 	})
-	if a.resultPrefsWarn != "" {
-		ui.Text(c, a.resultPrefsWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
-	}
+	a.settingsNoticeLine(c, "result")
 }
 
 // setResultPrefs 更新结果预算：立即作用于后续查询，并写入 results.json。
@@ -302,9 +299,9 @@ func (a *root) setResultPrefs(p app.ResultPrefs) {
 		return
 	}
 	if err := app.SaveResultPrefs(a.resultPrefsPath, p); err != nil {
-		a.resultPrefsWarn = locales.SettingsSaveResultFailed(err.Error())
+		a.setSettingsNotice("result", locales.SettingsSaveResultFailed(err.Error()), true)
 	} else {
-		a.resultPrefsWarn = ""
+		a.setSettingsNotice("result", "", false)
 	}
 	a.updateSettingsWindow()
 }
@@ -372,9 +369,9 @@ func (a *root) applyFontPrefs() {
 		return
 	}
 	if err := app.SaveFontPrefs(a.fontPrefsPath, a.fontPrefs); err != nil {
-		a.fontPrefsWarn = locales.SettingsSaveFontFailed(err.Error())
+		a.setSettingsNotice("font", locales.SettingsSaveFontFailed(err.Error()), true)
 	} else {
-		a.fontPrefsWarn = ""
+		a.setSettingsNotice("font", "", false)
 	}
 	a.updateSettingsWindow()
 }
@@ -716,9 +713,7 @@ func (a *root) appearanceSection(c *ui.Context) {
 			a.pickImportTheme()
 		}
 	})
-	if a.themeWarn != "" {
-		ui.Text(c, a.themeWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
-	}
+	a.settingsNoticeLine(c, "theme")
 }
 
 // exportThemeFile 只把主题写到文件，不读 root。
@@ -741,7 +736,7 @@ func (a *root) applyImportedTheme(prefs app.ThemePrefs, warn []string) {
 	a.paletteLoaded, a.paletteErr = false, ""
 	a.setThemePrefs(prefs)
 	if len(warn) > 0 {
-		a.themeWarn = locales.SettingsImported(strings.Join(warn, "；"))
+		a.setSettingsNotice("theme", locales.SettingsImported(strings.Join(warn, "；")), true)
 	}
 	app.LogInfo("startup", "theme imported")
 }
@@ -763,10 +758,10 @@ func (a *root) pickExportTheme() {
 		err = exportThemeFile(path, prefs)
 		a.safeUpdate(win, func() {
 			if err != nil {
-				a.themeWarn = locales.SettingsExportFailed(err.Error())
+				a.reportSettingsResult("theme", locales.SettingsExportFailed(err.Error()), true)
 				return
 			}
-			a.themeWarn = locales.SettingsExported(path)
+			a.reportSettingsResult("theme", locales.SettingsExported(path), false)
 		})
 	}()
 }
@@ -785,7 +780,7 @@ func (a *root) pickImportTheme() {
 		prefs, warn, err := importThemeFile(paths[0])
 		a.safeUpdate(win, func() {
 			if err != nil {
-				a.themeWarn = locales.SettingsImportFailed(err.Error())
+				a.reportSettingsResult("theme", locales.SettingsImportFailed(err.Error()), true)
 				return
 			}
 			a.applyImportedTheme(prefs, warn)

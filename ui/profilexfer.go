@@ -64,10 +64,10 @@ func (a *root) pickExportProfiles() {
 		n, err := exportProfilesTo(path, list)
 		a.safeUpdate(win, func() {
 			if err != nil {
-				a.consoleErr = locales.ProfileExportFailed(err.Error())
+				a.reportSettingsResult("profiles", locales.ProfileExportFailed(err.Error()), true)
 				return
 			}
-			a.consoleErr = locales.ProfileExported(n, path)
+			a.reportSettingsResult("profiles", locales.ProfileExported(n, path), false)
 		})
 	}()
 }
@@ -91,10 +91,10 @@ func (a *root) pickImportProfiles() {
 		added, err := importProfilesFrom(paths[0], existing)
 		a.safeUpdate(win, func() {
 			if err != nil {
-				a.consoleErr = locales.ProfileImportFailed(err.Error())
+				a.reportSettingsResult("profiles", locales.ProfileImportFailed(err.Error()), true)
 				return
 			}
-			a.consoleErr = locales.ProfileImported(a.applyImportedProfiles(added))
+			a.reportSettingsResult("profiles", locales.ProfileImported(a.applyImportedProfiles(added)), false)
 		})
 	}()
 }
@@ -111,4 +111,5 @@ func (a *root) profilesSection(c *ui.Context) {
 			a.pickImportProfiles()
 		}
 	})
+	a.settingsNoticeLine(c, "profiles")
 }

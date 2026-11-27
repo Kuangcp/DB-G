@@ -622,7 +622,7 @@ func (a *root) consoleSection(c *ui.Context, p app.ConnProfile) {
 		if iconButtonPlain(c, iconPlus, locales.ConsoleNew(), ui.Transparent).Clicked() {
 			rec, err := m.Create(p.ID, "")
 			if err != nil {
-				a.consoleErr = locales.ConsoleCreateFailed(err.Error())
+				a.reportBackgroundError(locales.ConsoleCreateFailed(err.Error()))
 				return
 			}
 			a.pendingActivate = rec.ID

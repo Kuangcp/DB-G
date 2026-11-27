@@ -640,8 +640,7 @@ func (a *root) previewObject(p app.ConnProfile, o engine.DBObject) {
 	}
 	a.connectAsync(p, func(err error) {
 		if err != nil {
-			a.consoleErr = err.Error()
-			return
+			return // 建连失败已由 setSessionErr 弹出 toast
 		}
 		a.previewObjectNow(p, o, m)
 	})
@@ -662,7 +661,7 @@ func (a *root) previewObjectNow(p app.ConnProfile, o engine.DBObject, m *app.Con
 	}
 	rec, err := m.Create(p.ID, locales.TreePreviewConsole(o.Name))
 	if err != nil {
-		a.consoleErr = locales.TreePreviewFailed(err.Error())
+		a.reportBackgroundError(locales.TreePreviewFailed(err.Error()))
 		return
 	}
 	a.pendingActivate = rec.ID
@@ -673,8 +672,7 @@ func (a *root) previewObjectNow(p app.ConnProfile, o engine.DBObject, m *app.Con
 func (a *root) showDDL(p app.ConnProfile, o engine.DBObject) {
 	a.connectAsync(p, func(err error) {
 		if err != nil {
-			a.consoleErr = err.Error()
-			return
+			return // 建连失败已由 setSessionErr 弹出 toast
 		}
 		a.loadObjectDDL(p, o)
 	})

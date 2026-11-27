@@ -296,8 +296,10 @@ func (a *root) saveKeymap() {
 		return
 	}
 	if err := app.SaveKeymap(a.keymapPath, saved); err != nil {
-		a.consoleErr = locales.KeymapSaveFailed(err.Error())
+		a.setSettingsNotice("keymap", locales.KeymapSaveFailed(err.Error()), true)
+		return
 	}
+	a.setSettingsNotice("keymap", "", false)
 }
 
 // setChords 改一个动作的键位：存盘 + 重建编辑器绑定。

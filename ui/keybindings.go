@@ -21,8 +21,8 @@ func (a *root) keymapSection(c *ui.Context) {
 			Focusable().Focus().
 			HandleInput(a.captureKey)
 	}
-	if a.keymapWarn != "" {
-		ui.Text(c, a.keymapWarn).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
+	if n, ok := a.settingsNoticeOf("keymap"); ok {
+		ui.Text(c, n.text).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
 	}
 	for _, act := range keyActions {
 		recording := a.captureAction == act.ID

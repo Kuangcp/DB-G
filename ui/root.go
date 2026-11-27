@@ -72,16 +72,12 @@ type root struct {
 	keymapPath        string                       // keymap.json 的位置（空 = 不读盘，测试用）
 	fontPrefs         app.FontPrefs                // 编辑区/结果区/功能界面字体
 	fontPrefsPath     string                       // fonts.json 的位置（空 = 不落盘）
-	fontPrefsWarn     string
-	resultPrefs       app.ResultPrefs // 结果大小预算
-	resultPrefsPath   string          // results.json 的位置（空 = 不落盘）
-	resultPrefsWarn   string
-	consolePrefs      app.ConsolePrefs // 控制台自动保存
-	consolePrefsPath  string           // console.json 的位置（空 = 不落盘）
-	consolePrefsWarn  string
-	themePrefs        app.ThemePrefs // 外观：模式/强调色/密度/圆角/字号
-	themePath         string         // theme.json 的位置（空 = 不落盘）
-	themeWarn         string
+	resultPrefs       app.ResultPrefs              // 结果大小预算
+	resultPrefsPath   string                       // results.json 的位置（空 = 不落盘）
+	consolePrefs      app.ConsolePrefs             // 控制台自动保存
+	consolePrefsPath  string                       // console.json 的位置（空 = 不落盘）
+	themePrefs        app.ThemePrefs               // 外观：模式/强调色/密度/圆角/字号
+	themePath         string                       // theme.json 的位置（空 = 不落盘）
 	themeSaveSeq      atomic.Uint64
 	themeHex          string // 外观分区里自定义强调色的输入框
 	themeHexErr       string
@@ -89,9 +85,8 @@ type root struct {
 	paletteDark       app.ThemePalette // 自定义配色的深色草稿
 	paletteLoaded     bool             // 草稿是否已从 prefs 载入
 	paletteErr        string
-	localePref        string // 界面语言："" 跟随系统，或 en / zh-Hans
-	localePrefsPath   string // locale.json 的位置（空 = 不落盘）
-	localeWarn        string
+	localePref        string      // 界面语言："" 跟随系统，或 en / zh-Hans
+	localePrefsPath   string      // locale.json 的位置（空 = 不落盘）
 	aiPrefs           app.AIPrefs // AI 服务地址/模型/出网开关
 	aiShowKey         bool        // AI API Key 是否显示明文（纯瞬态）
 	aiPrefsPath       string      // ai.json 的位置（空 = 不落盘）
@@ -130,10 +125,10 @@ type root struct {
 	guardOpen         bool
 	guardBlocked      bool
 	guardRisks        []app.SQLRisk
-	settingsSection   int    // 设置窗口选中的分区
-	captureAction     string // 设置窗口正在录制键位的动作
-	keymapWarn        string // 键位文件读写问题的提示
-	connTestMsg       string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	settingsSection   int                       // 设置窗口选中的分区
+	captureAction     string                    // 设置窗口正在录制键位的动作
+	settingsNotice    map[string]settingsNotice // 设置分区内联提示（key = 分区）
+	connTestMsg       string                    // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
 	connTestErr       bool
 	connTestBusy      bool
 	connTestSeq       int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
@@ -379,21 +374,43 @@ func NewRoot() *root {
 func newRootWithStore(storePath string) *root {
 	r := newRoot("")
 	r.keymapPath = app.DefaultKeymapPath()
-	r.keymapWarn = r.loadKeymap()
+	if warn := r.loadKeymap(); warn != "" {
+		r.setSettingsNotice("keymap", warn, true)
+	}
 	r.applyEditorBindings()
 	r.fontPrefsPath = app.DefaultFontPrefsPath()
-	r.fontPrefs, r.fontPrefsWarn = app.LoadFontPrefs(r.fontPrefsPath)
+	var fontWarn string
+	r.fontPrefs, fontWarn = app.LoadFontPrefs(r.fontPrefsPath)
+	if fontWarn != "" {
+		r.setSettingsNotice("font", fontWarn, true)
+	}
 	r.applyFontPrefs()
 	r.resultPrefsPath = filepath.Join(filepath.Dir(storePath), "results.json")
-	r.resultPrefs, r.resultPrefsWarn = app.LoadResultPrefs(r.resultPrefsPath)
+	var resultWarn string
+	r.resultPrefs, resultWarn = app.LoadResultPrefs(r.resultPrefsPath)
+	if resultWarn != "" {
+		r.setSettingsNotice("result", resultWarn, true)
+	}
 	r.applyResultLimits()
 	r.consolePrefsPath = filepath.Join(filepath.Dir(storePath), "console.json")
-	r.consolePrefs, r.consolePrefsWarn = app.LoadConsolePrefs(r.consolePrefsPath)
+	var consoleWarn string
+	r.consolePrefs, consoleWarn = app.LoadConsolePrefs(r.consolePrefsPath)
+	if consoleWarn != "" {
+		r.setSettingsNotice("console", consoleWarn, true)
+	}
 	r.themePath = app.DefaultThemePrefsPath()
-	r.themePrefs, r.themeWarn = app.LoadThemePrefs(r.themePath)
+	var themeWarn string
+	r.themePrefs, themeWarn = app.LoadThemePrefs(r.themePath)
+	if themeWarn != "" {
+		r.setSettingsNotice("theme", themeWarn, true)
+	}
 	r.localePrefsPath = filepath.Join(filepath.Dir(storePath), "locale.json")
 	var localePrefs app.LocalizationPrefs
-	localePrefs, r.localeWarn = app.LoadLocalePrefs(r.localePrefsPath)
+	var localeWarn string
+	localePrefs, localeWarn = app.LoadLocalePrefs(r.localePrefsPath)
+	if localeWarn != "" {
+		r.setSettingsNotice("locale", localeWarn, true)
+	}
 	r.localePref = localePrefs.Locale
 	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
 	r.syncPrefsPath = filepath.Join(filepath.Dir(storePath), "sync.json")

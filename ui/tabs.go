@@ -348,7 +348,7 @@ func (a *root) closeConsole(id string) {
 	}
 	wasActive := a.activeConsole == id
 	if err := m.CloseConsole(id); err != nil {
-		a.consoleErr = locales.TabCloseFailed(err.Error())
+		a.reportBackgroundError(locales.TabCloseFailed(err.Error()))
 		app.LogWarn("console", "close failed", "id", id, "err", err.Error())
 		return
 	}
