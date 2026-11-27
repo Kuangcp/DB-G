@@ -62,6 +62,27 @@ type SchemaColumnLister interface {
 	ColumnsIn(ctx context.Context, schema, table string) ([]Column, error)
 }
 
+// Index 是一个索引的元数据（表视图结构页用）。
+type Index struct {
+	Name      string
+	Columns   []string // 按索引定义顺序；含前缀长度/排序方向
+	Unique    bool
+	Primary   bool
+	Type      string // btree/hash/gin/…；没有类型概念时为空
+	Predicate string // 部分索引的 WHERE 条件；没有则为空
+}
+
+// IndexLister 是可选能力接口：列出一个表的索引。
+// UI 经类型断言与 CapIndexes 能力位判定后使用；Session 接口本身不要求实现它。
+type IndexLister interface {
+	Indexes(ctx context.Context, table string) ([]Index, error)
+}
+
+// SchemaIndexLister 是可选能力接口：按 schema/库 + 表名列出索引。
+type SchemaIndexLister interface {
+	IndexesIn(ctx context.Context, schema, table string) ([]Index, error)
+}
+
 // ForeignKey 是一个列的外键指向（供 AI 检索时做一跳扩展）。
 type ForeignKey struct {
 	Column    string

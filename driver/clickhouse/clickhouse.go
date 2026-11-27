@@ -101,7 +101,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapObjectStats | engine.CapExplain
+	return engine.CapObjects | engine.CapColumns | engine.CapIndexes | engine.CapFetchMore | engine.CapObjectDDL | engine.CapObjectStats | engine.CapExplain
 }
 
 // ServerInfo 返回当前库名与 ClickHouse 版本。
@@ -534,6 +534,46 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 			return nil, err
 		}
 		out = append(out, engine.Column{Name: name, Type: typ, Comment: comment})
+	}
+	return out, rows.Err()
+}
+
+// Indexes 列出一个表的数据跳过索引（system.data_skipping_indices）。
+func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, "", table)
+}
+
+// IndexesIn 按库列出索引。
+func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, schema, table)
+}
+
+func (s *session) indexesLocked(ctx context.Context, schema, table string) ([]engine.Index, error) {
+	if s.db == nil {
+		return nil, errors.New("clickhouse: session not open")
+	}
+	database, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
+	}
+	const q = `SELECT name, type, expr FROM system.data_skipping_indices
+		WHERE database = ? AND table = ? ORDER BY name`
+	rows, err := s.db.QueryContext(ctx, q, database, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.Index
+	for rows.Next() {
+		var name, typ, expr string
+		if err := rows.Scan(&name, &typ, &expr); err != nil {
+			return nil, err
+		}
+		out = append(out, engine.Index{Name: name, Type: typ, Columns: []string{expr}})
 	}
 	return out, rows.Err()
 }

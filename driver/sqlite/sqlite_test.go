@@ -291,6 +291,52 @@ func TestColumns(t *testing.T) {
 	}
 }
 
+// 索引元数据：普通/唯一/主键/部分索引与排序方向。
+func TestIndexes(t *testing.T) {
+	ctx := context.Background()
+	s := newMemSession(t)
+	for _, q := range []string{
+		`CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT, age INTEGER)`,
+		`CREATE UNIQUE INDEX idx_name ON users(name)`,
+		`CREATE INDEX idx_age ON users(age DESC)`,
+		`CREATE INDEX idx_partial ON users(name) WHERE age > 18`,
+	} {
+		if _, err := s.RunStatement(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lister, ok := s.(engine.IndexLister)
+	if !ok || !s.Caps().Has(engine.CapIndexes) {
+		t.Fatal("sqlite must list indexes")
+	}
+	indexes, err := lister.Indexes(ctx, "users")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]engine.Index{}
+	for _, ix := range indexes {
+		byName[ix.Name] = ix
+	}
+	if ix, ok := byName["idx_name"]; !ok || !ix.Unique || len(ix.Columns) != 1 || ix.Columns[0] != "name" {
+		t.Fatalf("idx_name = %+v", ix)
+	}
+	if ix, ok := byName["idx_age"]; !ok || ix.Unique || len(ix.Columns) != 1 || ix.Columns[0] != "age DESC" {
+		t.Fatalf("idx_age = %+v", ix)
+	}
+	if ix, ok := byName["idx_partial"]; !ok || ix.Predicate != "age > 18" {
+		t.Fatalf("idx_partial = %+v", ix)
+	}
+	foundPK := false
+	for _, ix := range indexes {
+		if ix.Primary && ix.Unique && len(ix.Columns) == 1 && ix.Columns[0] == "id" {
+			foundPK = true
+		}
+	}
+	if !foundPK {
+		t.Fatalf("primary index missing: %+v", indexes)
+	}
+}
+
 func TestColumnsQuotesIdentifier(t *testing.T) {
 	ctx := context.Background()
 	s := newMemSession(t)

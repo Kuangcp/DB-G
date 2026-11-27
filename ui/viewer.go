@@ -59,6 +59,11 @@ type viewerTab struct {
 	colsErr     string
 	colsLoading bool
 
+	idx        []engine.Index
+	idxState   ui.ListState
+	idxErr     string
+	idxLoading bool
+
 	ddl        string
 	ddlErr     string
 	ddlLoading bool
@@ -210,6 +215,7 @@ func (a *root) ensureViewerPage(t *viewerTab) {
 		a.ensureViewerData(t)
 	case viewerStructure:
 		a.viewerLoadColumns(t)
+		a.viewerLoadIndexes(t)
 	case viewerDDL:
 		a.viewerLoadDDL(t)
 	}
@@ -381,6 +387,63 @@ func (a *root) viewerLoadColumns(t *viewerTab) {
 	go func() {
 		cols, err := load()
 		a.safeUpdate(win, func() { done(cols, err) })
+	}()
+}
+
+// viewerLoadIndexes 读索引清单（结构页）。
+func (a *root) viewerLoadIndexes(t *viewerTab) {
+	if t.idx != nil || t.idxLoading {
+		return
+	}
+	sess := a.sessionFor(t.connID)
+	if sess == nil {
+		a.ensureViewerSession(t, func() { a.viewerLoadIndexes(t) })
+		return
+	}
+	scoped, hasScoped := sess.(engine.SchemaIndexLister)
+	lister, hasIdx := sess.(engine.IndexLister)
+	if !sess.Caps().Has(engine.CapIndexes) || (!hasScoped && !hasIdx) {
+		t.idxErr = locales.ViewerIndexesUnsupported()
+		return
+	}
+	if t.schema != "" && hasScoped {
+		// 有 schema 的多库数据源：按对象所属 schema 读。
+	} else if !hasIdx {
+		t.idxErr = locales.ViewerIndexesUnsupported()
+		return
+	}
+	t.idxLoading = true
+	load := func() ([]engine.Index, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
+		defer cancel()
+		if t.schema != "" && hasScoped {
+			return scoped.IndexesIn(ctx, t.schema, t.obj.Name)
+		}
+		return lister.Indexes(ctx, t.obj.Name)
+	}
+	done := func(idx []engine.Index, err error) {
+		t.idxLoading = false
+		if a.viewerTabs[t.id] != t {
+			return
+		}
+		if err != nil {
+			t.idxErr = err.Error()
+			return
+		}
+		if idx == nil {
+			idx = []engine.Index{}
+		}
+		t.idx = idx
+	}
+	if a.win == nil {
+		idx, err := load()
+		done(idx, err)
+		return
+	}
+	win := a.win
+	go func() {
+		idx, err := load()
+		a.safeUpdate(win, func() { done(idx, err) })
 	}()
 }
 
@@ -752,52 +815,104 @@ func (a *root) viewerDataFooter(c *ui.Context, t *viewerTab, r *engine.QueryResu
 	})
 }
 
-// viewerStructurePage 渲染结构页：字段表格。
+// viewerStructurePage 渲染结构页：字段与索引两张表格。
 func (a *root) viewerStructurePage(c *ui.Context, t *viewerTab) {
 	a.viewerLoadColumns(t)
-	if t.colsErr != "" {
-		ui.Text(c, t.colsErr).TextColor(c.Theme().TextMuted).Padding(4)
-		return
-	}
-	if t.colsLoading || t.cols == nil {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Spinner(c)
-			ui.Text(c, locales.ViewerLoading()).FontSize(12).TextColor(c.Theme().TextMuted)
-		})
-		return
-	}
-	cols := []ui.TableColumn{
-		{Title: locales.ViewerColName(), ID: "name", Width: 220},
-		{Title: locales.ViewerColType(), ID: "type", Width: 220},
-		{Title: locales.ViewerColNullable(), ID: "null", Width: 90, Fixed: true},
-		{Title: locales.ViewerColPrimaryKey(), ID: "pk", Width: 90, Fixed: true},
-		{Title: locales.ViewerColComment(), ID: "comment", MinWidth: 160},
-	}
-	ui.Table(c, &t.colsState, cols, len(t.cols), func(row, col int) {
-		if row < 0 || row >= len(t.cols) {
-			return
-		}
-		cl := t.cols[row]
-		switch col {
-		case 0:
-			ui.Text(c, cl.Name).SingleLine()
-		case 1:
-			ui.Text(c, cl.Type).Font("monospace").FontSize(12).SingleLine()
-		case 2:
-			if cl.Nullable {
-				ui.Text(c, "NULL").FontSize(12).TextColor(c.Theme().TextMuted)
-			} else {
-				ui.Text(c, "NOT NULL").FontSize(12)
+	a.viewerLoadIndexes(t)
+	th := c.Theme()
+	ui.Column(c).Fill().Gap(6).Children(func() {
+		ui.Text(c, locales.ViewerFieldsTitle()).FontSize(12).Bold()
+		switch {
+		case t.colsErr != "":
+			ui.Text(c, t.colsErr).TextColor(th.TextMuted).Padding(4)
+		case t.colsLoading || t.cols == nil:
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Spinner(c)
+				ui.Text(c, locales.ViewerLoading()).FontSize(12).TextColor(th.TextMuted)
+			})
+		default:
+			cols := []ui.TableColumn{
+				{Title: locales.ViewerColName(), ID: "name", Width: 220},
+				{Title: locales.ViewerColType(), ID: "type", Width: 220},
+				{Title: locales.ViewerColNullable(), ID: "null", Width: 90, Fixed: true},
+				{Title: locales.ViewerColPrimaryKey(), ID: "pk", Width: 90, Fixed: true},
+				{Title: locales.ViewerColComment(), ID: "comment", MinWidth: 160},
 			}
-		case 3:
-			if cl.PrimaryKey {
-				ui.Text(c, "PK").FontSize(12).TextColor(c.Theme().Warning)
-			}
-		case 4:
-			ui.Text(c, cl.Comment).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine().
-				Tooltip(cl.Comment)
+			ui.Table(c, &t.colsState, cols, len(t.cols), func(row, col int) {
+				if row < 0 || row >= len(t.cols) {
+					return
+				}
+				cl := t.cols[row]
+				switch col {
+				case 0:
+					ui.Text(c, cl.Name).SingleLine()
+				case 1:
+					ui.Text(c, cl.Type).Font("monospace").FontSize(12).SingleLine()
+				case 2:
+					if cl.Nullable {
+						ui.Text(c, "NULL").FontSize(12).TextColor(th.TextMuted)
+					} else {
+						ui.Text(c, "NOT NULL").FontSize(12)
+					}
+				case 3:
+					if cl.PrimaryKey {
+						ui.Text(c, "PK").FontSize(12).TextColor(th.Warning)
+					}
+				case 4:
+					ui.Text(c, cl.Comment).FontSize(12).TextColor(th.TextMuted).SingleLine().
+						Tooltip(cl.Comment)
+				}
+			}).Grow(1)
 		}
-	}).Grow(1)
+
+		ui.Text(c, locales.ViewerIndexesTitle()).FontSize(12).Bold()
+		switch {
+		case t.idxErr != "":
+			ui.Text(c, t.idxErr).TextColor(th.TextMuted).Padding(4)
+		case t.idxLoading || t.idx == nil:
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Spinner(c)
+				ui.Text(c, locales.ViewerLoading()).FontSize(12).TextColor(th.TextMuted)
+			})
+		case len(t.idx) == 0:
+			ui.Text(c, locales.ViewerNoIndexes()).FontSize(12).TextColor(th.TextMuted).Padding(4)
+		default:
+			idxCols := []ui.TableColumn{
+				{Title: locales.ViewerIndexName(), ID: "name", Width: 200},
+				{Title: locales.ViewerIndexColumns(), ID: "columns", MinWidth: 200},
+				{Title: locales.ViewerIndexUnique(), ID: "unique", Width: 70, Fixed: true},
+				{Title: locales.ViewerIndexPrimary(), ID: "primary", Width: 70, Fixed: true},
+				{Title: locales.ViewerIndexType(), ID: "type", Width: 110},
+				{Title: locales.ViewerIndexPredicate(), ID: "predicate", MinWidth: 160},
+			}
+			ui.Table(c, &t.idxState, idxCols, len(t.idx), func(row, col int) {
+				if row < 0 || row >= len(t.idx) {
+					return
+				}
+				ix := t.idx[row]
+				switch col {
+				case 0:
+					ui.Text(c, ix.Name).SingleLine()
+				case 1:
+					ui.Text(c, strings.Join(ix.Columns, ", ")).Font("monospace").FontSize(12).
+						SingleLine().Tooltip(strings.Join(ix.Columns, ", "))
+				case 2:
+					if ix.Unique {
+						ui.Icon(c, iconCheck).FontSize(13).TextColor(th.Success)
+					}
+				case 3:
+					if ix.Primary {
+						ui.Icon(c, iconCheck).FontSize(13).TextColor(th.Warning)
+					}
+				case 4:
+					ui.Text(c, ix.Type).FontSize(12).TextColor(th.TextMuted).SingleLine()
+				case 5:
+					ui.Text(c, ix.Predicate).FontSize(12).TextColor(th.TextMuted).SingleLine().
+						Tooltip(ix.Predicate)
+				}
+			}).Grow(1)
+		}
+	})
 }
 
 // viewerDDLPage 渲染 DDL 页：只读高亮编辑器（与 Ctrl+Q 弹窗同源）。

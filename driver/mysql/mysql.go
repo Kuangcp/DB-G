@@ -86,7 +86,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapObjectStats | engine.CapEditableResult | engine.CapExplain | engine.CapExplainAnalyze | engine.CapForeignKeys
+	return engine.CapObjects | engine.CapColumns | engine.CapIndexes | engine.CapFetchMore | engine.CapObjectDDL | engine.CapObjectStats | engine.CapEditableResult | engine.CapExplain | engine.CapExplainAnalyze | engine.CapForeignKeys
 }
 
 // ServerInfo 返回当前库名与 MySQL 版本；未选库时 DATABASE() 为 NULL。
@@ -519,6 +519,70 @@ func (s *session) columnsLocked(ctx context.Context, schema, table string) ([]en
 		return nil, err
 	}
 	return out, nil
+}
+
+// Indexes 列出一个表的索引；没选库时用当前库。
+func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, "", table)
+}
+
+// IndexesIn 按库列出索引。
+func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, schema, table)
+}
+
+func (s *session) indexesLocked(ctx context.Context, schema, table string) ([]engine.Index, error) {
+	if s.db == nil {
+		return nil, errors.New("mysql: session not open")
+	}
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
+	}
+	const q = `SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SUB_PART, INDEX_TYPE, COLLATION
+		FROM information_schema.STATISTICS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+		ORDER BY INDEX_NAME, SEQ_IN_INDEX`
+	rows, err := s.db.QueryContext(ctx, q, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.Index
+	at := map[string]int{}
+	for rows.Next() {
+		var (
+			name, typ    string
+			nonUnique    int
+			column, coll sql.NullString
+			subPart      sql.NullInt64
+		)
+		if err := rows.Scan(&name, &nonUnique, &column, &subPart, &typ, &coll); err != nil {
+			return nil, err
+		}
+		i, ok := at[name]
+		if !ok {
+			i = len(out)
+			at[name] = i
+			out = append(out, engine.Index{Name: name, Unique: nonUnique == 0, Primary: name == "PRIMARY", Type: typ})
+		}
+		col := column.String
+		if !column.Valid || col == "" {
+			col = "(expression)"
+		}
+		if subPart.Valid && subPart.Int64 > 0 {
+			col += fmt.Sprintf("(%d)", subPart.Int64)
+		}
+		if coll.Valid && strings.EqualFold(coll.String, "D") {
+			col += " DESC"
+		}
+		out[i].Columns = append(out[i].Columns, col)
+	}
+	return out, rows.Err()
 }
 
 // Stream 逐行流式读结果（全量导出用）：不设行数上限，也不裁单元格，内存只留当前行。

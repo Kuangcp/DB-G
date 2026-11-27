@@ -5476,6 +5476,106 @@ func (msgs Messages) ViewerColComment() string {
 	return Catalog.Format(msgs.locale, "viewerColComment", nil)
 }
 
+// ViewerFieldsTitle says "Fields"
+// in the language the app shows.
+func ViewerFieldsTitle() string { return In(i18n.Locale()).ViewerFieldsTitle() }
+
+// ViewerFieldsTitle says "Fields"
+// in the language of msgs.
+func (msgs Messages) ViewerFieldsTitle() string {
+	return Catalog.Format(msgs.locale, "viewerFieldsTitle", nil)
+}
+
+// ViewerIndexesTitle says "Indexes"
+// in the language the app shows.
+func ViewerIndexesTitle() string { return In(i18n.Locale()).ViewerIndexesTitle() }
+
+// ViewerIndexesTitle says "Indexes"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexesTitle() string {
+	return Catalog.Format(msgs.locale, "viewerIndexesTitle", nil)
+}
+
+// ViewerIndexesUnsupported says "This datasource does not provide index information"
+// in the language the app shows.
+func ViewerIndexesUnsupported() string { return In(i18n.Locale()).ViewerIndexesUnsupported() }
+
+// ViewerIndexesUnsupported says "This datasource does not provide index information"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexesUnsupported() string {
+	return Catalog.Format(msgs.locale, "viewerIndexesUnsupported", nil)
+}
+
+// ViewerNoIndexes says "No indexes"
+// in the language the app shows.
+func ViewerNoIndexes() string { return In(i18n.Locale()).ViewerNoIndexes() }
+
+// ViewerNoIndexes says "No indexes"
+// in the language of msgs.
+func (msgs Messages) ViewerNoIndexes() string {
+	return Catalog.Format(msgs.locale, "viewerNoIndexes", nil)
+}
+
+// ViewerIndexName says "Name"
+// in the language the app shows.
+func ViewerIndexName() string { return In(i18n.Locale()).ViewerIndexName() }
+
+// ViewerIndexName says "Name"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexName() string {
+	return Catalog.Format(msgs.locale, "viewerIndexName", nil)
+}
+
+// ViewerIndexColumns says "Columns"
+// in the language the app shows.
+func ViewerIndexColumns() string { return In(i18n.Locale()).ViewerIndexColumns() }
+
+// ViewerIndexColumns says "Columns"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexColumns() string {
+	return Catalog.Format(msgs.locale, "viewerIndexColumns", nil)
+}
+
+// ViewerIndexUnique says "Unique"
+// in the language the app shows.
+func ViewerIndexUnique() string { return In(i18n.Locale()).ViewerIndexUnique() }
+
+// ViewerIndexUnique says "Unique"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexUnique() string {
+	return Catalog.Format(msgs.locale, "viewerIndexUnique", nil)
+}
+
+// ViewerIndexPrimary says "Primary"
+// in the language the app shows.
+func ViewerIndexPrimary() string { return In(i18n.Locale()).ViewerIndexPrimary() }
+
+// ViewerIndexPrimary says "Primary"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexPrimary() string {
+	return Catalog.Format(msgs.locale, "viewerIndexPrimary", nil)
+}
+
+// ViewerIndexType says "Type"
+// in the language the app shows.
+func ViewerIndexType() string { return In(i18n.Locale()).ViewerIndexType() }
+
+// ViewerIndexType says "Type"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexType() string {
+	return Catalog.Format(msgs.locale, "viewerIndexType", nil)
+}
+
+// ViewerIndexPredicate says "Condition"
+// in the language the app shows.
+func ViewerIndexPredicate() string { return In(i18n.Locale()).ViewerIndexPredicate() }
+
+// ViewerIndexPredicate says "Condition"
+// in the language of msgs.
+func (msgs Messages) ViewerIndexPredicate() string {
+	return Catalog.Format(msgs.locale, "viewerIndexPredicate", nil)
+}
+
 // TreeShownFirst says "Showing the first {shown, number, ::group-off} of {total, number, ::group-off}"
 // in the language the app shows.
 func TreeShownFirst(shown int, total int) string {

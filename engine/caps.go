@@ -14,6 +14,7 @@ const (
 	CapExplainAnalyze
 	CapObjectStats
 	CapForeignKeys
+	CapIndexes
 )
 
 func (c Capabilities) Has(x Capabilities) bool { return c&x != 0 }

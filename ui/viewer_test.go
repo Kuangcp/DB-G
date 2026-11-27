@@ -22,6 +22,7 @@ type viewerFakeSession struct {
 	result  *engine.QueryResult
 	err     error
 	cols    []engine.Column
+	indexes []engine.Index
 	ddl     string
 	ddlErr  error
 }
@@ -30,7 +31,7 @@ func (s *viewerFakeSession) Open(context.Context) error { return nil }
 func (s *viewerFakeSession) Close() error               { return nil }
 func (s *viewerFakeSession) Cancel() bool               { return false }
 func (s *viewerFakeSession) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapObjectDDL
+	return engine.CapObjects | engine.CapColumns | engine.CapIndexes | engine.CapObjectDDL
 }
 func (s *viewerFakeSession) RunStatement(_ context.Context, sql string) (*engine.QueryResult, error) {
 	s.mu.Lock()
@@ -46,6 +47,9 @@ func (s *viewerFakeSession) RunStatement(_ context.Context, sql string) (*engine
 }
 func (s *viewerFakeSession) Columns(context.Context, string) ([]engine.Column, error) {
 	return s.cols, nil
+}
+func (s *viewerFakeSession) Indexes(context.Context, string) ([]engine.Index, error) {
+	return s.indexes, nil
 }
 func (s *viewerFakeSession) ObjectDDL(context.Context, engine.ObjectKind, string) (string, error) {
 	return s.ddl, s.ddlErr
@@ -234,6 +238,10 @@ func TestViewerStructureAndDDL(t *testing.T) {
 			{Name: "id", Type: "INTEGER", PrimaryKey: true},
 			{Name: "name", Type: "TEXT", Nullable: true, Comment: "用户姓名"},
 		},
+		indexes: []engine.Index{
+			{Name: "idx_name", Columns: []string{"name"}, Unique: true, Type: "BTREE"},
+			{Name: "idx_age", Columns: []string{"age DESC"}, Type: "BTREE", Predicate: "age > 18"},
+		},
 		ddl: "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
 	}
 	a, p, id := viewerRoot(t, fake, engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
@@ -245,7 +253,13 @@ func TestViewerStructureAndDDL(t *testing.T) {
 	tb.page = viewerStructure
 	a.ensureViewerPage(tb)
 	tt.Frame()
-	for _, want := range []string{"id", "INTEGER", "name", "TEXT", "PK", locales.ViewerColComment(), "用户姓名"} {
+	for _, want := range []string{
+		"id", "INTEGER", "name", "TEXT", "PK", locales.ViewerColComment(), "用户姓名",
+		locales.ViewerFieldsTitle(), locales.ViewerIndexesTitle(),
+		locales.ViewerIndexName(), locales.ViewerIndexColumns(), locales.ViewerIndexUnique(),
+		locales.ViewerIndexPrimary(), locales.ViewerIndexType(), locales.ViewerIndexPredicate(),
+		"idx_name", "idx_age", "age > 18",
+	} {
 		if !tt.HasText(want) {
 			t.Fatalf("结构页缺少 %q: %q", want, tt.Texts())
 		}

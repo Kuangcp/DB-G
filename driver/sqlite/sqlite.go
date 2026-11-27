@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,7 +62,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapObjectDDL | engine.CapObjectStats | engine.CapEditableResult | engine.CapExplain | engine.CapForeignKeys
+	return engine.CapObjects | engine.CapColumns | engine.CapIndexes | engine.CapFetchMore | engine.CapObjectDDL | engine.CapObjectStats | engine.CapEditableResult | engine.CapExplain | engine.CapForeignKeys
 }
 
 // ServerInfo 返回数据库文件名与 SQLite 版本。
@@ -344,6 +345,111 @@ func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, e
 		return nil, err
 	}
 	return out, nil
+}
+
+// Indexes 列出一个表的索引（PRAGMA index_list + index_xinfo）。
+func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, table)
+}
+
+// IndexesIn 与 Indexes 相同：SQLite 的临时表视图不区分 schema。
+func (s *session) IndexesIn(ctx context.Context, _ string, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, table)
+}
+
+func (s *session) indexesLocked(ctx context.Context, table string) ([]engine.Index, error) {
+	if s.db == nil {
+		return nil, errors.New("sqlite: session not open")
+	}
+	rows, err := s.db.QueryContext(ctx, "PRAGMA index_list("+quoteIdent(table)+")")
+	if err != nil {
+		return nil, err
+	}
+	type listed struct {
+		name, origin string
+		unique       bool
+		partial      bool
+	}
+	var indexes []listed
+	for rows.Next() {
+		var (
+			seq     int
+			name    string
+			unique  int
+			origin  string
+			partial int
+		)
+		if err := rows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		indexes = append(indexes, listed{name: name, origin: origin, unique: unique != 0, partial: partial != 0})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	sort.Slice(indexes, func(i, j int) bool { return indexes[i].name < indexes[j].name })
+
+	out := make([]engine.Index, 0, len(indexes))
+	for _, in := range indexes {
+		idx := engine.Index{Name: in.name, Unique: in.unique, Primary: in.origin == "pk", Type: "BTREE"}
+		if in.partial {
+			idx.Predicate = s.sqliteIndexPredicate(ctx, in.name)
+		}
+		cols, err := s.db.QueryContext(ctx, "PRAGMA index_xinfo("+quoteIdent(in.name)+")")
+		if err != nil {
+			return nil, err
+		}
+		for cols.Next() {
+			var (
+				seqno, cid, desc, key int
+				name                  sql.NullString
+				coll                  sql.NullString
+			)
+			if err := cols.Scan(&seqno, &cid, &name, &desc, &coll, &key); err != nil {
+				cols.Close()
+				return nil, err
+			}
+			if key == 0 {
+				continue // 行尾的附加列不属于索引键
+			}
+			col := name.String
+			if !name.Valid || col == "" {
+				col = "(expression)"
+			}
+			if desc == 1 {
+				col += " DESC"
+			}
+			idx.Columns = append(idx.Columns, col)
+		}
+		if err := cols.Err(); err != nil {
+			cols.Close()
+			return nil, err
+		}
+		cols.Close()
+		out = append(out, idx)
+	}
+	return out, nil
+}
+
+// sqliteIndexPredicate 从 sqlite_master 的 CREATE INDEX 语句里取部分索引的 WHERE。
+func (s *session) sqliteIndexPredicate(ctx context.Context, name string) string {
+	var ddl sql.NullString
+	if err := s.db.QueryRowContext(ctx,
+		"SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?", name).Scan(&ddl); err != nil || !ddl.Valid {
+		return ""
+	}
+	up := strings.ToUpper(ddl.String)
+	if at := strings.Index(up, " WHERE "); at >= 0 {
+		return strings.TrimSpace(strings.TrimSuffix(ddl.String[at+7:], ";"))
+	}
+	return ""
 }
 
 // Stream 逐行流式读结果（全量导出用）：不设行数上限，也不裁单元格，内存只留当前行。

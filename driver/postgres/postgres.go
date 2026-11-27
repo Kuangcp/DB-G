@@ -80,7 +80,7 @@ func (s *session) Close() error {
 }
 
 func (s *session) Caps() engine.Capabilities {
-	return engine.CapObjects | engine.CapColumns | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL | engine.CapObjectStats | engine.CapExplain | engine.CapExplainAnalyze | engine.CapForeignKeys
+	return engine.CapObjects | engine.CapColumns | engine.CapIndexes | engine.CapFetchMore | engine.CapEditableResult | engine.CapObjectDDL | engine.CapObjectStats | engine.CapExplain | engine.CapExplainAnalyze | engine.CapForeignKeys
 }
 
 // ServerInfo 返回当前库名与 PostgreSQL 版本（server_version 是短版本号）。
@@ -614,6 +614,64 @@ ORDER BY c.ordinal_position`
 			return nil, err
 		}
 		out = append(out, engine.Column{Name: name, Type: typ, Nullable: nullable == "YES", PrimaryKey: pk, Comment: comment})
+	}
+	return out, rows.Err()
+}
+
+// Indexes 列出一个表的索引。
+func (s *session) Indexes(ctx context.Context, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, "", table)
+}
+
+// IndexesIn 按 schema 列出索引。
+func (s *session) IndexesIn(ctx context.Context, schema, table string) ([]engine.Index, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexesLocked(ctx, schema, table)
+}
+
+func (s *session) indexesLocked(ctx context.Context, schema, table string) ([]engine.Index, error) {
+	if s.db == nil {
+		return nil, errors.New("postgres: session not open")
+	}
+	schema, err := s.schemaLocked(ctx, schema)
+	if err != nil {
+		return nil, err
+	}
+	const q = `
+SELECT i.relname, ix.indisunique, ix.indisprimary, am.amname,
+       pg_get_indexdef(i.oid, k.ord::int, true),
+       COALESCE(pg_get_expr(ix.indpred, ix.indrelid), '')
+FROM pg_catalog.pg_class t
+JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+JOIN pg_catalog.pg_index ix ON ix.indrelid = t.oid
+JOIN pg_catalog.pg_class i ON i.oid = ix.indexrelid
+JOIN pg_catalog.pg_am am ON am.oid = i.relam
+CROSS JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord)
+WHERE n.nspname = $1 AND t.relname = $2
+ORDER BY i.relname, k.ord`
+	rows, err := s.db.QueryContext(ctx, q, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []engine.Index
+	at := map[string]int{}
+	for rows.Next() {
+		var name, typ, column, predicate string
+		var unique, primary bool
+		if err := rows.Scan(&name, &unique, &primary, &typ, &column, &predicate); err != nil {
+			return nil, err
+		}
+		i, ok := at[name]
+		if !ok {
+			i = len(out)
+			at[name] = i
+			out = append(out, engine.Index{Name: name, Unique: unique, Primary: primary, Type: typ, Predicate: predicate})
+		}
+		out[i].Columns = append(out[i].Columns, column)
 	}
 	return out, rows.Err()
 }

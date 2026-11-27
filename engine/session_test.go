@@ -64,9 +64,21 @@ func TestCapColumns(t *testing.T) {
 	if !c.Has(CapColumns) {
 		t.Fatal("CapColumns must be settable and readable")
 	}
-	for _, other := range []Capabilities{CapEditableResult, CapFetchMore, CapObjectDDL, CapSQLCompletion, CapObjects} {
+	for _, other := range []Capabilities{CapEditableResult, CapFetchMore, CapObjectDDL, CapSQLCompletion, CapObjects, CapIndexes} {
 		if CapColumns == other {
 			t.Fatal("CapColumns must not collide with existing bits")
+		}
+	}
+}
+
+func TestCapIndexes(t *testing.T) {
+	var c Capabilities = CapIndexes
+	if !c.Has(CapIndexes) {
+		t.Fatal("CapIndexes must be settable and readable")
+	}
+	for _, other := range []Capabilities{CapEditableResult, CapFetchMore, CapObjectDDL, CapSQLCompletion, CapObjects, CapColumns} {
+		if CapIndexes == other {
+			t.Fatal("CapIndexes must not collide with existing bits")
 		}
 	}
 }
