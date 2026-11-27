@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/app"
+	"db-g/engine"
 	"db-g/locales"
 )
 
@@ -691,8 +693,8 @@ func (a *root) connModal(c *ui.Context) {
 		// 左右布局：左侧数据源列表（无按钮外观、行间分隔线、选中高亮），右侧表单。
 		ui.Row(c).Fill().Gap(0).Children(func() {
 			ui.Column(c).Width(168).FillHeight().Children(func() {
-				for _, k := range connKinds {
-					a.connKindRow(c, k)
+				for _, m := range connKindMetas() {
+					a.connKindRow(c, m)
 				}
 				ui.Spacer(c)
 			})
@@ -854,11 +856,11 @@ func (a *root) connPasswordInput(c *ui.Context, radius float32) {
 
 // connKindRow 是左侧数据源类型的一行：走通用的侧边导航样式（无按钮外观、
 // 行底分隔线、选中高亮）。
-func (a *root) connKindRow(c *ui.Context, k connKind) {
-	selected := a.connForm.Kind == k.kind
-	row := sideNavRow(c, k.label, connKindIcon(k.kind), connKindColor(k.kind), selected)
+func (a *root) connKindRow(c *ui.Context, m engine.DriverMeta) {
+	selected := a.connForm.Kind == m.Kind
+	row := sideNavRow(c, m.Label, connKindIcon(m.Kind), connKindColor(m.Kind), selected)
 	if row.Clicked() {
-		a.switchConnKind(k.kind)
+		a.switchConnKind(m.Kind)
 	}
 }
 
@@ -873,23 +875,93 @@ func (a *root) connKindOf(connID string) string {
 	return ""
 }
 
-// connKind 是连接类型导航项。
-type connKind struct{ kind, label string }
+// connKindDefaults 是未链接驱动（如纯 ui 测试）时的元数据兜底；
+// 生产构建始终用 engine.DriverMetas()。
+var connKindDefaults = []engine.DriverMeta{
+	{Kind: "sqlite", Order: 10, Label: "SQLite"},
+	{Kind: "mysql", Order: 20, Label: "MySQL", DefaultPort: 3306},
+	{Kind: "postgres", Order: 30, Label: "PostgreSQL", DefaultPort: 5432},
+	{Kind: "clickhouse", Order: 40, Label: "ClickHouse", DefaultPort: 9000,
+		DefaultProtocol: "native", Protocols: []string{"native", "http", "https"},
+		ProtocolPorts: map[string]int{"native": 9000, "http": 8123, "https": 8443},
+		CountExpr:     "count()"},
+}
 
-var connKinds = []connKind{
-	{"sqlite", "SQLite"},
-	{"mysql", "MySQL"},
-	{"postgres", "PostgreSQL"},
-	{"clickhouse", "ClickHouse"},
+func connKindMetas() []engine.DriverMeta {
+	ms := engine.DriverMetas()
+	if len(ms) == 0 {
+		return connKindDefaults
+	}
+	seen := make(map[string]bool, len(ms))
+	for i := range ms {
+		ms[i] = mergeKindMeta(ms[i])
+		seen[ms[i].Kind] = true
+	}
+	for _, d := range connKindDefaults {
+		if !seen[d.Kind] {
+			ms = append(ms, d)
+		}
+	}
+	sort.SliceStable(ms, func(i, j int) bool {
+		if ms[i].Order != ms[j].Order {
+			return ms[i].Order < ms[j].Order
+		}
+		return ms[i].Label < ms[j].Label
+	})
+	return ms
+}
+
+func defaultKindMeta(kind string) (engine.DriverMeta, bool) {
+	for _, d := range connKindDefaults {
+		if d.Kind == kind {
+			return d, true
+		}
+	}
+	return engine.DriverMeta{}, false
+}
+
+// mergeKindMeta 用内置兜底补齐测试桩/旧注册缺失的字段。
+func mergeKindMeta(m engine.DriverMeta) engine.DriverMeta {
+	def, ok := defaultKindMeta(m.Kind)
+	if !ok {
+		return m
+	}
+	if m.Order == 0 {
+		m.Order = def.Order
+	}
+	if m.Label == "" {
+		m.Label = def.Label
+	}
+	if m.DefaultPort == 0 {
+		m.DefaultPort = def.DefaultPort
+	}
+	if m.DefaultProtocol == "" {
+		m.DefaultProtocol = def.DefaultProtocol
+	}
+	if len(m.Protocols) == 0 {
+		m.Protocols = def.Protocols
+	}
+	if len(m.ProtocolPorts) == 0 {
+		m.ProtocolPorts = def.ProtocolPorts
+	}
+	if m.CountExpr == "" {
+		m.CountExpr = def.CountExpr
+	}
+	return m
+}
+
+func kindMeta(kind string) engine.DriverMeta {
+	if m, ok := engine.Meta(kind); ok {
+		return mergeKindMeta(m)
+	}
+	if d, ok := defaultKindMeta(kind); ok {
+		return d
+	}
+	return engine.DriverMeta{Kind: kind, CountExpr: "COUNT(*)"}
 }
 
 func kindLabel(kind string) string {
-	for _, k := range connKinds {
-		if k.kind == kind {
-			return k.label
-		}
-	}
-	return kind
+	return kindMeta(kind).Label
 }
 
 // switchConnKind 切换数据源类型；端口还是旧默认值（或空）时跟随新类型的默认端口。
@@ -1037,42 +1109,46 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 
 // connProtoName 把协议下拉的下标换成档案里的协议名。
 func connProtoName(idx int) string {
-	switch idx {
-	case 1:
-		return "http"
-	case 2:
-		return "https"
+	meta := kindMeta("clickhouse")
+	if idx >= 0 && idx < len(meta.Protocols) {
+		return meta.Protocols[idx]
 	}
-	return "native"
+	return meta.DefaultProtocol
 }
 
 // connProtoIndex 是 connProtoName 的反向：编辑连接时把档案读回下拉。
 func connProtoIndex(name string) int {
-	switch strings.ToLower(name) {
-	case "http":
-		return 1
-	case "https":
-		return 2
+	meta := kindMeta("clickhouse")
+	name = strings.ToLower(name)
+	for i, p := range meta.Protocols {
+		if p == name {
+			return i
+		}
 	}
 	return 0
 }
 
 // clickhouseProtoPort 返回 ClickHouse 各协议的默认端口。
 func clickhouseProtoPort(idx int) int {
-	switch idx {
-	case 1:
-		return 8123
-	case 2:
-		return 8443
+	meta := kindMeta("clickhouse")
+	if idx >= 0 && idx < len(meta.Protocols) {
+		if p, ok := meta.ProtocolPorts[meta.Protocols[idx]]; ok {
+			return p
+		}
 	}
-	return 9000
+	return meta.DefaultPort
 }
 
 // applyConnProto 换协议后把端口跟着换成该协议的默认端口；用户自己填的端口不动。
 func (a *root) applyConnProto() {
 	port := strings.TrimSpace(a.connForm.Port)
 	old := false
-	for _, p := range []int{9000, 8123, 8443} {
+	meta := kindMeta("clickhouse")
+	ports := []int{meta.DefaultPort}
+	for _, p := range meta.ProtocolPorts {
+		ports = append(ports, p)
+	}
+	for _, p := range ports {
 		if port == "" || port == strconv.Itoa(p) {
 			old = true
 			break
@@ -1155,15 +1231,7 @@ func (a *root) browsePath() {
 
 // defaultPort 返回各数据源的默认端口。
 func defaultPort(kind string) int {
-	switch kind {
-	case "mysql":
-		return 3306
-	case "postgres":
-		return 5432
-	case "clickhouse":
-		return 9000
-	}
-	return 0
+	return kindMeta(kind).DefaultPort
 }
 
 // openNewConnForm 重置新建连接表单；folderID 为空表示根级。

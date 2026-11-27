@@ -30,7 +30,7 @@ var (
 // init 注册一个测试专用数据源：app 层只认内置 kind，所以借用 postgres 的名字，
 // 把行为按 DSN 转到测试桩上（ui 测试不导入真实 postgres 驱动）。
 func init() {
-	engine.Register("postgres", func(p engine.Profile) (engine.Session, error) {
+	engine.Register("postgres", engine.DriverMeta{Label: "PostgreSQL"}, func(p engine.Profile) (engine.Session, error) {
 		slowMu.Lock()
 		h := slowByID[p.DSN]
 		slowMu.Unlock()

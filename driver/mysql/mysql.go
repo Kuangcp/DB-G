@@ -17,7 +17,10 @@ import (
 const maxCellBytes = 1 << 20
 
 func init() {
-	engine.Register("mysql", openSession)
+	engine.Register("mysql", engine.DriverMeta{
+		Order: 20, Label: "MySQL", DefaultPort: 3306,
+		QuoteIdent: quoteIdent,
+	}, openSession)
 }
 
 type session struct {

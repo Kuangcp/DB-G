@@ -19,7 +19,7 @@ func TestRegisterOpen(t *testing.T) {
 	if _, err := Open(Profile{Kind: "definitely-unknown"}); err == nil {
 		t.Fatal("unknown kind must return an error")
 	}
-	Register("stubkind", func(p Profile) (Session, error) { return stubSession{}, nil })
+	Register("stubkind", DriverMeta{Label: "Stub"}, func(p Profile) (Session, error) { return stubSession{}, nil })
 	s, err := Open(Profile{Kind: "stubkind", Name: "n1", DSN: "d1"})
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +32,7 @@ func TestRegisterOpen(t *testing.T) {
 			t.Fatal("duplicate Register must panic")
 		}
 	}()
-	Register("stubkind", func(p Profile) (Session, error) { return stubSession{}, nil })
+	Register("stubkind", DriverMeta{Label: "Stub"}, func(p Profile) (Session, error) { return stubSession{}, nil })
 }
 
 func TestCapabilitiesHas(t *testing.T) {

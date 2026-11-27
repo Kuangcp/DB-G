@@ -151,19 +151,26 @@ type RowStreamer interface {
 // Factory 创建未打开的会话。
 type Factory func(p Profile) (Session, error)
 
+type registration struct {
+	meta    DriverMeta
+	factory Factory
+}
+
 var (
-	regMu     sync.RWMutex
-	factories = map[string]Factory{}
+	regMu    sync.RWMutex
+	registry = map[string]registration{}
 )
 
-// Register 注册数据源工厂，由 driver 包 init() 调用；重复注册 panic。
-func Register(kind string, f Factory) {
+// Register 注册数据源元数据与工厂，由 driver 包 init() 调用；重复注册 panic。
+func Register(kind string, meta DriverMeta, f Factory) {
 	regMu.Lock()
 	defer regMu.Unlock()
-	if _, dup := factories[kind]; dup {
+	if _, dup := registry[kind]; dup {
 		panic("engine: duplicate Register " + kind)
 	}
-	factories[kind] = f
+	meta.Kind = kind
+	registry[kind] = registration{meta: meta.Normalized(), factory: f}
+	driverOrder = append(driverOrder, kind)
 }
 
 // Registered 报告某种数据源的工厂是否已注册：程序没有链接对应的 driver 包时
@@ -171,17 +178,17 @@ func Register(kind string, f Factory) {
 func Registered(kind string) bool {
 	regMu.RLock()
 	defer regMu.RUnlock()
-	_, ok := factories[kind]
+	_, ok := registry[kind]
 	return ok
 }
 
 // Open 按 Profile.Kind 创建未打开的会话。
 func Open(p Profile) (Session, error) {
 	regMu.RLock()
-	f, ok := factories[p.Kind]
+	r, ok := registry[p.Kind]
 	regMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("engine: unknown data source kind %q", p.Kind)
 	}
-	return f(p)
+	return r.factory(p)
 }

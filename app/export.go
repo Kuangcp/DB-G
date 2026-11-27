@@ -12,11 +12,16 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"db-g/engine"
 )
 
-// QuoteIdent 按数据源方言引用标识符（mysql 反引号，其余双引号）。
+// QuoteIdent 按数据源方言引用标识符；驱动未注册时退回双引号。
 func QuoteIdent(kind, name string) string {
-	if kind == "mysql" {
+	if m, ok := engine.Meta(kind); ok && m.QuoteIdent != nil {
+		return m.QuoteIdent(name)
+	}
+	if kind == "mysql" || kind == "clickhouse" {
 		return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 	}
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`

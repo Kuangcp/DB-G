@@ -39,9 +39,9 @@ func pageCountSQL(kind, sql string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	fn := "COUNT(*)"
-	if kind == "clickhouse" {
-		fn = "count()"
+	fn := kindMeta(kind).CountExpr
+	if fn == "" {
+		fn = "COUNT(*)"
 	}
 	return fmt.Sprintf("SELECT %s FROM (%s) AS dbg_count", fn, body), true
 }

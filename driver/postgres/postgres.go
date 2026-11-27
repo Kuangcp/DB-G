@@ -18,7 +18,12 @@ import (
 
 const maxCellBytes = 1 << 20
 
-func init() { engine.Register("postgres", openSession) }
+func init() {
+	engine.Register("postgres", engine.DriverMeta{
+		Order: 30, Label: "PostgreSQL", DefaultPort: 5432,
+		QuoteIdent: quoteIdent,
+	}, openSession)
+}
 
 type session struct {
 	dsn     string

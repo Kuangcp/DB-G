@@ -568,7 +568,7 @@ func TestSidebarMySQLConnFlow(t *testing.T) {
 
 func TestOpenConnMySQLProfileFields(t *testing.T) {
 	var captured engine.Profile
-	engine.Register("mysql", func(p engine.Profile) (engine.Session, error) {
+	engine.Register("mysql", engine.DriverMeta{Label: "MySQL"}, func(p engine.Profile) (engine.Session, error) {
 		captured = p
 		return treeFakeSession{}, nil
 	})
@@ -832,13 +832,13 @@ func TestConnFormLeftRightNav(t *testing.T) {
 
 func TestConnKindIcons(t *testing.T) {
 	seen := map[ui.Color]bool{}
-	for _, k := range connKinds {
-		if connKindIcon(k.kind) == nil {
-			t.Fatalf("icon missing for %q", k.kind)
+	for _, m := range connKindMetas() {
+		if connKindIcon(m.Kind) == nil {
+			t.Fatalf("icon missing for %q", m.Kind)
 		}
-		col := connKindColor(k.kind)
+		col := connKindColor(m.Kind)
 		if seen[col] {
-			t.Fatalf("duplicate brand color for %q", k.kind)
+			t.Fatalf("duplicate brand color for %q", m.Kind)
 		}
 		seen[col] = true
 	}

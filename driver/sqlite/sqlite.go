@@ -20,7 +20,10 @@ import (
 const maxCellBytes = 1 << 20
 
 func init() {
-	engine.Register("sqlite", openSession)
+	engine.Register("sqlite", engine.DriverMeta{
+		Order: 10, Label: "SQLite",
+		QuoteIdent: quoteIdent,
+	}, openSession)
 }
 
 type session struct {

@@ -20,7 +20,14 @@ import (
 
 const maxCellBytes = 1 << 20
 
-func init() { engine.Register("clickhouse", openSession) }
+func init() {
+	engine.Register("clickhouse", engine.DriverMeta{
+		Order: 40, Label: "ClickHouse", DefaultPort: 9000,
+		DefaultProtocol: "native", Protocols: []string{"native", "http", "https"},
+		ProtocolPorts: map[string]int{"native": 9000, "http": 8123, "https": 8443},
+		CountExpr:     "count()", QuoteIdent: quoteIdent,
+	}, openSession)
+}
 
 type session struct {
 	dsn     string

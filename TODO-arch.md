@@ -297,6 +297,12 @@
 
 ### ARCH-11 数据源元数据散在 8 处 `switch kind`
 
+**已完成（2026-11-27）**：新增 `engine.DriverMeta`，驱动 `init()` 注册 Label/Order/
+DefaultPort/DefaultProtocol/Protocols/ProtocolPorts/CountExpr/QuoteIdent。
+`engine.DriverMetas()` 提供有序列表；UI 的类型列表、标签、默认端口、ClickHouse 协议/端口、
+结果计数表达式、`app.QuoteIdent` 都改为查元数据。纯 UI 测试无驱动时用内置兜底元数据补齐。
+图标/品牌色与本地化参数提示仍留在 UI（视觉/文案）。
+
 | 元数据 | 位置 |
 |---|---|
 | 类型列表/顺序 | `ui/sidebar.go:879` |

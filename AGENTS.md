@@ -61,8 +61,9 @@ main.go ──> ui ──> app ──> engine
 2. **`main.go` 加 `_ "db-g/driver/<kind>"`** —— 漏了不会编译报错，只会在打开连接时报
    `engine: unknown data source kind`（历史事故：postgres / clickhouse 都漏过）。
 3. `main_test.go` 的 `TestAllConnKindsLinked` 列表补上这个 kind（它会替你把第 2 步守住）。
-4. UI 侧：`ui/sidebar.go` 的 `connKinds`（类型列表）、`connKindIcon`/`connKindColor`（`ui/dbicons.go`）、
-   `defaultPort`、`paramsPlaceholder`。
+4. UI 侧只需要视觉/文案：`connKindIcon`/`connKindColor`（`ui/dbicons.go`）、
+   `paramsPlaceholder`。类型列表/标签/默认端口/协议/计数表达式/标识符引用由
+   `engine.DriverMeta` 提供，不要另加 switch。
 5. `Readme.md` 功能清单勾上。
 
 ## 会话契约与能力位
