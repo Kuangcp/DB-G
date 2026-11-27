@@ -329,6 +329,13 @@ DefaultPort/DefaultProtocol/Protocols/ProtocolPorts/CountExpr/QuoteIdent。
 
 ### ARCH-12 标识符引用与字面量转义重复实现
 
+**已完成（2026-11-27）**：新增 `engine/quote.go`：
+`QuoteIdent` / `QuoteIdentFunc` / `QuoteString`。
+`app.QuoteIdent`、`quoteSQLString`、四个驱动的 `quoteIdent` 与
+`mysqlLiteral`/`chLiteral`/`pgLiteral`/`quoteLiteral` 全部委托给同一实现；
+`DriverMeta.QuoteIdent` 直接注册 `engine.QuoteIdentFunc(kind)`。
+新增 `engine/quote_test.go` 覆盖两种引用风格与反斜杠/引号转义。
+
 **证据**：`app/export.go:18` 的 `QuoteIdent(kind, name)` 与四个驱动的
 `quoteIdent`（`driver/sqlite/sqlite.go:313`、`driver/mysql/mysql.go:263`、
 `driver/postgres/postgres.go:558`、`driver/clickhouse/clickhouse.go:495`）是同一规则的两套；

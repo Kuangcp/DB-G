@@ -21,7 +21,7 @@ const maxCellBytes = 1 << 20
 func init() {
 	engine.Register("postgres", engine.DriverMeta{
 		Order: 30, Label: "PostgreSQL", DefaultPort: 5432,
-		QuoteIdent: quoteIdent,
+		QuoteIdent: engine.QuoteIdentFunc("postgres"),
 	}, openSession)
 }
 
@@ -544,9 +544,7 @@ WHERE c.table_schema=$1 AND c.table_name=$2 ORDER BY c.ordinal_position`
 	return b.String(), nil
 }
 
-func quoteIdent(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
-}
+func quoteIdent(s string) string { return engine.QuoteIdent("postgres", s) }
 
 func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {
 	s.mu.Lock()

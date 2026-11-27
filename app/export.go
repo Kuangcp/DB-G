@@ -16,15 +16,9 @@ import (
 	"db-g/engine"
 )
 
-// QuoteIdent 按数据源方言引用标识符；驱动未注册时退回双引号。
+// QuoteIdent 按数据源方言引用标识符（与各驱动共用 engine 的同一实现）。
 func QuoteIdent(kind, name string) string {
-	if m, ok := engine.Meta(kind); ok && m.QuoteIdent != nil {
-		return m.QuoteIdent(name)
-	}
-	if kind == "mysql" || kind == "clickhouse" {
-		return "`" + strings.ReplaceAll(name, "`", "``") + "`"
-	}
-	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+	return engine.QuoteIdent(kind, name)
 }
 
 // QuoteValue 把值渲染成标准 SQL 字面量；没有方言信息时按 SQLite/PostgreSQL 处理。
@@ -98,21 +92,7 @@ func QuoteValueForType(kind, dbType string, v any) string {
 // quoteSQLString 生成字符串字面量。MySQL/ClickHouse 先转义反斜杠与控制字符，
 // 再双写单引号；PostgreSQL/SQLite 只双写单引号，保留 JSON 里的反斜杠。
 func quoteSQLString(kind, s string) string {
-	switch kind {
-	case "mysql", "clickhouse":
-		r := strings.NewReplacer(
-			`\`, `\\`,
-			"\n", `\n`,
-			"\r", `\r`,
-			"\t", `\t`,
-			"\x00", `\0`,
-		)
-		s = r.Replace(s)
-		s = strings.ReplaceAll(s, "'", "''")
-	default:
-		s = strings.ReplaceAll(s, "'", "''")
-	}
-	return "'" + s + "'"
+	return engine.QuoteString(kind, s)
 }
 
 // InsertStatement 生成一条 INSERT（不带列类型）。

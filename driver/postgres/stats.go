@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
-	"strings"
 
 	"db-g/engine"
 )
@@ -109,6 +108,4 @@ LEFT JOIN pg_stat_user_tables s
 }
 
 // pgLiteral 把字符串包成 PostgreSQL 单引号字面量（展示的 SQL 可直接复制执行）。
-func pgLiteral(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
-}
+func pgLiteral(s string) string { return engine.QuoteString("postgres", s) }

@@ -19,7 +19,7 @@ const maxCellBytes = 1 << 20
 func init() {
 	engine.Register("mysql", engine.DriverMeta{
 		Order: 20, Label: "MySQL", DefaultPort: 3306,
-		QuoteIdent: quoteIdent,
+		QuoteIdent: engine.QuoteIdentFunc("mysql"),
 	}, openSession)
 }
 
@@ -247,9 +247,7 @@ func trimStr(s string, max int) string {
 }
 
 // quoteIdent 是 MySQL 的标识符引用（库名/表名）。
-func quoteIdent(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
-}
+func quoteIdent(name string) string { return engine.QuoteIdent("mysql", name) }
 
 func trimBytes(b []byte, max int) []byte {
 	if len(b) <= max {

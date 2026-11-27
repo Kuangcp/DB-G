@@ -22,7 +22,7 @@ const maxCellBytes = 1 << 20
 func init() {
 	engine.Register("sqlite", engine.DriverMeta{
 		Order: 10, Label: "SQLite",
-		QuoteIdent: quoteIdent,
+		QuoteIdent: engine.QuoteIdentFunc("sqlite"),
 	}, openSession)
 }
 
@@ -298,9 +298,7 @@ func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine
 }
 
 // quoteIdent 把 SQL 标识符包成双引号并转义内部双引号（PRAGMA 不吃占位符）。
-func quoteIdent(name string) string {
-	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
-}
+func quoteIdent(name string) string { return engine.QuoteIdent("sqlite", name) }
 
 // Columns 列出一个表的列（PRAGMA table_info）；表不存在时返回空列表。
 func (s *session) Columns(ctx context.Context, table string) ([]engine.Column, error) {

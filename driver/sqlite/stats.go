@@ -101,6 +101,4 @@ func sqliteRowEstimate(stat string) (int64, bool) {
 }
 
 // quoteLiteral 把字符串包成单引号字面量（统计弹窗里展示的 SQL 可直接复制执行）。
-func quoteLiteral(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
-}
+func quoteLiteral(s string) string { return engine.QuoteString("sqlite", s) }

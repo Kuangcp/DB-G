@@ -25,7 +25,7 @@ func init() {
 		Order: 40, Label: "ClickHouse", DefaultPort: 9000,
 		DefaultProtocol: "native", Protocols: []string{"native", "http", "https"},
 		ProtocolPorts: map[string]int{"native": 9000, "http": 8123, "https": 8443},
-		CountExpr:     "count()", QuoteIdent: quoteIdent,
+		CountExpr:     "count()", QuoteIdent: engine.QuoteIdentFunc("clickhouse"),
 	}, openSession)
 }
 
@@ -483,9 +483,7 @@ func (s *session) objectDDLLocked(ctx context.Context, schema string, kind engin
 	return "", engine.NewUserError(engine.ErrDDLNotFound, name)
 }
 
-func quoteIdent(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
-}
+func quoteIdent(name string) string { return engine.QuoteIdent("clickhouse", name) }
 
 func (s *session) Objects(ctx context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
 	return s.ObjectsPage(ctx, "", kind, 0, 0)

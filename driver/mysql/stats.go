@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"strconv"
-	"strings"
 
 	"db-g/engine"
 )
@@ -99,8 +98,4 @@ WHERE t.TABLE_SCHEMA = ` + litSchema + ` AND t.TABLE_NAME = ` + litName
 }
 
 // mysqlLiteral 把字符串包成单引号字面量；统计弹窗展示的 SQL 可直接复制执行。
-func mysqlLiteral(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, "'", "''")
-	return "'" + s + "'"
-}
+func mysqlLiteral(s string) string { return engine.QuoteString("mysql", s) }

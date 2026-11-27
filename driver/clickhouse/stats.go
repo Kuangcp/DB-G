@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"db-g/engine"
 )
@@ -119,8 +118,4 @@ WHERE active AND database = ` + litDB + ` AND table = ` + litName
 }
 
 // chLiteral 把字符串包成 ClickHouse 单引号字面量（展示的 SQL 可直接复制执行）。
-func chLiteral(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, "'", "''")
-	return "'" + s + "'"
-}
+func chLiteral(s string) string { return engine.QuoteString("clickhouse", s) }
