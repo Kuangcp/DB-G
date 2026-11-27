@@ -74,8 +74,8 @@ func TestCloseActiveSwitchesEditorContent(t *testing.T) {
 	a.closeConsole(B.ID)
 	tt.Frame()
 	tt.Frame()
-	if a.activeConsole != A.ID {
-		t.Fatalf("closing B must activate A, active=%q", a.activeConsole)
+	if a.tabs.ActiveConsole != A.ID {
+		t.Fatalf("closing B must activate A, active=%q", a.tabs.ActiveConsole)
 	}
 	if got := a.activeText(); got != "SELECT 'A'" {
 		t.Fatalf("editor must show A after closing B, got %q", got)

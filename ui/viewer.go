@@ -81,18 +81,18 @@ func (a *root) openViewerTab(p app.ConnProfile, o engine.DBObject) {
 		return
 	}
 	id := viewerTabID(p.ID, o.Schema, o)
-	if a.viewerTabs == nil {
-		a.viewerTabs = map[string]*viewerTab{}
+	if a.tabs.ViewerTabs == nil {
+		a.tabs.ViewerTabs = map[string]*viewerTab{}
 	}
-	t := a.viewerTabs[id]
+	t := a.tabs.ViewerTabs[id]
 	if t == nil {
 		t = &viewerTab{
 			id: id, connID: p.ID, schema: o.Schema, obj: o,
 			page: viewerData,
 			grid: newGridState(),
 		}
-		a.viewerTabs[id] = t
-		a.viewerOrder = append(a.viewerOrder, id)
+		a.tabs.ViewerTabs[id] = t
+		a.tabs.ViewerOrder = append(a.tabs.ViewerOrder, id)
 		app.LogInfo("catalog", "viewer open", "conn", p.Name, "object", o.Name)
 	}
 	a.activateViewer(id)
@@ -100,11 +100,11 @@ func (a *root) openViewerTab(p app.ConnProfile, o engine.DBObject) {
 
 // activateViewer 切到表视图标签：只把当前网格指针切到该标签自己的状态。
 func (a *root) activateViewer(id string) {
-	t := a.viewerTabs[id]
+	t := a.tabs.ViewerTabs[id]
 	if t == nil {
 		return
 	}
-	if a.activeViewer == id {
+	if a.tabs.ActiveViewer == id {
 		a.ensureViewerPage(t)
 		return
 	}
@@ -113,9 +113,9 @@ func (a *root) activateViewer(id string) {
 			a.externalFlushFailed(err)
 			return
 		}
-		a.consoleGrid = a.grid
+		a.tabs.ConsoleGrid = a.grid
 	}
-	a.activeViewer = id
+	a.tabs.ActiveViewer = id
 	if t.grid == nil {
 		t.grid = newGridState()
 	}
@@ -128,49 +128,49 @@ func (a *root) activateViewer(id string) {
 
 // leaveViewer 离开表视图回到控制台（换回控制台自己的网格指针）。
 func (a *root) leaveViewer() {
-	if a.activeViewer == "" {
+	if a.tabs.ActiveViewer == "" {
 		return
 	}
-	a.activeViewer = ""
-	if a.consoleGrid == nil {
-		a.consoleGrid = newGridState()
+	a.tabs.ActiveViewer = ""
+	if a.tabs.ConsoleGrid == nil {
+		a.tabs.ConsoleGrid = newGridState()
 	}
-	a.grid = a.consoleGrid
+	a.grid = a.tabs.ConsoleGrid
 	a.stopInlineEdit()
 	a.editCellOpen, a.previewOpen, a.filterOpen = false, false, false
 }
 
 // closeViewerTab 关闭一个表视图标签；关的是当前标签时回落到控制台。
 func (a *root) closeViewerTab(id string) {
-	t := a.viewerTabs[id]
+	t := a.tabs.ViewerTabs[id]
 	if t == nil {
 		return
 	}
 	if t.rt != nil {
 		t.rt.Cancel()
 	}
-	delete(a.viewerTabs, id)
+	delete(a.tabs.ViewerTabs, id)
 	delete(a.editSets, viewerRuntimeID(id))
-	for i, v := range a.viewerOrder {
+	for i, v := range a.tabs.ViewerOrder {
 		if v == id {
-			a.viewerOrder = append(a.viewerOrder[:i], a.viewerOrder[i+1:]...)
+			a.tabs.ViewerOrder = append(a.tabs.ViewerOrder[:i], a.tabs.ViewerOrder[i+1:]...)
 			break
 		}
 	}
-	if a.activeViewer == id {
-		a.activeViewer = ""
-		if a.consoleGrid == nil {
-			a.consoleGrid = newGridState()
+	if a.tabs.ActiveViewer == id {
+		a.tabs.ActiveViewer = ""
+		if a.tabs.ConsoleGrid == nil {
+			a.tabs.ConsoleGrid = newGridState()
 		}
-		a.grid = a.consoleGrid
+		a.grid = a.tabs.ConsoleGrid
 	}
 	app.LogInfo("catalog", "viewer close", "object", t.obj.Name)
 }
 
 // closeViewersOf 关掉某数据源的全部表视图标签（删连接/同步刷新时用）。
 func (a *root) closeViewersOf(connID string) {
-	for _, id := range append([]string(nil), a.viewerOrder...) {
-		if t := a.viewerTabs[id]; t != nil && t.connID == connID {
+	for _, id := range append([]string(nil), a.tabs.ViewerOrder...) {
+		if t := a.tabs.ViewerTabs[id]; t != nil && t.connID == connID {
 			a.closeViewerTab(id)
 		}
 	}
@@ -203,7 +203,7 @@ func (a *root) viewerSQL(t *viewerTab, withLimit bool) (string, error) {
 		q += " ORDER BY " + strings.Join(order, ", ")
 	}
 	if withLimit {
-		size := a.resultPrefs.PageSize
+		size := a.settings.ResultPrefs.PageSize
 		if size <= 0 {
 			size = app.DefaultResultPageSize
 		}
@@ -253,7 +253,7 @@ func (a *root) ensureViewerSession(t *viewerTab, then func()) {
 	}
 	t.query.loading = true
 	a.connectAsync(p, func(err error) {
-		if a.viewerTabs[t.id] != t {
+		if a.tabs.ViewerTabs[t.id] != t {
 			return
 		}
 		t.query.loading = false
@@ -267,7 +267,7 @@ func (a *root) ensureViewerSession(t *viewerTab, then func()) {
 
 // viewerReload 重新执行数据页查询；after 在结果回投后调用（可为 nil）。
 func (a *root) viewerReload(t *viewerTab, after func()) {
-	if a.viewerTabs[t.id] != t {
+	if a.tabs.ViewerTabs[t.id] != t {
 		return
 	}
 	if t.rt != nil && t.rt.Running() {
@@ -291,19 +291,19 @@ func (a *root) viewerReload(t *viewerTab, after func()) {
 	seq := t.seq
 	t.query.sql = sql
 	t.query.loading, t.query.err = true, ""
-	size := a.resultPrefs.PageSize
+	size := a.settings.ResultPrefs.PageSize
 	if size <= 0 {
 		size = app.DefaultResultPageSize
 	}
 	t.rt.SetPageSize(size)
 	t.rt.SetOnDone(func(_ *engine.QueryResult, errMsg string, _ time.Duration) {
 		apply := func() {
-			if a.viewerTabs[t.id] != t || seq != t.seq {
+			if a.tabs.ViewerTabs[t.id] != t || seq != t.seq {
 				return
 			}
 			t.query.loading = false
 			t.query.err = errMsg
-			if a.viewerActive() && a.activeViewer == t.id {
+			if a.viewerActive() && a.tabs.ActiveViewer == t.id {
 				a.grid.editKey = "" // 结果变了，可编辑计划重算
 			}
 			if after != nil {
@@ -377,7 +377,7 @@ func (a *root) viewerLoadColumns(t *viewerTab) {
 	}
 	done := func(cols []engine.Column, err error) {
 		t.colsLoading = false
-		if a.viewerTabs[t.id] != t {
+		if a.tabs.ViewerTabs[t.id] != t {
 			return
 		}
 		if err != nil {
@@ -431,7 +431,7 @@ func (a *root) viewerLoadIndexes(t *viewerTab) {
 	}
 	done := func(idx []engine.Index, err error) {
 		t.idxLoading = false
-		if a.viewerTabs[t.id] != t {
+		if a.tabs.ViewerTabs[t.id] != t {
 			return
 		}
 		if err != nil {
@@ -473,7 +473,7 @@ func (a *root) viewerLoadDDL(t *viewerTab) {
 	}
 	done := func(ddl string, supported bool, err error) {
 		t.ddlLoading = false
-		if a.viewerTabs[t.id] != t {
+		if a.tabs.ViewerTabs[t.id] != t {
 			return
 		}
 		switch {
@@ -590,7 +590,7 @@ func (a *root) viewerDataPage(c *ui.Context, t *viewerTab) {
 			ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
 		}
 		if r.Truncated {
-			ui.Badge(c, locales.ResultTruncated(a.resultPrefs.BudgetMB))
+			ui.Badge(c, locales.ResultTruncated(a.settings.ResultPrefs.BudgetMB))
 		}
 	})
 	a.gridTable(c, r, gridViewer)
@@ -691,7 +691,7 @@ func (a *root) viewerDataToolbar(c *ui.Context, t *viewerTab, r *engine.QueryRes
 		ui.Divider(c)
 		if iconButton(c, iconChevronLeft, locales.PagingPrev(), ui.Transparent).
 			Disabled(t.query.loading || t.query.offset <= 0).Clicked() {
-			t.query.offset = max(t.query.offset-a.resultPrefs.PageSize, 0)
+			t.query.offset = max(t.query.offset-a.settings.ResultPrefs.PageSize, 0)
 			a.viewerReload(t, nil)
 		}
 		pageNo := t.query.offset/a.pageSize() + 1
@@ -796,8 +796,8 @@ func viewerFilterInsert(kind, name string) string {
 
 // pageSize 返回结果页大小（设置里的每页行数）。
 func (a *root) pageSize() int {
-	if a.resultPrefs.PageSize > 0 {
-		return a.resultPrefs.PageSize
+	if a.settings.ResultPrefs.PageSize > 0 {
+		return a.settings.ResultPrefs.PageSize
 	}
 	return app.DefaultResultPageSize
 }
@@ -971,7 +971,7 @@ func (a *root) openSQLInConsole(connID, sql string) {
 	}
 	if recs := m.ConsolesOf(connID); len(recs) > 0 {
 		target := recs[0]
-		if cur, ok := a.store.GetConsole(a.activeConsole); ok && cur.ConnectionID == connID {
+		if cur, ok := a.store.GetConsole(a.tabs.ActiveConsole); ok && cur.ConnectionID == connID {
 			target = cur
 		}
 		a.deferActivateConsole(target.ID, sql)

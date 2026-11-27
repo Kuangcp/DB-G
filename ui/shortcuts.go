@@ -17,12 +17,12 @@ import (
 //     keymap 处理（applyEditorBindings 已经把键位同步过去）。
 func (a *root) dispatchKeys(c *ui.Context) {
 	editorFocused := a.code != nil && a.code.state.Focused()
-	aiInputFocused := a.aiChat.open && a.aiChat.inputRef.Focused(c)
+	aiInputFocused := a.ai.Chat.open && a.ai.Chat.inputRef.Focused(c)
 	for _, act := range keyActions {
 		if act.Cmd != myeditor.NoCommand || !act.applies(editorFocused) {
 			continue
 		}
-		for _, ch := range a.chords[act.ID] {
+		for _, ch := range a.settings.Chords[act.ID] {
 			if !c.Shortcut(ch.Mods, ch.Key) {
 				continue
 			}
@@ -78,7 +78,7 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 			a.externalFlushFailed(err)
 			return
 		}
-		a.externalAfterSave(a.activeConsole)
+		a.externalAfterSave(a.tabs.ActiveConsole)
 	case "format":
 		a.formatActive()
 	case "commentLine":
@@ -91,7 +91,7 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 		a.copyCurrentCell(c, a.currentRuntime().Result())
 	case "setNull":
 		if a.resultsHidden || a.inlineEditOn || a.editCellOpen || a.cellView.Open ||
-			a.filterOpen || a.previewOpen || a.aiChat.open {
+			a.filterOpen || a.previewOpen || a.ai.Chat.open {
 			return
 		}
 		a.setSelectedNull(a.currentRuntime().Result())
@@ -119,19 +119,19 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 // 录制框在录制时拿焦点（AutoFocus），所以这里能收到任意键；返回 true 表示
 // 这个键被吃掉了，不会继续传给后面的控件。
 func (a *root) captureKey(ev ui.InputEvent) bool {
-	if a.captureAction == "" || ev.Kind != ui.InputKeyDown {
+	if a.settings.CaptureAction == "" || ev.Kind != ui.InputKeyDown {
 		return false
 	}
 	if ev.Key == 0 {
 		return true // 只按下了修饰键，等真正的主键
 	}
 	if ev.Key == ui.KeyEscape && ev.Mods == 0 {
-		a.captureAction = ""
+		a.settings.CaptureAction = ""
 		a.updateSettingsWindow()
 		return true
 	}
-	a.setChords(a.captureAction, []chord{{Mods: ev.Mods, Key: ev.Key}})
-	a.captureAction = ""
+	a.setChords(a.settings.CaptureAction, []chord{{Mods: ev.Mods, Key: ev.Key}})
+	a.settings.CaptureAction = ""
 	a.updateSettingsWindow()
 	return true
 }
@@ -147,23 +147,23 @@ func (a *root) breakConflicts(id string, ch chord) {
 			continue
 		}
 		var kept []chord
-		for _, cs := range a.chords[other.ID] {
+		for _, cs := range a.settings.Chords[other.ID] {
 			if cs != ch {
 				kept = append(kept, cs)
 			}
 		}
-		if len(kept) != len(a.chords[other.ID]) {
-			a.chords[other.ID] = kept
+		if len(kept) != len(a.settings.Chords[other.ID]) {
+			a.settings.Chords[other.ID] = kept
 		}
 	}
 }
 
 // keymapHint 是设置窗口里「正在录制」的提示文案。
 func keymapHint(a *root) string {
-	if a.captureAction == "" {
+	if a.settings.CaptureAction == "" {
 		return ""
 	}
-	if act, ok := actionByID(a.captureAction); ok {
+	if act, ok := actionByID(a.settings.CaptureAction); ok {
 		return locales.KeymapRecordingHint(act.Label())
 	}
 	return ""

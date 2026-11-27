@@ -82,8 +82,8 @@ func (a *root) groupOpenPtr(key string, v bool) *bool {
 
 func (a *root) reloadTree() {
 	a.tree.Gen++
-	a.aiDDL = nil
-	a.aiRelations = nil
+	a.ai.DDL = nil
+	a.ai.Relations = nil
 	a.tree.Data = nil
 	a.tree.Counts = nil
 	a.tree.Loading = nil
@@ -652,7 +652,7 @@ func (a *root) previewObjectNow(p app.ConnProfile, o engine.DBObject, m *app.Con
 	if recs := m.ConsolesOf(p.ID); len(recs) > 0 {
 		target := recs[0]
 		// 当前激活的控制台已经属于这个数据源时，优先留在原地。
-		if cur, ok := a.store.GetConsole(a.activeConsole); ok && cur.ConnectionID == p.ID {
+		if cur, ok := a.store.GetConsole(a.tabs.ActiveConsole); ok && cur.ConnectionID == p.ID {
 			target = cur
 		}
 		a.deferActivateConsole(target.ID, sql)

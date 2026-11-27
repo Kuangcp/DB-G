@@ -232,7 +232,7 @@ func (a *root) finishSync(res app.SyncOutcome) {
 func (a *root) refreshAfterSync() {
 	a.closeAllSessions()
 	a.sessionErr = map[string]string{}
-	for _, id := range append([]string(nil), a.viewerOrder...) {
+	for _, id := range append([]string(nil), a.tabs.ViewerOrder...) {
 		a.closeViewerTab(id)
 	}
 	a.reloadTree()
@@ -241,9 +241,9 @@ func (a *root) refreshAfterSync() {
 		m.ResetForSync()
 	}
 	a.clearEditorConsole()
-	a.lastVer = map[string]uint64{}
-	a.runsByConsole = nil
-	a.stmtRuns, a.activeStmt = nil, 0
+	a.tabs.LastVer = map[string]uint64{}
+	a.tabs.RunsByConsole = nil
+	a.tabs.StmtRuns, a.tabs.ActiveStmt = nil, 0
 	a.selConn, a.selObj, a.hasSelObj = app.ConnProfile{}, engine.DBObject{}, false
 	if m := a.consoleMgr(); m != nil {
 		if rec, ok := m.Active(); ok {

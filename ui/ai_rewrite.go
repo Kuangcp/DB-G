@@ -41,7 +41,7 @@ func (a *root) openAIRewrite() {
 		}
 		start, end = st.Start, st.End
 	}
-	a.aiRewrite = aiRewriteState{
+	a.ai.Rewrite = aiRewriteState{
 		open: true, target: text[start:end],
 		start: start, end: end, version: a.code.Version(),
 	}
@@ -49,7 +49,7 @@ func (a *root) openAIRewrite() {
 
 // startAIRewrite 发送一次改写请求；上下文与对话共用（同样的表结构、当前 SQL）。
 func (a *root) startAIRewrite() {
-	st := &a.aiRewrite
+	st := &a.ai.Rewrite
 	instruction := strings.TrimSpace(st.instruction)
 	if instruction == "" {
 		st.err = locales.AiRewriteNeedInstruction()
@@ -118,7 +118,7 @@ func (a *root) startAIRewrite() {
 
 // finishAIRewrite 在主线程落定模型结果并生成 diff。
 func (a *root) finishAIRewrite(seq uint64, raw string, err error) {
-	st := &a.aiRewrite
+	st := &a.ai.Rewrite
 	if seq != st.seq {
 		return
 	}
@@ -152,7 +152,7 @@ func (a *root) finishAIRewrite(seq uint64, raw string, err error) {
 // recordAIRewriteConversation 把这次 Ctrl+K 对话写进当前工作区的 AI 会话历史。
 // 执行历史只记真实执行，改写结果不混进去。
 func (a *root) recordAIRewriteConversation() {
-	st := &a.aiRewrite
+	st := &a.ai.Rewrite
 	instruction := strings.TrimSpace(st.instruction)
 	if st.result == "" || instruction == "" {
 		return
@@ -173,9 +173,9 @@ func (a *root) recordAIRewriteConversation() {
 			{Role: "assistant", Text: "```sql\n" + st.result + "\n```", Done: true, Time: now},
 		},
 	}
-	a.aiChat.store.Conversations = append(a.aiChat.store.Conversations, conv)
-	if a.aiChat.store.ActiveID == "" {
-		a.aiChat.store.ActiveID = conv.ID
+	a.ai.Chat.store.Conversations = append(a.ai.Chat.store.Conversations, conv)
+	if a.ai.Chat.store.ActiveID == "" {
+		a.ai.Chat.store.ActiveID = conv.ID
 	}
 	a.saveAIChat()
 	app.LogInfo("ai", "rewrite conversation saved", "out_len", len(st.result))
@@ -197,7 +197,7 @@ func truncateRunes(s string, n int) string {
 
 // stopAIRewrite 取消改写请求。
 func (a *root) stopAIRewrite() {
-	st := &a.aiRewrite
+	st := &a.ai.Rewrite
 	if !st.loading {
 		return
 	}
@@ -211,7 +211,7 @@ func (a *root) stopAIRewrite() {
 
 // applyAIRewrite 把结果替换原文，或追加到原文之后；原文变了就拒绝。
 func (a *root) applyAIRewrite(appendMode bool) {
-	st := &a.aiRewrite
+	st := &a.ai.Rewrite
 	if st.result == "" {
 		return
 	}
@@ -235,7 +235,7 @@ func (a *root) applyAIRewrite(appendMode bool) {
 
 // aiRewriteModal 是 Ctrl+K 打开的改写浮窗。
 func (a *root) aiRewriteModal(c *ui.Context) {
-	st := &a.aiRewrite
+	st := &a.ai.Rewrite
 	if !st.open {
 		return
 	}

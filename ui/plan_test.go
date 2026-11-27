@@ -66,11 +66,11 @@ func TestRunExplainParsesPlan(t *testing.T) {
 	if sess.sql != "select * from users" {
 		t.Fatalf("explain sql: %q", sess.sql)
 	}
-	if !a.plan.open || a.plan.loading || len(a.plan.nodes) != 1 {
-		t.Fatalf("plan: %+v", a.plan)
+	if !a.ai.Plan.open || a.ai.Plan.loading || len(a.ai.Plan.nodes) != 1 {
+		t.Fatalf("plan: %+v", a.ai.Plan)
 	}
-	if a.plan.nodes[0].Op != "SCAN users" {
-		t.Fatalf("nodes: %+v", a.plan.nodes)
+	if a.ai.Plan.nodes[0].Op != "SCAN users" {
+		t.Fatalf("nodes: %+v", a.ai.Plan.nodes)
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -83,8 +83,8 @@ func TestRunExplainAnalyzeOnlySelect(t *testing.T) {
 	a, sess := planRoot(t)
 	a.setActiveText("update users set name = 'x'")
 	a.runExplain(true)
-	if a.plan.open || !strings.Contains(a.consoleErr, "只允许 SELECT") {
-		t.Fatalf("non-select analyze: open=%v err=%q", a.plan.open, a.consoleErr)
+	if a.ai.Plan.open || !strings.Contains(a.consoleErr, "只允许 SELECT") {
+		t.Fatalf("non-select analyze: open=%v err=%q", a.ai.Plan.open, a.consoleErr)
 	}
 	a.setActiveText("select * from users")
 	a.runExplain(true)
@@ -96,16 +96,16 @@ func TestRunExplainAnalyzeOnlySelect(t *testing.T) {
 func TestDiagnosePlanSendsExecutionContext(t *testing.T) {
 	a, _ := planRoot(t)
 	a.runExplain(false)
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "建议加索引"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
+	a.ai.Prefs.Model = "fake"
 	a.diagnosePlan()
-	if !a.aiChat.open || len(a.aiChat.messages) != 2 {
-		t.Fatalf("diagnose chat: open=%v messages=%+v", a.aiChat.open, a.aiChat.messages)
+	if !a.ai.Chat.open || len(a.ai.Chat.messages) != 2 {
+		t.Fatalf("diagnose chat: open=%v messages=%+v", a.ai.Chat.open, a.ai.Chat.messages)
 	}
-	p := a.aiTestProvider.(*fakeAIProvider)
+	p := a.ai.TestProvider.(*fakeAIProvider)
 	if !strings.Contains(p.req.Messages[1].Content, "Execution Plan") ||
 		!strings.Contains(p.req.Messages[1].Content, "SCAN users") {
 		t.Fatalf("plan missing from prompt:\n%s", p.req.Messages[1].Content)
@@ -117,8 +117,8 @@ func TestRunExplainAnalyzeUnsupported(t *testing.T) {
 	sess.caps = engine.CapExplain | engine.CapObjects | engine.CapColumns
 	a.setActiveText("select * from users")
 	a.runExplain(true)
-	if a.plan.open || !strings.Contains(a.consoleErr, "不支持 EXPLAIN ANALYZE") {
-		t.Fatalf("unsupported analyze: open=%v err=%q", a.plan.open, a.consoleErr)
+	if a.ai.Plan.open || !strings.Contains(a.consoleErr, "不支持 EXPLAIN ANALYZE") {
+		t.Fatalf("unsupported analyze: open=%v err=%q", a.ai.Plan.open, a.consoleErr)
 	}
 	a.runExplain(false)
 	tt := ui.NewTester(rootView(a), 1400, 800)

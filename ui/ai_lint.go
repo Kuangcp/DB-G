@@ -15,8 +15,8 @@ func showAILintButton(a *root, c *ui.Context, rep aiSQLReport) {
 	}
 	text := truncateRunes(rep.Summary(), 80)
 	if ui.Button(c, text).FontSize(10.5).TextColor(color).Tooltip(rep.Summary()).Clicked() {
-		a.aiLintReport = rep
-		a.aiLintOpen = true
+		a.ai.LintReport = rep
+		a.ai.LintOpen = true
 	}
 }
 
@@ -32,21 +32,21 @@ func aiLintText(rep aiSQLReport) string {
 
 // aiLintModal 展示最近一次 AI SQL 自检的完整问题与原文。
 func (a *root) aiLintModal(c *ui.Context) {
-	if !a.aiLintOpen {
+	if !a.ai.LintOpen {
 		return
 	}
 	t := c.Theme()
-	ui.Modal(c, &a.aiLintOpen, func() {
+	ui.Modal(c, &a.ai.LintOpen, func() {
 		ui.Text(c, locales.AiSelfCheckTitle()).Bold()
 		ui.Scroll(c).Height(190).Children(func() {
 			ui.Column(c).FillWidth().Gap(2).Children(func() {
-				for _, risk := range a.aiLintReport.Risks {
+				for _, risk := range a.ai.LintReport.Risks {
 					row := ui.Text(c, risk.Message).FontSize(12).TextColor(t.Danger).SingleLine()
 					if risk.Rule != "" {
 						row.Tooltip(risk.Rule)
 					}
 				}
-				for _, issue := range a.aiLintReport.Issues {
+				for _, issue := range a.ai.LintReport.Issues {
 					var text string
 					if issue.Column == "" {
 						text = locales.AiSelfCheckUnknownTable(issue.Table)
@@ -58,13 +58,13 @@ func (a *root) aiLintModal(c *ui.Context) {
 			})
 		})
 		ui.Text(c, locales.AiSelfCheckSQL()).FontSize(11).TextColor(t.TextMuted)
-		ui.TextArea(c, &a.aiLintReport.SQL).ReadOnly(true).Lines(8, 12).FillWidth()
+		ui.TextArea(c, &a.ai.LintReport.SQL).ReadOnly(true).Lines(8, 12).FillWidth()
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.AiSelfCheckCopy()).Clicked() {
-				c.WriteClipboard(aiLintText(a.aiLintReport))
+				c.WriteClipboard(aiLintText(a.ai.LintReport))
 			}
 			if ui.PrimaryButton(c, locales.CommonClose()).Clicked() {
-				a.aiLintOpen = false
+				a.ai.LintOpen = false
 			}
 		})
 	}).Width(680).Height(500)

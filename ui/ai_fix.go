@@ -27,12 +27,12 @@ type aiFixState struct {
 
 // currentRunSQL 返回当前结果页对应的 SQL。
 func (a *root) currentRunSQL() string {
-	if len(a.stmtRuns) > 0 && a.activeStmt >= 0 && a.activeStmt < len(a.stmtRuns) {
-		if sql := strings.TrimSpace(a.stmtRuns[a.activeStmt].sql); sql != "" {
+	if len(a.tabs.StmtRuns) > 0 && a.tabs.ActiveStmt >= 0 && a.tabs.ActiveStmt < len(a.tabs.StmtRuns) {
+		if sql := strings.TrimSpace(a.tabs.StmtRuns[a.tabs.ActiveStmt].sql); sql != "" {
 			return sql
 		}
 	}
-	return strings.TrimSpace(a.lastExecSQL)
+	return strings.TrimSpace(a.tabs.LastExecSQL)
 }
 
 // fixErrorSQL 用 AI 修复当前失败语句。
@@ -44,18 +44,18 @@ func (a *root) fixErrorSQL() {
 	}
 	provider, err := a.aiProviderFor()
 	if err != nil {
-		a.aiFix = aiFixState{open: true, err: err.Error(), original: sql}
+		a.ai.Fix = aiFixState{open: true, err: err.Error(), original: sql}
 		return
 	}
 	snap := a.aiSnapshot()
 	msgs, rep := ai.BuildFix(snap, sql, errText, a.aiBudget("fix", a.aiTaskMaxTokens("fix")))
 	a.recordAIRequest(locales.AiKindFix(), a.aiTaskModel("fix"),
 		aiContextNote(rep, locales.AiFailureStats(len(sql), len(errText))), msgs)
-	a.aiFix = aiFixState{open: true, loading: true, original: sql}
+	a.ai.Fix = aiFixState{open: true, loading: true, original: sql}
 	ctx, cancel := context.WithCancel(context.Background())
-	a.aiFix.seq++
-	seq := a.aiFix.seq
-	a.aiFix.cancel = cancel
+	a.ai.Fix.seq++
+	seq := a.ai.Fix.seq
+	a.ai.Fix.cancel = cancel
 	req := ai.Request{
 		Model:       a.aiTaskModel("fix"),
 		Messages:    msgs,
@@ -78,9 +78,9 @@ func (a *root) fixErrorSQL() {
 	if a.win == nil {
 		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
-			a.aiFix.loading = false
-			a.aiFix.err = err.Error()
-			a.aiFix.cancel = nil
+			a.ai.Fix.loading = false
+			a.ai.Fix.err = err.Error()
+			a.ai.Fix.cancel = nil
 			cancel()
 			app.LogWarn("ai", "fix stream failed", "err", err.Error())
 			return
@@ -108,28 +108,28 @@ func (a *root) fixErrorSQL() {
 
 // finishAIFix 在主线程落定模型结果。
 func (a *root) finishAIFix(seq uint64, raw string, err error) {
-	if seq != a.aiFix.seq {
+	if seq != a.ai.Fix.seq {
 		return
 	}
-	a.aiFix.loading = false
-	a.aiFix.cancel = nil
+	a.ai.Fix.loading = false
+	a.ai.Fix.cancel = nil
 	if err != nil {
-		a.aiFix.err = err.Error()
+		a.ai.Fix.err = err.Error()
 		return
 	}
 	fixed, ok := ai.ExtractSQL(raw)
 	if !ok || strings.TrimSpace(fixed) == "" {
-		a.aiFix.err = locales.AiNoSQLBlock()
+		a.ai.Fix.err = locales.AiNoSQLBlock()
 		return
 	}
-	a.aiFix.fixed = fixed
-	a.aiFix.lint = a.aiSQLCheck(fixed)
+	a.ai.Fix.fixed = fixed
+	a.ai.Fix.lint = a.aiSQLCheck(fixed)
 	lang := myeditor.LanguageFor("query.sql")
-	old := myeditor.NewBuffer(a.aiFix.original)
+	old := myeditor.NewBuffer(a.ai.Fix.original)
 	old.SetLanguage(lang)
 	next := myeditor.NewBuffer(fixed)
 	next.SetLanguage(lang)
-	a.aiFix.diff = &myeditor.DiffState{
+	a.ai.Fix.diff = &myeditor.DiffState{
 		Old: old, New: next,
 		Layout:       myeditor.DiffUnified,
 		Indicators:   myeditor.DiffClassic,
@@ -140,27 +140,27 @@ func (a *root) finishAIFix(seq uint64, raw string, err error) {
 
 // stopAIFix 取消修复请求。
 func (a *root) stopAIFix() {
-	if !a.aiFix.loading {
+	if !a.ai.Fix.loading {
 		return
 	}
-	a.aiFix.seq++
-	if a.aiFix.cancel != nil {
-		a.aiFix.cancel()
-		a.aiFix.cancel = nil
+	a.ai.Fix.seq++
+	if a.ai.Fix.cancel != nil {
+		a.ai.Fix.cancel()
+		a.ai.Fix.cancel = nil
 	}
-	a.aiFix.loading = false
+	a.ai.Fix.loading = false
 }
 
 // applyAIFix 把修复结果替换回原语句；run 为 true 时随后执行。
 func (a *root) applyAIFix(run bool) {
-	if strings.TrimSpace(a.aiFix.fixed) == "" {
+	if strings.TrimSpace(a.ai.Fix.fixed) == "" {
 		return
 	}
-	if !a.replaceStatement(a.aiFix.original, a.aiFix.fixed) {
-		a.aiFix.err = locales.AiSourceChanged()
+	if !a.replaceStatement(a.ai.Fix.original, a.ai.Fix.fixed) {
+		a.ai.Fix.err = locales.AiSourceChanged()
 		return
 	}
-	a.aiFix.open = false
+	a.ai.Fix.open = false
 	if run {
 		a.deferUI(a.runSQL)
 	}
@@ -197,14 +197,14 @@ func (a *root) replaceStatement(original, fixed string) bool {
 
 // aiFixModal 展示修复 diff 并确认应用。
 func (a *root) aiFixModal(c *ui.Context) {
-	if !a.aiFix.open {
+	if !a.ai.Fix.open {
 		return
 	}
 	t := c.Theme()
-	m := ui.Modal(c, &a.aiFix.open, func() {
+	m := ui.Modal(c, &a.ai.Fix.open, func() {
 		ui.Text(c, locales.AiFixTitle()).Bold()
 		switch {
-		case a.aiFix.loading:
+		case a.ai.Fix.loading:
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Spinner(c)
 				ui.Text(c, locales.AiFixGenerating())
@@ -213,21 +213,21 @@ func (a *root) aiFixModal(c *ui.Context) {
 					a.stopAIFix()
 				}
 			})
-		case a.aiFix.err != "":
-			ui.Text(c, a.aiFix.err).TextColor(t.Danger).FontSize(12)
+		case a.ai.Fix.err != "":
+			ui.Text(c, a.ai.Fix.err).TextColor(t.Danger).FontSize(12)
 		}
-		if !a.aiFix.lint.Empty() {
-			showAILintButton(a, c, a.aiFix.lint)
+		if !a.ai.Fix.lint.Empty() {
+			showAILintButton(a, c, a.ai.Fix.lint)
 		}
-		if a.aiFix.diff != nil {
-			myeditor.DiffView(c, a.aiFix.diff).Grow(1).FillWidth()
+		if a.ai.Fix.diff != nil {
+			myeditor.DiffView(c, a.ai.Fix.diff).Grow(1).FillWidth()
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
 				a.stopAIFix()
-				a.aiFix.open = false
+				a.ai.Fix.open = false
 			}
-			if a.aiFix.fixed != "" {
+			if a.ai.Fix.fixed != "" {
 				if ui.Button(c, locales.AiApplyFix()).Clicked() {
 					a.applyAIFix(false)
 				}

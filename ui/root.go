@@ -12,7 +12,6 @@ import (
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
 
-	"db-g/ai"
 	"db-g/app"
 	"db-g/engine"
 	"db-g/locales"
@@ -20,88 +19,45 @@ import (
 )
 
 type root struct {
-	code             *codeEditor
-	stmtOKColor      ui.Color // 执行成功圆点（主题 Success）
-	stmtErrColor     ui.Color // 执行失败圆点（主题 Danger）
-	stmtRunColor     ui.Color // 执行中圆点（主题 Accent）
-	aiDebug          aiDebugState
-	aiRewrite        aiRewriteState
-	con              *app.Console
-	win              *mygo.Window
-	grid             *gridState   // 当前展示的网格（控制台或表视图）
-	resultClickMods  ui.Modifiers // 结果表格最近一次指针按下/抬起时的修饰键
-	pointerDouble    bool         // 最近一次指针事件是否是双击的第二次按下
-	editorPercent    float32      // 编辑器占上下的百分比（结果区在下方）
-	resultsHidden    bool         // Alt+D 临时隐藏结果区
-	sidebarHidden    bool         // 临时隐藏左侧数据源面板（纯瞬态）
-	selConn          app.ConnProfile
-	selObj           engine.DBObject
-	hasSelObj        bool
-	sidebarWidth     float32
-	store            *app.ConnStore
-	toastQueue       []ui.Toast // 下一帧弹出的浮窗提示（错误自动消失，不再占顶栏）
-	toastSeq         uint64
-	connForm         connFormState                // 新建/编辑连接弹窗
-	connProto        int                          // ClickHouse 协议：0 native / 1 http / 2 https
-	serverInfo       map[string]engine.ServerInfo // connID → 数据库名/版本
-	serverInfoErr    map[string]string            // connID → 版本查询失败原因
-	serverInfoSeq    map[string]uint64            // connID → 异步查询轮次（旧结果作废）
-	chords           map[string][]chord           // 动作 → 键位（见 keymap.go）
-	mouseBindings    map[string]ui.Modifiers      // 鼠标双击动作 → 修饰键（见 keymap.go）
-	keymapPath       string                       // keymap.json 的位置（空 = 不读盘，测试用）
-	fontPrefs        app.FontPrefs                // 编辑区/结果区/功能界面字体
-	fontPrefsPath    string                       // fonts.json 的位置（空 = 不落盘）
-	resultPrefs      app.ResultPrefs              // 结果大小预算
-	resultPrefsPath  string                       // results.json 的位置（空 = 不落盘）
-	consolePrefs     app.ConsolePrefs             // 控制台自动保存
-	consolePrefsPath string                       // console.json 的位置（空 = 不落盘）
-	themePrefs       app.ThemePrefs               // 外观：模式/强调色/密度/圆角/字号
-	themePath        string                       // theme.json 的位置（空 = 不落盘）
-	themeSaveSeq     atomic.Uint64
-	themeHex         string // 外观分区里自定义强调色的输入框
-	themeHexErr      string
-	paletteLight     app.ThemePalette // 自定义配色的浅色草稿
-	paletteDark      app.ThemePalette // 自定义配色的深色草稿
-	paletteLoaded    bool             // 草稿是否已从 prefs 载入
-	paletteErr       string
-	localePref       string      // 界面语言："" 跟随系统，或 en / zh-Hans
-	localePrefsPath  string      // locale.json 的位置（空 = 不落盘）
-	aiPrefs          app.AIPrefs // AI 服务地址/模型/出网开关
-	aiShowKey        bool        // AI API Key 是否显示明文（纯瞬态）
-	aiPrefsPath      string      // ai.json 的位置（空 = 不落盘）
-	aiWarn           string
-	gitSync          syncState // Git 同步：配置、密钥弹窗、发现项
-	aiModels         []string  // /models 返回的模型列表
-	aiModelsLoading  bool
-	aiModelsErr      string
-	aiModelsSeq      int    // 异步获取轮次；旧结果作废
-	aiModelsKey      string // 已请求过的 baseURL+key 指纹
-	vault            *app.Vault
-	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
-	aiChat           aiChatState
-	aiTokenScale     map[string]float64 // model → provider 实际/估算比例
-	aiLintOpen       bool
-	aiLintReport     aiSQLReport
-	aiDDL            map[string]aiDDLEntry      // 相关表 DDL 缓存（AI 上下文用）
-	aiRelations      map[string]aiRelationEntry // 相关表外键缓存（AI 检索用）
-	aiFix            aiFixState
-	aiCompletion     aiCompletionState
-	plan             planState
-	guardOpen        bool
-	guardBlocked     bool
-	guardRisks       []app.SQLRisk
-	settingsSection  int                       // 设置窗口选中的分区
-	captureAction    string                    // 设置窗口正在录制键位的动作
-	settingsNotice   map[string]settingsNotice // 设置分区内联提示（key = 分区）
-	connTestMsg      string                    // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
-	connTestErr      bool
-	connTestBusy     bool
-	connTestSeq      int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
-	connDeleteOpen   bool
-	connDeleting     string
-	tree             treeState
-	deferred         []func()      // 下一帧帧首执行的动作（FIFO）
-	modals           modalRegistry // 每帧按顺序询问的弹窗
+	code            *codeEditor
+	stmtOKColor     ui.Color // 执行成功圆点（主题 Success）
+	stmtErrColor    ui.Color // 执行失败圆点（主题 Danger）
+	stmtRunColor    ui.Color // 执行中圆点（主题 Accent）
+	ai              aiState
+	con             *app.Console
+	win             *mygo.Window
+	grid            *gridState   // 当前展示的网格（控制台或表视图）
+	resultClickMods ui.Modifiers // 结果表格最近一次指针按下/抬起时的修饰键
+	pointerDouble   bool         // 最近一次指针事件是否是双击的第二次按下
+	editorPercent   float32      // 编辑器占上下的百分比（结果区在下方）
+	resultsHidden   bool         // Alt+D 临时隐藏结果区
+	sidebarHidden   bool         // 临时隐藏左侧数据源面板（纯瞬态）
+	selConn         app.ConnProfile
+	selObj          engine.DBObject
+	hasSelObj       bool
+	sidebarWidth    float32
+	store           *app.ConnStore
+	toastQueue      []ui.Toast // 下一帧弹出的浮窗提示（错误自动消失，不再占顶栏）
+	toastSeq        uint64
+	connForm        connFormState                // 新建/编辑连接弹窗
+	connProto       int                          // ClickHouse 协议：0 native / 1 http / 2 https
+	serverInfo      map[string]engine.ServerInfo // connID → 数据库名/版本
+	serverInfoErr   map[string]string            // connID → 版本查询失败原因
+	serverInfoSeq   map[string]uint64            // connID → 异步查询轮次（旧结果作废）
+	settings        settingsState                // 设置窗口与全部偏好
+	gitSync         syncState                    // Git 同步：配置、密钥弹窗、发现项
+	guardOpen       bool
+	guardBlocked    bool
+	guardRisks      []app.SQLRisk
+	connTestMsg     string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	connTestErr     bool
+	connTestBusy    bool
+	connTestSeq     int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
+	connDeleteOpen  bool
+	connDeleting    string
+	tree            treeState
+	deferred        []func()      // 下一帧帧首执行的动作（FIFO）
+	modals          modalRegistry // 每帧按顺序询问的弹窗
 
 	appIconPNG []byte       // 窗口图标；自举安装时写入图标目录
 	install    installState // 自举安装/升级（仅发布构建）
@@ -126,21 +82,7 @@ type root struct {
 	connWaiters         map[string][]func(error)  // connID → 等这次建连结果的回调（UI 线程执行）
 	bgRun               func(work, done func())   // 后台执行 + 回投 UI 的注入点（测试用；nil = 按窗口有无决定）
 	useSeq              uint64
-	consoles            map[string]*app.Console // consoleID → 运行态
-	activeConsole       string
-	consoleMRU          []string              // 最近使用过的标签（控制台 id 或 "vw:"+viewerID；Ctrl+Tab 用，队首最新）
-	viewerTabs          map[string]*viewerTab // 表/视图临时标签（只在内存，关应用即丢）
-	viewerOrder         []string              // 表视图标签的创建顺序（标签行渲染用）
-	activeViewer        string                // 非空 = 当前展示表视图
-	consoleGrid         *gridState            // 控制台自己的结果网格状态
-	lastVer             map[string]uint64
-	lastCaret           [2]int
-	stmtRuns            []stmtRun              // 当前控制台的结果 tab：pinned 固定在最左，新执行追加到右侧
-	nextTabNo           int                    // 结果编号分配器（结果 N：pin/重排都不改名）
-	runsByConsole       map[string]consoleRuns // consoleID → 该控制台最近一次的结果 tab（对照 db-k 的 runSlots）
-	activeStmt          int
-	lastExecSQL         string                // 最近一次执行的语句文本（取更多/复制 INSERT 用）
-	pageStates          map[string]*pageState // runtimeID → 分页状态
+	tabs                consoleTabsState
 	filterOpen          bool
 	filterCol           int
 	filterText          string
@@ -183,12 +125,9 @@ type root struct {
 	consoleErr          string
 	computingCompletion bool
 	retriggerPending    bool
-	completionWanted    bool // 编辑器正在等/持有补全弹层（用户触发）
-	completionWordStart int  // 触发时词起点的字节偏移；光标离开这个词就不再重弹
-	settingsRequested   bool
-	settingsWin         settingsWin
-	openSettingsWin     func(mygo.WindowOptions) settingsWin // 测试注入；nil = 真实窗口
-	tabMenuAction       string                               // "close" / "rename" / "delete"
+	completionWanted    bool   // 编辑器正在等/持有补全弹层（用户触发）
+	completionWordStart int    // 触发时词起点的字节偏移；光标离开这个词就不再重弹
+	tabMenuAction       string // "close" / "rename" / "delete"
 	tabMenuTarget       string
 	modalKind           string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
 	modalTarget         string
@@ -225,14 +164,16 @@ func newRoot(text string) *root {
 			MetaSaveSeq:      map[string]uint64{},
 			GroupStale:       map[string]bool{},
 		},
-		connForm:      connFormState{Kind: "sqlite", TagColor: app.DefaultConnTagColor},
-		cellView:      cellViewState{ModalW: cellModalDefaultW, ModalH: cellModalDefaultH, Wrap: true},
-		chords:        defaultChords(),
-		mouseBindings: defaultMouseBindings(),
-		fontPrefs:     app.DefaultFontPrefs(),
-		resultPrefs:   app.DefaultResultPrefs(),
-		consolePrefs:  app.DefaultConsolePrefs(),
-		themePrefs:    app.DefaultThemePrefs(),
+		connForm: connFormState{Kind: "sqlite", TagColor: app.DefaultConnTagColor},
+		cellView: cellViewState{ModalW: cellModalDefaultW, ModalH: cellModalDefaultH, Wrap: true},
+		settings: settingsState{
+			Chords:        defaultChords(),
+			MouseBindings: defaultMouseBindings(),
+			FontPrefs:     app.DefaultFontPrefs(),
+			ResultPrefs:   app.DefaultResultPrefs(),
+			ConsolePrefs:  app.DefaultConsolePrefs(),
+			ThemePrefs:    app.DefaultThemePrefs(),
+		},
 		sessions:      map[string]engine.Session{},
 		sessionUse:    map[string]uint64{},
 		sessionErr:    map[string]string{},
@@ -241,17 +182,19 @@ func newRoot(text string) *root {
 		serverInfo:    map[string]engine.ServerInfo{},
 		serverInfoErr: map[string]string{},
 		serverInfoSeq: map[string]uint64{},
-		consoles:      map[string]*app.Console{},
-		viewerTabs:    map[string]*viewerTab{},
-		lastVer:       map[string]uint64{},
-		extFiles:      map[string]*extFile{},
+		tabs: consoleTabsState{
+			Consoles:   map[string]*app.Console{},
+			ViewerTabs: map[string]*viewerTab{},
+			LastVer:    map[string]uint64{},
+			PageStates: map[string]*pageState{},
+		},
+		extFiles: map[string]*extFile{},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
-	a.con.SetPageSize(a.resultPrefs.PageSize)
-	a.con.SetResultBudgetMB(a.resultPrefs.BudgetMB)
+	a.con.SetPageSize(a.settings.ResultPrefs.PageSize)
+	a.con.SetResultBudgetMB(a.settings.ResultPrefs.BudgetMB)
 	a.grid = newGridState()
-	a.consoleGrid = a.grid
-	a.pageStates = map[string]*pageState{}
+	a.tabs.ConsoleGrid = a.grid
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
@@ -301,46 +244,46 @@ func NewRoot() *root {
 // newRootWithStore 用指定连接库路径建根状态，并恢复上次激活的工作区、控制台、正文与光标。
 func newRootWithStore(storePath string) *root {
 	r := newRoot("")
-	r.keymapPath = app.DefaultKeymapPath()
+	r.settings.KeymapPath = app.DefaultKeymapPath()
 	if warn := r.loadKeymap(); warn != "" {
 		r.setSettingsNotice("keymap", warn, true)
 	}
 	r.applyEditorBindings()
-	r.fontPrefsPath = app.DefaultFontPrefsPath()
+	r.settings.FontPrefsPath = app.DefaultFontPrefsPath()
 	var fontWarn string
-	r.fontPrefs, fontWarn = app.LoadFontPrefs(r.fontPrefsPath)
+	r.settings.FontPrefs, fontWarn = app.LoadFontPrefs(r.settings.FontPrefsPath)
 	if fontWarn != "" {
 		r.setSettingsNotice("font", fontWarn, true)
 	}
 	r.applyFontPrefs()
-	r.resultPrefsPath = filepath.Join(filepath.Dir(storePath), "results.json")
+	r.settings.ResultPrefsPath = filepath.Join(filepath.Dir(storePath), "results.json")
 	var resultWarn string
-	r.resultPrefs, resultWarn = app.LoadResultPrefs(r.resultPrefsPath)
+	r.settings.ResultPrefs, resultWarn = app.LoadResultPrefs(r.settings.ResultPrefsPath)
 	if resultWarn != "" {
 		r.setSettingsNotice("result", resultWarn, true)
 	}
 	r.applyResultLimits()
-	r.consolePrefsPath = filepath.Join(filepath.Dir(storePath), "console.json")
+	r.settings.ConsolePrefsPath = filepath.Join(filepath.Dir(storePath), "console.json")
 	var consoleWarn string
-	r.consolePrefs, consoleWarn = app.LoadConsolePrefs(r.consolePrefsPath)
+	r.settings.ConsolePrefs, consoleWarn = app.LoadConsolePrefs(r.settings.ConsolePrefsPath)
 	if consoleWarn != "" {
 		r.setSettingsNotice("console", consoleWarn, true)
 	}
-	r.themePath = app.DefaultThemePrefsPath()
+	r.settings.ThemePath = app.DefaultThemePrefsPath()
 	var themeWarn string
-	r.themePrefs, themeWarn = app.LoadThemePrefs(r.themePath)
+	r.settings.ThemePrefs, themeWarn = app.LoadThemePrefs(r.settings.ThemePath)
 	if themeWarn != "" {
 		r.setSettingsNotice("theme", themeWarn, true)
 	}
-	r.localePrefsPath = filepath.Join(filepath.Dir(storePath), "locale.json")
+	r.settings.LocalePrefsPath = filepath.Join(filepath.Dir(storePath), "locale.json")
 	var localePrefs app.LocalizationPrefs
 	var localeWarn string
-	localePrefs, localeWarn = app.LoadLocalePrefs(r.localePrefsPath)
+	localePrefs, localeWarn = app.LoadLocalePrefs(r.settings.LocalePrefsPath)
 	if localeWarn != "" {
 		r.setSettingsNotice("locale", localeWarn, true)
 	}
-	r.localePref = localePrefs.Locale
-	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
+	r.settings.LocalePref = localePrefs.Locale
+	r.ai.PrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
 	r.gitSync.PrefsPath = filepath.Join(filepath.Dir(storePath), "sync.json")
 	r.gitSync.Prefs, r.gitSync.Warn = app.LoadSyncPrefs(r.gitSync.PrefsPath)
 	if key, ok := app.LoadSyncKey(r.gitSync.PrefsPath); ok {
@@ -348,12 +291,12 @@ func newRootWithStore(storePath string) *root {
 		r.gitSync.KeyKCV = sync.KCV(key)
 	}
 	if vault, err := app.LoadVault(storePath); err != nil {
-		r.aiWarn = locales.RootAiKeyUnavailable(err.Error())
+		r.ai.Warn = locales.RootAiKeyUnavailable(err.Error())
 	} else {
-		r.vault = vault
-		prefs, warn := app.LoadAIPrefs(r.aiPrefsPath, vault)
-		r.aiPrefs = prefs
-		r.aiWarn = warn
+		r.ai.Vault = vault
+		prefs, warn := app.LoadAIPrefs(r.ai.PrefsPath, vault)
+		r.ai.Prefs = prefs
+		r.ai.Warn = warn
 	}
 	r.store = app.LoadStore(storePath)
 	r.tree.MetaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
@@ -420,8 +363,8 @@ func (a *root) execDoneLogger(consoleID string) func(*engine.QueryResult, string
 // newConsole 创建一个带当前结果设置（页大小/预算）的运行态。
 func (a *root) newConsole() *app.Console {
 	c := app.NewConsole()
-	c.SetPageSize(a.resultPrefs.PageSize)
-	c.SetResultBudgetMB(a.resultPrefs.BudgetMB)
+	c.SetPageSize(a.settings.ResultPrefs.PageSize)
+	c.SetResultBudgetMB(a.settings.ResultPrefs.BudgetMB)
 	return c
 }
 
@@ -431,14 +374,14 @@ func (a *root) applyResultLimits() {
 		if c == nil {
 			return
 		}
-		c.SetPageSize(a.resultPrefs.PageSize)
-		c.SetResultBudgetMB(a.resultPrefs.BudgetMB)
+		c.SetPageSize(a.settings.ResultPrefs.PageSize)
+		c.SetResultBudgetMB(a.settings.ResultPrefs.BudgetMB)
 	}
 	set(a.con)
-	for _, c := range a.consoles {
+	for _, c := range a.tabs.Consoles {
 		set(c)
 	}
-	for _, t := range a.viewerTabs {
+	for _, t := range a.tabs.ViewerTabs {
 		if t != nil {
 			set(t.rt)
 		}
@@ -447,7 +390,7 @@ func (a *root) applyResultLimits() {
 
 // runtime 返回某控制台的执行运行态（懒创建，结果按控制台各自保留）。
 func (a *root) runtime(id string) *app.Console {
-	if c, ok := a.consoles[id]; ok {
+	if c, ok := a.tabs.Consoles[id]; ok {
 		return c
 	}
 	c := a.newConsole()
@@ -456,7 +399,7 @@ func (a *root) runtime(id string) *app.Console {
 		win := a.win
 		c.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
 	}
-	a.consoles[id] = c
+	a.tabs.Consoles[id] = c
 	return c
 }
 
@@ -484,23 +427,23 @@ func (a *root) runtimeFor(id string) *app.Console {
 
 // currentRuntimeID 返回当前结果对应的运行态 id（多语句时为 consoleID#i）。
 func (a *root) currentRuntimeID() string {
-	if len(a.stmtRuns) > 0 && a.activeStmt < len(a.stmtRuns) {
-		return a.stmtRuns[a.activeStmt].runtimeID
+	if len(a.tabs.StmtRuns) > 0 && a.tabs.ActiveStmt < len(a.tabs.StmtRuns) {
+		return a.tabs.StmtRuns[a.tabs.ActiveStmt].runtimeID
 	}
-	return a.activeConsole
+	return a.tabs.ActiveConsole
 }
 
 // currentRuntime 返回结果区展示的运行态：多语句时是当前语句，否则是当前控制台。
 func (a *root) currentRuntime() *app.Console {
-	if len(a.stmtRuns) > 0 && a.activeStmt < len(a.stmtRuns) {
-		return a.runtimeFor(a.stmtRuns[a.activeStmt].runtimeID)
+	if len(a.tabs.StmtRuns) > 0 && a.tabs.ActiveStmt < len(a.tabs.StmtRuns) {
+		return a.runtimeFor(a.tabs.StmtRuns[a.tabs.ActiveStmt].runtimeID)
 	}
-	return a.runtimeFor(a.activeConsole)
+	return a.runtimeFor(a.tabs.ActiveConsole)
 }
 
 // hasPinned 报告本次执行里是否有钉住的结果 tab。
 func (a *root) hasPinned() bool {
-	for _, run := range a.stmtRuns {
+	for _, run := range a.tabs.StmtRuns {
 		if run.pinned {
 			return true
 		}
@@ -513,14 +456,14 @@ func (a *root) hasPinned() bool {
 func (a *root) refreshStmtMarks() {
 	st := a.code.state
 	st.GutterMarks = nil
-	if len(a.stmtRuns) == 0 || st.Buffer == nil {
+	if len(a.tabs.StmtRuns) == 0 || st.Buffer == nil {
 		a.code.marks = nil
 		st.LineBackgrounds = nil
 		return
 	}
 	buf := st.Buffer
-	out := make([]myeditor.GutterMark, 0, len(a.stmtRuns))
-	for _, run := range a.stmtRuns {
+	out := make([]myeditor.GutterMark, 0, len(a.tabs.StmtRuns))
+	for _, run := range a.tabs.StmtRuns {
 		// 钉住的结果来自旧正文，行号已经失效，不画 gutter 标记。
 		if run.pinned || !run.started || run.sql == "" {
 			continue
@@ -557,15 +500,15 @@ func (a *root) activateConsole(id string) bool {
 	}
 	if a.viewerActive() {
 		a.leaveViewer()
-		if id == a.activeConsole {
+		if id == a.tabs.ActiveConsole {
 			return true
 		}
 	}
-	if id == a.activeConsole {
+	if id == a.tabs.ActiveConsole {
 		return true
 	}
-	a.plan.open = false
-	prev := a.activeConsole
+	a.ai.Plan.open = false
+	prev := a.tabs.ActiveConsole
 	if err := a.flushActive(); err != nil {
 		return false // 落盘失败不切换，避免丢编辑
 	}
@@ -586,15 +529,15 @@ func (a *root) activateConsole(id string) bool {
 	a.code.SetActive(rec.ID, text)
 	start, end := m.Caret(rec.ID)
 	a.code.SetSelection(start, end)
-	a.activeConsole = rec.ID
+	a.tabs.ActiveConsole = rec.ID
 	// 状态点来自该控制台的 stmtRuns，必须在 SetActive 换成它的正文之后再算，
 	// 否则会沿用上一个控制台的圆点或按错误正文校验而全部丢掉。
 	a.refreshStmtMarks()
 	a.touchConsoleMRU(rec.ID)
 	// 活动控制台的正文惰性取自编辑器：逐帧只比较版本号，落盘时才拷贝。
 	m.SetTextSource(rec.ID, func() string { return a.code.Text() })
-	a.lastVer[rec.ID] = a.code.Version()
-	a.lastCaret = [2]int{start, end}
+	a.tabs.LastVer[rec.ID] = a.code.Version()
+	a.tabs.LastCaret = [2]int{start, end}
 	a.code.state.ScrollTo(a.code.state.CursorPos().Line)
 	a.runtime(rec.ID)
 	return true
@@ -615,7 +558,7 @@ func (a *root) formatActive() {
 	if err != nil || formatted == segment || formatted == "" {
 		return
 	}
-	if a.activeConsole != "" {
+	if a.tabs.ActiveConsole != "" {
 		a.syncActiveBuffer()
 	}
 	a.code.Replace(start, end, formatted)
@@ -662,7 +605,7 @@ func (a *root) setSelection(startRune, endRune int) { a.code.SetSelection(startR
 
 // flushActive 落盘当前控制台的正文与光标（切标签/关闭/执行前/退出）。
 func (a *root) flushActive() error {
-	if a.activeConsole == "" {
+	if a.tabs.ActiveConsole == "" {
 		return nil
 	}
 	m := a.consoleMgr()
@@ -670,16 +613,16 @@ func (a *root) flushActive() error {
 		return nil
 	}
 	s, e := a.code.CaretRunes()
-	m.SetCaret(a.activeConsole, s, e)
+	m.SetCaret(a.tabs.ActiveConsole, s, e)
 	m.FlushCarets()
 	if _, st, ok := a.activeExternal(); ok && (st.conflict || st.missing) {
 		// 外部文件冲突/缺失：把编辑器正文存回内存缓存，切标签不丢内容。
-		m.SetText(a.activeConsole, a.code.Text())
+		m.SetText(a.tabs.ActiveConsole, a.code.Text())
 		return nil
 	}
-	if err := m.Flush(a.activeConsole); err != nil {
+	if err := m.Flush(a.tabs.ActiveConsole); err != nil {
 		a.consoleErr = err.Error()
-		app.LogWarn("console", "flush failed", "console", a.activeConsole, "err", err.Error())
+		app.LogWarn("console", "flush failed", "console", a.tabs.ActiveConsole, "err", err.Error())
 		return err
 	}
 	return nil
@@ -690,9 +633,9 @@ func (a *root) flushActive() error {
 func (a *root) syncActiveBuffer() {
 	// 没有激活控制台时的临时缓冲同样要响应编辑：否则旧语句的行底色会留在正文上。
 	ver := a.code.Version()
-	if a.activeConsole == "" {
-		if ver != a.lastVer[""] {
-			a.lastVer[""] = ver
+	if a.tabs.ActiveConsole == "" {
+		if ver != a.tabs.LastVer[""] {
+			a.tabs.LastVer[""] = ver
 			a.refreshStmtMarks()
 		}
 		return
@@ -701,14 +644,14 @@ func (a *root) syncActiveBuffer() {
 	if m == nil {
 		return
 	}
-	if ver != a.lastVer[a.activeConsole] {
-		a.lastVer[a.activeConsole] = ver
-		m.TouchVersion(a.activeConsole, ver)
+	if ver != a.tabs.LastVer[a.tabs.ActiveConsole] {
+		a.tabs.LastVer[a.tabs.ActiveConsole] = ver
+		m.TouchVersion(a.tabs.ActiveConsole, ver)
 		a.refreshStmtMarks()
 	}
-	if s, e := a.code.CaretRunes(); [2]int{s, e} != a.lastCaret {
-		a.lastCaret = [2]int{s, e}
-		m.SetCaret(a.activeConsole, s, e)
+	if s, e := a.code.CaretRunes(); [2]int{s, e} != a.tabs.LastCaret {
+		a.tabs.LastCaret = [2]int{s, e}
+		m.SetCaret(a.tabs.ActiveConsole, s, e)
 	}
 }
 
@@ -736,13 +679,13 @@ func (a *root) Attach(win *mygo.Window) {
 		a.FlushAll()
 	})
 	a.con.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
-	for _, c := range a.consoles {
+	for _, c := range a.tabs.Consoles {
 		c.SetPublisher(func(f func()) { a.safeUpdate(win, f) })
 	}
 	// 语言切换后设置窗口的原生标题也要跟着变（标题栏文字每帧重建，不用管）。
 	mygo.App.OnLocaleChanged(func(string) {
-		if a.settingsWin != nil {
-			a.settingsWin.SetTitle(locales.SettingsTitle() + " — " + app.DisplayName)
+		if a.settings.Win != nil {
+			a.settings.Win.SetTitle(locales.SettingsTitle() + " — " + app.DisplayName)
 		}
 	})
 }
@@ -848,11 +791,11 @@ func (a *root) view(c *ui.Context) {
 					})
 				})
 			}
-			if a.aiChat.open {
-				if a.aiChat.split <= 0 || a.aiChat.split >= 100 {
-					a.aiChat.split = 68
+			if a.ai.Chat.open {
+				if a.ai.Chat.split <= 0 || a.ai.Chat.split >= 100 {
+					a.ai.Chat.split = 68
 				}
-				ui.SplitPercent(c, &a.aiChat.split, main, func() {
+				ui.SplitPercent(c, &a.ai.Chat.split, main, func() {
 					a.aiPanel(c)
 				}).Fill().SplitReset(68)
 				return

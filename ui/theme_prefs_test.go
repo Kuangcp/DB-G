@@ -114,7 +114,7 @@ func TestResolveThemeSystemKeepsBaseMetrics(t *testing.T) {
 // 帧首接入：显式模式把主题换掉，系统+无覆盖时不干预。
 func TestApplyThemeInFrame(t *testing.T) {
 	a := newTestRoot()
-	a.themePrefs = app.ThemePrefs{Mode: "dark"}
+	a.settings.ThemePrefs = app.ThemePrefs{Mode: "dark"}
 	tt := ui.NewTester(rootView(a), 1000, 700)
 	tt.Frame() // 不 panic 且能出帧
 	if !tt.HasText("编辑器") {
@@ -124,7 +124,7 @@ func TestApplyThemeInFrame(t *testing.T) {
 	if !got.Theme.Dark {
 		t.Fatalf("dark mode must apply: %+v", got)
 	}
-	a.themePrefs = app.DefaultThemePrefs()
+	a.settings.ThemePrefs = app.DefaultThemePrefs()
 	got = a.resolvedThemeFor(ui.LightTheme(), ui.Preferences{})
 	if got.Theme.Dark {
 		t.Fatalf("system mode must still apply the Lobe theme: %+v", got)
@@ -134,9 +134,9 @@ func TestApplyThemeInFrame(t *testing.T) {
 // 设置修改同步落盘（headless），并可用 LoadThemePrefs 读回。
 func TestSetThemePrefsPersists(t *testing.T) {
 	a := newTestRoot()
-	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	a.settings.ThemePath = filepath.Join(t.TempDir(), "theme.json")
 	a.setThemePrefs(app.ThemePrefs{Mode: "light", Accent: "violet", Density: "compact", Radius: 9, FontSize: 16})
-	got, warn := app.LoadThemePrefs(a.themePath)
+	got, warn := app.LoadThemePrefs(a.settings.ThemePath)
 	if warn != "" {
 		t.Fatalf("warn: %s", warn)
 	}
@@ -183,7 +183,7 @@ func TestResolveThemeSchemesAndCustomPalette(t *testing.T) {
 
 func TestAppearanceSchemeSwitch(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	a.settings.ThemePath = filepath.Join(t.TempDir(), "theme.json")
 	tt := openSettingsSection(t, a, "外观")
 	tt.SetSize(720, 900)
 	tt.Frame()
@@ -195,15 +195,15 @@ func TestAppearanceSchemeSwitch(t *testing.T) {
 	if err := tt.Click("海洋"); err != nil {
 		t.Fatal(err)
 	}
-	if a.themePrefs.Scheme != app.ThemeSchemeOcean {
-		t.Fatalf("scheme = %q", a.themePrefs.Scheme)
+	if a.settings.ThemePrefs.Scheme != app.ThemeSchemeOcean {
+		t.Fatalf("scheme = %q", a.settings.ThemePrefs.Scheme)
 	}
 	if err := tt.Click("自定义"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.themePrefs.Scheme != app.ThemeSchemeCustom || !a.paletteLoaded {
-		t.Fatalf("custom scheme: %+v loaded=%v", a.themePrefs, a.paletteLoaded)
+	if a.settings.ThemePrefs.Scheme != app.ThemeSchemeCustom || !a.settings.PaletteLoaded {
+		t.Fatalf("custom scheme: %+v loaded=%v", a.settings.ThemePrefs, a.settings.PaletteLoaded)
 	}
 	if !tt.HasText("自定义配色（颜色留空则沿用默认）") {
 		t.Fatalf("palette editor missing: %q", tt.Texts())

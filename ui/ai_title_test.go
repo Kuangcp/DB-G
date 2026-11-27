@@ -10,18 +10,18 @@ import (
 func TestAIChatRetitlesLanguageNeutralDefault(t *testing.T) {
 	for _, title := range []string{"New chat", "新会话"} {
 		a := newConsoleRoot(t)
-		a.aiChat.convID = "c1"
-		a.aiChat.store.ActiveID = "c1"
-		a.aiChat.store.Conversations = []app.AIConversation{{
+		a.ai.Chat.convID = "c1"
+		a.ai.Chat.store.ActiveID = "c1"
+		a.ai.Chat.store.Conversations = []app.AIConversation{{
 			ID:       "c1",
 			Title:    title,
 			Messages: []app.AIMessageRecord{{Role: "user", Text: "select 1"}},
 		}}
-		a.aiChat.messages = []aiChatMessage{{role: "user", text: "select 1", done: true}}
+		a.ai.Chat.messages = []aiChatMessage{{role: "user", text: "select 1", done: true}}
 
 		a.syncAIChat()
 
-		if got := a.aiChat.store.Conversations[0].Title; got != "select 1" {
+		if got := a.ai.Chat.store.Conversations[0].Title; got != "select 1" {
 			t.Fatalf("title %q -> %q, want %q", title, got, "select 1")
 		}
 	}

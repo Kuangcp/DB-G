@@ -61,19 +61,19 @@ type aiChatState struct {
 
 // aiProviderFor 返回当前配置对应的 Provider；测试可注入。
 func (a *root) aiProviderFor() (ai.Provider, error) {
-	if a.aiTestProvider != nil {
-		return a.aiTestProvider, nil
+	if a.ai.TestProvider != nil {
+		return a.ai.TestProvider, nil
 	}
-	base := strings.TrimSpace(a.aiPrefs.BaseURL)
+	base := strings.TrimSpace(a.ai.Prefs.BaseURL)
 	if base == "" {
 		base = app.DefaultAIBaseURL
 	}
-	if strings.TrimSpace(a.aiPrefs.Model) == "" {
+	if strings.TrimSpace(a.ai.Prefs.Model) == "" {
 		return nil, errors.New(locales.AiModelMissing())
 	}
 	return ai.NewOpenAIProvider(ai.OpenAIConfig{
 		BaseURL: base,
-		APIKey:  a.aiPrefs.APIKey,
+		APIKey:  a.ai.Prefs.APIKey,
 	}), nil
 }
 
@@ -174,7 +174,7 @@ func (a *root) aiDialogue() []ai.Message {
 // aiDialogueParts 把长对话拆成“更早的确定性摘要 + 最近 8 条消息”。
 func (a *root) aiDialogueParts() (string, []ai.Message) {
 	var all []ai.Message
-	for _, m := range a.aiChat.messages {
+	for _, m := range a.ai.Chat.messages {
 		if strings.TrimSpace(m.text) == "" || !m.done {
 			continue
 		}
@@ -227,8 +227,8 @@ func (a *root) chatSnapshotWith(opts aiEgressPolicy) ai.ContextSnapshot {
 
 // sendAI 发送当前输入；服务端错误只写面板，不影响查询。
 func (a *root) sendAI() {
-	q := strings.TrimSpace(a.aiChat.input)
-	if q == "" || a.aiChat.streaming || a.aiChat.preparing {
+	q := strings.TrimSpace(a.ai.Chat.input)
+	if q == "" || a.ai.Chat.streaming || a.ai.Chat.preparing {
 		return
 	}
 	policy := a.aiEgressPolicy()
@@ -239,21 +239,21 @@ func (a *root) sendAI() {
 // sendAIChat 在上下文准备好后组装提示词并开始流式请求。
 func (a *root) sendAIChat(q string, snap ai.ContextSnapshot) {
 	msgs, rep := ai.BuildChat(snap, q, a.aiBudget("chat", a.aiTaskMaxTokens("chat")))
-	a.aiChat.lastCtx = aiContextNote(rep, "")
-	a.aiChat.lint = aiSQLReport{}
+	a.ai.Chat.lastCtx = aiContextNote(rep, "")
+	a.ai.Chat.lint = aiSQLReport{}
 	if err := a.startAIRequest(locales.AiKindChat(), aiContextNote(rep, ""), q, msgs); err != nil {
-		a.aiChat.err = err.Error()
+		a.ai.Chat.err = err.Error()
 		return
 	}
-	a.aiChat.input = ""
+	a.ai.Chat.input = ""
 }
 
 // startAIRequest 追加一轮消息并发起流式请求；kind 只用于「最近 AI 请求」查看器。
 func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) error {
-	if a.aiChat.streaming {
+	if a.ai.Chat.streaming {
 		return errors.New(locales.AiAlreadyStreaming())
 	}
-	if a.aiChat.convID == "" {
+	if a.ai.Chat.convID == "" {
 		a.newAIConversation()
 	}
 	provider, err := a.aiProviderFor()
@@ -262,29 +262,29 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 	}
 	model := a.aiTaskModel("chat")
 	a.recordAIRequest(kind, model, note, msgs)
-	a.aiChat.err = ""
-	a.aiChat.usage = ai.Usage{}
-	a.aiChat.usageCounted = false
-	a.aiChat.estimate = 0
+	a.ai.Chat.err = ""
+	a.ai.Chat.usage = ai.Usage{}
+	a.ai.Chat.usageCounted = false
+	a.ai.Chat.estimate = 0
 	for _, m := range msgs {
-		a.aiChat.estimate += ai.EstimateTokens(m.Content)
+		a.ai.Chat.estimate += ai.EstimateTokens(m.Content)
 	}
-	a.aiChat.reqModel = model
-	a.aiChat.messages = append(a.aiChat.messages,
+	a.ai.Chat.reqModel = model
+	a.ai.Chat.messages = append(a.ai.Chat.messages,
 		aiChatMessage{role: "user", text: display, done: true},
 		aiChatMessage{role: "assistant"},
 	)
 	a.saveAIChat()
-	if a.aiPrefs.AITitle && len(a.aiChat.messages) == 2 {
-		a.generateAITitle(a.aiChat.convID, display)
+	if a.ai.Prefs.AITitle && len(a.ai.Chat.messages) == 2 {
+		a.generateAITitle(a.ai.Chat.convID, display)
 	}
-	a.aiChat.seq++
-	seq := a.aiChat.seq
+	a.ai.Chat.seq++
+	seq := a.ai.Chat.seq
 	ctx, cancel := context.WithCancel(context.Background())
-	a.aiChat.cancel = cancel
-	a.aiChat.streaming = true
-	a.aiChat.started = time.Now()
-	a.aiChat.scroll.Y = math.MaxFloat32
+	a.ai.Chat.cancel = cancel
+	a.ai.Chat.streaming = true
+	a.ai.Chat.started = time.Now()
+	a.ai.Chat.scroll.Y = math.MaxFloat32
 	req := ai.Request{
 		Model:       model,
 		Messages:    msgs,
@@ -294,10 +294,10 @@ func (a *root) startAIRequest(kind, note, display string, msgs []ai.Message) err
 	if a.win == nil {
 		ch, err := openAIStream(ctx, cancel, provider, req)
 		if err != nil {
-			a.aiChat.streaming = false
-			a.aiChat.cancel = nil
+			a.ai.Chat.streaming = false
+			a.ai.Chat.cancel = nil
 			cancel()
-			a.aiChat.err = err.Error()
+			a.ai.Chat.err = err.Error()
 			app.LogWarn("ai", "stream failed", "model", model, "err", err.Error())
 			a.applyAIEvent(seq, ai.Event{Kind: ai.EventError, Err: err})
 			return err
@@ -366,40 +366,40 @@ func (a *root) consumeAI(seq uint64, ch <-chan ai.Event) {
 
 // applyAIEvent 应用一个流事件；旧请求直接忽略。
 func (a *root) applyAIEvent(seq uint64, ev ai.Event) {
-	if seq != a.aiChat.seq {
+	if seq != a.ai.Chat.seq {
 		return
 	}
-	n := len(a.aiChat.messages)
-	if n == 0 || a.aiChat.messages[n-1].role != "assistant" {
+	n := len(a.ai.Chat.messages)
+	if n == 0 || a.ai.Chat.messages[n-1].role != "assistant" {
 		return
 	}
-	msg := &a.aiChat.messages[n-1]
+	msg := &a.ai.Chat.messages[n-1]
 	switch ev.Kind {
 	case ai.EventText:
 		msg.text += ev.Text
 	case ai.EventUsage:
 		if ev.Usage != nil {
-			a.aiChat.usage = *ev.Usage
-			a.updateAITokenScale(a.aiChat.reqModel, a.aiChat.estimate, ev.Usage.PromptTokens)
+			a.ai.Chat.usage = *ev.Usage
+			a.updateAITokenScale(a.ai.Chat.reqModel, a.ai.Chat.estimate, ev.Usage.PromptTokens)
 		}
 	case ai.EventDone:
 		a.addAIUsage()
 		msg.done = true
-		a.aiChat.streaming = false
-		a.aiChat.cancel = nil
+		a.ai.Chat.streaming = false
+		a.ai.Chat.cancel = nil
 		a.saveAIChat()
-		app.LogInfo("ai", "chat done", "dur_ms", time.Since(a.aiChat.started).Milliseconds(),
-			"tokens", a.aiChat.usage.TotalTokens)
+		app.LogInfo("ai", "chat done", "dur_ms", time.Since(a.ai.Chat.started).Milliseconds(),
+			"tokens", a.ai.Chat.usage.TotalTokens)
 	case ai.EventError:
 		a.addAIUsage()
 		if ev.Err != nil {
 			msg.err = ev.Err.Error()
-			a.aiChat.err = ev.Err.Error()
+			a.ai.Chat.err = ev.Err.Error()
 			app.LogWarn("ai", "chat error", "err", ev.Err.Error())
 		}
 		msg.done = true
-		a.aiChat.streaming = false
-		a.aiChat.cancel = nil
+		a.ai.Chat.streaming = false
+		a.ai.Chat.cancel = nil
 		a.saveAIChat()
 	}
 }
@@ -416,10 +416,10 @@ func (a *root) updateAITokenScale(model string, estimate, actual int) {
 	if ratio > 2 {
 		ratio = 2
 	}
-	if a.aiTokenScale == nil {
-		a.aiTokenScale = map[string]float64{}
+	if a.ai.TokenScale == nil {
+		a.ai.TokenScale = map[string]float64{}
 	}
-	old := a.aiTokenScale[model]
+	old := a.ai.TokenScale[model]
 	if old <= 0 {
 		old = 1
 	}
@@ -430,34 +430,34 @@ func (a *root) updateAITokenScale(model string, estimate, actual int) {
 	if next > 2 {
 		next = 2
 	}
-	a.aiTokenScale[model] = next
+	a.ai.TokenScale[model] = next
 }
 
 // addAIUsage 把本次请求的 token 计入会话累计，只计一次。
 func (a *root) addAIUsage() {
-	if a.aiChat.usageCounted || a.aiChat.usage.TotalTokens == 0 {
+	if a.ai.Chat.usageCounted || a.ai.Chat.usage.TotalTokens == 0 {
 		return
 	}
-	a.aiChat.usageCounted = true
-	a.aiChat.totalUsage.PromptTokens += a.aiChat.usage.PromptTokens
-	a.aiChat.totalUsage.CompletionTokens += a.aiChat.usage.CompletionTokens
-	a.aiChat.totalUsage.TotalTokens += a.aiChat.usage.TotalTokens
+	a.ai.Chat.usageCounted = true
+	a.ai.Chat.totalUsage.PromptTokens += a.ai.Chat.usage.PromptTokens
+	a.ai.Chat.totalUsage.CompletionTokens += a.ai.Chat.usage.CompletionTokens
+	a.ai.Chat.totalUsage.TotalTokens += a.ai.Chat.usage.TotalTokens
 }
 
 // stopAI 取消当前请求并丢弃后续回包。
 func (a *root) stopAI() {
 	a.cancelAIPrepare()
-	if !a.aiChat.streaming {
+	if !a.ai.Chat.streaming {
 		return
 	}
-	a.aiChat.seq++
-	if a.aiChat.cancel != nil {
-		a.aiChat.cancel()
-		a.aiChat.cancel = nil
+	a.ai.Chat.seq++
+	if a.ai.Chat.cancel != nil {
+		a.ai.Chat.cancel()
+		a.ai.Chat.cancel = nil
 	}
-	a.aiChat.streaming = false
-	if n := len(a.aiChat.messages); n > 0 {
-		msg := &a.aiChat.messages[n-1]
+	a.ai.Chat.streaming = false
+	if n := len(a.ai.Chat.messages); n > 0 {
+		msg := &a.ai.Chat.messages[n-1]
 		if msg.role == "assistant" && !msg.done {
 			msg.done = true
 			msg.err = locales.AiStopped()
@@ -468,16 +468,16 @@ func (a *root) stopAI() {
 
 // cancelAIPrepare 作废正在补齐 DDL 的上下文准备。
 func (a *root) cancelAIPrepare() {
-	if !a.aiChat.preparing {
+	if !a.ai.Chat.preparing {
 		return
 	}
-	a.aiChat.prepareSeq++
-	a.aiChat.preparing = false
+	a.ai.Chat.prepareSeq++
+	a.ai.Chat.preparing = false
 }
 
 // resetAIChat 新建一段会话。
 func (a *root) resetAIChat() {
-	a.aiChat.showHistory = false
+	a.ai.Chat.showHistory = false
 	a.newAIConversation()
 }
 
@@ -487,14 +487,14 @@ func (a *root) insertAISQL(text string) bool {
 	if !ok {
 		return false
 	}
-	a.aiChat.lint = a.aiSQLCheck(sql)
+	a.ai.Chat.lint = a.aiSQLCheck(sql)
 	a.code.Insert(sql)
 	return true
 }
 
 // aiChatFile 返回当前工作区的 AI 会话文件；未配置或没有工作区时为空。
 func (a *root) aiChatFile() string {
-	if a.aiPrefsPath == "" {
+	if a.ai.PrefsPath == "" {
 		return ""
 	}
 	m := a.consoleMgr()
@@ -505,7 +505,7 @@ func (a *root) aiChatFile() string {
 	if !ok {
 		return ""
 	}
-	return app.AIConversationPath(filepath.Dir(a.aiPrefsPath), ws.ID)
+	return app.AIConversationPath(filepath.Dir(a.ai.PrefsPath), ws.ID)
 }
 
 // ensureAIChatStore 保证内存里是当前工作区的会话库；切换工作区后重新读盘。
@@ -515,40 +515,40 @@ func (a *root) ensureAIChatStore() bool {
 	if path == "" {
 		return false
 	}
-	if a.aiChat.storeLoaded && a.aiChat.storePath == path {
+	if a.ai.Chat.storeLoaded && a.ai.Chat.storePath == path {
 		return true
 	}
-	if a.aiChat.storeLoaded && a.aiChat.storePath != "" {
+	if a.ai.Chat.storeLoaded && a.ai.Chat.storePath != "" {
 		// 旧工作区还有未落盘的消息：先写回旧文件，再切到新工作区。
 		a.syncAIChat()
-		if err := app.SaveAIConversations(a.aiChat.storePath, a.aiChat.store); err != nil {
-			a.aiWarn = locales.AiSaveConversationFailed(err.Error())
+		if err := app.SaveAIConversations(a.ai.Chat.storePath, a.ai.Chat.store); err != nil {
+			a.ai.Warn = locales.AiSaveConversationFailed(err.Error())
 		}
 	}
 	store, warn := app.LoadAIConversations(path)
 	if warn != "" {
-		a.aiWarn = warn
+		a.ai.Warn = warn
 	}
-	a.aiChat.store = store
-	a.aiChat.storeLoaded = true
-	a.aiChat.storePath = path
+	a.ai.Chat.store = store
+	a.ai.Chat.storeLoaded = true
+	a.ai.Chat.storePath = path
 	return true
 }
 
 // loadAIChat 读取当前工作区会话（打开面板时调用）。
 func (a *root) loadAIChat() {
 	if !a.ensureAIChatStore() {
-		a.aiChat.convID = ""
+		a.ai.Chat.convID = ""
 		a.newAIConversation()
 		return
 	}
-	store := a.aiChat.store
+	store := a.ai.Chat.store
 	id := store.ActiveID
 	if id == "" && len(store.Conversations) > 0 {
 		id = store.Conversations[0].ID
 	}
 	if id == "" {
-		a.aiChat.convID = ""
+		a.ai.Chat.convID = ""
 		a.newAIConversation()
 		return
 	}
@@ -562,27 +562,27 @@ func (a *root) selectAIConversation(id string, saveCurrent bool) {
 		a.syncAIChat()
 	}
 	var conv *app.AIConversation
-	for i := range a.aiChat.store.Conversations {
-		if a.aiChat.store.Conversations[i].ID == id {
-			conv = &a.aiChat.store.Conversations[i]
+	for i := range a.ai.Chat.store.Conversations {
+		if a.ai.Chat.store.Conversations[i].ID == id {
+			conv = &a.ai.Chat.store.Conversations[i]
 			break
 		}
 	}
 	if conv == nil {
 		return
 	}
-	a.aiChat.convID = id
-	a.aiChat.messages = a.aiChat.messages[:0]
-	a.aiChat.lint = aiSQLReport{}
+	a.ai.Chat.convID = id
+	a.ai.Chat.messages = a.ai.Chat.messages[:0]
+	a.ai.Chat.lint = aiSQLReport{}
 	for _, m := range conv.Messages {
-		a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{
+		a.ai.Chat.messages = append(a.ai.Chat.messages, aiChatMessage{
 			role: m.Role, text: m.Text, done: m.Done, err: m.Err,
 		})
 	}
-	a.aiChat.store.ActiveID = id
-	a.aiChat.usage, a.aiChat.totalUsage = ai.Usage{}, ai.Usage{}
-	a.aiChat.usageCounted = false
-	a.aiChat.scroll.Y = math.MaxFloat32
+	a.ai.Chat.store.ActiveID = id
+	a.ai.Chat.usage, a.ai.Chat.totalUsage = ai.Usage{}, ai.Usage{}
+	a.ai.Chat.usageCounted = false
+	a.ai.Chat.scroll.Y = math.MaxFloat32
 	a.saveAIChat()
 }
 
@@ -592,27 +592,27 @@ func (a *root) newAIConversation() {
 	a.syncAIChat()
 	now := time.Now().UnixMilli()
 	conv := app.AIConversation{ID: app.NewAIConversationID(), CreatedAt: now, UpdatedAt: now}
-	a.aiChat.store.Conversations = append(a.aiChat.store.Conversations, conv)
-	a.aiChat.store.ActiveID = conv.ID
-	a.aiChat.convID = conv.ID
-	a.aiChat.messages = nil
-	a.aiChat.err = ""
-	a.aiChat.lastCtx = ""
-	a.aiChat.lint = aiSQLReport{}
-	a.aiChat.usage, a.aiChat.totalUsage = ai.Usage{}, ai.Usage{}
-	a.aiChat.usageCounted = false
-	a.aiChat.scroll.Y = 0
+	a.ai.Chat.store.Conversations = append(a.ai.Chat.store.Conversations, conv)
+	a.ai.Chat.store.ActiveID = conv.ID
+	a.ai.Chat.convID = conv.ID
+	a.ai.Chat.messages = nil
+	a.ai.Chat.err = ""
+	a.ai.Chat.lastCtx = ""
+	a.ai.Chat.lint = aiSQLReport{}
+	a.ai.Chat.usage, a.ai.Chat.totalUsage = ai.Usage{}, ai.Usage{}
+	a.ai.Chat.usageCounted = false
+	a.ai.Chat.scroll.Y = 0
 	a.saveAIChat()
 }
 
 // syncAIChat 把当前消息写回内存 store，并更新标题/时间。
 func (a *root) syncAIChat() {
-	if a.aiChat.convID == "" {
+	if a.ai.Chat.convID == "" {
 		return
 	}
 	idx := -1
-	for i := range a.aiChat.store.Conversations {
-		if a.aiChat.store.Conversations[i].ID == a.aiChat.convID {
+	for i := range a.ai.Chat.store.Conversations {
+		if a.ai.Chat.store.Conversations[i].ID == a.ai.Chat.convID {
 			idx = i
 			break
 		}
@@ -620,9 +620,9 @@ func (a *root) syncAIChat() {
 	if idx < 0 {
 		return
 	}
-	conv := &a.aiChat.store.Conversations[idx]
-	next := make([]app.AIMessageRecord, 0, len(a.aiChat.messages))
-	for _, m := range a.aiChat.messages {
+	conv := &a.ai.Chat.store.Conversations[idx]
+	next := make([]app.AIMessageRecord, 0, len(a.ai.Chat.messages))
+	for _, m := range a.ai.Chat.messages {
 		next = append(next, app.AIMessageRecord{
 			Role: m.role, Text: m.text, Done: m.done, Err: m.err,
 		})
@@ -636,9 +636,9 @@ func (a *root) syncAIChat() {
 	}
 	if changed {
 		conv.UpdatedAt = time.Now().UnixMilli()
-		a.aiChat.historyLimit = 0
+		a.ai.Chat.historyLimit = 0
 	}
-	a.aiChat.store.ActiveID = conv.ID
+	a.ai.Chat.store.ActiveID = conv.ID
 }
 
 // sameAIMessageList 比较两条消息列表，切换会话时避免刷新 UpdatedAt 导致排序跳动。
@@ -662,8 +662,8 @@ func (a *root) saveAIChat() {
 		return
 	}
 	a.syncAIChat()
-	if err := app.SaveAIConversations(path, a.aiChat.store); err != nil {
-		a.aiWarn = locales.AiSaveConversationFailed(err.Error())
+	if err := app.SaveAIConversations(path, a.ai.Chat.store); err != nil {
+		a.ai.Warn = locales.AiSaveConversationFailed(err.Error())
 	}
 }
 
@@ -691,11 +691,11 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 		if title == "" {
 			return
 		}
-		for i := range a.aiChat.store.Conversations {
-			if a.aiChat.store.Conversations[i].ID == convID {
-				a.aiChat.store.Conversations[i].Title = title
-				a.aiChat.store.Conversations[i].TitleLocked = true
-				a.aiChat.store.Conversations[i].UpdatedAt = time.Now().UnixMilli()
+		for i := range a.ai.Chat.store.Conversations {
+			if a.ai.Chat.store.Conversations[i].ID == convID {
+				a.ai.Chat.store.Conversations[i].Title = title
+				a.ai.Chat.store.Conversations[i].TitleLocked = true
+				a.ai.Chat.store.Conversations[i].UpdatedAt = time.Now().UnixMilli()
 				break
 			}
 		}
@@ -731,12 +731,12 @@ func (a *root) generateAITitle(convID, firstMessage string) {
 
 // saveAIPrefs 写盘 AI 配置；空路径（测试）不落盘。
 func (a *root) saveAIPrefs() {
-	if a.aiPrefsPath == "" {
+	if a.ai.PrefsPath == "" {
 		return
 	}
-	if err := app.SaveAIPrefs(a.aiPrefsPath, a.vault, a.aiPrefs); err != nil {
-		a.aiWarn = locales.AiSaveConfigFailed(err.Error())
+	if err := app.SaveAIPrefs(a.ai.PrefsPath, a.ai.Vault, a.ai.Prefs); err != nil {
+		a.ai.Warn = locales.AiSaveConfigFailed(err.Error())
 		return
 	}
-	a.aiWarn = ""
+	a.ai.Warn = ""
 }

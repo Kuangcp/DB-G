@@ -52,8 +52,8 @@ func TestPaletteSearchesSQLAndSwitchesConsole(t *testing.T) {
 	if a.paletteOpen {
 		t.Fatal("选中后面板应关闭")
 	}
-	if a.activeConsole != first.ID {
-		t.Fatalf("应跳到匹配的控制台: got %q want %q", a.activeConsole, first.ID)
+	if a.tabs.ActiveConsole != first.ID {
+		t.Fatalf("应跳到匹配的控制台: got %q want %q", a.tabs.ActiveConsole, first.ID)
 	}
 	if got, _ := a.code.SelectedText(); got != "users" {
 		t.Fatalf("应选中命中的 SQL: %q", got)

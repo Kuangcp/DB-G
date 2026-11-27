@@ -106,7 +106,7 @@ func (f *fakeSettingsWin) SetBackgroundColor(string) error { return nil }
 func TestSettingsButtonOpensSingletonWindow(t *testing.T) {
 	a := newConsoleRoot(t)
 	var created []*fakeSettingsWin
-	a.openSettingsWin = func(o mygo.WindowOptions) settingsWin {
+	a.settings.OpenWin = func(o mygo.WindowOptions) settingsWin {
 		f := &fakeSettingsWin{options: o}
 		created = append(created, f)
 		return f
@@ -137,7 +137,7 @@ func TestSettingsButtonOpensSingletonWindow(t *testing.T) {
 		t.Fatalf("second click must focus the existing window: created=%d focuses=%d", len(created), created[0].focuses)
 	}
 	// 关窗后清空单例，再点能重开
-	a.settingsWin = nil
+	a.settings.Win = nil
 	if err := tt.Click("设置"); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestSettingsSectionsSwitch(t *testing.T) {
 // 字号改大后立刻应用到编辑器，并落盘。
 func TestEditorFontSizeAppliesAndSaves(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	a.settings.FontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
 	tt := openSettingsSection(t, a, "字体")
 	if got := a.code.state.Font.Size; got != 13 {
 		t.Fatalf("默认字号 %v", got)
@@ -203,7 +203,7 @@ func TestEditorFontSizeAppliesAndSaves(t *testing.T) {
 	if got := a.code.state.Font.Size; got != 14 {
 		t.Fatalf("点 + 之后编辑器字号应为 14，实际 %v", got)
 	}
-	prefs, warn := app.LoadFontPrefs(a.fontPrefsPath)
+	prefs, warn := app.LoadFontPrefs(a.settings.FontPrefsPath)
 	if warn != "" {
 		t.Fatal(warn)
 	}
@@ -223,14 +223,14 @@ func TestEditorFontSizeAppliesAndSaves(t *testing.T) {
 // 字体族写进去就会落到编辑器和预览上。
 func TestEditorFontFamilyApplies(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	a.settings.FontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
 	_ = openSettingsSection(t, a, "字体")
-	a.fontPrefs.Editor.Family = "JetBrains Mono"
+	a.settings.FontPrefs.Editor.Family = "JetBrains Mono"
 	a.applyFontPrefs()
 	if got := a.code.state.Font.Family; got != "JetBrains Mono" {
 		t.Fatalf("字体族没应用: %q", got)
 	}
-	prefs, _ := app.LoadFontPrefs(a.fontPrefsPath)
+	prefs, _ := app.LoadFontPrefs(a.settings.FontPrefsPath)
 	if prefs.Editor.Family != "JetBrains Mono" {
 		t.Fatalf("没落盘: %+v", prefs)
 	}
@@ -239,7 +239,7 @@ func TestEditorFontFamilyApplies(t *testing.T) {
 // 三个区域各有字体控件，功能界面字体落到主题上。
 func TestFontSectionCoversThreeAreas(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	a.settings.FontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
 	tt := openSettingsSection(t, a, "字体")
 	for _, want := range []string{"编辑区", "结果区", "控制台标签", "功能界面"} {
 		if !tt.HasText(want) {
@@ -249,7 +249,7 @@ func TestFontSectionCoversThreeAreas(t *testing.T) {
 	if tt.HasText("预览") {
 		t.Fatalf("字体分区不应再有预览: %q", tt.Texts())
 	}
-	a.fontPrefs.UI = "Noto Sans CJK SC"
+	a.settings.FontPrefs.UI = "Noto Sans CJK SC"
 	a.applyFontPrefs()
 	var got string
 	tt = ui.NewTester(func(c *ui.Context) {
@@ -261,7 +261,7 @@ func TestFontSectionCoversThreeAreas(t *testing.T) {
 	if got != "Noto Sans CJK SC" {
 		t.Fatalf("功能界面字体没进入主题: %q", got)
 	}
-	prefs, _ := app.LoadFontPrefs(a.fontPrefsPath)
+	prefs, _ := app.LoadFontPrefs(a.settings.FontPrefsPath)
 	if prefs.UI != "Noto Sans CJK SC" {
 		t.Fatalf("没落盘: %+v", prefs)
 	}
@@ -280,7 +280,7 @@ func TestSettingsShowsVersion(t *testing.T) {
 // 外观分区：默认项齐全，切换模式/强调色/密度即时生效并落盘。
 func TestAppearanceSectionControls(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	a.settings.ThemePath = filepath.Join(t.TempDir(), "theme.json")
 	tt := openSettingsSection(t, a, "外观")
 	for _, want := range []string{"跟随系统", "浅色", "深色", "强调色", "密度", "预览", "恢复默认", "导出主题…", "导入主题…", "启用 GPU 渲染"} {
 		if !tt.HasText(want) {
@@ -291,32 +291,32 @@ func TestAppearanceSectionControls(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.themePrefs.Mode != app.ThemeModeDark {
-		t.Fatalf("mode: %+v", a.themePrefs)
+	if a.settings.ThemePrefs.Mode != app.ThemeModeDark {
+		t.Fatalf("mode: %+v", a.settings.ThemePrefs)
 	}
-	if got, _ := app.LoadThemePrefs(a.themePath); got.Mode != app.ThemeModeDark {
+	if got, _ := app.LoadThemePrefs(a.settings.ThemePath); got.Mode != app.ThemeModeDark {
 		t.Fatalf("persisted mode: %+v", got)
 	}
 	if err := tt.Click("强调色：紫"); err != nil {
 		t.Fatal(err)
 	}
-	if a.themePrefs.Accent != "violet" {
-		t.Fatalf("accent: %+v", a.themePrefs)
+	if a.settings.ThemePrefs.Accent != "violet" {
+		t.Fatalf("accent: %+v", a.settings.ThemePrefs)
 	}
 	if err := tt.Click("紧凑"); err != nil {
 		t.Fatal(err)
 	}
-	if a.themePrefs.Density != app.ThemeDensityCompact {
-		t.Fatalf("density: %+v", a.themePrefs)
+	if a.settings.ThemePrefs.Density != app.ThemeDensityCompact {
+		t.Fatalf("density: %+v", a.settings.ThemePrefs)
 	}
 	if err := tt.Click("启用 GPU 渲染"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.themePrefs.SoftwareRender {
-		t.Fatalf("GPU switch did not turn off rendering: %+v", a.themePrefs)
+	if !a.settings.ThemePrefs.SoftwareRender {
+		t.Fatalf("GPU switch did not turn off rendering: %+v", a.settings.ThemePrefs)
 	}
-	if got, _ := app.LoadThemePrefs(a.themePath); !got.SoftwareRender {
+	if got, _ := app.LoadThemePrefs(a.settings.ThemePath); !got.SoftwareRender {
 		t.Fatalf("persisted software render: %+v", got)
 	}
 }
@@ -324,7 +324,7 @@ func TestAppearanceSectionControls(t *testing.T) {
 // 恢复默认清空覆盖项。
 func TestAppearanceReset(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.themePath = filepath.Join(t.TempDir(), "theme.json")
+	a.settings.ThemePath = filepath.Join(t.TempDir(), "theme.json")
 	a.setThemePrefs(app.ThemePrefs{Mode: "dark", Accent: "violet", Density: "compact", Radius: 10, FontSize: 16})
 	tt := openSettingsSection(t, a, "外观")
 	tt.SetSize(720, 900)
@@ -332,8 +332,8 @@ func TestAppearanceReset(t *testing.T) {
 	if err := tt.Click("恢复默认"); err != nil {
 		t.Fatal(err)
 	}
-	if a.themePrefs != app.DefaultThemePrefs() {
-		t.Fatalf("reset: %+v", a.themePrefs)
+	if a.settings.ThemePrefs != app.DefaultThemePrefs() {
+		t.Fatalf("reset: %+v", a.settings.ThemePrefs)
 	}
 }
 
@@ -342,7 +342,7 @@ func TestThemeExportImport(t *testing.T) {
 	a := newConsoleRoot(t)
 	path := filepath.Join(t.TempDir(), "theme.json")
 	a.setThemePrefs(app.ThemePrefs{Mode: "light", Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15})
-	if err := exportThemeFile(path, a.themePrefs); err != nil {
+	if err := exportThemeFile(path, a.settings.ThemePrefs); err != nil {
 		t.Fatal(err)
 	}
 	a.setThemePrefs(app.DefaultThemePrefs())
@@ -352,14 +352,14 @@ func TestThemeExportImport(t *testing.T) {
 	}
 	a.applyImportedTheme(prefs, warn)
 	want := app.ThemePrefs{Mode: "light", Scheme: app.ThemeSchemeDefault, Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15}
-	if a.themePrefs != want {
-		t.Fatalf("imported: %+v want %+v", a.themePrefs, want)
+	if a.settings.ThemePrefs != want {
+		t.Fatalf("imported: %+v want %+v", a.settings.ThemePrefs, want)
 	}
 }
 
 func TestSettingsTitleBarControls(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.settingsWin = &fakeSettingsWin{}
+	a.settings.Win = &fakeSettingsWin{}
 	tt := ui.NewTester(a.settingsView, 760, 600)
 	tt.Frame()
 	for _, label := range []string{"设置", "最小化", "最大化", "关闭窗口"} {
@@ -371,8 +371,8 @@ func TestSettingsTitleBarControls(t *testing.T) {
 
 func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.resultPrefsPath = filepath.Join(t.TempDir(), "results.json")
-	if got := a.resultPrefs.BudgetMB; got != 8 {
+	a.settings.ResultPrefsPath = filepath.Join(t.TempDir(), "results.json")
+	if got := a.settings.ResultPrefs.BudgetMB; got != 8 {
 		t.Fatalf("default budget = %d", got)
 	}
 	if got := a.newConsole().ResultBudgetMB(); got != 8 {
@@ -388,13 +388,13 @@ func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if got := a.resultPrefs.BudgetMB; got != 9 {
+	if got := a.settings.ResultPrefs.BudgetMB; got != 9 {
 		t.Fatalf("budget after + = %d, want 9MB", got)
 	}
 	if got := a.runtime("live").ResultBudgetMB(); got != 9 {
 		t.Fatalf("live console budget = %d, want 9MB", got)
 	}
-	prefs, warn := app.LoadResultPrefs(a.resultPrefsPath)
+	prefs, warn := app.LoadResultPrefs(a.settings.ResultPrefsPath)
 	if warn != "" || prefs.BudgetMB != 9 {
 		t.Fatalf("not saved: %+v warn=%q", prefs, warn)
 	}
@@ -402,7 +402,7 @@ func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if got := a.resultPrefs.BudgetMB; got != 8 {
+	if got := a.settings.ResultPrefs.BudgetMB; got != 8 {
 		t.Fatalf("budget after reset = %d", got)
 	}
 	if got := a.runtime("live").ResultBudgetMB(); got != 8 {
@@ -412,16 +412,16 @@ func TestResultBudgetSettingAppliesAndSaves(t *testing.T) {
 
 func TestTabFontSizeAppliesAndSaves(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.fontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
+	a.settings.FontPrefsPath = filepath.Join(t.TempDir(), "fonts.json")
 	if got := a.tabFontSize(); got != float32(app.DefaultTabFontSize) {
 		t.Fatalf("默认标签字号 = %v", got)
 	}
-	a.fontPrefs.TabSize = 15
+	a.settings.FontPrefs.TabSize = 15
 	a.applyFontPrefs()
 	if got := a.tabFontSize(); got != 15 {
 		t.Fatalf("标签字号没应用: %v", got)
 	}
-	prefs, warn := app.LoadFontPrefs(a.fontPrefsPath)
+	prefs, warn := app.LoadFontPrefs(a.settings.FontPrefsPath)
 	if warn != "" || prefs.TabSize != 15 {
 		t.Fatalf("没落盘: %+v warn=%q", prefs, warn)
 	}
@@ -429,7 +429,7 @@ func TestTabFontSizeAppliesAndSaves(t *testing.T) {
 
 func TestConsoleSaveDelaySetting(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.consolePrefsPath = filepath.Join(t.TempDir(), "console.json")
+	a.settings.ConsolePrefsPath = filepath.Join(t.TempDir(), "console.json")
 	tt := openSettingsSection(t, a, "控制台")
 	if !tt.HasText("自动保存") {
 		t.Fatalf("控制台分区缺少自动保存说明: %q", tt.Texts())
@@ -441,7 +441,7 @@ func TestConsoleSaveDelaySetting(t *testing.T) {
 	if got := a.consoleMgr().SaveDelay; got != 6*time.Second {
 		t.Fatalf("save delay = %v, want 6s", got)
 	}
-	prefs, warn := app.LoadConsolePrefs(a.consolePrefsPath)
+	prefs, warn := app.LoadConsolePrefs(a.settings.ConsolePrefsPath)
 	if warn != "" || prefs.SaveDelaySeconds != 6 {
 		t.Fatalf("not saved: %+v warn=%q", prefs, warn)
 	}

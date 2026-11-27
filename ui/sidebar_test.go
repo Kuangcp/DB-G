@@ -661,8 +661,8 @@ func TestRemoveConnDeletesConsoleFiles(t *testing.T) {
 	if len(a.consoleMgr().Open()) != 0 {
 		t.Fatal("tabs must be gone")
 	}
-	if a.activeConsole != "" {
-		t.Fatalf("active console must clear: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != "" {
+		t.Fatalf("active console must clear: %q", a.tabs.ActiveConsole)
 	}
 }
 
@@ -727,8 +727,8 @@ func TestSidebarDeleteConsoleFlow(t *testing.T) {
 	if files.Exists(rec.ID) {
 		t.Fatal(".sql must be deleted")
 	}
-	if a.activeConsole != "" {
-		t.Fatalf("active must clear: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != "" {
+		t.Fatalf("active must clear: %q", a.tabs.ActiveConsole)
 	}
 }
 

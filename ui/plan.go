@@ -46,7 +46,7 @@ func (a *root) explainSQL() (string, bool) {
 
 // runExplain 生成执行计划；analyze 为 true 时必须由调用方先确认。
 func (a *root) runExplain(analyze bool) {
-	if a.plan.loading {
+	if a.ai.Plan.loading {
 		return
 	}
 	sql, ok := a.explainSQL()
@@ -80,7 +80,7 @@ func (a *root) runExplain(analyze bool) {
 	if p, ok := a.store.Get(a.activeConnID()); ok {
 		kind = p.Kind
 	}
-	a.plan = planState{
+	a.ai.Plan = planState{
 		open: true, loading: true, analyze: analyze, sql: sql, kind: kind,
 	}
 	run := func() (*engine.QueryResult, error) {
@@ -89,18 +89,18 @@ func (a *root) runExplain(analyze bool) {
 		return pe.Explain(ctx, sql, engine.ExplainOptions{Analyze: analyze, Buffers: analyze})
 	}
 	done := func(res *engine.QueryResult, err error) {
-		a.plan.loading = false
+		a.ai.Plan.loading = false
 		if err != nil {
-			a.plan.err = app.ErrorText(err)
+			a.ai.Plan.err = app.ErrorText(err)
 			return
 		}
-		a.plan.raw = planRaw(res)
+		a.ai.Plan.raw = planRaw(res)
 		nodes, perr := plan.Parse(kind, res.Columns, res.Rows)
 		if perr != nil {
-			a.plan.err = perr.Error()
+			a.ai.Plan.err = perr.Error()
 			return
 		}
-		a.plan.nodes = nodes
+		a.ai.Plan.nodes = nodes
 		app.LogInfo("ai", "plan parsed", "kind", kind, "nodes", countPlanNodes(nodes), "analyze", analyze)
 	}
 	if a.win == nil {
@@ -142,7 +142,7 @@ func planRaw(res *engine.QueryResult) string {
 // planPane 在结果区展示执行计划；它覆盖普通结果，关闭后回到结果表。
 func (a *root) planPane(c *ui.Context) {
 	t := c.Theme()
-	ps := &a.plan
+	ps := &a.ai.Plan
 	ui.Column(c).Fill().Gap(6).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, locales.TopExecPlan()).Bold()
@@ -253,21 +253,21 @@ func (a *root) planNode(c *ui.Context, n plan.PlanNode, depth int, maxCost float
 
 // planConfirmModal 是 EXPLAIN ANALYZE 的每次确认。
 func (a *root) planConfirmModal(c *ui.Context) {
-	if !a.plan.confirm {
+	if !a.ai.Plan.confirm {
 		return
 	}
-	ui.Modal(c, &a.plan.confirm, func() {
+	ui.Modal(c, &a.ai.Plan.confirm, func() {
 		ui.Text(c, locales.PlanAnalyzeTitle()).Bold()
 		ui.Text(c, locales.PlanAnalyzeHint()).
 			FontSize(12).TextColor(c.Theme().TextMuted)
-		ui.Text(c, a.plan.sql).Font("monospace").FontSize(11).SingleLine().Tooltip(a.plan.sql)
+		ui.Text(c, a.ai.Plan.sql).Font("monospace").FontSize(11).SingleLine().Tooltip(a.ai.Plan.sql)
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.plan.confirm = false
+				a.ai.Plan.confirm = false
 			}
 			if ui.PrimaryButton(c, locales.PlanRunAnalyze()).Clicked() {
-				a.plan.confirm = false
+				a.ai.Plan.confirm = false
 				a.runExplain(true)
 			}
 		})
@@ -276,15 +276,15 @@ func (a *root) planConfirmModal(c *ui.Context) {
 
 // diagnosePlan 把计划树发给 AI 面板诊断。
 func (a *root) diagnosePlan() {
-	if len(a.plan.nodes) == 0 {
+	if len(a.ai.Plan.nodes) == 0 {
 		return
 	}
 	snap := a.aiSnapshot()
-	planText := plan.Text(a.plan.nodes)
-	msgs, rep := ai.BuildPlan(snap, planText, a.plan.analyze, a.aiBudget("chat", a.aiTaskMaxTokens("chat")))
-	a.aiChat.open = true
-	a.aiChat.lastCtx = aiContextNote(rep, locales.PlanContext())
+	planText := plan.Text(a.ai.Plan.nodes)
+	msgs, rep := ai.BuildPlan(snap, planText, a.ai.Plan.analyze, a.aiBudget("chat", a.aiTaskMaxTokens("chat")))
+	a.ai.Chat.open = true
+	a.ai.Chat.lastCtx = aiContextNote(rep, locales.PlanContext())
 	if err := a.startAIRequest(locales.TopExecPlan(), aiContextNote(rep, locales.PlanTextBytes(len(planText))), locales.PlanDiagnoseAsk(), msgs); err != nil {
-		a.aiChat.err = err.Error()
+		a.ai.Chat.err = err.Error()
 	}
 }

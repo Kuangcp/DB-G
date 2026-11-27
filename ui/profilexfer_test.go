@@ -49,7 +49,7 @@ func TestImportProfilesWorkDoesNotTouchUI(t *testing.T) {
 
 func TestImportThemeWorkDoesNotTouchUI(t *testing.T) {
 	a := newConsoleRoot(t)
-	before := a.themePrefs
+	before := a.settings.ThemePrefs
 	src := filepath.Join(t.TempDir(), "theme.json")
 	want := app.ThemePrefs{Mode: "light", Accent: "#7c3aed", Density: "roomy", Radius: 4, FontSize: 15}
 	if err := app.ExportThemePrefs(src, want); err != nil {
@@ -60,12 +60,12 @@ func TestImportThemeWorkDoesNotTouchUI(t *testing.T) {
 	if err != nil || len(warn) != 0 {
 		t.Fatalf("import: warn=%v err=%v", warn, err)
 	}
-	if a.themePrefs != before {
+	if a.settings.ThemePrefs != before {
 		t.Fatal("parsing a theme must not apply it")
 	}
 
 	a.applyImportedTheme(prefs, warn)
-	if a.themePrefs != prefs {
-		t.Fatalf("applied theme = %+v, want %+v", a.themePrefs, prefs)
+	if a.settings.ThemePrefs != prefs {
+		t.Fatalf("applied theme = %+v, want %+v", a.settings.ThemePrefs, prefs)
 	}
 }

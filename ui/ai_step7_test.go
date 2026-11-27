@@ -71,8 +71,8 @@ func TestInsertAISQLRunsSelfCheck(t *testing.T) {
 	if !a.insertAISQL("```sql\nselect u.missing_col from users u;\n```") {
 		t.Fatal("insert failed")
 	}
-	if !strings.Contains(a.aiChat.lint.Summary(), "missing_col") {
-		t.Fatalf("self-check warning missing: %q", a.aiChat.lint.Summary())
+	if !strings.Contains(a.ai.Chat.lint.Summary(), "missing_col") {
+		t.Fatalf("self-check warning missing: %q", a.ai.Chat.lint.Summary())
 	}
 	if !strings.Contains(a.code.Text(), "missing_col") {
 		t.Fatalf("SQL not inserted: %q", a.code.Text())
@@ -95,16 +95,16 @@ func TestConnectionAIStrictPolicy(t *testing.T) {
 	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
 	a.catalog.finishColumns(prof.ID, "users", []engine.Column{{Name: "id", Type: "INTEGER"}}, "")
 	a.setActiveText("select id from users")
-	a.aiPrefs.AllowHistory = true
-	a.aiPrefs.AllowErrorLogs = true
-	a.aiPrefs.AllowSampleRows = true
-	a.aiPrefs.AllowDDL = true
+	a.ai.Prefs.AllowHistory = true
+	a.ai.Prefs.AllowErrorLogs = true
+	a.ai.Prefs.AllowSampleRows = true
+	a.ai.Prefs.AllowDDL = true
 	a.history = app.OpenHistory(t.TempDir())
 	if err := a.history.Add(app.HistoryEntry{ConnID: prof.ID, SQL: "select 1"}); err != nil {
 		t.Fatal(err)
 	}
 	a.consoleErr = "boom"
-	a.aiDDL = map[string]aiDDLEntry{
+	a.ai.DDL = map[string]aiDDLEntry{
 		aiDDLKey(prof.ID, "", "users"): {ddl: "CREATE TABLE users (id INT)", at: time.Now()},
 	}
 	a.runtimeFor(rec.ID).SetOutcome(&engine.QueryResult{

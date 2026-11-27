@@ -66,8 +66,8 @@ func (a *root) aiEgressPolicy() aiEgressPolicy {
 		return aiEgressPolicy{}
 	}
 	return aiEgressPolicy{
-		ddl: a.aiPrefs.AllowDDL, samples: a.aiPrefs.AllowSampleRows,
-		history: a.aiPrefs.AllowHistory, errors: a.aiPrefs.AllowErrorLogs,
+		ddl: a.ai.Prefs.AllowDDL, samples: a.ai.Prefs.AllowSampleRows,
+		history: a.ai.Prefs.AllowHistory, errors: a.ai.Prefs.AllowErrorLogs,
 	}
 }
 
@@ -118,12 +118,12 @@ func (a *root) aiResultContextWith(samples bool) *ai.ResultContext {
 
 // aiPlanContext 把当前打开的计划树带上；没打开计划时不发送。
 func (a *root) aiPlanContext() *ai.PlanContext {
-	if !a.plan.open || len(a.plan.nodes) == 0 {
+	if !a.ai.Plan.open || len(a.ai.Plan.nodes) == 0 {
 		return nil
 	}
 	return &ai.PlanContext{
-		SQL: a.plan.sql, Analyze: a.plan.analyze,
-		Text: plan.Text(a.plan.nodes),
+		SQL: a.ai.Plan.sql, Analyze: a.ai.Plan.analyze,
+		Text: plan.Text(a.ai.Plan.nodes),
 	}
 }
 
@@ -145,7 +145,7 @@ func aiDDLKey(connID, schema, table string) string {
 
 // cachedAIDDL 取未过期的 DDL。
 func (a *root) cachedAIDDL(key string) (string, bool) {
-	e, ok := a.aiDDL[key]
+	e, ok := a.ai.DDL[key]
 	if !ok || time.Since(e.at) > aiDDLTTL || e.ddl == "" {
 		return "", false
 	}
@@ -154,9 +154,9 @@ func (a *root) cachedAIDDL(key string) (string, bool) {
 
 // forgetAIDDL 丢弃某连接的 DDL 缓存；删除连接时调用。
 func (a *root) forgetAIDDL(connID string) {
-	for key := range a.aiDDL {
+	for key := range a.ai.DDL {
 		if strings.HasPrefix(key, connID+"\x00") {
-			delete(a.aiDDL, key)
+			delete(a.ai.DDL, key)
 		}
 	}
 }
@@ -168,7 +168,7 @@ func aiRelationKey(connID, schema, table string) string {
 
 // cachedAIRelations 取未过期的外键；ok 表示已缓存（即使 refs 为空）。
 func (a *root) cachedAIRelations(key string) ([]ai.TableRef, bool) {
-	e, ok := a.aiRelations[key]
+	e, ok := a.ai.Relations[key]
 	if !ok || time.Since(e.at) > aiDDLTTL {
 		return nil, false
 	}
@@ -238,9 +238,9 @@ func (a *root) attachAIRelations(snap *ai.ContextSnapshot, reqs []aiRelationRequ
 
 // forgetAIRelations 丢弃某连接的外键缓存。
 func (a *root) forgetAIRelations(connID string) {
-	for key := range a.aiRelations {
+	for key := range a.ai.Relations {
 		if strings.HasPrefix(key, connID+"\x00") {
-			delete(a.aiRelations, key)
+			delete(a.ai.Relations, key)
 		}
 	}
 }
@@ -319,7 +319,7 @@ func (a *root) attachAIDDL(snap *ai.ContextSnapshot, connID string, reqs []aiDDL
 // prepareAIContext 在发送/预览前补齐缺失的表/列、外键与 DDL，然后在主线程调用 done。
 // 外键用于检索扩展；DDL 只在设置开启时加载。没有缺失时不产生额外延迟。
 func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowDDL bool, done func(ai.ContextSnapshot)) {
-	if a.aiChat.preparing {
+	if a.ai.Chat.preparing {
 		done(snap)
 		return
 	}
@@ -488,26 +488,26 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowD
 		}
 		return out
 	}
-	a.aiChat.preparing = true
-	a.aiChat.prepareSeq++
-	seq := a.aiChat.prepareSeq
+	a.ai.Chat.preparing = true
+	a.ai.Chat.prepareSeq++
+	seq := a.ai.Chat.prepareSeq
 	apply := func(got prepared) {
-		if seq != a.aiChat.prepareSeq {
+		if seq != a.ai.Chat.prepareSeq {
 			return
 		}
-		a.aiChat.preparing = false
+		a.ai.Chat.preparing = false
 		now := time.Now()
-		if a.aiDDL == nil {
-			a.aiDDL = map[string]aiDDLEntry{}
+		if a.ai.DDL == nil {
+			a.ai.DDL = map[string]aiDDLEntry{}
 		}
 		for key, ddl := range got.ddl {
-			a.aiDDL[key] = aiDDLEntry{ddl: ddl, at: now}
+			a.ai.DDL[key] = aiDDLEntry{ddl: ddl, at: now}
 		}
-		if a.aiRelations == nil {
-			a.aiRelations = map[string]aiRelationEntry{}
+		if a.ai.Relations == nil {
+			a.ai.Relations = map[string]aiRelationEntry{}
 		}
 		for key, refs := range got.refs {
-			a.aiRelations[key] = aiRelationEntry{refs: refs, at: now}
+			a.ai.Relations[key] = aiRelationEntry{refs: refs, at: now}
 		}
 		if got.tablesLoaded {
 			snap.Tables = got.tables

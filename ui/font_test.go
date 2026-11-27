@@ -24,7 +24,7 @@ func TestResultFontSizeAffectsCells(t *testing.T) {
 	if !ok {
 		t.Fatalf("默认结果里找不到单元格: %q", tt.Texts())
 	}
-	a.fontPrefs.Result.Size = 24
+	a.settings.FontPrefs.Result.Size = 24
 	for range 3 {
 		tt.Frame()
 	}

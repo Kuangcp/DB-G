@@ -21,7 +21,7 @@ func (a *root) consoleTabs(c *ui.Context) {
 	for _, rec := range open {
 		counts[rec.ConnectionID]++
 	}
-	if len(open) == 0 && len(a.viewerOrder) == 0 {
+	if len(open) == 0 && len(a.tabs.ViewerOrder) == 0 {
 		ui.Text(c, locales.TabEmptyHint()).TextColor(c.Theme().TextMuted).FontSize(a.tabFontSize()).SingleLine()
 		ui.Spacer(c)
 		return
@@ -33,8 +33,8 @@ func (a *root) consoleTabs(c *ui.Context) {
 			first = false
 		}
 		// 表视图是临时标签，排在控制台之后。
-		for _, id := range a.viewerOrder {
-			if t := a.viewerTabs[id]; t != nil {
+		for _, id := range a.tabs.ViewerOrder {
+			if t := a.tabs.ViewerTabs[id]; t != nil {
 				a.viewerTabButton(c, t, first)
 				first = false
 			}
@@ -47,7 +47,7 @@ func (a *root) viewerTabButton(c *ui.Context, t *viewerTab, first bool) {
 	th := c.Theme()
 	size := a.tabFontSize()
 	height := max(th.Space(6.5), size*1.7+4)
-	active := a.activeViewer == t.id
+	active := a.tabs.ActiveViewer == t.id
 	btn := ui.ButtonBase(c).Label(t.obj.Name).Gap(5).Height(height).Padding(2, 9)
 	if !first {
 		btn.BorderWidth(0, 0, 0, 1).BorderColor(th.Border)
@@ -96,7 +96,7 @@ func (a *root) tabsRow(c *ui.Context) {
 
 // tabFontSize 返回控制台标签的字号；配置越界时回退默认值。
 func (a *root) tabFontSize() float32 {
-	size := a.fontPrefs.TabSize
+	size := a.settings.FontPrefs.TabSize
 	if size < app.MinTabFontSize || size > app.MaxTabFontSize {
 		size = app.DefaultTabFontSize
 	}
@@ -130,7 +130,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 	if dirty {
 		label = "● " + label
 	}
-	active := rec.ID == a.activeConsole && !a.viewerActive()
+	active := rec.ID == a.tabs.ActiveConsole && !a.viewerActive()
 	size := a.tabFontSize()
 	height := max(t.Space(6.5), size*1.7+4)
 	// 简约标签：无边框无底色，标签之间一条竖分隔线（第一个没有）。
@@ -284,9 +284,9 @@ func nextWorkspaceMember(ws app.WorkspaceRecord, id string) string {
 
 // touchConsoleMRU 把控制台置顶到最近使用列表（Ctrl+Tab 用）；列表封顶 16 条。
 func (a *root) touchConsoleMRU(id string) {
-	kept := make([]string, 0, len(a.consoleMRU)+1)
+	kept := make([]string, 0, len(a.tabs.MRU)+1)
 	kept = append(kept, id)
-	for _, v := range a.consoleMRU {
+	for _, v := range a.tabs.MRU {
 		if v != id {
 			kept = append(kept, v)
 		}
@@ -294,7 +294,7 @@ func (a *root) touchConsoleMRU(id string) {
 	if len(kept) > 16 {
 		kept = kept[:16]
 	}
-	a.consoleMRU = kept
+	a.tabs.MRU = kept
 }
 
 // switchToRecentConsole 切到最近使用过的那个标签（控制台或表视图）；
@@ -308,12 +308,12 @@ func (a *root) switchToRecentConsole() {
 		}
 	}
 	current := a.activeTabKey()
-	for _, key := range a.consoleMRU {
+	for _, key := range a.tabs.MRU {
 		if key == current {
 			continue
 		}
 		if id, ok := strings.CutPrefix(key, "vw:"); ok {
-			if _, exists := a.viewerTabs[id]; exists {
+			if _, exists := a.tabs.ViewerTabs[id]; exists {
 				a.deferActivateViewer(id)
 				return
 			}
@@ -329,9 +329,9 @@ func (a *root) switchToRecentConsole() {
 // activeTabKey 返回当前标签在最近使用序列里的键。
 func (a *root) activeTabKey() string {
 	if a.viewerActive() {
-		return viewerRuntimeID(a.activeViewer)
+		return viewerRuntimeID(a.tabs.ActiveViewer)
 	}
-	return a.activeConsole
+	return a.tabs.ActiveConsole
 }
 
 // closeConsole 把控制台移出当前工作区（文件与元数据保留）。
@@ -346,7 +346,7 @@ func (a *root) closeConsole(id string) {
 		a.extMsg = locales.TabExtUnresolved()
 		return
 	}
-	wasActive := a.activeConsole == id
+	wasActive := a.tabs.ActiveConsole == id
 	if err := m.CloseConsole(id); err != nil {
 		a.reportBackgroundError(locales.TabCloseFailed(err.Error()))
 		app.LogWarn("console", "close failed", "id", id, "err", err.Error())
@@ -374,12 +374,12 @@ func (a *root) afterActiveRemoved() {
 
 // clearEditorConsole 进入「无激活控制台」空态。
 func (a *root) clearEditorConsole() {
-	a.saveStmtRuns(a.activeConsole)
-	a.stmtRuns, a.activeStmt = nil, 0
-	a.activeConsole = ""
+	a.saveStmtRuns(a.tabs.ActiveConsole)
+	a.tabs.StmtRuns, a.tabs.ActiveStmt = nil, 0
+	a.tabs.ActiveConsole = ""
 	a.code.Clear()
 	a.refreshStmtMarks()
-	a.lastCaret = [2]int{}
+	a.tabs.LastCaret = [2]int{}
 }
 
 // workspaceMenu 构建工作区切换菜单。
@@ -447,15 +447,15 @@ func (a *root) tabModal(c *ui.Context) {
 			}
 			ui.Text(c, hint).TextColor(c.Theme().TextMuted)
 			a.modalButtons(c, func() {
-				wasActive := a.activeConsole == a.modalTarget
+				wasActive := a.tabs.ActiveConsole == a.modalTarget
 				if err := m.DeleteConsole(a.modalTarget); err != nil {
 					a.modalErr = locales.ModalDeleteFailed(err.Error())
 					app.LogWarn("console", "delete failed", "id", a.modalTarget, "err", err.Error())
 					return
 				}
 				app.LogInfo("console", "delete", "id", a.modalTarget)
-				delete(a.consoles, a.modalTarget)
-				delete(a.lastVer, a.modalTarget)
+				delete(a.tabs.Consoles, a.modalTarget)
+				delete(a.tabs.LastVer, a.modalTarget)
 				a.removeExternalState(a.modalTarget)
 				a.dropStmtRunsOf([]string{a.modalTarget})
 				a.code.Drop(a.modalTarget)

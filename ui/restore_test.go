@@ -33,8 +33,8 @@ func TestRestoreWorkspaceAndConsole(t *testing.T) {
 	m.FlushCarets()
 
 	a := newRootWithStore(storePath)
-	if a.activeConsole != rec.ID {
-		t.Fatalf("active console: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != rec.ID {
+		t.Fatalf("active console: %q", a.tabs.ActiveConsole)
 	}
 	if got := a.activeText(); got != "SELECT 100" {
 		t.Fatalf("restored text: %q", got)
@@ -64,8 +64,8 @@ func TestRestoreFallsBackOnInvalidIDs(t *testing.T) {
 	if a.activeText() != "" {
 		t.Fatalf("empty buffer expected: %q", a.activeText())
 	}
-	if a.activeConsole != "" {
-		t.Fatalf("active console must be empty: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != "" {
+		t.Fatalf("active console must be empty: %q", a.tabs.ActiveConsole)
 	}
 }
 

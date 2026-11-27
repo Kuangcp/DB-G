@@ -59,8 +59,8 @@ func (a *root) settingsTitleBar(c *ui.Context) {
 		ui.Text(c, app.DisplayName).FontSize(11).TextColor(t.TextMuted)
 		ui.Spacer(c)
 		ui.Box(c).Width(6)
-		if a.settingsWin != nil {
-			windowButtons(c, a.settingsWin)
+		if a.settings.Win != nil {
+			windowButtons(c, a.settings.Win)
 		}
 	})
 }
@@ -89,7 +89,7 @@ func (a *root) topBar(c *ui.Context) {
 				a.historyOpen = true
 			}
 			aiColor := t.TextMuted
-			if a.aiChat.open {
+			if a.ai.Chat.open {
 				aiColor = t.Accent
 			}
 			if iconButtonPlain(c, iconSparkles, locales.TopAIAssistant(), aiColor).Clicked() {
@@ -120,7 +120,7 @@ func (a *root) paletteEntry(c *ui.Context) {
 		ui.Icon(c, iconSearch).FontSize(15).TextColor(t.TextMuted)
 		ui.Text(c, locales.PaletteSearchPlaceholder()).FontSize(12.5).
 			TextColor(t.TextMuted).SingleLine().Grow(1)
-		ui.Text(c, formatChords(a.chords["commandPalette"])).FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, formatChords(a.settings.Chords["commandPalette"])).FontSize(11).TextColor(t.TextMuted)
 	})
 	if b.Clicked() {
 		a.openPalette()
@@ -129,10 +129,10 @@ func (a *root) paletteEntry(c *ui.Context) {
 
 // toggleAIChat 开关右侧 AI 面板；打开时载入会话并滚到底。
 func (a *root) toggleAIChat() {
-	a.aiChat.open = !a.aiChat.open
-	if a.aiChat.open {
+	a.ai.Chat.open = !a.ai.Chat.open
+	if a.ai.Chat.open {
 		a.loadAIChat()
-		a.aiChat.scroll.Y = math.MaxFloat32
+		a.ai.Chat.scroll.Y = math.MaxFloat32
 	} else {
 		a.cancelAIPrepare()
 		a.stopAI()

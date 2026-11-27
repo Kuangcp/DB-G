@@ -78,7 +78,7 @@ func viewerRoot(t *testing.T, sess engine.Session, obj engine.DBObject) (*root, 
 // waitViewer 等数据页读完（假会话/真会话都在后台协程执行）。
 func waitViewer(t *testing.T, a *root, id string) *viewerTab {
 	t.Helper()
-	tb := a.viewerTabs[id]
+	tb := a.tabs.ViewerTabs[id]
 	if tb == nil {
 		t.Fatalf("viewer tab %q missing", id)
 	}
@@ -113,22 +113,22 @@ func TestViewerDoubleClickOpensOneTab(t *testing.T) {
 	}
 	tt.ClickAt(rect.X+2, rect.Y+rect.H/2)
 	tt.Frame()
-	if len(a.viewerTabs) != 0 {
+	if len(a.tabs.ViewerTabs) != 0 {
 		t.Fatal("单击不该打开表视图")
 	}
 	tt.ClickAt(rect.X+2, rect.Y+rect.H/2)
 	tt.ClickAt(rect.X+2, rect.Y+rect.H/2)
 	tt.Frame()
 	id := viewerTabID(p.ID, "", engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
-	if len(a.viewerTabs) != 1 || a.activeViewer != id {
-		t.Fatalf("双击应开一个表视图: tabs=%d active=%q", len(a.viewerTabs), a.activeViewer)
+	if len(a.tabs.ViewerTabs) != 1 || a.tabs.ActiveViewer != id {
+		t.Fatalf("双击应开一个表视图: tabs=%d active=%q", len(a.tabs.ViewerTabs), a.tabs.ActiveViewer)
 	}
 	// 再双击一次：仍是同一个标签。
 	tt.ClickAt(rect.X+2, rect.Y+rect.H/2)
 	tt.ClickAt(rect.X+2, rect.Y+rect.H/2)
 	tt.Frame()
-	if len(a.viewerTabs) != 1 || len(a.viewerOrder) != 1 {
-		t.Fatalf("重复双击应复用标签: tabs=%d order=%d", len(a.viewerTabs), len(a.viewerOrder))
+	if len(a.tabs.ViewerTabs) != 1 || len(a.tabs.ViewerOrder) != 1 {
+		t.Fatalf("重复双击应复用标签: tabs=%d order=%d", len(a.tabs.ViewerTabs), len(a.tabs.ViewerOrder))
 	}
 }
 
@@ -197,8 +197,8 @@ func TestViewerOpenInConsole(t *testing.T) {
 		t.Fatalf("应排队在控制台追加，deferred=%d", len(a.deferred))
 	}
 	a.drainDeferred()
-	if a.activeConsole == "" || !strings.Contains(a.activeText(), sql) {
-		t.Fatalf("应在控制台追加: active=%q text=%q", a.activeConsole, a.activeText())
+	if a.tabs.ActiveConsole == "" || !strings.Contains(a.activeText(), sql) {
+		t.Fatalf("应在控制台追加: active=%q text=%q", a.tabs.ActiveConsole, a.activeText())
 	}
 }
 
@@ -298,12 +298,12 @@ func TestViewerCloseFallsBackToConsole(t *testing.T) {
 	a.openViewerTab(prof, obj)
 	id := viewerTabID(prof.ID, "", obj)
 	waitViewer(t, a, id)
-	if a.activeViewer != id {
+	if a.tabs.ActiveViewer != id {
 		t.Fatal("表视图应处于激活状态")
 	}
 	a.closeViewerTab(id)
-	if a.activeViewer != "" || len(a.viewerTabs) != 0 {
-		t.Fatalf("关闭后应回到控制台: active=%q tabs=%d", a.activeViewer, len(a.viewerTabs))
+	if a.tabs.ActiveViewer != "" || len(a.tabs.ViewerTabs) != 0 {
+		t.Fatalf("关闭后应回到控制台: active=%q tabs=%d", a.tabs.ActiveViewer, len(a.tabs.ViewerTabs))
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()

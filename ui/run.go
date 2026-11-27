@@ -58,10 +58,10 @@ func (a *root) removeConn(id string) {
 	if m := a.consoleMgr(); m != nil {
 		m.OnConnectionDeleted(id, recs)
 		for _, rec := range recs {
-			delete(a.consoles, rec.ID)
-			delete(a.lastVer, rec.ID)
+			delete(a.tabs.Consoles, rec.ID)
+			delete(a.tabs.LastVer, rec.ID)
 			a.code.Drop(rec.ID)
-			if a.activeConsole == rec.ID {
+			if a.tabs.ActiveConsole == rec.ID {
 				a.clearEditorConsole()
 			}
 		}
@@ -88,24 +88,24 @@ func (a *root) rekeyRuntime(oldID, newID string) {
 	if oldID == newID {
 		return
 	}
-	if c, ok := a.consoles[oldID]; ok {
-		a.consoles[newID] = c
-		delete(a.consoles, oldID)
+	if c, ok := a.tabs.Consoles[oldID]; ok {
+		a.tabs.Consoles[newID] = c
+		delete(a.tabs.Consoles, oldID)
 	}
-	if ps, ok := a.pageStates[oldID]; ok {
+	if ps, ok := a.tabs.PageStates[oldID]; ok {
 		if ps.PageRuntime == oldID+"#page" {
 			ps.PageRuntime = newID + "#page"
 		}
 		if ps.CountRuntime == oldID+"#count" {
 			ps.CountRuntime = newID + "#count"
 		}
-		a.pageStates[newID] = ps
-		delete(a.pageStates, oldID)
+		a.tabs.PageStates[newID] = ps
+		delete(a.tabs.PageStates, oldID)
 	}
 	for _, suffix := range []string{"#page", "#count"} {
-		if c, ok := a.consoles[oldID+suffix]; ok {
-			a.consoles[newID+suffix] = c
-			delete(a.consoles, oldID+suffix)
+		if c, ok := a.tabs.Consoles[oldID+suffix]; ok {
+			a.tabs.Consoles[newID+suffix] = c
+			delete(a.tabs.Consoles, oldID+suffix)
 		}
 	}
 	if es, ok := a.editSets[oldID]; ok {
@@ -117,47 +117,47 @@ func (a *root) rekeyRuntime(oldID, newID string) {
 // togglePin 切换当前结果 tab 的钉住状态（仅查询结果）。钉住后立即移到 pin 区最右并选中；
 // 新执行时 pinned 结果保留在最前，新结果追加到右侧。交互与 db-k 的 togglePin 一致。
 func (a *root) togglePin() {
-	if len(a.stmtRuns) == 0 || a.activeStmt < 0 || a.activeStmt >= len(a.stmtRuns) {
+	if len(a.tabs.StmtRuns) == 0 || a.tabs.ActiveStmt < 0 || a.tabs.ActiveStmt >= len(a.tabs.StmtRuns) {
 		return
 	}
 	// 执行中禁止重排：stmtDone 按索引推进下一条，改顺序会执行错语句。
-	for _, r := range a.stmtRuns {
+	for _, r := range a.tabs.StmtRuns {
 		if a.runtimeFor(r.runtimeID).Running() {
 			return
 		}
 	}
-	cur := a.stmtRuns[a.activeStmt]
+	cur := a.tabs.StmtRuns[a.tabs.ActiveStmt]
 	rt := a.runtimeFor(cur.runtimeID)
 	res := rt.Result()
 	if res == nil || !res.IsQuery {
 		return // 只允许钉住查询结果
 	}
 	pinnedCount := 0
-	for _, r := range a.stmtRuns {
+	for _, r := range a.tabs.StmtRuns {
 		if r.pinned {
 			pinnedCount++
 		}
 	}
-	rest := make([]stmtRun, 0, len(a.stmtRuns)-1)
-	rest = append(rest, a.stmtRuns[:a.activeStmt]...)
-	rest = append(rest, a.stmtRuns[a.activeStmt+1:]...)
+	rest := make([]stmtRun, 0, len(a.tabs.StmtRuns)-1)
+	rest = append(rest, a.tabs.StmtRuns[:a.tabs.ActiveStmt]...)
+	rest = append(rest, a.tabs.StmtRuns[a.tabs.ActiveStmt+1:]...)
 	if cur.pinned {
 		// 取消钉住：落到 pin 区之后的第一个位置（rest 里还剩 pinnedCount-1 个 pinned）。
 		cur.pinned = false
 		at := pinnedCount - 1
-		a.stmtRuns = slices.Insert(rest, at, cur)
-		a.activeStmt = at
+		a.tabs.StmtRuns = slices.Insert(rest, at, cur)
+		a.tabs.ActiveStmt = at
 	} else {
 		if pinnedCount >= pinMax {
 			return
 		}
 		// 换独立运行态 id：结果快照从此不再被同控制台的新执行覆盖。
-		newID := fmt.Sprintf("%s#pin%d", a.activeConsole, cur.tabNo)
+		newID := fmt.Sprintf("%s#pin%d", a.tabs.ActiveConsole, cur.tabNo)
 		a.rekeyRuntime(cur.runtimeID, newID)
 		cur.runtimeID = newID
 		cur.pinned = true
-		a.stmtRuns = slices.Insert(rest, pinnedCount, cur)
-		a.activeStmt = pinnedCount
+		a.tabs.StmtRuns = slices.Insert(rest, pinnedCount, cur)
+		a.tabs.ActiveStmt = pinnedCount
 	}
 	a.refreshStmtMarks()
 }
@@ -173,23 +173,23 @@ func (a *root) saveStmtRuns(consoleID string) {
 	if consoleID == "" {
 		return
 	}
-	if a.runsByConsole == nil {
-		a.runsByConsole = map[string]consoleRuns{}
+	if a.tabs.RunsByConsole == nil {
+		a.tabs.RunsByConsole = map[string]consoleRuns{}
 	}
-	a.runsByConsole[consoleID] = consoleRuns{runs: a.stmtRuns, active: a.activeStmt}
+	a.tabs.RunsByConsole[consoleID] = consoleRuns{runs: a.tabs.StmtRuns, active: a.tabs.ActiveStmt}
 }
 
 // loadStmtRuns 恢复某控制台上次的结果 tab；没有记录则清空。
 func (a *root) loadStmtRuns(consoleID string) {
-	if saved, ok := a.runsByConsole[consoleID]; ok && len(saved.runs) > 0 {
-		a.stmtRuns = saved.runs
-		a.activeStmt = saved.active
-		if a.activeStmt >= len(a.stmtRuns) {
-			a.activeStmt = len(a.stmtRuns) - 1
+	if saved, ok := a.tabs.RunsByConsole[consoleID]; ok && len(saved.runs) > 0 {
+		a.tabs.StmtRuns = saved.runs
+		a.tabs.ActiveStmt = saved.active
+		if a.tabs.ActiveStmt >= len(a.tabs.StmtRuns) {
+			a.tabs.ActiveStmt = len(a.tabs.StmtRuns) - 1
 		}
 		return
 	}
-	a.stmtRuns, a.activeStmt = nil, 0
+	a.tabs.StmtRuns, a.tabs.ActiveStmt = nil, 0
 }
 
 // idsOf 取出控制台 id 列表（给 dropStmtRunsOf 用）。
@@ -203,7 +203,7 @@ func idsOf(recs []app.ConsoleRecord) []string {
 
 // dropStmtRunsOf 移除指定控制台的结果 tab（含钉住的），并回收 pin 专用运行态。
 func (a *root) dropStmtRunsOf(consoleIDs []string) {
-	if len(a.stmtRuns) == 0 || len(consoleIDs) == 0 {
+	if len(a.tabs.StmtRuns) == 0 || len(consoleIDs) == 0 {
 		return
 	}
 	owner := make(map[string]bool, len(consoleIDs))
@@ -216,15 +216,15 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 		}
 		return id
 	}
-	kept := make([]stmtRun, 0, len(a.stmtRuns))
-	for _, run := range a.stmtRuns {
+	kept := make([]stmtRun, 0, len(a.tabs.StmtRuns))
+	for _, run := range a.tabs.StmtRuns {
 		if owner[baseID(run.runtimeID)] {
 			a.discardEditState(run.runtimeID)
 			a.cancelPageRuntimes(run.runtimeID)
-			delete(a.consoles, run.runtimeID)
-			delete(a.pageStates, run.runtimeID)
-			delete(a.consoles, run.runtimeID+"#page")
-			delete(a.consoles, run.runtimeID+"#count")
+			delete(a.tabs.Consoles, run.runtimeID)
+			delete(a.tabs.PageStates, run.runtimeID)
+			delete(a.tabs.Consoles, run.runtimeID+"#page")
+			delete(a.tabs.Consoles, run.runtimeID+"#count")
 			continue
 		}
 		kept = append(kept, run)
@@ -235,17 +235,17 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 			delete(a.editSets, id)
 		}
 	}
-	a.stmtRuns = kept
-	if a.activeStmt >= len(kept) {
-		a.activeStmt = max(len(kept)-1, 0)
+	a.tabs.StmtRuns = kept
+	if a.tabs.ActiveStmt >= len(kept) {
+		a.tabs.ActiveStmt = max(len(kept)-1, 0)
 	}
 	for _, id := range consoleIDs {
-		delete(a.runsByConsole, id)
+		delete(a.tabs.RunsByConsole, id)
 	}
 }
 
 func (a *root) runSQL() {
-	a.plan.open = false
+	a.ai.Plan.open = false
 	a.pollExternalFiles(true)
 	if a.externalBlocked() {
 		return
@@ -281,7 +281,7 @@ func (a *root) runSQLNow() {
 		return
 	}
 	// 有激活控制台时：先落盘，并确保连着它的数据源；没有控制台时沿用临时缓冲执行（不落盘）。
-	if a.activeConsole != "" {
+	if a.tabs.ActiveConsole != "" {
 		if err := a.flushActive(); err != nil {
 			a.externalFlushFailed(err)
 			return
@@ -299,7 +299,7 @@ func (a *root) startRuns(ranges []app.SQLStatement) {
 		return
 	}
 	a.resetStmtRuns(ranges)
-	a.startStmt(a.activeStmt) // 跳过左侧已钉住的结果
+	a.startStmt(a.tabs.ActiveStmt) // 跳过左侧已钉住的结果
 }
 
 // execRanges 算出本次要执行的语句：有选区 → 选区切分（偏移加上选区起点）；
@@ -340,10 +340,10 @@ func textSlice(text string, start, end int) string {
 // rerunnableSQL 返回当前结果对应的 SQL 快照；不是查询结果或没有快照时返回 false。
 // 刷新按钮只在这种情况下出现：写语句/DDL 没有可重放的结果集。
 func (a *root) rerunnableSQL() (string, bool) {
-	if a.activeStmt < 0 || a.activeStmt >= len(a.stmtRuns) {
+	if a.tabs.ActiveStmt < 0 || a.tabs.ActiveStmt >= len(a.tabs.StmtRuns) {
 		return "", false
 	}
-	sql := strings.TrimSpace(a.stmtRuns[a.activeStmt].sql)
+	sql := strings.TrimSpace(a.tabs.StmtRuns[a.tabs.ActiveStmt].sql)
 	if sql == "" {
 		return "", false
 	}
@@ -355,12 +355,12 @@ func (a *root) rerunnableSQL() (string, bool) {
 
 // anyRunRunning 报告当前控制台的结果 tab 里是否还有语句在跑（多语句顺序执行中）。
 func (a *root) anyRunRunning() bool {
-	for _, run := range a.stmtRuns {
+	for _, run := range a.tabs.StmtRuns {
 		if a.runtimeFor(run.runtimeID).Running() {
 			return true
 		}
 	}
-	for _, ps := range a.pageStates {
+	for _, ps := range a.tabs.PageStates {
 		if ps.PageRuntime != "" && a.runtimeFor(ps.PageRuntime).Running() {
 			return true
 		}
@@ -380,7 +380,7 @@ func (a *root) rerunQuery(sql string) {
 	if a.anyRunRunning() {
 		return
 	}
-	if a.activeConsole != "" {
+	if a.tabs.ActiveConsole != "" {
 		a.ensureConsoleConnAsync(func() { a.startRerun(sql) })
 		return
 	}
@@ -396,12 +396,12 @@ func (a *root) startRerun(sql string) {
 		return
 	}
 	rtID := a.currentRuntimeID()
-	rt.SetPageSize(a.resultPrefs.PageSize)
-	a.lastExecSQL = sql
-	app.LogInfo("exec", "rerun", "conn", a.activeConnName(), "console", a.activeConsole, "sql", truncateLogSQL(sql))
+	rt.SetPageSize(a.settings.ResultPrefs.PageSize)
+	a.tabs.LastExecSQL = sql
+	app.LogInfo("exec", "rerun", "conn", a.activeConnName(), "console", a.tabs.ActiveConsole, "sql", truncateLogSQL(sql))
 	rt.SetOnDone(a.rerunDone(rtID, sql))
 	if !rt.RunTimeout(sess, sql, a.queryTimeoutFor()) {
-		app.LogWarn("exec", "rerun not started", "console", a.activeConsole)
+		app.LogWarn("exec", "rerun not started", "console", a.tabs.ActiveConsole)
 		return
 	}
 	a.discardEditState(rtID)
@@ -437,7 +437,7 @@ func (a *root) rerunDone(rtID, sql string) func(*engine.QueryResult, string, tim
 // cancelPageRuntimes 取消某个结果 tab 正在跑的翻页/统计任务。
 func (a *root) cancelPageRuntimes(runtimeID string) {
 	for _, suffix := range []string{"#page", "#count"} {
-		if rt, ok := a.consoles[runtimeID+suffix]; ok && rt != nil {
+		if rt, ok := a.tabs.Consoles[runtimeID+suffix]; ok && rt != nil {
 			rt.Cancel()
 		}
 	}
@@ -447,8 +447,8 @@ func (a *root) cancelPageRuntimes(runtimeID string) {
 // 多条语句各建一个（id = consoleID#i）。
 func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 	// 保留已钉住的结果在最前（左），本次新结果追加到右侧（对照 db-k）。
-	pinned := make([]stmtRun, 0, len(a.stmtRuns))
-	for _, run := range a.stmtRuns {
+	pinned := make([]stmtRun, 0, len(a.tabs.StmtRuns))
+	for _, run := range a.tabs.StmtRuns {
 		if run.pinned {
 			pinned = append(pinned, run)
 			continue
@@ -456,11 +456,11 @@ func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 		// 丢弃的非 pinned 旧结果：连同编辑状态、分页缓存与 pin 专用运行态一起清理。
 		a.discardEditState(run.runtimeID)
 		a.cancelPageRuntimes(run.runtimeID)
-		delete(a.pageStates, run.runtimeID)
-		delete(a.consoles, run.runtimeID+"#page")
-		delete(a.consoles, run.runtimeID+"#count")
+		delete(a.tabs.PageStates, run.runtimeID)
+		delete(a.tabs.Consoles, run.runtimeID+"#page")
+		delete(a.tabs.Consoles, run.runtimeID+"#count")
 		if strings.Contains(run.runtimeID, "#pin") {
-			delete(a.consoles, run.runtimeID)
+			delete(a.tabs.Consoles, run.runtimeID)
 		}
 	}
 	multi := len(ranges) > 1
@@ -468,26 +468,26 @@ func (a *root) resetStmtRuns(ranges []app.SQLStatement) {
 	runs := make([]stmtRun, 0, len(pinned)+len(ranges))
 	runs = append(runs, pinned...)
 	for i, st := range ranges {
-		id := a.activeConsole
+		id := a.tabs.ActiveConsole
 		if multi {
-			id = fmt.Sprintf("%s#%d", a.activeConsole, i)
+			id = fmt.Sprintf("%s#%d", a.tabs.ActiveConsole, i)
 		}
-		a.nextTabNo++
-		runs = append(runs, stmtRun{stmt: st, sql: textSlice(text, st.Start, st.End), runtimeID: id, tabNo: a.nextTabNo})
+		a.tabs.NextTabNo++
+		runs = append(runs, stmtRun{stmt: st, sql: textSlice(text, st.Start, st.End), runtimeID: id, tabNo: a.tabs.NextTabNo})
 	}
-	a.stmtRuns = runs
-	a.activeStmt = len(pinned)
+	a.tabs.StmtRuns = runs
+	a.tabs.ActiveStmt = len(pinned)
 	a.refreshStmtMarks()
 }
 
 // startStmt 执行第 i 条语句；完成回调里顺序推进下一条（失败即停）。
 func (a *root) startStmt(i int) {
-	if i < 0 || i >= len(a.stmtRuns) {
+	if i < 0 || i >= len(a.tabs.StmtRuns) {
 		return
 	}
-	a.stmtRuns[i].started = true
-	a.activeStmt = i
-	run := a.stmtRuns[i]
+	a.tabs.StmtRuns[i].started = true
+	a.tabs.ActiveStmt = i
+	run := a.tabs.StmtRuns[i]
 	sql := run.sql
 	// 会话按运行态所属的控制台取，而不是「当前激活的数据源」：
 	// 多语句执行途中切到表视图/别的数据源时，后续语句仍要跑在原数据源上。
@@ -496,10 +496,10 @@ func (a *root) startStmt(i int) {
 	if sess == nil {
 		sess = a.activeSession() // 临时缓冲执行（无控制台）
 	}
-	app.LogInfo("exec", "start", "conn", a.connName(connID), "console", a.activeConsole, "sql", truncateLogSQL(sql))
-	a.lastExecSQL = sql
+	app.LogInfo("exec", "start", "conn", a.connName(connID), "console", a.tabs.ActiveConsole, "sql", truncateLogSQL(sql))
+	a.tabs.LastExecSQL = sql
 	rt := a.runtimeFor(run.runtimeID)
-	rt.SetPageSize(a.resultPrefs.PageSize)
+	rt.SetPageSize(a.settings.ResultPrefs.PageSize)
 	rt.SetOnDone(a.stmtDoneFor(run.runtimeID, sql, connID))
 	if sess == nil {
 		app.LogWarn("exec", "no session", "index", i)
@@ -576,7 +576,7 @@ func (a *root) stmtDoneFor(rtID, sql, connID string) func(*engine.QueryResult, s
 				a.refreshConnMeta(connID)
 			}
 			// 找回该运行态当前所在位置，执行它的下一条（找不到说明结果已被清走）。
-			for j, run := range a.stmtRuns {
+			for j, run := range a.tabs.StmtRuns {
 				if run.runtimeID == rtID {
 					a.startStmt(j + 1)
 					return

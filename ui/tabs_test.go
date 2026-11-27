@@ -16,7 +16,7 @@ func newConsoleRoot(t *testing.T) *root {
 	a := newRoot("")
 	a.store = app.LoadStore(filepath.Join(t.TempDir(), "connections.json"))
 	a.tree.MetaCache = app.NewMetaCache(filepath.Join(t.TempDir(), "meta"))
-	a.consoles, a.lastVer = map[string]*app.Console{}, map[string]uint64{}
+	a.tabs.Consoles, a.tabs.LastVer = map[string]*app.Console{}, map[string]uint64{}
 	return a
 }
 
@@ -192,8 +192,8 @@ func TestWorkspaceCreateAndSwitch(t *testing.T) {
 	if len(m.Open()) != 0 {
 		t.Fatalf("new workspace must start empty: %+v", m.Open())
 	}
-	if a.activeConsole != "" {
-		t.Fatalf("editor must be in empty state, active=%q", a.activeConsole)
+	if a.tabs.ActiveConsole != "" {
+		t.Fatalf("editor must be in empty state, active=%q", a.tabs.ActiveConsole)
 	}
 	if !tt.HasText("在左侧数据源下新建或打开控制台") {
 		t.Fatalf("empty hint missing: %q", tt.Texts())
@@ -202,8 +202,8 @@ func TestWorkspaceCreateAndSwitch(t *testing.T) {
 	a.deferSwitchWorkspace(firstWS.ID)
 	tt.Frame()
 	tt.Frame()
-	if a.activeConsole != recA.ID {
-		t.Fatalf("switching back must restore A: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != recA.ID {
+		t.Fatalf("switching back must restore A: %q", a.tabs.ActiveConsole)
 	}
 	if got := a.activeText(); got != "" {
 		t.Fatalf("A body: %q", got)
@@ -229,8 +229,8 @@ func TestWorkspaceDeleteKeepsConsoles(t *testing.T) {
 	if _, ok := m.ActiveWorkspace(); ok {
 		t.Fatal("workspace must be deleted")
 	}
-	if a.activeConsole != "" {
-		t.Fatalf("editor must be empty: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != "" {
+		t.Fatalf("editor must be empty: %q", a.tabs.ActiveConsole)
 	}
 	if recs := m.ConsolesOf(prof.ID); len(recs) != 1 {
 		t.Fatalf("console must survive: %+v", recs)
@@ -342,8 +342,8 @@ func TestTabBarOverflowMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.activeConsole != last.ID {
-		t.Fatalf("overflow item did not activate: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != last.ID {
+		t.Fatalf("overflow item did not activate: %q", a.tabs.ActiveConsole)
 	}
 }
 
@@ -429,14 +429,14 @@ func TestCtrlTabSwitchesRecentConsole(t *testing.T) {
 	tt.Key(ui.Ctrl, ui.KeyTab)
 	tt.Frame()
 	tt.Frame()
-	if a.activeConsole != c1.ID {
-		t.Fatalf("Ctrl+Tab should go back to the previous console: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != c1.ID {
+		t.Fatalf("Ctrl+Tab should go back to the previous console: %q", a.tabs.ActiveConsole)
 	}
 	tt.Key(ui.Ctrl, ui.KeyTab)
 	tt.Frame()
 	tt.Frame()
-	if a.activeConsole != c2.ID {
-		t.Fatalf("Ctrl+Tab again should toggle back: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != c2.ID {
+		t.Fatalf("Ctrl+Tab again should toggle back: %q", a.tabs.ActiveConsole)
 	}
 }
 

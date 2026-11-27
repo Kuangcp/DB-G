@@ -19,11 +19,11 @@ func TestCtrlKOpensRewriteForSelection(t *testing.T) {
 	tt.Key(ui.Ctrl, ui.KeyK)
 	tt.Frame()
 
-	if !a.aiRewrite.open {
+	if !a.ai.Rewrite.open {
 		t.Fatal("Ctrl+K should open the rewrite modal")
 	}
-	if a.aiRewrite.target != sql {
-		t.Fatalf("target: %q", a.aiRewrite.target)
+	if a.ai.Rewrite.target != sql {
+		t.Fatalf("target: %q", a.ai.Rewrite.target)
 	}
 	if got := a.code.Text(); got != sql {
 		t.Fatalf("Ctrl+K must not cut to line end: %q", got)
@@ -45,17 +45,17 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 		{Kind: ai.EventText, Text: "```sql\nSELECT id FROM users WHERE id = 1\n```"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiTestProvider = p
-	a.aiPrefs.Model = "fake"
-	a.aiPrefsPath = filepath.Join(t.TempDir(), "ai.json")
+	a.ai.TestProvider = p
+	a.ai.Prefs.Model = "fake"
+	a.ai.PrefsPath = filepath.Join(t.TempDir(), "ai.json")
 	a.history = app.OpenHistory(t.TempDir())
-	a.aiRewrite.instruction = "只查 id"
+	a.ai.Rewrite.instruction = "只查 id"
 	a.startAIRewrite()
 
-	if a.aiRewrite.loading || a.aiRewrite.err != "" || a.aiRewrite.diff == nil {
-		t.Fatalf("rewrite state: %+v", a.aiRewrite)
+	if a.ai.Rewrite.loading || a.ai.Rewrite.err != "" || a.ai.Rewrite.diff == nil {
+		t.Fatalf("rewrite state: %+v", a.ai.Rewrite)
 	}
-	if got := a.aiRewrite.result; got != "SELECT id FROM users WHERE id = 1" {
+	if got := a.ai.Rewrite.result; got != "SELECT id FROM users WHERE id = 1" {
 		t.Fatalf("result: %q", got)
 	}
 	body := p.req.Messages[1].Content
@@ -68,7 +68,7 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 	if got := a.code.Text(); got != "SELECT id FROM users WHERE id = 1" {
 		t.Fatalf("editor: %q", got)
 	}
-	if a.aiRewrite.open {
+	if a.ai.Rewrite.open {
 		t.Fatal("modal should close after apply")
 	}
 	// 执行历史只记真实执行；这次改写不能混进去。
@@ -92,8 +92,8 @@ func TestAIRewriteReplacesSelection(t *testing.T) {
 	}
 
 	// AI 助手的「会话历史」里能看到这次改写。
-	a.aiChat.open = true
-	a.aiChat.showHistory = true
+	a.ai.Chat.open = true
+	a.ai.Chat.showHistory = true
 	a.loadAIChat()
 	tt.Frame()
 	if !tt.HasText("改写：只查 id") {
@@ -107,12 +107,12 @@ func TestAIRewriteAppendsAfterSelection(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyK)
 	tt.Frame()
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "```sql\nSELECT 2;\n```"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
-	a.aiRewrite.instruction = "再来一条"
+	a.ai.Prefs.Model = "fake"
+	a.ai.Rewrite.instruction = "再来一条"
 	a.startAIRewrite()
 	a.applyAIRewrite(true)
 	if got := a.code.Text(); got != "SELECT 1;\nSELECT 2;" {
@@ -126,16 +126,16 @@ func TestAIRewriteRejectsStaleTarget(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyK)
 	tt.Frame()
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "```sql\nSELECT 2;\n```"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
-	a.aiRewrite.instruction = "改成 2"
+	a.ai.Prefs.Model = "fake"
+	a.ai.Rewrite.instruction = "改成 2"
 	a.startAIRewrite()
 	a.setActiveText("SELECT 9;")
 	a.applyAIRewrite(false)
-	if a.aiRewrite.err == "" {
+	if a.ai.Rewrite.err == "" {
 		t.Fatal("stale target must be rejected")
 	}
 	if got := a.code.Text(); got != "SELECT 9;" {
@@ -150,7 +150,7 @@ func TestAIRewriteFallsBackToStatement(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyK)
 	tt.Frame()
-	if !a.aiRewrite.open || !strings.Contains(a.aiRewrite.target, "SELECT 2") {
-		t.Fatalf("rewrite state: %+v", a.aiRewrite)
+	if !a.ai.Rewrite.open || !strings.Contains(a.ai.Rewrite.target, "SELECT 2") {
+		t.Fatalf("rewrite state: %+v", a.ai.Rewrite)
 	}
 }

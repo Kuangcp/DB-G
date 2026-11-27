@@ -15,8 +15,8 @@ import (
 // applyTheme 在帧首应用外观设置；跟随系统且无覆盖时不调 SetTheme。
 // 功能界面字体单独于 theme.json，设置后强制 SetTheme（只改字体，不动桌面主题）。
 func (a *root) applyTheme(c *ui.Context) {
-	t := resolveTheme(c.Theme(), a.themePrefs, c.Preferences()).Theme
-	if fam := strings.TrimSpace(a.fontPrefs.UI); fam != "" {
+	t := resolveTheme(c.Theme(), a.settings.ThemePrefs, c.Preferences()).Theme
+	if fam := strings.TrimSpace(a.settings.FontPrefs.UI); fam != "" {
 		cp := *t
 		cp.Font = fam
 		t = &cp
@@ -31,17 +31,17 @@ func (a *root) applyTheme(c *ui.Context) {
 
 // resolvedThemeFor 是 resolvedTheme 的测试友好入口（用当前设置）。
 func (a *root) resolvedThemeFor(base *ui.Theme, desk ui.Preferences) resolvedTheme {
-	return resolveTheme(base, a.themePrefs, desk)
+	return resolveTheme(base, a.settings.ThemePrefs, desk)
 }
 
 // setThemePrefs 更新外观设置：规范化、持久化（有窗口时防抖）、重画两个窗口。
 func (a *root) setThemePrefs(p app.ThemePrefs) {
 	prefs, warn := p.Normalize()
-	a.themePrefs = prefs
+	a.settings.ThemePrefs = prefs
 	if strings.HasPrefix(prefs.Accent, "#") {
-		a.themeHex = prefs.Accent
+		a.settings.ThemeHex = prefs.Accent
 	} else {
-		a.themeHex = ""
+		a.settings.ThemeHex = ""
 	}
 	if len(warn) > 0 {
 		a.setSettingsNotice("theme", strings.Join(warn, "；"), true)
@@ -56,19 +56,19 @@ func (a *root) setThemePrefs(p app.ThemePrefs) {
 		win := a.win
 		a.safeUpdate(win, func() {})
 	}
-	if a.settingsWin != nil {
-		_ = a.settingsWin.SetBackgroundColor(bg)
+	if a.settings.Win != nil {
+		_ = a.settings.Win.SetBackgroundColor(bg)
 	}
 }
 
 // saveThemePrefs 写盘：有窗口时延迟 300ms 合并连续改动（滑杆/输入框），
 // headless（测试）同步写，便于断言。
 func (a *root) saveThemePrefs() {
-	path := a.themePath
+	path := a.settings.ThemePath
 	if path == "" {
 		return
 	}
-	prefs := a.themePrefs
+	prefs := a.settings.ThemePrefs
 	if a.win == nil {
 		if err := app.SaveThemePrefs(path, prefs); err != nil {
 			app.LogError("startup", "theme save failed", "path", path, "err", err.Error())
@@ -76,11 +76,11 @@ func (a *root) saveThemePrefs() {
 		}
 		return
 	}
-	seq := a.themeSaveSeq.Add(1)
+	seq := a.settings.ThemeSaveSeq.Add(1)
 	win := a.win
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		if a.themeSaveSeq.Load() != seq {
+		if a.settings.ThemeSaveSeq.Load() != seq {
 			return
 		}
 		if err := app.SaveThemePrefs(path, prefs); err != nil {

@@ -14,13 +14,13 @@ func (a *root) setSettingsNotice(key, text string, isErr bool) {
 		return
 	}
 	if text == "" {
-		delete(a.settingsNotice, key)
+		delete(a.settings.Notice, key)
 		return
 	}
-	if a.settingsNotice == nil {
-		a.settingsNotice = map[string]settingsNotice{}
+	if a.settings.Notice == nil {
+		a.settings.Notice = map[string]settingsNotice{}
 	}
-	a.settingsNotice[key] = settingsNotice{text: text, err: isErr}
+	a.settings.Notice[key] = settingsNotice{text: text, err: isErr}
 }
 
 // reportSettingsResult 是设置窗口操作结果的统一出口：内联提示 + 失败时 toast，
@@ -34,7 +34,7 @@ func (a *root) reportSettingsResult(key, text string, isErr bool) {
 
 // settingsNoticeOf 返回某个设置分区的内联提示。
 func (a *root) settingsNoticeOf(key string) (settingsNotice, bool) {
-	n, ok := a.settingsNotice[key]
+	n, ok := a.settings.Notice[key]
 	return n, ok && n.text != ""
 }
 

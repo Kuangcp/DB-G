@@ -25,14 +25,14 @@ func TestAICompletionRequestsAndStoresSuggestion(t *testing.T) {
 		{Kind: ai.EventText, Text: "```sql\nFROM users\n```"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiTestProvider = p
-	a.aiPrefs.Model = "fake"
+	a.ai.TestProvider = p
+	a.ai.Prefs.Model = "fake"
 
 	a.requestAICompletion()
-	if got := a.aiCompletion.suggestion; got != "FROM users" {
+	if got := a.ai.Completion.suggestion; got != "FROM users" {
 		t.Fatalf("suggestion: %q", got)
 	}
-	if a.aiCompletion.loading {
+	if a.ai.Completion.loading {
 		t.Fatal("completion should be done")
 	}
 	body := p.req.Messages[1].Content
@@ -45,17 +45,17 @@ func TestAICompletionRequestsAndStoresSuggestion(t *testing.T) {
 
 func TestAICompletionIgnoresStaleVersion(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "FROM users"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
+	a.ai.Prefs.Model = "fake"
 	a.setActiveText("select * from us")
 	a.setSelection(len("select * from us"), len("select * from us"))
 	a.requestAICompletion()
 	// 请求完成后又改了正文：旧建议不应弹层（状态里仍保留，但 show 会丢弃）。
 	a.setActiveText("select * from users where id = 1")
-	a.showAICompletion(a.aiCompletion.seq)
+	a.showAICompletion(a.ai.Completion.seq)
 	if !strings.Contains(a.code.Text(), "where id = 1") {
 		t.Fatalf("editor text changed unexpectedly: %q", a.code.Text())
 	}

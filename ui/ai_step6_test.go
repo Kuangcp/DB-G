@@ -62,7 +62,7 @@ func TestAIContextHydratesTablesAndColumns(t *testing.T) {
 		},
 	}
 	a.testSetSession(prof.ID, fake)
-	a.aiChat.input = "users 有哪些列"
+	a.ai.Chat.input = "users 有哪些列"
 
 	snap := a.chatSnapshot()
 	if len(snap.Tables) != 0 {
@@ -183,8 +183,8 @@ func TestAIHistoryRedaction(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	a.aiPrefs.AllowHistory = true
-	a.aiPrefs.AllowErrorLogs = true
+	a.ai.Prefs.AllowHistory = true
+	a.ai.Prefs.AllowErrorLogs = true
 	a.consoleErr = "token: xyz"
 	snap := a.aiSnapshot()
 	if len(snap.History) != 1 {

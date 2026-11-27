@@ -149,28 +149,28 @@ func themeSchemeIndex(key string) int {
 // loadPaletteDrafts 把自定义配色从 prefs 装进编辑草稿；整块为空时用默认方案。
 func (a *root) loadPaletteDrafts(prefs app.ThemePrefs) {
 	defLight, defDark := defaultCustomPalettes()
-	a.paletteLight, a.paletteDark = prefs.CustomLight, prefs.CustomDark
-	if a.paletteLight == (app.ThemePalette{}) {
-		a.paletteLight = defLight
+	a.settings.PaletteLight, a.settings.PaletteDark = prefs.CustomLight, prefs.CustomDark
+	if a.settings.PaletteLight == (app.ThemePalette{}) {
+		a.settings.PaletteLight = defLight
 	}
-	if a.paletteDark == (app.ThemePalette{}) {
-		a.paletteDark = defDark
+	if a.settings.PaletteDark == (app.ThemePalette{}) {
+		a.settings.PaletteDark = defDark
 	}
-	a.paletteLoaded, a.paletteErr = true, ""
+	a.settings.PaletteLoaded, a.settings.PaletteErr = true, ""
 }
 
 // applyPaletteDrafts 校验草稿并应用；非法颜色只提示，不落盘。
 func (a *root) applyPaletteDrafts(prefs app.ThemePrefs) {
-	for _, p := range []app.ThemePalette{a.paletteLight, a.paletteDark} {
+	for _, p := range []app.ThemePalette{a.settings.PaletteLight, a.settings.PaletteDark} {
 		for _, color := range []string{p.Background, p.Surface, p.Border, p.Text, p.TextMuted} {
 			if !app.ValidThemePaletteColor(color) {
-				a.paletteErr = locales.PaletteHexInvalid()
+				a.settings.PaletteErr = locales.PaletteHexInvalid()
 				return
 			}
 		}
 	}
-	a.paletteErr = ""
+	a.settings.PaletteErr = ""
 	prefs.Scheme = app.ThemeSchemeCustom
-	prefs.CustomLight, prefs.CustomDark = a.paletteLight, a.paletteDark
+	prefs.CustomLight, prefs.CustomDark = a.settings.PaletteLight, a.settings.PaletteDark
 	a.setThemePrefs(prefs)
 }

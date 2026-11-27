@@ -31,7 +31,7 @@ func TestI18nCatalogChinese(t *testing.T) {
 
 func TestLanguageSectionSwitchesAndPersists(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.localePrefsPath = filepath.Join(t.TempDir(), "locale.json")
+	a.settings.LocalePrefsPath = filepath.Join(t.TempDir(), "locale.json")
 	tt := openSettingsSection(t, a, "语言")
 	if !tt.HasText("跟随系统") || !tt.HasText("English") {
 		t.Fatalf("language section missing options: %q", tt.Texts())
@@ -39,10 +39,10 @@ func TestLanguageSectionSwitchesAndPersists(t *testing.T) {
 	if err := tt.Click("English"); err != nil {
 		t.Fatalf("click English: %v", err)
 	}
-	if a.localePref != app.LocaleEn {
-		t.Fatalf("localePref = %q, want en", a.localePref)
+	if a.settings.LocalePref != app.LocaleEn {
+		t.Fatalf("localePref = %q, want en", a.settings.LocalePref)
 	}
-	prefs, warn := app.LoadLocalePrefs(a.localePrefsPath)
+	prefs, warn := app.LoadLocalePrefs(a.settings.LocalePrefsPath)
 	if warn != "" || prefs.Locale != app.LocaleEn {
 		t.Fatalf("persisted = %+v warn=%q", prefs, warn)
 	}
@@ -51,7 +51,7 @@ func TestLanguageSectionSwitchesAndPersists(t *testing.T) {
 	if err := tt.Click("跟随系统"); err != nil {
 		t.Fatalf("click system: %v", err)
 	}
-	prefs, _ = app.LoadLocalePrefs(a.localePrefsPath)
+	prefs, _ = app.LoadLocalePrefs(a.settings.LocalePrefsPath)
 	if prefs.Locale != app.LocaleSystem {
 		t.Fatalf("persisted = %q, want follow system", prefs.Locale)
 	}
@@ -90,7 +90,7 @@ func TestI18nEnglishAIPanelAndSync(t *testing.T) {
 		t.Skip("run with MYGO_LOCALE=en")
 	}
 	a := newConsoleRoot(t)
-	a.aiChat.open = true
+	a.ai.Chat.open = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	for _, want := range []string{"AI Panel", "Conversation History", "Send"} {
@@ -107,7 +107,7 @@ func TestI18nEnglishAIPanelAndSync(t *testing.T) {
 	if idx < 0 {
 		t.Fatal("sync settings section missing")
 	}
-	a.settingsSection = idx
+	a.settings.Section = idx
 	st := ui.NewTester(a.settingsView, 760, 600)
 	st.Frame()
 	for _, want := range []string{"Git Sync", "Sync Key", "Repository URL"} {

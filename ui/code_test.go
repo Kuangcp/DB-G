@@ -52,13 +52,13 @@ func TestEditorSelectionContextMenuRunsSelection(t *testing.T) {
 	}
 	waitStmts(t, a, tt, 1)
 	ran := false
-	for _, run := range a.stmtRuns {
+	for _, run := range a.tabs.StmtRuns {
 		if strings.Contains(run.sql, "SELECT 1") && !strings.Contains(run.sql, "SELECT 2") {
 			ran = true
 		}
 	}
 	if !ran {
-		t.Fatalf("menu Run should execute the selection: %+v", a.stmtRuns)
+		t.Fatalf("menu Run should execute the selection: %+v", a.tabs.StmtRuns)
 	}
 }
 

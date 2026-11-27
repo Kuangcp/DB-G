@@ -74,20 +74,20 @@ func TestAIChatSendsContextAndStreams(t *testing.T) {
 		{Kind: ai.EventText, Text: "```sql\nSELECT name FROM users;\n```"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiTestProvider = p
-	a.aiPrefs.Model = "fake"
-	a.aiChat.open = true
-	a.aiChat.input = "查 users 的 name"
+	a.ai.TestProvider = p
+	a.ai.Prefs.Model = "fake"
+	a.ai.Chat.open = true
+	a.ai.Chat.input = "查 users 的 name"
 
 	a.sendAI()
-	if len(a.aiChat.messages) != 2 {
-		t.Fatalf("messages: %+v", a.aiChat.messages)
+	if len(a.ai.Chat.messages) != 2 {
+		t.Fatalf("messages: %+v", a.ai.Chat.messages)
 	}
-	if got := a.aiChat.messages[1].text; !strings.Contains(got, "SELECT name") {
+	if got := a.ai.Chat.messages[1].text; !strings.Contains(got, "SELECT name") {
 		t.Fatalf("stream text: %q", got)
 	}
-	if !a.aiChat.messages[1].done || a.aiChat.streaming {
-		t.Fatalf("stream state: done=%v streaming=%v", a.aiChat.messages[1].done, a.aiChat.streaming)
+	if !a.ai.Chat.messages[1].done || a.ai.Chat.streaming {
+		t.Fatalf("stream state: done=%v streaming=%v", a.ai.Chat.messages[1].done, a.ai.Chat.streaming)
 	}
 	user := p.req.Messages[1].Content
 	for _, want := range []string{"users", "select * from users", "id"} {
@@ -113,7 +113,7 @@ func TestAIHistoryToggle(t *testing.T) {
 	if snap := a.aiSnapshot(); len(snap.History) != 0 {
 		t.Fatalf("history must default off: %+v", snap.History)
 	}
-	a.aiPrefs.AllowHistory = true
+	a.ai.Prefs.AllowHistory = true
 	if snap := a.aiSnapshot(); len(snap.History) != 1 || snap.History[0].SQL != "select 42" {
 		t.Fatalf("history toggle: %+v", snap.History)
 	}
@@ -121,20 +121,20 @@ func TestAIHistoryToggle(t *testing.T) {
 
 func TestAIStopIgnoresLateEvents(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.aiChat.streaming = true
-	a.aiChat.seq = 1
-	a.aiChat.messages = []aiChatMessage{{role: "assistant"}}
+	a.ai.Chat.streaming = true
+	a.ai.Chat.seq = 1
+	a.ai.Chat.messages = []aiChatMessage{{role: "assistant"}}
 	canceled := false
-	a.aiChat.cancel = func() { canceled = true }
+	a.ai.Chat.cancel = func() { canceled = true }
 	a.stopAI()
-	if !canceled || a.aiChat.streaming {
-		t.Fatalf("stop: canceled=%v streaming=%v", canceled, a.aiChat.streaming)
+	if !canceled || a.ai.Chat.streaming {
+		t.Fatalf("stop: canceled=%v streaming=%v", canceled, a.ai.Chat.streaming)
 	}
-	if msg := a.aiChat.messages[0]; !msg.done || msg.err != "已停止" {
+	if msg := a.ai.Chat.messages[0]; !msg.done || msg.err != "已停止" {
 		t.Fatalf("message: %+v", msg)
 	}
 	a.applyAIEvent(1, ai.Event{Kind: ai.EventText, Text: "late"})
-	if a.aiChat.messages[0].text != "" {
+	if a.ai.Chat.messages[0].text != "" {
 		t.Fatal("late events must be ignored")
 	}
 }
@@ -157,8 +157,8 @@ func TestAIPanelAndSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.aiChat.open || !tt.HasText("发送") {
-		t.Fatalf("AI panel missing: open=%v texts=%q", a.aiChat.open, tt.Texts())
+	if !a.ai.Chat.open || !tt.HasText("发送") {
+		t.Fatalf("AI panel missing: open=%v texts=%q", a.ai.Chat.open, tt.Texts())
 	}
 	tt2 := openSettingsSection(t, a, "AI")
 	if !tt2.HasText("服务地址") || !tt2.HasText("模型") || !tt2.HasText("API Key（本地 Ollama 可留空）") {
@@ -168,7 +168,7 @@ func TestAIPanelAndSettings(t *testing.T) {
 
 func TestAIChatPersistsPerWorkspace(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.aiPrefsPath = filepath.Join(t.TempDir(), "ai.json")
+	a.ai.PrefsPath = filepath.Join(t.TempDir(), "ai.json")
 	prof := seedConsoleConn(t, a, "本地")
 	rec, err := a.consoleMgr().Create(prof.ID, "AI")
 	if err != nil {
@@ -178,12 +178,12 @@ func TestAIChatPersistsPerWorkspace(t *testing.T) {
 		t.Fatal("activate")
 	}
 	a.setActiveText("select 1")
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "ok"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
-	a.aiChat.input = "hi"
+	a.ai.Prefs.Model = "fake"
+	a.ai.Chat.input = "hi"
 	a.sendAI()
 
 	path := a.aiChatFile()
@@ -193,10 +193,10 @@ func TestAIChatPersistsPerWorkspace(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("conversation not written: %v", err)
 	}
-	a.aiChat.messages = nil
+	a.ai.Chat.messages = nil
 	a.loadAIChat()
-	if len(a.aiChat.messages) != 2 || a.aiChat.messages[1].text != "ok" {
-		t.Fatalf("reloaded messages: %+v", a.aiChat.messages)
+	if len(a.ai.Chat.messages) != 2 || a.ai.Chat.messages[1].text != "ok" {
+		t.Fatalf("reloaded messages: %+v", a.ai.Chat.messages)
 	}
 }
 
@@ -204,15 +204,15 @@ func TestAIPanelWidthSurvivesHideShow(t *testing.T) {
 	a := newConsoleRoot(t)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	a.aiChat.open = true
+	a.ai.Chat.open = true
 	tt.Frame()
 	first, ok := tt.Find("AI 面板")
 	if !ok || first.W < 200 {
 		t.Fatalf("AI panel width: %v ok=%v", first.W, ok)
 	}
-	a.aiChat.open = false
+	a.ai.Chat.open = false
 	tt.Frame()
-	a.aiChat.open = true
+	a.ai.Chat.open = true
 	tt.Frame()
 	second, ok := tt.Find("AI 面板")
 	if !ok || second.W < 200 {
@@ -225,7 +225,7 @@ func TestAIPanelWidthSurvivesHideShow(t *testing.T) {
 
 func TestAIChatConversationHistorySwitch(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.aiPrefsPath = filepath.Join(t.TempDir(), "ai.json")
+	a.ai.PrefsPath = filepath.Join(t.TempDir(), "ai.json")
 	prof := seedConsoleConn(t, a, "本地")
 	rec, err := a.consoleMgr().Create(prof.ID, "AI")
 	if err != nil {
@@ -235,32 +235,32 @@ func TestAIChatConversationHistorySwitch(t *testing.T) {
 		t.Fatal("activate")
 	}
 	a.setActiveText("select 1")
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "ok"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
-	a.aiChat.open = true
+	a.ai.Prefs.Model = "fake"
+	a.ai.Chat.open = true
 	a.loadAIChat()
 
-	a.aiChat.input = "first question"
+	a.ai.Chat.input = "first question"
 	a.sendAI()
-	firstID := a.aiChat.convID
-	if firstID == "" || len(a.aiChat.messages) != 2 {
-		t.Fatalf("first conversation: id=%q messages=%+v", firstID, a.aiChat.messages)
+	firstID := a.ai.Chat.convID
+	if firstID == "" || len(a.ai.Chat.messages) != 2 {
+		t.Fatalf("first conversation: id=%q messages=%+v", firstID, a.ai.Chat.messages)
 	}
 
 	a.resetAIChat()
-	secondID := a.aiChat.convID
-	if secondID == "" || secondID == firstID || len(a.aiChat.messages) != 0 {
-		t.Fatalf("new conversation: id=%q messages=%+v", secondID, a.aiChat.messages)
+	secondID := a.ai.Chat.convID
+	if secondID == "" || secondID == firstID || len(a.ai.Chat.messages) != 0 {
+		t.Fatalf("new conversation: id=%q messages=%+v", secondID, a.ai.Chat.messages)
 	}
-	a.aiChat.input = "second question"
+	a.ai.Chat.input = "second question"
 	a.sendAI()
-	if len(a.aiChat.store.Conversations) != 2 {
-		t.Fatalf("store conversations: %+v", a.aiChat.store.Conversations)
+	if len(a.ai.Chat.store.Conversations) != 2 {
+		t.Fatalf("store conversations: %+v", a.ai.Chat.store.Conversations)
 	}
-	a.aiChat.showHistory = true
+	a.ai.Chat.showHistory = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if !tt.HasText("会话历史") || !tt.HasText("first question") || !tt.HasText("second question") {
@@ -269,17 +269,17 @@ func TestAIChatConversationHistorySwitch(t *testing.T) {
 	if row, ok := tt.Find("first question"); !ok || row.H < 10 {
 		t.Fatalf("history row must render text, not a thin strip: %+v ok=%v", row, ok)
 	}
-	a.aiChat.showHistory = false
+	a.ai.Chat.showHistory = false
 
 	before := map[string]int64{}
-	for _, conv := range a.aiChat.store.Conversations {
+	for _, conv := range a.ai.Chat.store.Conversations {
 		before[conv.ID] = conv.UpdatedAt
 	}
 	a.selectAIConversation(firstID, true)
-	if len(a.aiChat.messages) != 2 || a.aiChat.messages[0].text != "first question" {
-		t.Fatalf("switched messages: %+v", a.aiChat.messages)
+	if len(a.ai.Chat.messages) != 2 || a.ai.Chat.messages[0].text != "first question" {
+		t.Fatalf("switched messages: %+v", a.ai.Chat.messages)
 	}
-	for _, conv := range a.aiChat.store.Conversations {
+	for _, conv := range a.ai.Chat.store.Conversations {
 		if conv.UpdatedAt != before[conv.ID] {
 			t.Fatalf("switching must not reorder history: %s %d -> %d", conv.ID, before[conv.ID], conv.UpdatedAt)
 		}
@@ -308,18 +308,18 @@ func TestAITitleGenerationIsOptIn(t *testing.T) {
 		{Kind: ai.EventText, Text: "ok"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiTestProvider = p
-	a.aiPrefs.Model = "fake"
-	a.aiChat.open = true
+	a.ai.TestProvider = p
+	a.ai.Prefs.Model = "fake"
+	a.ai.Chat.open = true
 	a.loadAIChat()
-	a.aiChat.input = "first"
+	a.ai.Chat.input = "first"
 	a.sendAI()
 	if p.calls != 1 {
 		t.Fatalf("title generation must be off by default: calls=%d", p.calls)
 	}
-	a.aiPrefs.AITitle = true
+	a.ai.Prefs.AITitle = true
 	a.resetAIChat()
-	a.aiChat.input = "second"
+	a.ai.Chat.input = "second"
 	a.sendAI()
 	if p.calls != 3 {
 		t.Fatalf("title generation should add one call: calls=%d", p.calls)
@@ -328,14 +328,14 @@ func TestAITitleGenerationIsOptIn(t *testing.T) {
 
 func TestAIHistorySearchFiltersTitles(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.aiChat.store = app.AIConversationStore{Conversations: []app.AIConversation{
+	a.ai.Chat.store = app.AIConversationStore{Conversations: []app.AIConversation{
 		{ID: "a", Title: "alpha report", UpdatedAt: 2},
 		{ID: "b", Title: "beta query", UpdatedAt: 1},
 	}}
-	a.aiChat.convID = "b"
-	a.aiChat.open = true
-	a.aiChat.showHistory = true
-	a.aiChat.historyQuery = "beta"
+	a.ai.Chat.convID = "b"
+	a.ai.Chat.open = true
+	a.ai.Chat.showHistory = true
+	a.ai.Chat.historyQuery = "beta"
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if !tt.HasText("beta query") || tt.HasText("alpha report") {
@@ -346,21 +346,21 @@ func TestAIHistorySearchFiltersTitles(t *testing.T) {
 func TestAIHistoryScrollPagination(t *testing.T) {
 	a := newConsoleRoot(t)
 	for i := 0; i < 30; i++ {
-		a.aiChat.store.Conversations = append(a.aiChat.store.Conversations, app.AIConversation{
+		a.ai.Chat.store.Conversations = append(a.ai.Chat.store.Conversations, app.AIConversation{
 			ID: fmt.Sprintf("c%02d", i), Title: fmt.Sprintf("conv %02d", i), UpdatedAt: int64(100 - i),
 		})
 	}
-	a.aiChat.open = true
-	a.aiChat.showHistory = true
+	a.ai.Chat.open = true
+	a.ai.Chat.showHistory = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if !tt.HasText("继续向下滚动加载更多…") {
 		t.Fatalf("first page should show load-more hint: %q", tt.Texts())
 	}
-	a.aiChat.historyScroll.Y = a.aiChat.historyScroll.MaxY
+	a.ai.Chat.historyScroll.Y = a.ai.Chat.historyScroll.MaxY
 	tt.Frame()
-	if a.aiChat.historyLimit != 30 {
-		t.Fatalf("scroll to end should load all remaining rows: limit=%d", a.aiChat.historyLimit)
+	if a.ai.Chat.historyLimit != 30 {
+		t.Fatalf("scroll to end should load all remaining rows: limit=%d", a.ai.Chat.historyLimit)
 	}
 }
 
@@ -375,14 +375,14 @@ func TestAIChatCtrlEnterSendsFromInput(t *testing.T) {
 		t.Fatal("activate")
 	}
 	a.setActiveText("select 1")
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "ok"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
-	a.aiChat.open = true
+	a.ai.Prefs.Model = "fake"
+	a.ai.Chat.open = true
 	a.loadAIChat()
-	a.aiChat.input = "hello"
+	a.ai.Chat.input = "hello"
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if err := tt.Click("AI 提问"); err != nil {
@@ -394,15 +394,15 @@ func TestAIChatCtrlEnterSendsFromInput(t *testing.T) {
 	if a.con.Result() != nil || a.con.Running() {
 		t.Fatal("Ctrl+Enter in AI input must not execute the editor")
 	}
-	if len(a.aiChat.messages) != 2 || a.aiChat.messages[0].text != "hello" {
-		t.Fatalf("Ctrl+Enter should send the AI prompt: %+v", a.aiChat.messages)
+	if len(a.ai.Chat.messages) != 2 || a.ai.Chat.messages[0].text != "hello" {
+		t.Fatalf("Ctrl+Enter should send the AI prompt: %+v", a.ai.Chat.messages)
 	}
 }
 
 func TestAIChatEnterAddsNewline(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.aiChat.open = true
-	a.aiChat.input = "line one"
+	a.ai.Chat.open = true
+	a.ai.Chat.input = "line one"
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if err := tt.Click("AI 提问"); err != nil {
@@ -411,18 +411,18 @@ func TestAIChatEnterAddsNewline(t *testing.T) {
 	tt.Frame()
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if len(a.aiChat.messages) != 0 {
-		t.Fatalf("Enter must not send: %+v", a.aiChat.messages)
+	if len(a.ai.Chat.messages) != 0 {
+		t.Fatalf("Enter must not send: %+v", a.ai.Chat.messages)
 	}
-	if !strings.Contains(a.aiChat.input, "\n") {
-		t.Fatalf("Enter should insert a newline: %q", a.aiChat.input)
+	if !strings.Contains(a.ai.Chat.input, "\n") {
+		t.Fatalf("Enter should insert a newline: %q", a.ai.Chat.input)
 	}
 }
 
 func TestAIChatMessageAlignmentAndCopy(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.aiChat.open = true
-	a.aiChat.messages = []aiChatMessage{
+	a.ai.Chat.open = true
+	a.ai.Chat.messages = []aiChatMessage{
 		{role: "user", text: "hello from me", done: true},
 		{role: "assistant", text: "answer here", done: true},
 	}
@@ -495,24 +495,24 @@ func TestAIPreviewShowsBudgetedContext(t *testing.T) {
 	}
 	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
 	a.setActiveText("select * from users")
-	a.aiPrefs.ContextWindow = 2048
-	a.aiPrefs.Model = "fake"
-	a.aiChat.input = "查 users 的行数"
+	a.ai.Prefs.ContextWindow = 2048
+	a.ai.Prefs.Model = "fake"
+	a.ai.Chat.input = "查 users 的行数"
 
 	p := &fakeAIProvider{}
-	a.aiTestProvider = p
+	a.ai.TestProvider = p
 	a.openAIPreview()
 	if p.calls != 0 {
 		t.Fatalf("preview must not call the provider: %d", p.calls)
 	}
-	if !a.aiDebug.open || a.aiDebug.sel != -1 || a.aiDebug.draft == nil {
-		t.Fatalf("preview state: open=%v sel=%d draft=%v", a.aiDebug.open, a.aiDebug.sel, a.aiDebug.draft)
+	if !a.ai.Debug.open || a.ai.Debug.sel != -1 || a.ai.Debug.draft == nil {
+		t.Fatalf("preview state: open=%v sel=%d draft=%v", a.ai.Debug.open, a.ai.Debug.sel, a.ai.Debug.draft)
 	}
-	if !strings.Contains(a.aiDebug.body, "users") || !strings.Contains(a.aiDebug.body, "查 users 的行数") {
-		t.Fatalf("preview body missing context:\n%s", a.aiDebug.body)
+	if !strings.Contains(a.ai.Debug.body, "users") || !strings.Contains(a.ai.Debug.body, "查 users 的行数") {
+		t.Fatalf("preview body missing context:\n%s", a.ai.Debug.body)
 	}
-	if !strings.Contains(a.aiDebug.draft.Note, "token") {
-		t.Fatalf("preview note should carry the token budget: %q", a.aiDebug.draft.Note)
+	if !strings.Contains(a.ai.Debug.draft.Note, "token") {
+		t.Fatalf("preview note should carry the token budget: %q", a.ai.Debug.draft.Note)
 	}
 
 	// 小窗口 + 大 schema/历史：预览报告必须反映裁剪。
@@ -533,11 +533,11 @@ func TestAIPreviewShowsBudgetedContext(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	a.aiPrefs.AllowHistory = true
-	a.aiChat.input = "统计 big_00 的数据"
+	a.ai.Prefs.AllowHistory = true
+	a.ai.Chat.input = "统计 big_00 的数据"
 	a.openAIPreview()
-	if !strings.Contains(a.aiDebug.draft.Note, "已裁剪") {
-		t.Fatalf("preview note must report trimming: %q", a.aiDebug.draft.Note)
+	if !strings.Contains(a.ai.Debug.draft.Note, "已裁剪") {
+		t.Fatalf("preview note must report trimming: %q", a.ai.Debug.draft.Note)
 	}
 }
 
@@ -562,14 +562,14 @@ func TestAIChatSendsDialogue(t *testing.T) {
 		{Kind: ai.EventText, Text: "第一答"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiTestProvider = p
-	a.aiPrefs.Model = "fake"
-	a.aiChat.open = true
-	a.aiChat.input = "第一问"
+	a.ai.TestProvider = p
+	a.ai.Prefs.Model = "fake"
+	a.ai.Chat.open = true
+	a.ai.Chat.input = "第一问"
 	a.sendAI()
 
 	p.events = []ai.Event{{Kind: ai.EventText, Text: "第二答"}, {Kind: ai.EventDone}}
-	a.aiChat.input = "第二问"
+	a.ai.Chat.input = "第二问"
 	a.sendAI()
 
 	msgs := p.req.Messages
@@ -591,10 +591,10 @@ func TestAIChatSendsDialogue(t *testing.T) {
 	}
 
 	// 预览也必须带同一份对话记忆。
-	a.aiChat.input = "第三问"
+	a.ai.Chat.input = "第三问"
 	a.openAIPreview()
-	if !strings.Contains(a.aiDebug.body, "第一问") || !strings.Contains(a.aiDebug.body, "第一答") {
-		t.Fatalf("preview must carry dialogue:\n%s", a.aiDebug.body)
+	if !strings.Contains(a.ai.Debug.body, "第一问") || !strings.Contains(a.ai.Debug.body, "第一答") {
+		t.Fatalf("preview must carry dialogue:\n%s", a.ai.Debug.body)
 	}
 }
 
@@ -605,12 +605,12 @@ func TestAIDialogueKeepsRecentMessages(t *testing.T) {
 		if i%2 == 1 {
 			role = "assistant"
 		}
-		a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{
+		a.ai.Chat.messages = append(a.ai.Chat.messages, aiChatMessage{
 			role: role, text: fmt.Sprintf("msg-%02d", i), done: true,
 		})
 	}
 	// 未完成/空消息不进入上下文。
-	a.aiChat.messages = append(a.aiChat.messages, aiChatMessage{role: "assistant", text: "", done: false})
+	a.ai.Chat.messages = append(a.ai.Chat.messages, aiChatMessage{role: "assistant", text: "", done: false})
 	got := a.aiDialogue()
 	if len(got) != maxAIDialogueMessages {
 		t.Fatalf("dialogue length = %d", len(got))
@@ -626,7 +626,7 @@ func TestAIDialogueKeepsRecentMessages(t *testing.T) {
 
 func TestAIResultContextShapeAndSamples(t *testing.T) {
 	a := newTestRoot()
-	a.lastExecSQL = "select id, name from users"
+	a.tabs.LastExecSQL = "select id, name from users"
 	a.con.SetOutcome(&engine.QueryResult{
 		IsQuery:       true,
 		Columns:       []string{"id", "name"},
@@ -646,7 +646,7 @@ func TestAIResultContextShapeAndSamples(t *testing.T) {
 	if len(rc.Sample) != 0 {
 		t.Fatalf("samples must stay off by default: %+v", rc.Sample)
 	}
-	a.aiPrefs.AllowSampleRows = true
+	a.ai.Prefs.AllowSampleRows = true
 	rc = a.aiResultContext()
 	if len(rc.Sample) != 2 || rc.Sample[0][1] != "alice" || rc.Sample[1][1] != "NULL" {
 		t.Fatalf("samples: %+v", rc.Sample)
@@ -655,12 +655,12 @@ func TestAIResultContextShapeAndSamples(t *testing.T) {
 
 func TestAIPlanContextOnlyWhenOpen(t *testing.T) {
 	a := newTestRoot()
-	a.plan = planState{open: false, nodes: []plan.PlanNode{{Op: "Seq Scan"}}}
+	a.ai.Plan = planState{open: false, nodes: []plan.PlanNode{{Op: "Seq Scan"}}}
 	if got := a.aiPlanContext(); got != nil {
 		t.Fatalf("closed plan must not be sent: %+v", got)
 	}
-	a.plan.open = true
-	a.plan.sql = "select * from users"
+	a.ai.Plan.open = true
+	a.ai.Plan.sql = "select * from users"
 	got := a.aiPlanContext()
 	if got == nil || !strings.Contains(got.Text, "Seq Scan") || got.SQL != "select * from users" {
 		t.Fatalf("plan context: %+v", got)
@@ -688,14 +688,14 @@ func TestAIDDLContextPrefetchAndCache(t *testing.T) {
 		},
 	}
 	a.testSetSession(prof.ID, fake)
-	a.aiPrefs.AllowDDL = true
-	a.aiPrefs.Model = "fake"
+	a.ai.Prefs.AllowDDL = true
+	a.ai.Prefs.Model = "fake"
 	a.setActiveText("select * from t")
 	a.catalog.finish(prof.ID+"|db1", []string{"t"}, nil, "postgres")
 
 	p := &fakeAIProvider{events: []ai.Event{{Kind: ai.EventText, Text: "ok"}, {Kind: ai.EventDone}}}
-	a.aiTestProvider = p
-	a.aiChat.input = "看看这张表"
+	a.ai.TestProvider = p
+	a.ai.Chat.input = "看看这张表"
 	a.sendAI()
 	if fake.ddlSchema != "db1" {
 		t.Fatalf("DDL must use the scoped schema: %q", fake.ddlSchema)
@@ -707,7 +707,7 @@ func TestAIDDLContextPrefetchAndCache(t *testing.T) {
 
 	// 第二次发送即使会话不可用，也应命中 DDL 缓存。
 	a.sessions = map[string]engine.Session{}
-	a.aiChat.input = "再说一次"
+	a.ai.Chat.input = "再说一次"
 	a.sendAI()
 	last = p.req.Messages[len(p.req.Messages)-1].Content
 	if !strings.Contains(last, "CREATE TABLE db1.t") {

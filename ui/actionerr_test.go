@@ -19,7 +19,7 @@ func TestSettingsErrorsDoNotUseTopBar(t *testing.T) {
 	if len(a.toastQueue) != 1 || a.toastQueue[0].Title != "导入失败：bad file" {
 		t.Fatalf("toast = %+v", a.toastQueue)
 	}
-	notice, ok := a.settingsNotice["profiles"]
+	notice, ok := a.settings.Notice["profiles"]
 	if !ok || notice.text != "导入失败：bad file" || !notice.err {
 		t.Fatalf("settings notice = %+v %v", notice, ok)
 	}
@@ -35,7 +35,7 @@ func TestSettingsSuccessDoesNotToast(t *testing.T) {
 	if len(a.toastQueue) != 0 {
 		t.Fatalf("success must not toast: %+v", a.toastQueue)
 	}
-	if n := a.settingsNotice["profiles"]; n.err || n.text == "" {
+	if n := a.settings.Notice["profiles"]; n.err || n.text == "" {
 		t.Fatalf("notice = %+v", n)
 	}
 }
@@ -47,7 +47,7 @@ func TestKeymapSaveFailureStaysInSettings(t *testing.T) {
 	if err := os.WriteFile(block, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	a.keymapPath = filepath.Join(block, "keymap.json")
+	a.settings.KeymapPath = filepath.Join(block, "keymap.json")
 	a.consoleErr = "keep"
 
 	a.saveKeymap()
@@ -55,7 +55,7 @@ func TestKeymapSaveFailureStaysInSettings(t *testing.T) {
 	if a.consoleErr != "keep" {
 		t.Fatalf("consoleErr = %q, want unchanged", a.consoleErr)
 	}
-	if got := a.settingsNotice["keymap"]; !got.err || got.text == "" {
+	if got := a.settings.Notice["keymap"]; !got.err || got.text == "" {
 		t.Fatalf("keymap notice = %+v", got)
 	}
 }

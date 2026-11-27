@@ -25,7 +25,7 @@ func (a *root) keymapSection(c *ui.Context) {
 		ui.Text(c, n.text).FontSize(12).TextColor(c.Theme().Danger).SingleLine()
 	}
 	for _, act := range keyActions {
-		recording := a.captureAction == act.ID
+		recording := a.settings.CaptureAction == act.ID
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			label := ui.Text(c, act.Label()).FontSize(12).SingleLine()
 			if recording {
@@ -39,9 +39,9 @@ func (a *root) keymapSection(c *ui.Context) {
 			}
 			ui.Text(c, keyText).FontSize(12).TextColor(col).SingleLine()
 			if ui.Button(c, locales.KeymapRecord()).Radius(cr).Disabled(recording).Clicked() {
-				a.captureAction = act.ID
+				a.settings.CaptureAction = act.ID
 			}
-			if ui.Button(c, locales.KeymapReset()).Radius(cr).Disabled(chordsEqual(a.chords[act.ID], act.Def)).Clicked() {
+			if ui.Button(c, locales.KeymapReset()).Radius(cr).Disabled(chordsEqual(a.settings.Chords[act.ID], act.Def)).Clicked() {
 				a.resetChords(act.ID)
 			}
 		})
@@ -51,16 +51,16 @@ func (a *root) keymapSection(c *ui.Context) {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, act.Label()).FontSize(12).SingleLine()
 			ui.Spacer(c)
-			ui.MenuButton(c, mouseGestureText(a.mouseBindings[act.ID]), func(menu *ui.Menu) {
+			ui.MenuButton(c, mouseGestureText(a.settings.MouseBindings[act.ID]), func(menu *ui.Menu) {
 				for _, mods := range mouseGestureOptions() {
 					if menu.Item(mouseGestureText(mods)).
-						Checked(a.mouseBindings[act.ID] == mods).Chosen() {
+						Checked(a.settings.MouseBindings[act.ID] == mods).Chosen() {
 						a.setMouseBinding(act.ID, mods)
 					}
 				}
 			})
 			if ui.Button(c, locales.KeymapReset()).Radius(cr).
-				Disabled(a.mouseBindings[act.ID] == act.Def).Clicked() {
+				Disabled(a.settings.MouseBindings[act.ID] == act.Def).Clicked() {
 				a.resetMouseBinding(act.ID)
 			}
 		})
@@ -71,11 +71,11 @@ func (a *root) keymapSection(c *ui.Context) {
 			for _, act := range mouseActions {
 				a.resetMouseBinding(act.ID)
 			}
-			a.captureAction = ""
+			a.settings.CaptureAction = ""
 		}
-		if a.captureAction != "" {
+		if a.settings.CaptureAction != "" {
 			if ui.Button(c, locales.KeymapCancelRecord()).Radius(cr).Clicked() {
-				a.captureAction = ""
+				a.settings.CaptureAction = ""
 			}
 		}
 	})

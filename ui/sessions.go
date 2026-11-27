@@ -421,7 +421,7 @@ func (a *root) stopActiveRuns() {
 		seen[rt] = true
 		gen := rt.Generation()
 		rt.Cancel()
-		app.LogInfo("exec", "cancel", "conn", a.activeConnName(), "console", a.activeConsole)
+		app.LogInfo("exec", "cancel", "conn", a.activeConnName(), "console", a.tabs.ActiveConsole)
 		if a.win != nil {
 			win := a.win
 			go func() {
@@ -430,10 +430,10 @@ func (a *root) stopActiveRuns() {
 			}()
 		}
 	}
-	for _, run := range a.stmtRuns {
+	for _, run := range a.tabs.StmtRuns {
 		add(a.runtimeFor(run.runtimeID))
 	}
-	for _, ps := range a.pageStates {
+	for _, ps := range a.tabs.PageStates {
 		if ps.PageRuntime != "" {
 			add(a.runtimeFor(ps.PageRuntime))
 		}
@@ -449,7 +449,7 @@ func (a *root) forceStopRuntime(rt *app.Console, gen uint64, connID string) {
 	if rt == nil || !rt.AbortIf(gen, locales.SessionForceStopped()) {
 		return
 	}
-	for _, ps := range a.pageStates {
+	for _, ps := range a.tabs.PageStates {
 		if ps.PageRuntime != "" && a.runtimeFor(ps.PageRuntime) == rt {
 			ps.Loading = false
 		}
@@ -514,7 +514,7 @@ func (a *root) lruVictim(keep string) string {
 
 // connBusy 报告该数据源是否有控制台正在执行语句（有就别淘汰，免得把查询掐掉）。
 func (a *root) connBusy(connID string) bool {
-	for runtimeID, rt := range a.consoles {
+	for runtimeID, rt := range a.tabs.Consoles {
 		if rt == nil || !rt.Running() {
 			continue
 		}
@@ -623,7 +623,7 @@ func (a *root) disconnectConn(p app.ConnProfile) {
 // cancelConnRuns 取消该数据源上正在执行的语句（断开/关闭连接前调用）。
 // 取消只走运行态自己的 context，不再有会话级取消槽。
 func (a *root) cancelConnRuns(connID string) {
-	for id, rt := range a.consoles {
+	for id, rt := range a.tabs.Consoles {
 		if rt == nil || !rt.Running() {
 			continue
 		}
@@ -631,7 +631,7 @@ func (a *root) cancelConnRuns(connID string) {
 			rt.Cancel()
 		}
 	}
-	for _, t := range a.viewerTabs {
+	for _, t := range a.tabs.ViewerTabs {
 		if t != nil && t.connID == connID && t.rt != nil && t.rt.Running() {
 			t.rt.Cancel()
 		}

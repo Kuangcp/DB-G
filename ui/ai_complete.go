@@ -38,7 +38,7 @@ func (a *root) requestAICompletion() {
 	for start > 0 && isIdentPart(text[start-1]) {
 		start--
 	}
-	st := &a.aiCompletion
+	st := &a.ai.Completion
 	if st.cancel != nil {
 		st.cancel()
 	}
@@ -61,11 +61,11 @@ func (a *root) requestAICompletion() {
 		MaxTokens:   a.aiTaskMaxTokens("completion"),
 	}
 	consume := func(text string, err error) {
-		if seq != a.aiCompletion.seq {
+		if seq != a.ai.Completion.seq {
 			return
 		}
-		a.aiCompletion.loading = false
-		a.aiCompletion.cancel = nil
+		a.ai.Completion.loading = false
+		a.ai.Completion.cancel = nil
 		if err != nil {
 			a.consoleErr = err.Error()
 			return
@@ -74,7 +74,7 @@ func (a *root) requestAICompletion() {
 		if got == "" {
 			return
 		}
-		a.aiCompletion.suggestion = got
+		a.ai.Completion.suggestion = got
 		a.showAICompletion(seq)
 	}
 	read := func(ch <-chan ai.Event) (string, error) {
@@ -122,7 +122,7 @@ func (a *root) requestAICompletion() {
 
 // showAICompletion 在编辑器里弹出 AI 候选；光标/版本变了就丢弃。
 func (a *root) showAICompletion(seq uint64) {
-	st := &a.aiCompletion
+	st := &a.ai.Completion
 	if seq != st.seq || st.suggestion == "" {
 		return
 	}

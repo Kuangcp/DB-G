@@ -105,15 +105,15 @@ func TestCtrlDNoLongerSelectsNextMatch(t *testing.T) {
 // 改键：写进 keymap.json，编辑器绑定跟着变，新键立即生效。
 func TestRemapPersistsAndRebinds(t *testing.T) {
 	a, tt := focusEditor(t, "SELECT 1")
-	a.keymapPath = filepath.Join(t.TempDir(), "keymap.json")
+	a.settings.KeymapPath = filepath.Join(t.TempDir(), "keymap.json")
 
 	a.setChords("duplicateLine", []chord{{ui.Ctrl | ui.Shift, ui.KeyY}})
 	tt.Frame()
 
-	if _, err := os.Stat(a.keymapPath); err != nil {
+	if _, err := os.Stat(a.settings.KeymapPath); err != nil {
 		t.Fatalf("应写出 keymap.json: %v", err)
 	}
-	saved, warn := app.LoadKeymap(a.keymapPath)
+	saved, warn := app.LoadKeymap(a.settings.KeymapPath)
 	if warn != "" || saved["duplicateLine"] != "Ctrl+Shift+Y" {
 		t.Fatalf("存盘内容: %v %q", saved, warn)
 	}
@@ -136,7 +136,7 @@ func TestRemapPersistsAndRebinds(t *testing.T) {
 // 设置窗口里录制按键：点「录制」→ 按 Ctrl+J → 存进文件。
 func TestRecordChordInSettings(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.keymapPath = filepath.Join(t.TempDir(), "keymap.json")
+	a.settings.KeymapPath = filepath.Join(t.TempDir(), "keymap.json")
 	tt := ui.NewTester(a.settingsView, 720, 520)
 	tt.Frame()
 	if err := tt.Click("快捷键"); err != nil {
@@ -147,7 +147,7 @@ func TestRecordChordInSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.captureAction == "" {
+	if a.settings.CaptureAction == "" {
 		t.Fatal("点录制后应进入录制状态")
 	}
 	if !tt.HasText("按下新组合") {
@@ -155,13 +155,13 @@ func TestRecordChordInSettings(t *testing.T) {
 	}
 	tt.Key(ui.Ctrl, ui.KeyJ)
 	tt.Frame()
-	if a.captureAction != "" {
+	if a.settings.CaptureAction != "" {
 		t.Fatal("按键后应退出录制")
 	}
 	if got := a.chordsFor("exec"); len(got) != 1 || got[0] != (chord{ui.Ctrl, ui.KeyJ}) {
 		t.Fatalf("第一个动作应绑到 Ctrl+J: %v", got)
 	}
-	saved, _ := app.LoadKeymap(a.keymapPath)
+	saved, _ := app.LoadKeymap(a.settings.KeymapPath)
 	if saved["exec"] != "Ctrl+J" {
 		t.Fatalf("没存盘: %v", saved)
 	}
@@ -170,7 +170,7 @@ func TestRecordChordInSettings(t *testing.T) {
 // 同作用域撞键时，把原来那个动作解绑，避免两个动作抢一个键。
 func TestRemapBreaksConflict(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.keymapPath = filepath.Join(t.TempDir(), "keymap.json")
+	a.settings.KeymapPath = filepath.Join(t.TempDir(), "keymap.json")
 	a.setChords("duplicateLine", []chord{{ui.Ctrl, ui.KeyD}}) // 和 deleteLine 撞
 	if got := a.chordsFor("deleteLine"); len(got) != 0 {
 		t.Fatalf("撞键后 deleteLine 应被解绑: %v", got)
@@ -238,15 +238,15 @@ func TestCtrlSlashCommentsAndMovesDown(t *testing.T) {
 // 双击手势可改：互换后存进 keymap.json，并能在新实例里读回。
 func TestMouseBindingsSwapAndPersist(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.keymapPath = filepath.Join(t.TempDir(), "keymap.json")
-	if a.mouseBindings[mouseCellPreview] != 0 || a.mouseBindings[mouseCellEdit] != ui.Ctrl {
-		t.Fatalf("默认手势: %+v", a.mouseBindings)
+	a.settings.KeymapPath = filepath.Join(t.TempDir(), "keymap.json")
+	if a.settings.MouseBindings[mouseCellPreview] != 0 || a.settings.MouseBindings[mouseCellEdit] != ui.Ctrl {
+		t.Fatalf("默认手势: %+v", a.settings.MouseBindings)
 	}
 	a.setMouseBinding(mouseCellEdit, 0) // 与预览互换
-	if a.mouseBindings[mouseCellEdit] != 0 || a.mouseBindings[mouseCellPreview] != ui.Ctrl {
-		t.Fatalf("互换后: %+v", a.mouseBindings)
+	if a.settings.MouseBindings[mouseCellEdit] != 0 || a.settings.MouseBindings[mouseCellPreview] != ui.Ctrl {
+		t.Fatalf("互换后: %+v", a.settings.MouseBindings)
 	}
-	saved, warn := app.LoadKeymap(a.keymapPath)
+	saved, warn := app.LoadKeymap(a.settings.KeymapPath)
 	if warn != "" {
 		t.Fatal(warn)
 	}
@@ -255,12 +255,12 @@ func TestMouseBindingsSwapAndPersist(t *testing.T) {
 	}
 
 	b := newConsoleRoot(t)
-	b.keymapPath = a.keymapPath
+	b.settings.KeymapPath = a.settings.KeymapPath
 	if warn := b.loadKeymap(); warn != "" {
 		t.Fatalf("load: %s", warn)
 	}
-	if b.mouseBindings[mouseCellEdit] != 0 || b.mouseBindings[mouseCellPreview] != ui.Ctrl {
-		t.Fatalf("读回: %+v", b.mouseBindings)
+	if b.settings.MouseBindings[mouseCellEdit] != 0 || b.settings.MouseBindings[mouseCellPreview] != ui.Ctrl {
+		t.Fatalf("读回: %+v", b.settings.MouseBindings)
 	}
 }
 

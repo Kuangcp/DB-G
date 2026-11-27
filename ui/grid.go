@@ -29,7 +29,7 @@ func newGridState() *gridState {
 
 // viewerActive 报告当前展示的是否是表视图标签。
 func (a *root) viewerActive() bool {
-	return a.activeViewer != "" && a.viewerTabs[a.activeViewer] != nil
+	return a.tabs.ActiveViewer != "" && a.tabs.ViewerTabs[a.tabs.ActiveViewer] != nil
 }
 
 // activeViewerTab 返回当前展示的表视图标签；没有返回 nil。
@@ -37,7 +37,7 @@ func (a *root) activeViewerTab() *viewerTab {
 	if !a.viewerActive() {
 		return nil
 	}
-	return a.viewerTabs[a.activeViewer]
+	return a.tabs.ViewerTabs[a.tabs.ActiveViewer]
 }
 
 // gridRuntime 返回网格展示结果对应的运行态：表视图用它的临时运行态。
@@ -72,7 +72,7 @@ func (a *root) gridSQL() string {
 	if t := a.activeViewerTab(); t != nil {
 		return t.query.sql
 	}
-	return a.lastExecSQL
+	return a.tabs.LastExecSQL
 }
 
 // gridKind 返回网格数据源的种类（引用符/格式化用）。

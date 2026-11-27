@@ -15,13 +15,13 @@ func waitStmts(t *testing.T, a *root, tt *ui.Tester, started int) {
 	for time.Now().Before(deadline) {
 		tt.Frame()
 		done := 0
-		for _, run := range a.stmtRuns {
+		for _, run := range a.tabs.StmtRuns {
 			if run.started && !a.runtimeFor(run.runtimeID).Running() {
 				done++
 			}
 		}
 		nStarted := 0
-		for _, run := range a.stmtRuns {
+		for _, run := range a.tabs.StmtRuns {
 			if run.started {
 				nStarted++
 			}
@@ -31,7 +31,7 @@ func waitStmts(t *testing.T, a *root, tt *ui.Tester, started int) {
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
-	t.Fatalf("statements did not finish: %+v", a.stmtRuns)
+	t.Fatalf("statements did not finish: %+v", a.tabs.StmtRuns)
 }
 
 func TestMultiStatementTabsAndSequentialRun(t *testing.T) {
@@ -45,10 +45,10 @@ func TestMultiStatementTabsAndSequentialRun(t *testing.T) {
 	waitStmts(t, a, tt, 2)
 	tt.Frame()
 	tt.Frame()
-	if len(a.stmtRuns) != 2 {
-		t.Fatalf("expected two statements: %d", len(a.stmtRuns))
+	if len(a.tabs.StmtRuns) != 2 {
+		t.Fatalf("expected two statements: %d", len(a.tabs.StmtRuns))
 	}
-	for i, run := range a.stmtRuns {
+	for i, run := range a.tabs.StmtRuns {
 		if !run.started {
 			t.Fatalf("statement %d must run", i+1)
 		}
@@ -83,10 +83,10 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	waitStmts(t, a, tt, 1) // 第一条失败即停，只需等它结束
 	tt.Frame()
 	tt.Frame()
-	if got := a.runtimeFor(a.stmtRuns[0].runtimeID).Err(); got == "" {
+	if got := a.runtimeFor(a.tabs.StmtRuns[0].runtimeID).Err(); got == "" {
 		t.Fatal("first statement must fail")
 	}
-	if a.stmtRuns[1].started || a.stmtRuns[2].started {
+	if a.tabs.StmtRuns[1].started || a.tabs.StmtRuns[2].started {
 		t.Fatal("statements after a failure must not run")
 	}
 	if !tt.HasText("结果 2 · 未执行") {
@@ -139,8 +139,8 @@ func TestSingleStatementKeepsCurrentRuntime(t *testing.T) {
 	tt.Frame()
 	a.runSQL()
 	pollResult(t, a, tt)
-	if len(a.stmtRuns) != 1 || a.stmtRuns[0].runtimeID != "" {
-		t.Fatalf("single statement must reuse the scratch runtime: %+v", a.stmtRuns)
+	if len(a.tabs.StmtRuns) != 1 || a.tabs.StmtRuns[0].runtimeID != "" {
+		t.Fatalf("single statement must reuse the scratch runtime: %+v", a.tabs.StmtRuns)
 	}
 	if !strings.Contains(tt.Texts()[len(tt.Texts())-1], "") { // 只是确保渲染不崩
 		t.Fatal("unreachable")
@@ -203,8 +203,8 @@ func TestStartStmtUsesSnapshotAfterEdit(t *testing.T) {
 	a.resetStmtRuns(a.execRanges(a.code.Text()))
 	a.setActiveText("x")
 	a.startStmt(0) // 旧实现会在这里用新正文切旧偏移而 panic
-	if a.lastExecSQL != "SELECT 1" {
-		t.Fatalf("应执行快照语句，实际 %q", a.lastExecSQL)
+	if a.tabs.LastExecSQL != "SELECT 1" {
+		t.Fatalf("应执行快照语句，实际 %q", a.tabs.LastExecSQL)
 	}
 }
 

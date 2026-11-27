@@ -48,7 +48,7 @@ func (a *root) externalRecord(id string) (app.ConsoleRecord, bool) {
 
 // activeExternal 返回当前活动控制台的外部文件状态。
 func (a *root) activeExternal() (app.ConsoleRecord, *extFile, bool) {
-	rec, ok := a.externalRecord(a.activeConsole)
+	rec, ok := a.externalRecord(a.tabs.ActiveConsole)
 	if !ok {
 		return app.ConsoleRecord{}, nil, false
 	}
@@ -57,7 +57,7 @@ func (a *root) activeExternal() (app.ConsoleRecord, *extFile, bool) {
 
 // localText 返回控制台当前本地文本：活动控制台以编辑器为准，其余用管理器缓存。
 func (a *root) localText(id string) string {
-	if id == a.activeConsole {
+	if id == a.tabs.ActiveConsole {
 		return a.code.Text()
 	}
 	if m := a.consoleMgr(); m != nil {
@@ -164,9 +164,9 @@ func (a *root) ensureExternal(id string) {
 	m.SetExternalText(id, text)
 	m.SetSavePaused(id, false)
 	app.LogInfo("external", "reloaded from disk", "console", id, "path", rec.FilePath)
-	if id == a.activeConsole {
+	if id == a.tabs.ActiveConsole {
 		a.code.SetActive(id, text)
-		a.lastVer[id] = a.code.Version()
+		a.tabs.LastVer[id] = a.code.Version()
 		a.refreshStmtMarks()
 	} else {
 		a.code.Reload(id, text)
@@ -517,7 +517,7 @@ func (a *root) reloadExternal() {
 	fs := app.StatExternalSQL(rec.FilePath)
 	st.mod, st.size = fs.ModTime, fs.Size
 	a.code.SetActive(rec.ID, text)
-	a.lastVer[rec.ID] = a.code.Version()
+	a.tabs.LastVer[rec.ID] = a.code.Version()
 }
 
 // requestReloadConsole 从磁盘重新加载一个控制台；本地有未保存改动时先确认。
@@ -563,9 +563,9 @@ func (a *root) reloadConsoleFromDisk(id string) {
 		fs := app.StatExternalSQL(rec.FilePath)
 		st.mod, st.size = fs.ModTime, fs.Size
 	}
-	if id == a.activeConsole {
+	if id == a.tabs.ActiveConsole {
 		a.code.SetActive(id, text)
-		a.lastVer[id] = a.code.Version()
+		a.tabs.LastVer[id] = a.code.Version()
 		a.refreshStmtMarks()
 	} else {
 		a.code.Reload(id, text)
@@ -708,7 +708,7 @@ func (a *root) externalBlocked() bool {
 
 // externalFlushFailed 处理外部控制台写盘失败：刷新状态并弹出冲突处理。
 func (a *root) externalFlushFailed(err error) bool {
-	rec, ok := a.externalRecord(a.activeConsole)
+	rec, ok := a.externalRecord(a.tabs.ActiveConsole)
 	if !ok {
 		return false
 	}

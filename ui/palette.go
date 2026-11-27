@@ -117,7 +117,7 @@ func (a *root) paletteActions(c *ui.Context) []paletteItem {
 		id := act.ID
 		items = append(items, paletteItem{
 			label: act.Label(),
-			hint:  formatChords(a.chords[id]),
+			hint:  formatChords(a.settings.Chords[id]),
 			run:   func() { a.runKeyAction(c, id) },
 		})
 	}
@@ -151,8 +151,8 @@ func (a *root) paletteConsoles() []paletteItem {
 		})
 	}
 	// 表视图标签也进面板：搜到就能直接切过去。
-	for _, id := range a.viewerOrder {
-		t := a.viewerTabs[id]
+	for _, id := range a.tabs.ViewerOrder {
+		t := a.tabs.ViewerTabs[id]
 		if t == nil {
 			continue
 		}
@@ -230,7 +230,7 @@ func (a *root) applyPaletteJump() {
 	}
 	id := a.paletteJumpID
 	a.paletteJumpID = ""
-	if a.activeConsole != id {
+	if a.tabs.ActiveConsole != id {
 		return
 	}
 	a.code.SetSelection(a.paletteJumpSel[0], a.paletteJumpSel[1])

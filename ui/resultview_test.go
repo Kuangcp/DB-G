@@ -103,7 +103,7 @@ func TestPageNavigationAndCount(t *testing.T) {
 	a.runSQL()
 	pollResult(t, a, tt)
 	tt.Frame()
-	ps := a.pageStates[a.currentRuntimeID()]
+	ps := a.tabs.PageStates[a.currentRuntimeID()]
 	if got := len(a.con.Result().Rows); got != 500 || ps == nil || !ps.HasMore {
 		t.Fatalf("first page rows=%d state=%+v", got, ps)
 	}
@@ -121,9 +121,9 @@ func TestPageNavigationAndCount(t *testing.T) {
 	}
 	a.changePage(1)
 	waitPage(t, a, tt, func() bool {
-		return a.pageStates[a.currentRuntimeID()].Page == 1 && len(a.con.Result().Rows) == 100
+		return a.tabs.PageStates[a.currentRuntimeID()].Page == 1 && len(a.con.Result().Rows) == 100
 	})
-	ps = a.pageStates[a.currentRuntimeID()]
+	ps = a.tabs.PageStates[a.currentRuntimeID()]
 	if ps.TotalKnown || ps.HasMore {
 		t.Fatalf("last page state: %+v", ps)
 	}
@@ -132,11 +132,11 @@ func TestPageNavigationAndCount(t *testing.T) {
 	}
 	a.changePage(-1)
 	waitPage(t, a, tt, func() bool {
-		return a.pageStates[a.currentRuntimeID()].Page == 0 && len(a.con.Result().Rows) == 500
+		return a.tabs.PageStates[a.currentRuntimeID()].Page == 0 && len(a.con.Result().Rows) == 500
 	})
 	a.countRows()
 	waitPage(t, a, tt, func() bool {
-		ps := a.pageStates[a.currentRuntimeID()]
+		ps := a.tabs.PageStates[a.currentRuntimeID()]
 		return ps != nil && ps.TotalKnown && ps.Total == 600
 	})
 	tt.Frame()

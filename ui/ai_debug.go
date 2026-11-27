@@ -45,7 +45,7 @@ func (a *root) recordAIRequest(kind, model, note string, msgs []ai.Message) {
 	for _, m := range msgs {
 		total += ai.EstimateTokens(m.Content)
 	}
-	st := &a.aiDebug
+	st := &a.ai.Debug
 	st.draft = nil
 	st.entries = append([]aiDebugEntry{{
 		Kind: kind, Model: model, Note: note, At: time.Now(),
@@ -73,15 +73,15 @@ func (a *root) recordAIRequest(kind, model, note string, msgs []ai.Message) {
 // aiBudget 把设置里的上下文窗口和本次输出上限合成一次请求预算。
 func (a *root) aiBudget(task string, maxOutput int) ai.Budget {
 	scale := 1.0
-	if v := a.aiTokenScale[a.aiTaskModel(task)]; v > 1 {
+	if v := a.ai.TokenScale[a.aiTaskModel(task)]; v > 1 {
 		scale = v
 	}
-	return ai.Budget{ContextWindow: a.aiPrefs.ContextWindow, MaxOutput: maxOutput, EstimateScale: scale}
+	return ai.Budget{ContextWindow: a.ai.Prefs.ContextWindow, MaxOutput: maxOutput, EstimateScale: scale}
 }
 
 // aiModelName 返回请求里实际写的模型名；未配置时与请求一致记为 local。
 func (a *root) aiModelName() string {
-	if m := strings.TrimSpace(a.aiPrefs.Model); m != "" {
+	if m := strings.TrimSpace(a.ai.Prefs.Model); m != "" {
 		return m
 	}
 	return "local"
@@ -121,32 +121,32 @@ func aiContextNote(rep ai.PromptReport, extra string) string {
 
 // openAIDebug 打开最近请求查看器；有请求时默认看最新一条。
 func (a *root) openAIDebug() {
-	a.aiDebug.open = true
-	if len(a.aiDebug.entries) == 0 {
-		a.aiDebug.body = locales.AiDebugEmpty()
+	a.ai.Debug.open = true
+	if len(a.ai.Debug.entries) == 0 {
+		a.ai.Debug.body = locales.AiDebugEmpty()
 		return
 	}
-	a.aiDebug.sel = 0
+	a.ai.Debug.sel = 0
 	a.selectAIDebug(0)
 }
 
 // openAIPreview 组装“现在发送会发什么”的草稿，不改编辑器、不发请求。
 func (a *root) openAIPreview() {
-	q := strings.TrimSpace(a.aiChat.input)
+	q := strings.TrimSpace(a.ai.Chat.input)
 	allowed := a.aiEgressPolicy()
-	a.aiDebug.previewAllowed = allowed
-	a.aiDebug.previewOpts = allowed
+	a.ai.Debug.previewAllowed = allowed
+	a.ai.Debug.previewOpts = allowed
 	a.startAIPreview(q)
 }
 
 // refreshAIPreview 在预览开关变化后重算草稿；旧的后台加载作废。
 func (a *root) refreshAIPreview() {
 	a.cancelAIPrepare()
-	a.startAIPreview(strings.TrimSpace(a.aiChat.input))
+	a.startAIPreview(strings.TrimSpace(a.ai.Chat.input))
 }
 
 func (a *root) startAIPreview(q string) {
-	opts := a.aiDebug.previewOpts
+	opts := a.ai.Debug.previewOpts
 	snap := a.chatSnapshotWith(opts)
 	a.prepareAIContext(q, snap, opts.ddl, func(snap ai.ContextSnapshot) { a.showAIPreview(q, snap) })
 }
@@ -158,17 +158,17 @@ func (a *root) showAIPreview(q string, snap ai.ContextSnapshot) {
 	if q == "" {
 		note += " · " + locales.AiPreviewNoQuestion()
 	}
-	a.aiDebug.draft = &aiDebugEntry{
+	a.ai.Debug.draft = &aiDebugEntry{
 		Kind: locales.AiPreviewDraft(), Model: a.aiModelName(), Note: note,
 		At: time.Now(), Messages: msgs, Tokens: rep.Tokens,
 	}
-	a.aiDebug.open = true
+	a.ai.Debug.open = true
 	a.selectAIDebug(-1)
 }
 
 // selectAIDebug 选中一条请求并把消息渲染成可复制的纯文本。
 func (a *root) selectAIDebug(idx int) {
-	st := &a.aiDebug
+	st := &a.ai.Debug
 	if idx < -1 || idx >= len(st.entries) {
 		return
 	}
@@ -198,7 +198,7 @@ func (a *root) selectAIDebug(idx int) {
 
 // aiDebugModal 展示最近请求的完整消息，用来核对上下文是否冗余或缺失。
 func (a *root) aiDebugModal(c *ui.Context) {
-	st := &a.aiDebug
+	st := &a.ai.Debug
 	if !st.open {
 		return
 	}
@@ -228,7 +228,7 @@ func (a *root) aiDebugModal(c *ui.Context) {
 				check(locales.AiCtxHistory(), locales.AiAllowHistory(), &st.previewOpts.history, st.previewAllowed.history)
 				check(locales.AiCtxErrors(), locales.AiAllowErrors(), &st.previewOpts.errors, st.previewAllowed.errors)
 				ui.Spacer(c)
-				if a.aiChat.preparing {
+				if a.ai.Chat.preparing {
 					ui.Spinner(c)
 					ui.Text(c, locales.AiPreparingContext()).FontSize(10.5).TextColor(t.TextMuted)
 				}

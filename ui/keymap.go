@@ -104,7 +104,7 @@ func defaultMouseBindings() map[string]ui.Modifiers {
 // mouseActionFor 返回当前按住的修饰键对应的双击动作；没有绑定时为空。
 func (a *root) mouseActionFor(mods ui.Modifiers) string {
 	for _, act := range mouseActions {
-		if a.mouseBindings[act.ID] == mods {
+		if a.settings.MouseBindings[act.ID] == mods {
 			return act.ID
 		}
 	}
@@ -173,19 +173,19 @@ func parseMouseBinding(s string) (ui.Modifiers, error) {
 
 // setMouseBinding 改一个双击手势；和另一个动作撞手势时互换，保证两者可区分。
 func (a *root) setMouseBinding(id string, mods ui.Modifiers) {
-	if a.mouseBindings == nil {
-		a.mouseBindings = defaultMouseBindings()
+	if a.settings.MouseBindings == nil {
+		a.settings.MouseBindings = defaultMouseBindings()
 	}
-	prev := a.mouseBindings[id]
+	prev := a.settings.MouseBindings[id]
 	if prev == mods {
 		return
 	}
 	for _, act := range mouseActions {
-		if act.ID != id && a.mouseBindings[act.ID] == mods {
-			a.mouseBindings[act.ID] = prev
+		if act.ID != id && a.settings.MouseBindings[act.ID] == mods {
+			a.settings.MouseBindings[act.ID] = prev
 		}
 	}
-	a.mouseBindings[id] = mods
+	a.settings.MouseBindings[id] = mods
 	a.saveKeymap()
 }
 
@@ -193,7 +193,7 @@ func (a *root) setMouseBinding(id string, mods ui.Modifiers) {
 func (a *root) resetMouseBinding(id string) {
 	for _, act := range mouseActions {
 		if act.ID == id {
-			a.mouseBindings[id] = act.Def
+			a.settings.MouseBindings[id] = act.Def
 		}
 	}
 	a.saveKeymap()
@@ -241,37 +241,37 @@ func defaultChords() map[string][]chord {
 // loadKeymap 读取用户键位并装进 a.chords；返回警告（读写失败/无法识别的键位）。
 // 只读 a.keymapPath 指向的文件，测试把它指到临时目录。
 func (a *root) loadKeymap() string {
-	a.chords = defaultChords()
-	a.mouseBindings = defaultMouseBindings()
-	if a.keymapPath == "" {
+	a.settings.Chords = defaultChords()
+	a.settings.MouseBindings = defaultMouseBindings()
+	if a.settings.KeymapPath == "" {
 		return ""
 	}
-	saved, warn := app.LoadKeymap(a.keymapPath)
+	saved, warn := app.LoadKeymap(a.settings.KeymapPath)
 	for _, act := range keyActions {
 		if raw, ok := saved[act.ID]; ok {
 			cs, err := parseChords(raw)
 			if err != nil {
 				warn = locales.KeymapInvalid(act.Label(), err.Error())
-				a.chords[act.ID] = act.Def
+				a.settings.Chords[act.ID] = act.Def
 				continue
 			}
-			a.chords[act.ID] = cs
+			a.settings.Chords[act.ID] = cs
 			continue
 		}
-		a.chords[act.ID] = act.Def
+		a.settings.Chords[act.ID] = act.Def
 	}
 	for _, act := range mouseActions {
 		if raw, ok := saved[act.ID]; ok {
 			mods, err := parseMouseBinding(raw)
 			if err != nil {
 				warn = locales.KeymapInvalid(act.Label(), err.Error())
-				a.mouseBindings[act.ID] = act.Def
+				a.settings.MouseBindings[act.ID] = act.Def
 				continue
 			}
-			a.mouseBindings[act.ID] = mods
+			a.settings.MouseBindings[act.ID] = mods
 			continue
 		}
-		a.mouseBindings[act.ID] = act.Def
+		a.settings.MouseBindings[act.ID] = act.Def
 	}
 	return warn
 }
@@ -280,22 +280,22 @@ func (a *root) loadKeymap() string {
 func (a *root) saveKeymap() {
 	saved := map[string]string{}
 	for _, act := range keyActions {
-		cur := a.chords[act.ID]
+		cur := a.settings.Chords[act.ID]
 		if chordsEqual(cur, act.Def) {
 			continue
 		}
 		saved[act.ID] = formatChords(cur)
 	}
 	for _, act := range mouseActions {
-		if a.mouseBindings[act.ID] == act.Def {
+		if a.settings.MouseBindings[act.ID] == act.Def {
 			continue
 		}
-		saved[act.ID] = formatMouseBinding(a.mouseBindings[act.ID])
+		saved[act.ID] = formatMouseBinding(a.settings.MouseBindings[act.ID])
 	}
-	if a.keymapPath == "" {
+	if a.settings.KeymapPath == "" {
 		return
 	}
-	if err := app.SaveKeymap(a.keymapPath, saved); err != nil {
+	if err := app.SaveKeymap(a.settings.KeymapPath, saved); err != nil {
 		a.setSettingsNotice("keymap", locales.KeymapSaveFailed(err.Error()), true)
 		return
 	}
@@ -304,13 +304,13 @@ func (a *root) saveKeymap() {
 
 // setChords 改一个动作的键位：存盘 + 重建编辑器绑定。
 func (a *root) setChords(id string, cs []chord) {
-	if a.chords == nil {
-		a.chords = map[string][]chord{}
+	if a.settings.Chords == nil {
+		a.settings.Chords = map[string][]chord{}
 	}
 	for _, ch := range cs {
 		a.breakConflicts(id, ch) // 同作用域撞键：原来的动作让位
 	}
-	a.chords[id] = cs
+	a.settings.Chords[id] = cs
 	a.saveKeymap()
 	a.applyEditorBindings()
 }
@@ -321,18 +321,18 @@ func (a *root) resetChords(id string) {
 		if id != "" && act.ID != id {
 			continue
 		}
-		a.chords[act.ID] = act.Def
+		a.settings.Chords[act.ID] = act.Def
 	}
 	a.saveKeymap()
 	a.applyEditorBindings()
 }
 
 // chordsFor 返回动作当前的键位（可能为空 = 未绑定）。
-func (a *root) chordsFor(id string) []chord { return a.chords[id] }
+func (a *root) chordsFor(id string) []chord { return a.settings.Chords[id] }
 
 // chordText 是设置窗口里显示的键位文本。
 func (a *root) chordText(id string) string {
-	cs := a.chords[id]
+	cs := a.settings.Chords[id]
 	if len(cs) == 0 {
 		return locales.KeymapUnbound()
 	}
@@ -351,7 +351,7 @@ func (a *root) applyEditorBindings() {
 		if act.Cmd == myeditor.NoCommand && act.Scope == scopeNoEditor {
 			continue // 结果区的动作（复制单元格）不碰编辑器自己的键
 		}
-		for _, ch := range a.chords[act.ID] {
+		for _, ch := range a.settings.Chords[act.ID] {
 			out = append(out, myeditor.Binding{Mods: ch.Mods, Key: ch.Key, Command: act.Cmd})
 		}
 	}

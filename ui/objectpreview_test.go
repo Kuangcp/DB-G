@@ -71,8 +71,8 @@ func TestPreviewObjectReusesFirstConsole(t *testing.T) {
 	if got, want := len(m.ConsolesOf(prof.ID)), 1; got != want {
 		t.Fatalf("复用控制台时不该新建: %d", got)
 	}
-	if a.activeConsole != rec.ID {
-		t.Fatalf("应跳到本数据源的控制台: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != rec.ID {
+		t.Fatalf("应跳到本数据源的控制台: %q", a.tabs.ActiveConsole)
 	}
 	want := before + "\n" + `SELECT * FROM "users" LIMIT 200;`
 	if got := a.activeText(); got != want {
@@ -111,8 +111,8 @@ func TestPreviewObjectAppendsToActiveConsole(t *testing.T) {
 	if got, want := len(m.ConsolesOf(prof.ID)), 1; got != want {
 		t.Fatalf("激活控制台时不该新建: %d", got)
 	}
-	if a.activeConsole != rec.ID {
-		t.Fatalf("不该切走: %q", a.activeConsole)
+	if a.tabs.ActiveConsole != rec.ID {
+		t.Fatalf("不该切走: %q", a.tabs.ActiveConsole)
 	}
 	sql := `SELECT * FROM "users" LIMIT 200;`
 	want := "SELECT 1;\n" + sql + "\nSELECT 2;"

@@ -26,24 +26,24 @@ func TestPinMovesTabToLeftAndSurvivesRerun(t *testing.T) {
 	tt.Frame()
 
 	setAndRun(t, a, tt, "SELECT 1 AS a; SELECT 2 AS b", 2)
-	if len(a.stmtRuns) != 2 {
-		t.Fatalf("two statements expected: %+v", a.stmtRuns)
+	if len(a.tabs.StmtRuns) != 2 {
+		t.Fatalf("two statements expected: %+v", a.tabs.StmtRuns)
 	}
-	secondNo := a.stmtRuns[1].tabNo
+	secondNo := a.tabs.StmtRuns[1].tabNo
 
 	// 激活第二个结果并钉住：应移到最左（索引 0）并成为当前 tab。
-	a.activeStmt = 1
+	a.tabs.ActiveStmt = 1
 	a.togglePin()
-	if a.activeStmt != 0 {
-		t.Fatalf("pinned tab must move to left, active=%d", a.activeStmt)
+	if a.tabs.ActiveStmt != 0 {
+		t.Fatalf("pinned tab must move to left, active=%d", a.tabs.ActiveStmt)
 	}
-	if !a.stmtRuns[0].pinned || a.stmtRuns[0].tabNo != secondNo {
-		t.Fatalf("pinned run must stay at front and keep its number: %+v", a.stmtRuns)
+	if !a.tabs.StmtRuns[0].pinned || a.tabs.StmtRuns[0].tabNo != secondNo {
+		t.Fatalf("pinned run must stay at front and keep its number: %+v", a.tabs.StmtRuns)
 	}
-	if a.stmtRuns[1].pinned {
-		t.Fatalf("only the selected result must be pinned: %+v", a.stmtRuns)
+	if a.tabs.StmtRuns[1].pinned {
+		t.Fatalf("only the selected result must be pinned: %+v", a.tabs.StmtRuns)
 	}
-	if got := a.runtimeFor(a.stmtRuns[0].runtimeID).Result(); got == nil || got.Columns[0] != "b" {
+	if got := a.runtimeFor(a.tabs.StmtRuns[0].runtimeID).Result(); got == nil || got.Columns[0] != "b" {
 		t.Fatalf("pinned snapshot must keep its own result")
 	}
 	// 渲染层验证：钉住的结果 tab 必须移到最左（X 更小）。
@@ -59,19 +59,19 @@ func TestPinMovesTabToLeftAndSurvivesRerun(t *testing.T) {
 
 	// 新执行：pinned 留在最左，新结果在右侧，且当前选中新结果。
 	setAndRun(t, a, tt, "SELECT 3 AS c", 1)
-	if len(a.stmtRuns) != 2 {
-		t.Fatalf("pinned + new result expected: %+v", a.stmtRuns)
+	if len(a.tabs.StmtRuns) != 2 {
+		t.Fatalf("pinned + new result expected: %+v", a.tabs.StmtRuns)
 	}
-	if !a.stmtRuns[0].pinned || a.stmtRuns[0].tabNo != secondNo {
-		t.Fatalf("pinned result must survive a new execution: %+v", a.stmtRuns)
+	if !a.tabs.StmtRuns[0].pinned || a.tabs.StmtRuns[0].tabNo != secondNo {
+		t.Fatalf("pinned result must survive a new execution: %+v", a.tabs.StmtRuns)
 	}
-	if a.stmtRuns[1].pinned || a.activeStmt != 1 {
-		t.Fatalf("new result must append right and be active: %+v active=%d", a.stmtRuns, a.activeStmt)
+	if a.tabs.StmtRuns[1].pinned || a.tabs.ActiveStmt != 1 {
+		t.Fatalf("new result must append right and be active: %+v active=%d", a.tabs.StmtRuns, a.tabs.ActiveStmt)
 	}
-	if got := a.runtimeFor(a.stmtRuns[0].runtimeID).Result(); got == nil || got.Columns[0] != "b" {
+	if got := a.runtimeFor(a.tabs.StmtRuns[0].runtimeID).Result(); got == nil || got.Columns[0] != "b" {
 		t.Fatalf("pinned result must not be overwritten by new execution")
 	}
-	if got := a.runtimeFor(a.stmtRuns[1].runtimeID).Result(); got == nil || got.Columns[0] != "c" {
+	if got := a.runtimeFor(a.tabs.StmtRuns[1].runtimeID).Result(); got == nil || got.Columns[0] != "c" {
 		t.Fatalf("new result must render its own data")
 	}
 }
@@ -84,27 +84,27 @@ func TestUnpinMovesAfterPinnedBlock(t *testing.T) {
 
 	setAndRun(t, a, tt, "SELECT 1 AS a; SELECT 2 AS b", 2)
 	// 两个结果都钉住：顺序 [结果1, 结果2]。
-	a.activeStmt = 0
+	a.tabs.ActiveStmt = 0
 	a.togglePin()
-	a.activeStmt = 1
+	a.tabs.ActiveStmt = 1
 	a.togglePin()
-	if len(a.stmtRuns) != 2 || !a.stmtRuns[0].pinned || !a.stmtRuns[1].pinned {
-		t.Fatalf("both must be pinned: %+v", a.stmtRuns)
+	if len(a.tabs.StmtRuns) != 2 || !a.tabs.StmtRuns[0].pinned || !a.tabs.StmtRuns[1].pinned {
+		t.Fatalf("both must be pinned: %+v", a.tabs.StmtRuns)
 	}
-	firstNo := a.stmtRuns[0].tabNo
-	secondNo := a.stmtRuns[1].tabNo
+	firstNo := a.tabs.StmtRuns[0].tabNo
+	secondNo := a.tabs.StmtRuns[1].tabNo
 
 	// 取消第一个：它应移到剩余 pinned（结果2）之后。
-	a.activeStmt = 0
+	a.tabs.ActiveStmt = 0
 	a.togglePin()
-	if a.activeStmt != 1 {
-		t.Fatalf("unpinned tab must land after pinned block, active=%d", a.activeStmt)
+	if a.tabs.ActiveStmt != 1 {
+		t.Fatalf("unpinned tab must land after pinned block, active=%d", a.tabs.ActiveStmt)
 	}
-	if !a.stmtRuns[0].pinned || a.stmtRuns[0].tabNo != secondNo {
-		t.Fatalf("remaining pinned keeps the left slot: %+v", a.stmtRuns)
+	if !a.tabs.StmtRuns[0].pinned || a.tabs.StmtRuns[0].tabNo != secondNo {
+		t.Fatalf("remaining pinned keeps the left slot: %+v", a.tabs.StmtRuns)
 	}
-	if a.stmtRuns[1].pinned || a.stmtRuns[1].tabNo != firstNo {
-		t.Fatalf("unpinned tab keeps its number and moves right: %+v", a.stmtRuns)
+	if a.tabs.StmtRuns[1].pinned || a.tabs.StmtRuns[1].tabNo != firstNo {
+		t.Fatalf("unpinned tab keeps its number and moves right: %+v", a.tabs.StmtRuns)
 	}
 }
 
@@ -115,11 +115,11 @@ func TestPinIgnoresNonQueryResult(t *testing.T) {
 	tt.Frame()
 
 	setAndRun(t, a, tt, "CREATE TABLE IF NOT EXISTS pin_probe (id INTEGER)", 1)
-	if a.runtimeFor(a.stmtRuns[0].runtimeID).Result().IsQuery {
+	if a.runtimeFor(a.tabs.StmtRuns[0].runtimeID).Result().IsQuery {
 		t.Fatal("DDL must not produce a query result")
 	}
 	a.togglePin()
-	if a.stmtRuns[0].pinned {
+	if a.tabs.StmtRuns[0].pinned {
 		t.Fatal("non-query results must not be pinned")
 	}
 }
@@ -146,29 +146,29 @@ func TestPinnedTabsKeptPerConsole(t *testing.T) {
 	tt.Frame()
 
 	setAndRun(t, a, tt, "SELECT 1 AS a; SELECT 2 AS b", 2)
-	a.activeStmt = 1
+	a.tabs.ActiveStmt = 1
 	a.togglePin()
-	pinnedNo := a.stmtRuns[0].tabNo
-	if !a.stmtRuns[0].pinned {
-		t.Fatalf("pin failed: %+v", a.stmtRuns)
+	pinnedNo := a.tabs.StmtRuns[0].tabNo
+	if !a.tabs.StmtRuns[0].pinned {
+		t.Fatalf("pin failed: %+v", a.tabs.StmtRuns)
 	}
 
 	// 切到另一个控制台：它没有结果 tab。
 	if !a.activateConsole(second.ID) {
 		t.Fatal("activate second console")
 	}
-	if len(a.stmtRuns) != 0 {
-		t.Fatalf("other console must not inherit tabs: %+v", a.stmtRuns)
+	if len(a.tabs.StmtRuns) != 0 {
+		t.Fatalf("other console must not inherit tabs: %+v", a.tabs.StmtRuns)
 	}
 
 	// 切回来：pinned 结果仍在最左且数据没变。
 	if !a.activateConsole(first.ID) {
 		t.Fatal("reactivate first console")
 	}
-	if len(a.stmtRuns) != 2 || !a.stmtRuns[0].pinned || a.stmtRuns[0].tabNo != pinnedNo {
-		t.Fatalf("pinned tab must be restored on the left: %+v", a.stmtRuns)
+	if len(a.tabs.StmtRuns) != 2 || !a.tabs.StmtRuns[0].pinned || a.tabs.StmtRuns[0].tabNo != pinnedNo {
+		t.Fatalf("pinned tab must be restored on the left: %+v", a.tabs.StmtRuns)
 	}
-	if got := a.runtimeFor(a.stmtRuns[0].runtimeID).Result(); got == nil || got.Columns[0] != "b" {
+	if got := a.runtimeFor(a.tabs.StmtRuns[0].runtimeID).Result(); got == nil || got.Columns[0] != "b" {
 		t.Fatal("restored pinned tab must keep its result")
 	}
 }

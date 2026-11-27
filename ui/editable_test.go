@@ -495,10 +495,10 @@ func TestPinnedResultKeepsEditState(t *testing.T) {
 	tt := runEditQuery(t, a, "SELECT id, name FROM users ORDER BY id")
 	a.setCellEdit(0, 1, "alice2")
 	a.togglePin()
-	if len(a.stmtRuns) != 1 || !a.stmtRuns[0].pinned {
-		t.Fatalf("pin failed: %+v", a.stmtRuns)
+	if len(a.tabs.StmtRuns) != 1 || !a.tabs.StmtRuns[0].pinned {
+		t.Fatalf("pin failed: %+v", a.tabs.StmtRuns)
 	}
-	pinID := a.stmtRuns[0].runtimeID
+	pinID := a.tabs.StmtRuns[0].runtimeID
 	if v, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; !ok || v != "alice2" {
 		t.Fatalf("pending edit must follow the pin, got %v (set=%v)", v, ok)
 	}
@@ -509,15 +509,15 @@ func TestPinnedResultKeepsEditState(t *testing.T) {
 	}
 
 	found := false
-	for i, run := range a.stmtRuns {
+	for i, run := range a.tabs.StmtRuns {
 		if run.runtimeID == pinID {
-			a.activeStmt = i
+			a.tabs.ActiveStmt = i
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("pinned run missing: %+v", a.stmtRuns)
+		t.Fatalf("pinned run missing: %+v", a.tabs.StmtRuns)
 	}
 	tt.Frame()
 	if a.grid.plan == nil {

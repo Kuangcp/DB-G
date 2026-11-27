@@ -15,7 +15,7 @@ import (
 
 // aiPanel 是右侧 AI 助手面板。
 func (a *root) aiPanel(c *ui.Context) {
-	st := &a.aiChat
+	st := &a.ai.Chat
 	t := c.Theme()
 	ui.Column(c).Fill().Background(t.Surface).Padding(8).Gap(6).Label(locales.AiPanelLabel()).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
@@ -25,8 +25,8 @@ func (a *root) aiPanel(c *ui.Context) {
 				title = locales.AiAssistant()
 			}
 			ui.Text(c, title).Bold().SingleLine()
-			if a.aiPrefs.Model != "" {
-				ui.Text(c, a.aiPrefs.Model).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			if a.ai.Prefs.Model != "" {
+				ui.Text(c, a.ai.Prefs.Model).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			}
 			ui.Spacer(c)
 			if iconButtonPlain(c, iconHistory, locales.AiHistory(), t.TextMuted).Clicked() {
@@ -42,8 +42,8 @@ func (a *root) aiPanel(c *ui.Context) {
 		if st.showHistory {
 			a.aiHistoryList(c)
 		}
-		if a.aiWarn != "" {
-			ui.Text(c, a.aiWarn).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.aiWarn)
+		if a.ai.Warn != "" {
+			ui.Text(c, a.ai.Warn).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.ai.Warn)
 		}
 		if st.scroll.Y >= st.scroll.MaxY {
 			st.scroll.Y = math.MaxFloat32
@@ -62,7 +62,7 @@ func (a *root) aiPanel(c *ui.Context) {
 				}
 			})
 		})
-		if st.lastCtx != "" || len(a.aiDebug.entries) > 0 {
+		if st.lastCtx != "" || len(a.ai.Debug.entries) > 0 {
 			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 				if st.lastCtx != "" {
 					ui.Text(c, st.lastCtx).FontSize(10.5).TextColor(t.TextMuted).SingleLine()
@@ -136,9 +136,9 @@ func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 		ui.Text(c, "AI").FontSize(10.5).TextColor(t.TextMuted).Bold()
 		if m.text != "" {
 			if m.done {
-				markdown.View(c, m.text, &a.aiChat.md).FillWidth()
+				markdown.View(c, m.text, &a.ai.Chat.md).FillWidth()
 			} else {
-				markdown.Stream(c, m.text, &a.aiChat.md).FillWidth()
+				markdown.Stream(c, m.text, &a.ai.Chat.md).FillWidth()
 			}
 		}
 		if m.err != "" {
@@ -164,8 +164,8 @@ func (a *root) aiMessage(c *ui.Context, m *aiChatMessage) {
 
 // currentAIConversationTitle 返回当前会话的标题（空 = 新会话）。
 func (a *root) currentAIConversationTitle() string {
-	for _, conv := range a.aiChat.store.Conversations {
-		if conv.ID == a.aiChat.convID {
+	for _, conv := range a.ai.Chat.store.Conversations {
+		if conv.ID == a.ai.Chat.convID {
 			if conv.Title != "" {
 				return conv.Title
 			}
@@ -177,7 +177,7 @@ func (a *root) currentAIConversationTitle() string {
 
 // aiHistoryList 是面板内的会话历史列表：按最近消息时间倒排，搜索 + 滚动分页。
 func (a *root) aiHistoryList(c *ui.Context) {
-	st := &a.aiChat
+	st := &a.ai.Chat
 	t := c.Theme()
 	convs := append([]app.AIConversation(nil), st.store.Conversations...)
 	sort.SliceStable(convs, func(i, j int) bool {

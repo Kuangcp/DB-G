@@ -29,8 +29,8 @@ func externalRoot(t *testing.T, text string) (*root, app.ConnProfile, string) {
 	if a.extPickOpen {
 		t.Fatal("绑定后应关闭选择弹窗")
 	}
-	if _, ok := a.externalRecord(a.activeConsole); !ok {
-		t.Fatalf("外部控制台未激活: %q", a.activeConsole)
+	if _, ok := a.externalRecord(a.tabs.ActiveConsole); !ok {
+		t.Fatalf("外部控制台未激活: %q", a.tabs.ActiveConsole)
 	}
 	return a, prof, path
 }
@@ -55,7 +55,7 @@ func TestDropExternalSQLBinds(t *testing.T) {
 // 控制台右键「重新加载」：有未保存改动时先确认，再覆盖为磁盘内容。
 func TestConsoleReloadConfirmsDirtyChanges(t *testing.T) {
 	a, prof, path := externalRoot(t, "SELECT 1\n")
-	id := a.activeConsole
+	id := a.tabs.ActiveConsole
 	if _, err := a.consoleMgr().Create(prof.ID, "其他"); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestExternalCleanChangeReloads(t *testing.T) {
 
 func TestExternalAutosaveThenEditNoConflict(t *testing.T) {
 	a, _, path := externalRoot(t, "SELECT 1\n")
-	id := a.activeConsole
+	id := a.tabs.ActiveConsole
 	a.setActiveText("SELECT 2\n")
 	a.syncActiveBuffer()
 	// 模拟防抖自动保存（不经过 externalAfterSave）：磁盘已是 SELECT 2。
@@ -142,7 +142,7 @@ func TestExternalAutosaveThenEditNoConflict(t *testing.T) {
 	}
 }
 
-func recID(a *root) string { return a.activeConsole }
+func recID(a *root) string { return a.tabs.ActiveConsole }
 
 func TestExternalConflictAndResolve(t *testing.T) {
 	a, _, path := externalRoot(t, "SELECT 1\n")
@@ -163,7 +163,7 @@ func TestExternalConflictAndResolve(t *testing.T) {
 	if data, _ := os.ReadFile(path); string(data) != "outside edit\n" {
 		t.Fatalf("冲突时不能覆盖磁盘: %q", data)
 	}
-	if got, _ := a.consoleMgr().Text(a.activeConsole); got != "local edit\n" {
+	if got, _ := a.consoleMgr().Text(a.tabs.ActiveConsole); got != "local edit\n" {
 		t.Fatalf("冲突缓冲应留在内存: %q", got)
 	}
 	// 执行/保存入口应弹处理窗。
@@ -174,8 +174,8 @@ func TestExternalConflictAndResolve(t *testing.T) {
 		t.Fatalf("关闭保护应命中该控制台: %q", got)
 	}
 	// 冲突时关闭标签应被拦住。
-	a.closeConsole(a.activeConsole)
-	if _, still := a.externalRecord(a.activeConsole); !still {
+	a.closeConsole(a.tabs.ActiveConsole)
+	if _, still := a.externalRecord(a.tabs.ActiveConsole); !still {
 		t.Fatal("冲突未处理时不应关闭标签")
 	}
 	a.extResolveOpen = false
@@ -290,8 +290,8 @@ func TestExternalDropPickerUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if _, ok := a.externalRecord(a.activeConsole); !ok {
-		t.Fatalf("选择数据源后应绑定并激活: %q", a.activeConsole)
+	if _, ok := a.externalRecord(a.tabs.ActiveConsole); !ok {
+		t.Fatalf("选择数据源后应绑定并激活: %q", a.tabs.ActiveConsole)
 	}
 }
 
@@ -317,7 +317,7 @@ func TestOpenSQLFilesFromCLI(t *testing.T) {
 	}
 	// 已绑定文件再次通过 -o 打开：直接激活，不再弹选择。
 	a.OpenSQLFiles([]string{path})
-	if a.extPickOpen || a.activeConsole != rec.ID {
-		t.Fatalf("重复打开不应新建/弹窗: pick=%v active=%q", a.extPickOpen, a.activeConsole)
+	if a.extPickOpen || a.tabs.ActiveConsole != rec.ID {
+		t.Fatalf("重复打开不应新建/弹窗: pick=%v active=%q", a.extPickOpen, a.tabs.ActiveConsole)
 	}
 }

@@ -111,14 +111,14 @@ func blockCSV(kind string, r *engine.QueryResult, rows, cols []int, header bool)
 }
 
 func (a *root) resultPane(c *ui.Context) {
-	if a.plan.open {
+	if a.ai.Plan.open {
 		a.planPane(c)
 		return
 	}
 	ui.Column(c).Fill().Gap(6).Children(func() {
 		ui.Column(c).Fill().Gap(6).Children(func() {
 			// 多语句或存在钉住结果时显示结果 tab：pinned 在左，新结果在右。
-			if len(a.stmtRuns) > 1 || a.hasPinned() {
+			if len(a.tabs.StmtRuns) > 1 || a.hasPinned() {
 				a.stmtTabs(c)
 			}
 			switch {
@@ -159,7 +159,7 @@ func (a *root) resultPane(c *ui.Context) {
 					return
 				}
 				if r.Truncated {
-					ui.Badge(c, locales.ResultTruncated(a.resultPrefs.BudgetMB))
+					ui.Badge(c, locales.ResultTruncated(a.settings.ResultPrefs.BudgetMB))
 				}
 				a.resultTable(c, r)
 			default:
@@ -191,10 +191,10 @@ func (a *root) stmtTabs(c *ui.Context) {
 	t := c.Theme()
 	ui.ScrollHorizontal(c).Children(func() {
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			for i := range a.stmtRuns {
-				run := a.stmtRuns[i]
+			for i := range a.tabs.StmtRuns {
+				run := a.tabs.StmtRuns[i]
 				rt := a.runtimeFor(run.runtimeID)
-				active := i == a.activeStmt
+				active := i == a.tabs.ActiveStmt
 				label := locales.ResultTab(run.tabNo)
 				state := locales.ResultStateSuccess()
 				switch {
@@ -239,7 +239,7 @@ func (a *root) stmtTabs(c *ui.Context) {
 					}
 				})
 				if btn.Clicked() {
-					a.activeStmt = i
+					a.tabs.ActiveStmt = i
 					a.refreshStmtMarks()
 				}
 			}
@@ -841,7 +841,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 
 // pinButton 显示钉住按钮：当前结果已钉住时图标上强调色，再点一次取消。
 func (a *root) pinButton(c *ui.Context) {
-	pinned := len(a.stmtRuns) > 0 && a.activeStmt < len(a.stmtRuns) && a.stmtRuns[a.activeStmt].pinned
+	pinned := len(a.tabs.StmtRuns) > 0 && a.tabs.ActiveStmt < len(a.tabs.StmtRuns) && a.tabs.StmtRuns[a.tabs.ActiveStmt].pinned
 	label := locales.PinResult()
 	col := ui.Transparent
 	if pinned {
@@ -966,7 +966,7 @@ func runeWidth(r rune) int {
 
 // pageToolbar 渲染分页控件：上一页/下一页、每页行数与统计总行数。
 func (a *root) pageToolbar(c *ui.Context, r *engine.QueryResult) {
-	ps := a.pageStates[a.currentRuntimeID()]
+	ps := a.tabs.PageStates[a.currentRuntimeID()]
 	if ps == nil || r == nil || !r.IsQuery {
 		return
 	}
@@ -1034,7 +1034,7 @@ func (a *root) canNextPage(ps *pageState) bool {
 // changePage 加载上一页/下一页；成功后才替换当前结果行。
 func (a *root) changePage(delta int) {
 	id := a.currentRuntimeID()
-	ps := a.pageStates[id]
+	ps := a.tabs.PageStates[id]
 	base := a.currentRuntime()
 	if ps == nil || base == nil || a.pageBusy(ps) || a.activeSession() == nil {
 		return
@@ -1070,7 +1070,7 @@ func (a *root) changePage(delta int) {
 				a.consoleErr = locales.PageFailed(errMsg)
 				return
 			}
-			if a.pageStates[id] != ps || base.Result() != expected {
+			if a.tabs.PageStates[id] != ps || base.Result() != expected {
 				return
 			}
 			r := base.Result()
@@ -1108,7 +1108,7 @@ func (a *root) changePage(delta int) {
 // countRows 用 COUNT(*) 包住原始查询统计总行数；显式点击才执行。
 func (a *root) countRows() {
 	id := a.currentRuntimeID()
-	ps := a.pageStates[id]
+	ps := a.tabs.PageStates[id]
 	if ps == nil || ps.TotalKnown || a.pageBusy(ps) {
 		return
 	}
@@ -1126,7 +1126,7 @@ func (a *root) countRows() {
 	rt.SetPageSize(1)
 	rt.SetOnDone(func(res *engine.QueryResult, errMsg string, _ time.Duration) {
 		apply := func() {
-			if a.pageStates[id] != ps {
+			if a.tabs.PageStates[id] != ps {
 				return
 			}
 			ps.CountLoading = false
@@ -1210,11 +1210,11 @@ func (a *root) filterModal(c *ui.Context) {
 
 // recordPageState 在语句执行成功后记录分页状态。
 func (a *root) recordPageState(runtimeID, sql string, res *engine.QueryResult) {
-	delete(a.pageStates, runtimeID)
+	delete(a.tabs.PageStates, runtimeID)
 	if res == nil || !res.IsQuery {
 		return
 	}
-	size := a.resultPrefs.PageSize
+	size := a.settings.ResultPrefs.PageSize
 	if size <= 0 {
 		size = app.DefaultResultPageSize
 	}
@@ -1226,7 +1226,7 @@ func (a *root) recordPageState(runtimeID, sql string, res *engine.QueryResult) {
 	if _, ok := pageSQL(sql, 0, size); !ok {
 		return
 	}
-	a.pageStates[runtimeID] = &pageState{
+	a.tabs.PageStates[runtimeID] = &pageState{
 		Size: size, BaseSQL: sql,
 		HasMore: res.HasMore && !res.Truncated,
 	}
@@ -1236,7 +1236,7 @@ func (a *root) recordPageState(runtimeID, sql string, res *engine.QueryResult) {
 // canStream 报告能否全量流式导出（驱动实现 RowStreamer 且有可重放的 SQL）。
 func (a *root) canStream() bool {
 	sess := a.activeSession()
-	if sess == nil || strings.TrimSpace(a.lastExecSQL) == "" {
+	if sess == nil || strings.TrimSpace(a.tabs.LastExecSQL) == "" {
 		return false
 	}
 	_, ok := sess.(engine.RowStreamer)
@@ -1447,7 +1447,7 @@ func (a *root) exportTo(path, format string, full bool) (int, error) {
 func (a *root) exportToProgress(path, format string, full bool, progress func(int)) (int, error) {
 	kind := a.connKind()
 	table := ""
-	if _, ok := pageBody(a.lastExecSQL); ok {
+	if _, ok := pageBody(a.tabs.LastExecSQL); ok {
 		if t, ok := a.rowTable(); ok {
 			table = t
 		}
@@ -1460,7 +1460,7 @@ func (a *root) exportToProgress(path, format string, full bool, progress func(in
 		if !ok {
 			return 0, errors.New(locales.ExportNoStream())
 		}
-		sql := a.lastExecSQL
+		sql := a.tabs.LastExecSQL
 		written := 0
 		last := time.Now()
 		stream := func(onCols func([]string) error, onRow func([]any) error) error {

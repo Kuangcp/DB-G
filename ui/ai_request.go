@@ -18,15 +18,15 @@ const aiIdleTimeout = 60 * time.Second
 func (a *root) aiTaskModel(task string) string {
 	switch task {
 	case "completion":
-		if m := strings.TrimSpace(a.aiPrefs.CompletionModel); m != "" {
+		if m := strings.TrimSpace(a.ai.Prefs.CompletionModel); m != "" {
 			return m
 		}
 	case "fix":
-		if m := strings.TrimSpace(a.aiPrefs.FixModel); m != "" {
+		if m := strings.TrimSpace(a.ai.Prefs.FixModel); m != "" {
 			return m
 		}
 	}
-	if m := strings.TrimSpace(a.aiPrefs.Model); m != "" {
+	if m := strings.TrimSpace(a.ai.Prefs.Model); m != "" {
 		return m
 	}
 	return "local"
@@ -43,18 +43,18 @@ func (a *root) aiTaskMaxTokens(task string) int {
 	}
 	switch task {
 	case "completion":
-		return value(a.aiPrefs.CompletionMaxTokens, def.CompletionMaxTokens)
+		return value(a.ai.Prefs.CompletionMaxTokens, def.CompletionMaxTokens)
 	case "fix":
-		return value(a.aiPrefs.FixMaxTokens, def.FixMaxTokens)
+		return value(a.ai.Prefs.FixMaxTokens, def.FixMaxTokens)
 	case "rewrite":
-		return value(a.aiPrefs.RewriteMaxTokens, def.RewriteMaxTokens)
+		return value(a.ai.Prefs.RewriteMaxTokens, def.RewriteMaxTokens)
 	}
-	return value(a.aiPrefs.ChatMaxTokens, def.ChatMaxTokens)
+	return value(a.ai.Prefs.ChatMaxTokens, def.ChatMaxTokens)
 }
 
 // aiChatTemperature 返回聊天温度；旧配置/未加载配置时回退默认 0.2。
 func (a *root) aiChatTemperature() float32 {
-	t := a.aiPrefs.ChatTemperature
+	t := a.ai.Prefs.ChatTemperature
 	if t < 0.1 || t > 2 {
 		t = app.DefaultAIPrefs().ChatTemperature
 	}

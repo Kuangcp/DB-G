@@ -18,8 +18,8 @@ func TestGridStateSwitchingKeepsIndependentState(t *testing.T) {
 		grid: newGridState(),
 	}
 	tab.grid.row = 7
-	a.viewerTabs = map[string]*viewerTab{"v1": tab}
-	a.viewerOrder = []string{"v1"}
+	a.tabs.ViewerTabs = map[string]*viewerTab{"v1": tab}
+	a.tabs.ViewerOrder = []string{"v1"}
 
 	a.activateViewer("v1")
 	if a.grid != tab.grid || a.grid.row != 7 {
@@ -28,8 +28,8 @@ func TestGridStateSwitchingKeepsIndependentState(t *testing.T) {
 	a.grid.row = 9
 
 	a.leaveViewer()
-	if a.grid != a.consoleGrid || a.grid.row != 3 {
-		t.Fatalf("console grid not restored: same=%v row=%d", a.grid == a.consoleGrid, a.grid.row)
+	if a.grid != a.tabs.ConsoleGrid || a.grid.row != 3 {
+		t.Fatalf("console grid not restored: same=%v row=%d", a.grid == a.tabs.ConsoleGrid, a.grid.row)
 	}
 	if tab.grid.row != 9 {
 		t.Fatalf("viewer state must stay in its tab: %d", tab.grid.row)

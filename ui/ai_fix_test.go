@@ -12,26 +12,26 @@ import (
 func TestAIFixAppliesSuggestedSQL(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.con.SetOutcome(nil, `column "user" does not exist`)
-	a.lastExecSQL = "select * from user"
+	a.tabs.LastExecSQL = "select * from user"
 	a.setActiveText("select * from user")
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "```sql\nSELECT * FROM users;\n```"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
+	a.ai.Prefs.Model = "fake"
 
 	a.fixErrorSQL()
-	if !a.aiFix.open || a.aiFix.loading || a.aiFix.err != "" {
-		t.Fatalf("fix state: %+v", a.aiFix)
+	if !a.ai.Fix.open || a.ai.Fix.loading || a.ai.Fix.err != "" {
+		t.Fatalf("fix state: %+v", a.ai.Fix)
 	}
-	if a.aiFix.fixed != "SELECT * FROM users;" || a.aiFix.diff == nil {
-		t.Fatalf("fixed: %q diff=%v", a.aiFix.fixed, a.aiFix.diff)
+	if a.ai.Fix.fixed != "SELECT * FROM users;" || a.ai.Fix.diff == nil {
+		t.Fatalf("fixed: %q diff=%v", a.ai.Fix.fixed, a.ai.Fix.diff)
 	}
 	a.applyAIFix(false)
 	if got := a.code.Text(); !strings.Contains(got, "SELECT * FROM users;") {
 		t.Fatalf("editor: %q", got)
 	}
-	if a.aiFix.open {
+	if a.ai.Fix.open {
 		t.Fatal("modal should close after apply")
 	}
 }
@@ -39,15 +39,15 @@ func TestAIFixAppliesSuggestedSQL(t *testing.T) {
 func TestAIFixRejectsMissingCodeBlock(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.con.SetOutcome(nil, "boom")
-	a.lastExecSQL = "select 1"
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.tabs.LastExecSQL = "select 1"
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "抱歉，我无法修复"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
+	a.ai.Prefs.Model = "fake"
 	a.fixErrorSQL()
-	if a.aiFix.err == "" || a.aiFix.fixed != "" {
-		t.Fatalf("state: %+v", a.aiFix)
+	if a.ai.Fix.err == "" || a.ai.Fix.fixed != "" {
+		t.Fatalf("state: %+v", a.ai.Fix)
 	}
 }
 
@@ -65,13 +65,13 @@ func TestReplaceStatementRefusesStaleText(t *testing.T) {
 func TestAIFixModalRenders(t *testing.T) {
 	a := newConsoleRoot(t)
 	a.con.SetOutcome(nil, "boom")
-	a.lastExecSQL = "select * from user"
+	a.tabs.LastExecSQL = "select * from user"
 	a.setActiveText("select * from user")
-	a.aiTestProvider = &fakeAIProvider{events: []ai.Event{
+	a.ai.TestProvider = &fakeAIProvider{events: []ai.Event{
 		{Kind: ai.EventText, Text: "```sql\nSELECT * FROM users;\n```"},
 		{Kind: ai.EventDone},
 	}}
-	a.aiPrefs.Model = "fake"
+	a.ai.Prefs.Model = "fake"
 	a.fixErrorSQL()
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()

@@ -190,7 +190,7 @@ func TestRefreshRerunsActiveStatementOnly(t *testing.T) {
 	tt.Frame()
 	a.runSQL()
 	waitStmts(t, a, tt, 2)
-	a.activeStmt = 1
+	a.tabs.ActiveStmt = 1
 	tt.Frame()
 	if err := tt.Click("重新执行此查询"); err != nil {
 		t.Fatal(err)
@@ -200,7 +200,7 @@ func TestRefreshRerunsActiveStatementOnly(t *testing.T) {
 	if got := a.currentRuntime().Result(); got == nil || got.Columns[0] != "b" {
 		t.Fatalf("refresh must rerun the active result's SQL: %+v", got)
 	}
-	if a.activeStmt != 1 || len(a.stmtRuns) != 2 {
-		t.Fatalf("refresh must not re-plan statements: active=%d runs=%+v", a.activeStmt, a.stmtRuns)
+	if a.tabs.ActiveStmt != 1 || len(a.tabs.StmtRuns) != 2 {
+		t.Fatalf("refresh must not re-plan statements: active=%d runs=%+v", a.tabs.ActiveStmt, a.tabs.StmtRuns)
 	}
 }
