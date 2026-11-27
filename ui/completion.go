@@ -160,17 +160,8 @@ func (a *root) ensureCatalog(connID string) {
 		}
 		a.session.Catalog.finish(key, tables, views, kind)
 		app.LogInfo("catalog", "tables loaded", "conn", connID, "schema", schema, "tables", len(tables), "views", len(views), "dur_ms", time.Since(start).Milliseconds())
-		if a.win != nil {
-			win := a.win
-			a.safeUpdate(win, a.retriggerCompletions)
-		}
 	}
-	if a.win == nil {
-		load()
-		a.requestRetrigger()
-		return
-	}
-	go load()
+	a.runBackground(load, a.requestRetrigger)
 }
 
 // ensureColumns 在主线程调用：没有新鲜列缓存时发起一次加载（同 ensureCatalog 的线程语义）。
@@ -209,21 +200,13 @@ func (a *root) ensureColumnsKey(key, connID, schema, table string) {
 		}
 		a.session.Catalog.finishColumns(key, table, cols, kind)
 		app.LogInfo("catalog", "columns loaded", "conn", connID, "schema", schema, "table", table, "cols", len(cols), "dur_ms", time.Since(start).Milliseconds())
-		if a.win != nil {
-			win := a.win
-			a.safeUpdate(win, func() {
-				if a.completionStillWanted() {
-					a.showCompletionsAtCursor()
-				}
-			})
-		}
 	}
-	if a.win == nil {
-		load()
+	a.runBackground(load, func() {
 		a.requestRetrigger()
-		return
-	}
-	go load()
+		if a.win != nil && a.completionStillWanted() {
+			a.showCompletionsAtCursor()
+		}
+	})
 }
 
 // columnsOf 用会话列出某表的列（纯函数，可被后台协程安全调用）。

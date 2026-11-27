@@ -106,18 +106,29 @@ func slowProfile(t *testing.T, a *root, name, key string) app.ConnProfile {
 	return app.ConnProfile{}
 }
 
-// asyncWindow 让 root 走「有窗口」的异步路径；返回的 wait 等回投完成后返回。
+// asyncWindow 让 root 走「有窗口」的异步路径；wait 等所有后台任务与回投完成。
 func asyncWindow(t *testing.T, a *root) (wait func()) {
 	t.Helper()
-	finished := make(chan struct{})
+	var active atomic.Int32
 	a.session.BgRun = func(work, done func()) {
+		active.Add(1)
 		go func() {
+			defer active.Add(-1)
 			work()
 			done()
-			close(finished)
 		}()
 	}
-	return func() { <-finished }
+	return func() {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if active.Load() == 0 {
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Fatal("background jobs did not finish")
+	}
 }
 
 // 点开一个网络不通的数据源：建连必须在后台，侧栏先显示「连接中」，不卡住渲染。

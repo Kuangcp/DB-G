@@ -78,15 +78,15 @@ func (a *root) testConnForm() {
 		a.connForm.TestMsg, a.connForm.TestErr = msg, failed
 		app.LogInfo("conn", "test", "kind", p.Kind, "name", p.Name, "ok", !failed, "msg", msg)
 	}
-	if a.win == nil {
-		done(probe())
-		return
-	}
-	win := a.win
-	go func() {
-		msg, failed := probe()
-		a.safeUpdate(win, func() { done(msg, failed) })
-	}()
+	var (
+		msg    string
+		failed bool
+	)
+	a.runBackground(func() {
+		msg, failed = probe()
+	}, func() {
+		done(msg, failed)
+	})
 }
 
 // connFormSummary 把连接信息排成多行 "key: value"，供「复制」放进剪贴板。

@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -299,18 +300,26 @@ func (a *root) connOpeningNow(connID string) bool {
 // runBackground 把 work 放到后台执行，完成后把 done 投回 UI 线程。
 // headless（无窗口）同步执行，测试才能在调用后立刻断言。
 func (a *root) runBackground(work, done func()) {
+	run := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				app.LogError("panic", "background work", "err", fmt.Sprint(r))
+			}
+		}()
+		work()
+	}
 	if a.session.BgRun != nil {
-		a.session.BgRun(work, done)
+		a.session.BgRun(run, done)
 		return
 	}
 	if a.win == nil {
-		work()
+		run()
 		done()
 		return
 	}
 	win := a.win
 	go func() {
-		work()
+		run()
 		a.safeUpdate(win, done)
 	}()
 }

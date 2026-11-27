@@ -417,6 +417,13 @@ Unmarshal → 本地化错误 → Normalize → MkdirAll → MarshalIndent → �
 
 ### ARCH-16 异步执行有三套写法，headless 分支 37 处
 
+**进度（2026-11-27）**：
+- 新增 `ui/async.go` 的 `runAsync[T]`（key 轮次、headless 同步、panic 转 error）。
+- `runBackground` 成为唯一后台入口，并兜住 work panic；`session.BgRun` 注入点保留。
+- 已迁移：连接测试、元数据缓存读写/刷新、统计、执行计划、补全目录/列、会话池之外的 8 处。
+- `a.win == nil` 从 37 降到 29；剩余主要是对话框、主题延迟保存等特例。
+- 单测覆盖 headless 同步、过期结果丢弃、panic 不崩、注入点生效。
+
 **证据**
 - `rg 'a\.win == nil' ui`（非测试）= 37 处；`rg 'go func' ui` = 40 处；
   `safeUpdate` = 59 处调用（另有定义），`win.Update` 直调 7 处。

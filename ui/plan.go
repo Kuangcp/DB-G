@@ -104,15 +104,15 @@ func (a *root) runExplain(analyze bool) {
 		a.ai.Plan.nodes = nodes
 		app.LogInfo("ai", "plan parsed", "kind", kind, "nodes", countPlanNodes(nodes), "analyze", analyze)
 	}
-	if a.win == nil {
-		done(run())
-		return
-	}
-	win := a.win
-	go func() {
-		res, err := run()
-		a.safeUpdate(win, func() { done(res, err) })
-	}()
+	var (
+		res *engine.QueryResult
+		err error
+	)
+	a.runBackground(func() {
+		res, err = run()
+	}, func() {
+		done(res, err)
+	})
 }
 
 func countPlanNodes(nodes []plan.PlanNode) int {

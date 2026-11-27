@@ -43,48 +43,37 @@ func (a *root) showStats(p app.ConnProfile, o engine.DBObject) {
 // loadStats 在会话就绪后读统计并填弹窗；headless 同步，有窗口时后台 + Update。
 func (a *root) loadStats(p app.ConnProfile, o engine.DBObject) {
 	sess := a.sessionFor(p.ID)
-	load := func() {
+	var (
+		stats       *engine.ObjectStats
+		err         error
+		unsupported bool
+	)
+	a.runBackground(func() {
 		statter, hasStats := sess.(engine.ObjectStatter)
 		scoped, hasScoped := sess.(engine.SchemaObjectStatter)
 		if sess == nil || !sess.Caps().Has(engine.CapObjectStats) || (!hasStats && !hasScoped) {
-			unsupported := func() { a.setStatsNote(locales.StatsUnsupported()) }
-			if a.win != nil {
-				a.safeUpdate(a.win, unsupported)
-				return
-			}
-			unsupported()
+			unsupported = true
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		var (
-			stats *engine.ObjectStats
-			err   error
-		)
 		if hasScoped {
 			stats, err = scoped.ObjectStatsIn(ctx, o.Schema, o.Kind, o.Name)
 		} else {
 			stats, err = statter.ObjectStats(ctx, o.Kind, o.Name)
 		}
-		apply := func() {
-			if err != nil {
-				a.setStatsNote(locales.StatsFailed(app.ErrorText(err)))
-				app.LogWarn("catalog", "stats load failed", "object", o.Name, "err", err.Error())
-				return
-			}
-			a.setStats(stats)
-		}
-		if a.win != nil {
-			a.safeUpdate(a.win, apply)
+	}, func() {
+		if unsupported {
+			a.setStatsNote(locales.StatsUnsupported())
 			return
 		}
-		apply()
-	}
-	if a.win == nil {
-		load()
-		return
-	}
-	go load()
+		if err != nil {
+			a.setStatsNote(locales.StatsFailed(app.ErrorText(err)))
+			app.LogWarn("catalog", "stats load failed", "object", o.Name, "err", err.Error())
+			return
+		}
+		a.setStats(stats)
+	})
 }
 
 // setStats 把统计结果装进弹窗；SQL 默认折叠，但缓冲区先备好，复制不受折叠影响。

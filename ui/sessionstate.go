@@ -17,6 +17,7 @@ type sessionState struct {
 	Waiters  map[string][]func(error)  // connID → 等这次建连结果的回调（UI 线程执行）
 	BgRun    func(work, done func())   // 后台执行 + 回投 UI 的注入点（测试用）
 	Seq      uint64
+	AsyncSeq map[string]uint64 // 异步请求轮次（按 key）
 
 	ServerInfo    map[string]engine.ServerInfo // connID → 数据库名/版本
 	ServerInfoErr map[string]string            // connID → 版本查询失败原因

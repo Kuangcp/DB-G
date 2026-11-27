@@ -37,16 +37,16 @@ func (a *root) loadMetaCache(p app.ConnProfile) {
 		}
 		a.applyMetaPayload(p, payload, stale)
 	}
-	if a.win == nil {
-		payload, hit, stale := load()
+	var (
+		payload app.MetaCachePayload
+		hit     bool
+		stale   bool
+	)
+	a.runBackground(func() {
+		payload, hit, stale = load()
+	}, func() {
 		apply(payload, hit, stale)
-		return
-	}
-	win := a.win
-	go func() {
-		payload, hit, stale := load()
-		a.safeUpdate(win, func() { apply(payload, hit, stale) })
-	}()
+	})
 }
 
 // applyMetaPayload 把缓存合并进当前树。只填空位，不覆盖已经查回来的新数据。
@@ -124,11 +124,7 @@ func (a *root) saveMetaCache(p app.ConnProfile) {
 			app.LogWarn("catalog", "meta cache save failed", "conn", p.ID, "err", err.Error())
 		}
 	}
-	if a.win == nil {
-		save()
-		return
-	}
-	go save()
+	a.runBackground(save, func() {})
 }
 
 // metaPayload 深拷贝当前连接在内存里的 schema/计数/已加载对象。
@@ -271,16 +267,15 @@ func (a *root) refreshStaleMeta(p app.ConnProfile) {
 			a.saveMetaCache(p)
 		}
 	}
-	if a.win == nil {
-		schemas, counts := load()
+	var (
+		schemas []string
+		counts  map[string]map[engine.ObjectKind]int
+	)
+	a.runBackground(func() {
+		schemas, counts = load()
+	}, func() {
 		done(schemas, counts)
-		return
-	}
-	win := a.win
-	go func() {
-		schemas, counts := load()
-		a.safeUpdate(win, func() { done(schemas, counts) })
-	}()
+	})
 }
 
 // refreshConnMeta 手动/DDL 后刷新一个连接的元数据：目录、树、磁盘缓存、
