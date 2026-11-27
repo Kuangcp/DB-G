@@ -63,8 +63,8 @@ func TestAIChatSendsContextAndStreams(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
-	a.catalog.finishColumns(prof.ID, "users", []engine.Column{
+	a.session.Catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.session.Catalog.finishColumns(prof.ID, "users", []engine.Column{
 		{Name: "id", Type: "INTEGER", PrimaryKey: true},
 		{Name: "name", Type: "TEXT"},
 	}, "")
@@ -460,12 +460,12 @@ func TestAISnapshotUsesCurrentSchemaKey(t *testing.T) {
 	}
 	a.tree.ConnSchema[prof.ID] = "shop"
 	key := prof.ID + "|shop"
-	a.catalog.finish(key, []string{"orders"}, nil, "mysql")
-	a.catalog.finishColumns(key, "orders", []engine.Column{
+	a.session.Catalog.finish(key, []string{"orders"}, nil, "mysql")
+	a.session.Catalog.finishColumns(key, "orders", []engine.Column{
 		{Name: "id", Type: "bigint", PrimaryKey: true},
 		{Name: "amount", Type: "int"},
 	}, "mysql")
-	a.catalog.finish(prof.ID, []string{"wrong_default"}, nil, "mysql")
+	a.session.Catalog.finish(prof.ID, []string{"wrong_default"}, nil, "mysql")
 
 	snap := a.aiSnapshot()
 	if len(snap.Tables) != 1 || snap.Tables[0].Name != "orders" {
@@ -493,7 +493,7 @@ func TestAIPreviewShowsBudgetedContext(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.session.Catalog.finish(prof.ID, []string{"users"}, nil, "")
 	a.setActiveText("select * from users")
 	a.ai.Prefs.ContextWindow = 2048
 	a.ai.Prefs.Model = "fake"
@@ -524,9 +524,9 @@ func TestAIPreviewShowsBudgetedContext(t *testing.T) {
 		for j := range 30 {
 			cols = append(cols, engine.Column{Name: fmt.Sprintf("c_%02d_%02d", i, j), Type: "text"})
 		}
-		a.catalog.finishColumns(prof.ID, name, cols, "")
+		a.session.Catalog.finishColumns(prof.ID, name, cols, "")
 	}
-	a.catalog.finish(prof.ID, names, nil, "")
+	a.session.Catalog.finish(prof.ID, names, nil, "")
 	a.history = app.OpenHistory(t.TempDir())
 	for i := range 12 {
 		if err := a.history.Add(app.HistoryEntry{ConnID: prof.ID, SQL: fmt.Sprintf("select %d", i), OK: true}); err != nil {
@@ -555,7 +555,7 @@ func TestAIChatSendsDialogue(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.session.Catalog.finish(prof.ID, []string{"users"}, nil, "")
 	a.setActiveText("select * from users")
 
 	p := &fakeAIProvider{events: []ai.Event{
@@ -691,7 +691,7 @@ func TestAIDDLContextPrefetchAndCache(t *testing.T) {
 	a.ai.Prefs.AllowDDL = true
 	a.ai.Prefs.Model = "fake"
 	a.setActiveText("select * from t")
-	a.catalog.finish(prof.ID+"|db1", []string{"t"}, nil, "postgres")
+	a.session.Catalog.finish(prof.ID+"|db1", []string{"t"}, nil, "postgres")
 
 	p := &fakeAIProvider{events: []ai.Event{{Kind: ai.EventText, Text: "ok"}, {Kind: ai.EventDone}}}
 	a.ai.TestProvider = p
@@ -706,7 +706,7 @@ func TestAIDDLContextPrefetchAndCache(t *testing.T) {
 	}
 
 	// 第二次发送即使会话不可用，也应命中 DDL 缓存。
-	a.sessions = map[string]engine.Session{}
+	a.session.Sessions = map[string]engine.Session{}
 	a.ai.Chat.input = "再说一次"
 	a.sendAI()
 	last = p.req.Messages[len(p.req.Messages)-1].Content
@@ -746,7 +746,7 @@ func TestAIContextPrefetchesForeignKeys(t *testing.T) {
 		t.Fatal("activate")
 	}
 	a.setActiveText("select * from orders")
-	a.catalog.finish(prof.ID, []string{"orders", "customers", "metrics"}, nil, "")
+	a.session.Catalog.finish(prof.ID, []string{"orders", "customers", "metrics"}, nil, "")
 	fk := &fkFakeSession{}
 	a.testSetSession(prof.ID, fk)
 

@@ -18,8 +18,8 @@ func editorDDLRoot(t *testing.T, sql string) (*root, *ui.Tester) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
-	rec, err := a.mgr.Create(prof.ID, "t")
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.session.Mgr.Create(prof.ID, "t")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,14 +46,14 @@ func TestEditorCtrlClickTableOpensDDL(t *testing.T) {
 	off := strings.Index(sql, "users") + 2 // 点在词中间也算整词
 	a.code.state.OnDefinition(off)
 	tt.Frame()
-	if !a.ddlOpen {
+	if !a.modal.DDLOpen {
 		t.Fatal("Ctrl+点击表名应打开 DDL 弹窗")
 	}
-	if !strings.Contains(a.ddlTitle, "users") {
-		t.Fatalf("ddl title: %q", a.ddlTitle)
+	if !strings.Contains(a.modal.DDLTitle, "users") {
+		t.Fatalf("ddl title: %q", a.modal.DDLTitle)
 	}
-	if !strings.Contains(a.ddlText, "CREATE TABLE") {
-		t.Fatalf("ddl text: %q", a.ddlText)
+	if !strings.Contains(a.modal.DDLText, "CREATE TABLE") {
+		t.Fatalf("ddl text: %q", a.modal.DDLText)
 	}
 }
 
@@ -70,8 +70,8 @@ func TestEditorCtrlClickNonTableDoesNothing(t *testing.T) {
 			engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "users"}},
 		},
 	}
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
-	rec, err := a.mgr.Create(prof.ID, "t")
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.session.Mgr.Create(prof.ID, "t")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,13 +85,13 @@ func TestEditorCtrlClickNonTableDoesNothing(t *testing.T) {
 
 	a.code.state.OnDefinition(1) // "select" 中间
 	tt.Frame()
-	if a.ddlOpen {
-		t.Fatalf("点关键字不该弹 DDL: %q", a.ddlTitle)
+	if a.modal.DDLOpen {
+		t.Fatalf("点关键字不该弹 DDL: %q", a.modal.DDLTitle)
 	}
 	a.code.state.OnDefinition(strings.Index(sql, "users"))
 	tt.Frame()
-	if !a.ddlOpen || !strings.Contains(a.ddlTitle, "users") {
-		t.Fatalf("点表名应弹 DDL: open=%v title=%q", a.ddlOpen, a.ddlTitle)
+	if !a.modal.DDLOpen || !strings.Contains(a.modal.DDLTitle, "users") {
+		t.Fatalf("点表名应弹 DDL: open=%v title=%q", a.modal.DDLOpen, a.modal.DDLTitle)
 	}
 }
 

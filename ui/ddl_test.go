@@ -31,7 +31,7 @@ func TestDDLRefreshCatalogCache(t *testing.T) {
 		t.Fatal("activate console")
 	}
 	key, _ := a.completionScope(p.ID)
-	a.catalog.finishColumns(key, "t", []engine.Column{{Name: "id", PrimaryKey: true}}, p.Kind)
+	a.session.Catalog.finishColumns(key, "t", []engine.Column{{Name: "id", PrimaryKey: true}}, p.Kind)
 
 	text := "ALTER TABLE t ADD COLUMN b TEXT;"
 	a.setActiveText(text)
@@ -41,12 +41,12 @@ func TestDDLRefreshCatalogCache(t *testing.T) {
 	a.runSQL()
 	waitStmts(t, a, tt, 1)
 	tt.Frame()
-	if _, ok := a.catalog.getColumns(key, "t"); ok {
+	if _, ok := a.session.Catalog.getColumns(key, "t"); ok {
 		t.Fatal("DDL 成功后旧列缓存应失效")
 	}
 
 	a.ensureColumns(p.ID, "t")
-	cols, ok := a.catalog.columns(key, "t")
+	cols, ok := a.session.Catalog.columns(key, "t")
 	if !ok {
 		t.Fatal("失效后应能重新加载列")
 	}

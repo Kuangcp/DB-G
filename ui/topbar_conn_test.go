@@ -70,8 +70,8 @@ func TestTopBarClickDisconnectsAndMarksTreeStale(t *testing.T) {
 	if a.connected(prof.ID) {
 		t.Fatal("单击已连接的数据源应当断开")
 	}
-	if len(a.sessionErr) != 0 {
-		t.Fatalf("断开后不该留下连接错误: %v", a.sessionErr)
+	if len(a.session.Err) != 0 {
+		t.Fatalf("断开后不该留下连接错误: %v", a.session.Err)
 	}
 	if !a.tree.GroupStale[groupKey] || a.tree.PageStarted[groupKey] {
 		t.Fatal("断开后树分组应标成过期并允许重拉首页")

@@ -178,14 +178,14 @@ func TestRefreshConnMetaClearsCaches(t *testing.T) {
 	}
 	a.tree.Counts[p.ID] = map[engine.ObjectKind]int{engine.ObjectTable: 1}
 	key, _ := a.completionScope(p.ID)
-	a.catalog.finishColumns(key, "t", []engine.Column{{Name: "id", PrimaryKey: true}}, p.Kind)
-	if _, ok := a.catalog.getColumns(key, "t"); !ok {
+	a.session.Catalog.finishColumns(key, "t", []engine.Column{{Name: "id", PrimaryKey: true}}, p.Kind)
+	if _, ok := a.session.Catalog.getColumns(key, "t"); !ok {
 		t.Fatal("precondition: columns should be cached")
 	}
 
 	a.refreshConnMeta(p.ID)
 
-	if _, ok := a.catalog.getColumns(key, "t"); ok {
+	if _, ok := a.session.Catalog.getColumns(key, "t"); ok {
 		t.Fatal("刷新后补全列缓存应失效")
 	}
 	if len(a.tree.Data) != 0 || len(a.tree.Counts) != 0 {

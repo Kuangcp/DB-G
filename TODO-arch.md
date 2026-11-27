@@ -147,11 +147,11 @@
 
 ### ARCH-06 `root` 是上帝对象：277 字段、547 方法、横跨十余个业务域
 
-**进度（2026-11-27）**：root 直接字段 277 → 115。已分组：
+**已完成（2026-11-27）**：root 直接字段 277 → 42。分组：
 `connForm`、`exportState`、`gitSync`、`install`、`cellView`、`tree`、`grid`（ARCH-07）、
-`settings`、`tabs`、`ai`。
+`settings`、`tabs`、`ai`、`edit`、`modal`、`session`、`external`、`toasts`。
 每组都用 gofmt 结构重写迁移引用，并有编译期的状态归组测试。
-**剩余**：弹窗/模态、编辑、外部文件、会话池、编辑器/布局、toast/history/guard。
+剩余 42 个是真·跨域单例（编辑器、窗口、存储、布局、会话管理器等），不再按业务域拆。
 
 **证据**：`ui/root.go:22-304`。字段按前缀粗分：
 

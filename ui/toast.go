@@ -18,9 +18,9 @@ func (a *root) toastError(msg string) {
 	if msg == "" {
 		return
 	}
-	a.toastSeq++
-	a.toastQueue = append(a.toastQueue, ui.Toast{
-		ID:      fmt.Sprintf("dbg-toast-%d", a.toastSeq),
+	a.toasts.Seq++
+	a.toasts.Queue = append(a.toasts.Queue, ui.Toast{
+		ID:      fmt.Sprintf("dbg-toast-%d", a.toasts.Seq),
 		Title:   msg,
 		Type:    "error",
 		Timeout: toastTimeout,
@@ -29,10 +29,10 @@ func (a *root) toastError(msg string) {
 
 // flushToasts 在帧首把排队的提示交给 mygo 的 toast 视口。
 func (a *root) flushToasts(c *ui.Context) {
-	for _, t := range a.toastQueue {
+	for _, t := range a.toasts.Queue {
 		c.AddToast(t)
 	}
-	a.toastQueue = nil
+	a.toasts.Queue = nil
 }
 
 // toastViewport 是浮窗提示的视口：底部居中、单行、错误用 Danger 描边，

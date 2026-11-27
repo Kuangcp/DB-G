@@ -11,7 +11,7 @@ func TestRunSQLWarnsRiskyStatement(t *testing.T) {
 	seedConsoleConn(t, a, "本地")
 	a.setActiveText("update users set name = 'x'")
 	a.runSQL()
-	if !a.guardOpen || a.guardBlocked || len(a.guardRisks) != 1 {
+	if !a.modal.GuardOpen || a.modal.GuardBlocked || len(a.modal.GuardRisks) != 1 {
 		t.Fatalf("guard: %+v", a)
 	}
 	tt := ui.NewTester(rootView(a), 1200, 800)
@@ -38,8 +38,8 @@ func TestRunSQLBlocksRiskyStatementOnConnection(t *testing.T) {
 	}
 	a.setActiveText("delete from users")
 	a.runSQL()
-	if !a.guardOpen || !a.guardBlocked || a.consoleErr == "" {
-		t.Fatalf("blocked: open=%v blocked=%v err=%q", a.guardOpen, a.guardBlocked, a.consoleErr)
+	if !a.modal.GuardOpen || !a.modal.GuardBlocked || a.consoleErr == "" {
+		t.Fatalf("blocked: open=%v blocked=%v err=%q", a.modal.GuardOpen, a.modal.GuardBlocked, a.consoleErr)
 	}
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()

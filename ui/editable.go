@@ -27,8 +27,8 @@ func (a *root) editStateKey(r *engine.QueryResult) string {
 // discardEditState 丢弃某个运行态的编辑缓存。执行新语句替换结果时调用；
 // 钉住的结果有自己的运行态 id，不会被这里动到。
 func (a *root) discardEditState(id string) {
-	if a.editSets != nil {
-		delete(a.editSets, id)
+	if a.edit.Sets != nil {
+		delete(a.edit.Sets, id)
 	}
 	if id != a.gridRuntimeID() {
 		return
@@ -37,8 +37,8 @@ func (a *root) discardEditState(id string) {
 	a.grid.plan = nil
 	a.grid.readonly = ""
 	a.stopInlineEdit()
-	a.editCellOpen = false
-	a.previewOpen = false
+	a.edit.CellOpen = false
+	a.edit.PreviewOpen = false
 }
 
 // ensureEditState 在结果变化时重算可编辑计划（只读原因也一并算出）。
@@ -48,8 +48,8 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		return
 	}
 	a.grid.editKey = key
-	if a.editSets == nil {
-		a.editSets = map[string]*app.EditSet{}
+	if a.edit.Sets == nil {
+		a.edit.Sets = map[string]*app.EditSet{}
 	}
 	a.grid.plan = nil
 	a.grid.readonly = ""
@@ -57,8 +57,8 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		return
 	}
 	id := a.gridRuntimeID()
-	if a.editSets[id] == nil {
-		a.editSets[id] = app.NewEditSet()
+	if a.edit.Sets[id] == nil {
+		a.edit.Sets[id] = app.NewEditSet()
 	}
 	sess := a.gridSession()
 	if sess == nil || !sess.Caps().Has(engine.CapEditableResult) {
@@ -103,11 +103,11 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		schema = a.tree.ConnSchema[connID]
 	}
 	scopeKey := catalogKey(connID, schema)
-	cols, all := a.catalog.getColumnsMany(scopeKey, []string{table})
+	cols, all := a.session.Catalog.getColumnsMany(scopeKey, []string{table})
 	if !all {
 		a.ensureColumnsKey(scopeKey, connID, schema, table)
 		// headless（无窗口）下加载是同步的，这里再读一次即可立刻判定。
-		cols, all = a.catalog.getColumnsMany(scopeKey, []string{table})
+		cols, all = a.session.Catalog.getColumnsMany(scopeKey, []string{table})
 		if !all {
 			a.grid.readonly = locales.EditReadonlyLoadingColumns()
 			a.grid.editKey = "" // 列加载完成后重算
@@ -129,13 +129,13 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 // editSet 返回当前结果的本地改动集。
 func (a *root) editSet() *app.EditSet {
 	id := a.gridRuntimeID()
-	if a.editSets == nil {
-		a.editSets = map[string]*app.EditSet{}
+	if a.edit.Sets == nil {
+		a.edit.Sets = map[string]*app.EditSet{}
 	}
-	if a.editSets[id] == nil {
-		a.editSets[id] = app.NewEditSet()
+	if a.edit.Sets[id] == nil {
+		a.edit.Sets[id] = app.NewEditSet()
 	}
-	return a.editSets[id]
+	return a.edit.Sets[id]
 }
 
 // rowsForPlan 返回当前结果的数据行（编辑用的行下标是结果行下标）。
@@ -349,26 +349,26 @@ func (a *root) commitEdits() {
 		a.gridErr(err.Error())
 		return
 	}
-	a.previewLines = lines
-	a.previewOpen = true
+	a.edit.PreviewLines = lines
+	a.edit.PreviewOpen = true
 }
 
 // setEditStatus 在结果工具条显示一条短状态，3 秒后自动消失。
 // 只用于提交成功这类非错误反馈；失败走 gridErr（控制台顶栏 / 表视图浮窗）。
 func (a *root) setEditStatus(msg string) {
-	a.editStatus = msg
-	seq := a.editStatusSeq.Add(1)
+	a.edit.Status = msg
+	seq := a.edit.StatusSeq.Add(1)
 	if msg == "" || a.win == nil {
 		return
 	}
 	win := a.win
 	time.AfterFunc(3*time.Second, func() {
-		if a.editStatusSeq.Load() != seq {
+		if a.edit.StatusSeq.Load() != seq {
 			return
 		}
 		a.safeUpdate(win, func() {
-			if a.editStatusSeq.Load() == seq {
-				a.editStatus = ""
+			if a.edit.StatusSeq.Load() == seq {
+				a.edit.Status = ""
 			}
 		})
 	})
@@ -376,13 +376,13 @@ func (a *root) setEditStatus(msg string) {
 
 // applyConfirmedEdits 在确认后执行（有窗口时后台 + Update）。
 func (a *root) applyConfirmedEdits() {
-	a.previewOpen = false
+	a.edit.PreviewOpen = false
 	if a.grid.plan == nil || a.editSet().Count() == 0 {
 		return
 	}
-	a.editBusy = true
+	a.edit.Busy = true
 	done := func(err error) {
-		a.editBusy = false
+		a.edit.Busy = false
 		if err != nil {
 			a.setEditStatus("")
 			a.gridErr(locales.EditCommitFailed(app.ErrorText(err)))
@@ -439,28 +439,28 @@ func (a *root) refreshResult(onDone func()) {
 
 // editCellModal 渲染单元格编辑弹窗；尺寸与查看弹窗一致，长文本用多行编辑器。
 func (a *root) editCellModal(c *ui.Context) {
-	if !a.editCellOpen {
+	if !a.edit.CellOpen {
 		return
 	}
 	w, h := a.cellModalSize()
-	ui.Modal(c, &a.editCellOpen, func() {
-		pos := locales.EditRowPos(a.editCellRow + 1)
-		if a.editCellRow < 0 {
-			pos = locales.EditNewRowPos(-a.editCellRow)
+	ui.Modal(c, &a.edit.CellOpen, func() {
+		pos := locales.EditRowPos(a.edit.CellRow + 1)
+		if a.edit.CellRow < 0 {
+			pos = locales.EditNewRowPos(-a.edit.CellRow)
 		}
-		ui.Text(c, locales.EditCellTitle(a.grid.plan.Columns[a.editCellCol], pos)).Bold()
-		ui.TextArea(c, &a.editCellText).AutoFocus().Grow(1)
+		ui.Text(c, locales.EditCellTitle(a.grid.plan.Columns[a.edit.CellCol], pos)).Bold()
+		ui.TextArea(c, &a.edit.CellText).AutoFocus().Grow(1)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.editCellOpen = false
+				a.edit.CellOpen = false
 			}
 			if ui.Button(c, locales.SetNull()).Clicked() {
-				a.setCellEdit(a.editCellRow, a.editCellCol, nil)
-				a.editCellOpen = false
+				a.setCellEdit(a.edit.CellRow, a.edit.CellCol, nil)
+				a.edit.CellOpen = false
 			}
 			if ui.PrimaryButton(c, locales.CommonSave()).Clicked() {
-				a.commitCellEdit(a.editCellRow, a.editCellCol, a.editCellText)
-				a.editCellOpen = false
+				a.commitCellEdit(a.edit.CellRow, a.edit.CellCol, a.edit.CellText)
+				a.edit.CellOpen = false
 			}
 		})
 		a.cellModalGrip(c)
@@ -469,17 +469,17 @@ func (a *root) editCellModal(c *ui.Context) {
 
 // previewModal 渲染提交预览。
 func (a *root) previewModal(c *ui.Context) {
-	if !a.previewOpen {
+	if !a.edit.PreviewOpen {
 		return
 	}
-	ui.Modal(c, &a.previewOpen, func() {
-		ui.Text(c, locales.EditPreviewTitle(len(a.previewLines))).Bold()
+	ui.Modal(c, &a.edit.PreviewOpen, func() {
+		ui.Text(c, locales.EditPreviewTitle(len(a.edit.PreviewLines))).Bold()
 		ui.ScrollBoth(c).Height(320).Children(func() {
-			ui.Text(c, strings.Join(a.previewLines, "\n")).Font("monospace").FontSize(12)
+			ui.Text(c, strings.Join(a.edit.PreviewLines, "\n")).Font("monospace").FontSize(12)
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.previewOpen = false
+				a.edit.PreviewOpen = false
 			}
 			if ui.PrimaryButton(c, locales.EditConfirmCommit()).Clicked() {
 				a.applyConfirmedEdits()
@@ -539,10 +539,10 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 			label = locales.EditCommitN(n)
 		}
 		col := ui.Transparent
-		if n > 0 && !a.editBusy {
+		if n > 0 && !a.edit.Busy {
 			col = c.Theme().Accent
 		}
-		if iconButton(c, iconCheck, label, col).Disabled(n == 0 || a.editBusy).Clicked() {
+		if iconButton(c, iconCheck, label, col).Disabled(n == 0 || a.edit.Busy).Clicked() {
 			a.commitEdits()
 		}
 	} else if a.grid.readonly != "" {
@@ -599,29 +599,29 @@ func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 			text = editTextFor(kind, r, col, pending)
 		}
 	}
-	if a.inlineEditOn {
+	if a.edit.InlineOn {
 		a.stopInlineEdit()
 	}
 	if inlineEditable(text) {
 		a.startInlineEdit(row, col, text)
 		return
 	}
-	a.editCellRow, a.editCellCol, a.editCellText = row, col, text
+	a.edit.CellRow, a.edit.CellCol, a.edit.CellText = row, col, text
 	a.fitCellModal(text, false)
-	a.editCellOpen = true
+	a.edit.CellOpen = true
 }
 
 // startInlineEdit 进入表格内联编辑（短内容）。
 func (a *root) startInlineEdit(row, col int, text string) {
-	a.inlineEditOn, a.inlineEditRow, a.inlineEditCol = true, row, col
-	a.inlineEditText, a.inlineEditHadFocus = text, false
+	a.edit.InlineOn, a.edit.InlineRow, a.edit.InlineCol = true, row, col
+	a.edit.InlineText, a.edit.InlineHadFocus = text, false
 }
 
 // stopInlineEdit 退出内联编辑，不提交。
 func (a *root) stopInlineEdit() {
-	a.inlineEditOn = false
-	a.inlineEditRow, a.inlineEditCol = -1, -1
-	a.inlineEditText, a.inlineEditHadFocus = "", false
+	a.edit.InlineOn = false
+	a.edit.InlineRow, a.edit.InlineCol = -1, -1
+	a.edit.InlineText, a.edit.InlineHadFocus = "", false
 }
 
 // commitCellEdit 把编辑框文本写进待提交改动：
@@ -675,25 +675,25 @@ func (a *root) editCellValue(row, col int) any {
 
 // commitInlineEdit 把内联编辑写进待提交改动。
 func (a *root) commitInlineEdit() {
-	a.commitCellEdit(a.inlineEditRow, a.inlineEditCol, a.inlineEditText)
+	a.commitCellEdit(a.edit.InlineRow, a.edit.InlineCol, a.edit.InlineText)
 	a.stopInlineEdit()
 }
 
 // inlineCellEditor 在结果表格的单元格里渲染输入框：Enter/失焦提交，Escape 取消。
 func (a *root) inlineCellEditor(c *ui.Context) {
-	in := ui.TextInput(c, &a.inlineEditText).FontSize(12).Fill().Padding(0, 2)
-	if !a.inlineEditHadFocus {
+	in := ui.TextInput(c, &a.edit.InlineText).FontSize(12).Fill().Padding(0, 2)
+	if !a.edit.InlineHadFocus {
 		in.AutoFocus()
 	}
 	if in.Focused() {
-		a.inlineEditHadFocus = true
+		a.edit.InlineHadFocus = true
 	}
 	switch {
 	case in.Submitted():
 		a.commitInlineEdit()
 	case in.Shortcut(0, ui.KeyEscape):
 		a.stopInlineEdit()
-	case a.inlineEditHadFocus && !in.Focused():
+	case a.edit.InlineHadFocus && !in.Focused():
 		a.commitInlineEdit()
 	}
 }

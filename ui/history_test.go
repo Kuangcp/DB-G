@@ -35,7 +35,7 @@ func TestHistoryPanelInsertAtCursor(t *testing.T) {
 	if err := a.history.Add(app.HistoryEntry{ConnID: a.activeConnID(), SQL: "SELECT 42 AS answer", OK: true}); err != nil {
 		t.Fatal(err)
 	}
-	a.historyOpen = true
+	a.modal.HistoryOpen = true
 	tt.Frame()
 	if !tt.HasText("SQL 历史") {
 		t.Fatalf("panel missing: %q", tt.Texts())
@@ -47,7 +47,7 @@ func TestHistoryPanelInsertAtCursor(t *testing.T) {
 	if got := a.activeText(); !strings.Contains(got, "SELECT 42 AS answer") {
 		t.Fatalf("insert into editor failed: %q", got)
 	}
-	if a.historyOpen {
+	if a.modal.HistoryOpen {
 		t.Fatal("panel must close after insert")
 	}
 }

@@ -111,8 +111,8 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 	}
 	prev := a.tree.ConnSchema[p.ID]
 	a.tree.ConnSchema[p.ID] = schema
-	if a.catalog != nil {
-		a.catalog.invalidate(p.ID)
+	if a.session.Catalog != nil {
+		a.session.Catalog.invalidate(p.ID)
 	}
 	// 展开对象树里对应的 schema 节点，用户能立刻看到该库下的对象。
 	key := p.ID + "|" + schema + "|schema"
@@ -147,8 +147,8 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 			app.LogWarn("conn", "schema switch failed", "conn", p.ID, "schema", schema, "err", err.Error())
 			return
 		}
-		if a.catalog != nil {
-			a.catalog.invalidate(p.ID)
+		if a.session.Catalog != nil {
+			a.session.Catalog.invalidate(p.ID)
 		}
 		app.LogInfo("conn", "schema switched", "conn", p.ID, "schema", schema)
 	}

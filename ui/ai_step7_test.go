@@ -23,11 +23,11 @@ func newSelfCheckRoot(t *testing.T) (*root, app.ConnProfile) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.catalog.finish(prof.ID, []string{"users", "orders"}, nil, "")
-	a.catalog.finishColumns(prof.ID, "users", []engine.Column{
+	a.session.Catalog.finish(prof.ID, []string{"users", "orders"}, nil, "")
+	a.session.Catalog.finishColumns(prof.ID, "users", []engine.Column{
 		{Name: "id", Type: "INTEGER", PrimaryKey: true}, {Name: "name", Type: "TEXT"},
 	}, "")
-	a.catalog.finishColumns(prof.ID, "orders", []engine.Column{
+	a.session.Catalog.finishColumns(prof.ID, "orders", []engine.Column{
 		{Name: "id", Type: "INTEGER"}, {Name: "user_id", Type: "INTEGER"},
 	}, "")
 	return a, prof
@@ -92,8 +92,8 @@ func TestConnectionAIStrictPolicy(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
-	a.catalog.finishColumns(prof.ID, "users", []engine.Column{{Name: "id", Type: "INTEGER"}}, "")
+	a.session.Catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.session.Catalog.finishColumns(prof.ID, "users", []engine.Column{{Name: "id", Type: "INTEGER"}}, "")
 	a.setActiveText("select id from users")
 	a.ai.Prefs.AllowHistory = true
 	a.ai.Prefs.AllowErrorLogs = true

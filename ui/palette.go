@@ -27,17 +27,17 @@ type paletteItem struct {
 
 // openPalette 打开命令面板（标题栏搜索框或 Ctrl+P）。
 func (a *root) openPalette() {
-	a.paletteQuery = ""
-	a.paletteOpen = true
+	a.modal.PaletteQuery = ""
+	a.modal.PaletteOpen = true
 }
 
 // palette 渲染命令面板：搜索框 + 操作 / 控制台 / 控制台内 SQL 三段结果。
 func (a *root) palette(c *ui.Context) {
-	if !a.paletteOpen {
+	if !a.modal.PaletteOpen {
 		return
 	}
 	t := c.Theme()
-	q := strings.ToLower(strings.TrimSpace(a.paletteQuery))
+	q := strings.ToLower(strings.TrimSpace(a.modal.PaletteQuery))
 	actions := a.paletteActions(c)
 	if q != "" {
 		actions = filterPalette(actions, q)
@@ -55,8 +55,8 @@ func (a *root) palette(c *ui.Context) {
 			break
 		}
 	}
-	ui.Modal(c, &a.paletteOpen, func() {
-		in := ui.TextInput(c, &a.paletteQuery).
+	ui.Modal(c, &a.modal.PaletteOpen, func() {
+		in := ui.TextInput(c, &a.modal.PaletteQuery).
 			Placeholder(locales.PaletteSearchPlaceholder()).
 			Label(locales.PaletteOpen()).AutoFocus()
 		ui.Scroll(c).Grow(1).Children(func() {
@@ -70,7 +70,7 @@ func (a *root) palette(c *ui.Context) {
 		})
 		if in.Submitted() && first != nil {
 			item := *first
-			a.paletteOpen = false
+			a.modal.PaletteOpen = false
 			if item.run != nil {
 				item.run()
 			}
@@ -99,7 +99,7 @@ func (a *root) paletteSection(c *ui.Context, title string, items []paletteItem) 
 			}
 		})
 		if row.Clicked() {
-			a.paletteOpen = false
+			a.modal.PaletteOpen = false
 			if item.run != nil {
 				item.run()
 			}
@@ -128,7 +128,7 @@ func (a *root) paletteActions(c *ui.Context) []paletteItem {
 	extras := []paletteItem{
 		{label: locales.SidebarNewConn(), run: func() { a.openNewConnForm("") }},
 		{label: locales.TopOpenSQLFile(), run: a.pickOpenSQLFiles},
-		{label: locales.TopHistory(), run: func() { a.historyOpen = true }},
+		{label: locales.TopHistory(), run: func() { a.modal.HistoryOpen = true }},
 		{label: locales.TopAIAssistant(), run: a.toggleAIChat},
 		{label: locales.SidebarReloadTree(), run: a.reloadTree},
 		{label: sidebarLabel, run: func() { a.sidebarHidden = !a.sidebarHidden }},
@@ -210,8 +210,8 @@ func (a *root) paletteSQL(q string) []paletteItem {
 				hint:  fmt.Sprintf("%d: %s", i+1, snippet),
 				run: func() {
 					a.deferActivateConsole(id, "")
-					a.paletteJumpID = id
-					a.paletteJumpSel = [2]int{selStart, selEnd}
+					a.modal.PaletteJumpID = id
+					a.modal.PaletteJumpSel = [2]int{selStart, selEnd}
 				},
 			})
 			if len(items) >= paletteMaxSQL {
@@ -225,15 +225,15 @@ func (a *root) paletteSQL(q string) []paletteItem {
 
 // applyPaletteJump 在命令面板选中 SQL 命中后把光标/选区放到命中行并滚到可见。
 func (a *root) applyPaletteJump() {
-	if a.paletteJumpID == "" {
+	if a.modal.PaletteJumpID == "" {
 		return
 	}
-	id := a.paletteJumpID
-	a.paletteJumpID = ""
+	id := a.modal.PaletteJumpID
+	a.modal.PaletteJumpID = ""
 	if a.tabs.ActiveConsole != id {
 		return
 	}
-	a.code.SetSelection(a.paletteJumpSel[0], a.paletteJumpSel[1])
+	a.code.SetSelection(a.modal.PaletteJumpSel[0], a.modal.PaletteJumpSel[1])
 	a.code.state.ScrollTo(a.code.state.CursorPos().Line)
 }
 

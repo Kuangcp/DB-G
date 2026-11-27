@@ -467,7 +467,7 @@ func TestConsoleReloadCleanWithoutConfirm(t *testing.T) {
 		t.Fatalf("右键菜单缺少重新加载: %v", err)
 	}
 	tt.Frame()
-	if a.reloadConfirmOpen {
+	if a.modal.ReloadConfirmOpen {
 		t.Fatal("没有未保存改动时不应弹确认")
 	}
 	if got := a.code.Text(); got != "SELECT 88;\n" {

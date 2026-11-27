@@ -32,7 +32,7 @@ func TestMultipleConnectionsStayOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !a.connected(a1.ID) || !a.connected(b1.ID) {
-		t.Fatalf("两个都该连着: %d", len(a.sessions))
+		t.Fatalf("两个都该连着: %d", len(a.session.Sessions))
 	}
 	a.expandConnAndTree(a1)
 	a.expandConnAndTree(b1)
@@ -57,8 +57,8 @@ func TestLRUEvictsLeastRecentlyUsed(t *testing.T) {
 		}
 		conns = append(conns, p)
 	}
-	if len(a.sessions) != maxOpenSessions {
-		t.Fatalf("sessions = %d", len(a.sessions))
+	if len(a.session.Sessions) != maxOpenSessions {
+		t.Fatalf("sessions = %d", len(a.session.Sessions))
 	}
 	// 把第 1 个再「用」一次，它就变成最新的，该被淘汰的是第 2 个。
 	a.sessionFor(conns[0].ID)
@@ -66,8 +66,8 @@ func TestLRUEvictsLeastRecentlyUsed(t *testing.T) {
 	if err := a.openConn(extra); err != nil {
 		t.Fatal(err)
 	}
-	if len(a.sessions) != maxOpenSessions {
-		t.Fatalf("淘汰后应保持 %d 个，实际 %d", maxOpenSessions, len(a.sessions))
+	if len(a.session.Sessions) != maxOpenSessions {
+		t.Fatalf("淘汰后应保持 %d 个，实际 %d", maxOpenSessions, len(a.session.Sessions))
 	}
 	if !a.connected(conns[0].ID) {
 		t.Fatal("刚用过的第 1 个不该被淘汰")
@@ -108,8 +108,8 @@ func TestEvictionSkipsBusyConnection(t *testing.T) {
 	if !a.connected(p.ID) {
 		t.Fatal("正在执行的连接不能被关掉")
 	}
-	if len(a.sessions) != maxOpenSessions {
-		t.Fatalf("sessions = %d", len(a.sessions))
+	if len(a.session.Sessions) != maxOpenSessions {
+		t.Fatalf("sessions = %d", len(a.session.Sessions))
 	}
 	rt.Cancel()
 }
@@ -118,7 +118,7 @@ func TestEvictionSkipsBusyConnection(t *testing.T) {
 func TestStartupConnectsNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "connections.json")
 	a := newRootWithStore(path)
-	if n := len(a.sessions); n != 0 {
+	if n := len(a.session.Sessions); n != 0 {
 		t.Fatalf("启动时不该连任何数据源，实际 %d 个", n)
 	}
 	if len(a.tree.Data) != 0 {
@@ -140,7 +140,7 @@ func TestConnDotColors(t *testing.T) {
 	if got := a.connDotColor(p.ID, th); got != th.Success {
 		t.Fatalf("已连接应为绿色: %+v", got)
 	}
-	a.sessionErr[p.ID] = "boom"
+	a.session.Err[p.ID] = "boom"
 	if got := a.connDotColor(p.ID, th); got != th.Danger {
 		t.Fatalf("失败应为红色: %+v", got)
 	}
@@ -152,7 +152,7 @@ func TestClickingConnNameConnects(t *testing.T) {
 	p := addConn(t, a, "点我来连")
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if len(a.sessions) != 0 {
+	if len(a.session.Sessions) != 0 {
 		t.Fatal("还没点就不该连")
 	}
 	if err := tt.Click("点我来连"); err != nil {
@@ -177,7 +177,7 @@ func TestRefreshDoesNotConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(a.sessions) != 0 {
-		t.Fatalf("刷新不该连数据源: %d", len(a.sessions))
+	if len(a.session.Sessions) != 0 {
+		t.Fatalf("刷新不该连数据源: %d", len(a.session.Sessions))
 	}
 }

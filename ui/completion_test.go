@@ -98,11 +98,11 @@ func TestRefreshCompletionsInvalidatesCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.ensureCatalog(prof.ID)
-	if _, ok := a.catalog.get(prof.ID); !ok {
+	if _, ok := a.session.Catalog.get(prof.ID); !ok {
 		t.Fatal("catalog must be cached after a load")
 	}
 	a.refreshCompletions()
-	if _, ok := a.catalog.get(prof.ID); !ok {
+	if _, ok := a.session.Catalog.get(prof.ID); !ok {
 		t.Fatal("refresh must repopulate the cache")
 	}
 }
@@ -110,12 +110,12 @@ func TestRefreshCompletionsInvalidatesCache(t *testing.T) {
 func TestOpenConnInvalidatesCatalog(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
-	a.catalog.begin(prof.ID)
-	a.catalog.finish(prof.ID, []string{"stale"}, nil, "")
+	a.session.Catalog.begin(prof.ID)
+	a.session.Catalog.finish(prof.ID, []string{"stale"}, nil, "")
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := a.catalog.get(prof.ID); ok {
+	if _, ok := a.session.Catalog.get(prof.ID); ok {
 		t.Fatal("openConn must invalidate the connection's catalog")
 	}
 }
@@ -135,7 +135,7 @@ func TestCompletionColumnsAfterDot(t *testing.T) {
 	if _, err := a.testSession(t).RunStatement(t.Context(), `CREATE TABLE a3_t (id INTEGER PRIMARY KEY, zz_col TEXT)`); err != nil {
 		t.Fatal(err)
 	}
-	a.catalog.invalidate(prof.ID)
+	a.session.Catalog.invalidate(prof.ID)
 	rec, err := a.consoleMgr().Create(prof.ID, "列补全")
 	if err != nil {
 		t.Fatal(err)
@@ -162,7 +162,7 @@ func TestCompletionUnknownTableAfterDotKeepsKeywords(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	a.catalog.invalidate(prof.ID)
+	a.session.Catalog.invalidate(prof.ID)
 	rec, _ := a.consoleMgr().Create(prof.ID, "列补全")
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
@@ -197,10 +197,10 @@ func (s noColumnsSession) Objects(context.Context, engine.ObjectKind) ([]engine.
 
 func TestEnsureColumnsDegradesWithoutCapability(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.sessions["c1"] = noColumnsSession{}
-	a.sessionUse["c1"] = 1
+	a.session.Sessions["c1"] = noColumnsSession{}
+	a.session.Use["c1"] = 1
 	a.ensureColumns("c1", "t") // 不得 panic，也不得写缓存
-	if _, ok := a.catalog.getColumns("c1", "t"); ok {
+	if _, ok := a.session.Catalog.getColumns("c1", "t"); ok {
 		t.Fatal("session without CapColumns must not produce column items")
 	}
 	if found := a.completionItems("c1"); len(found) == 0 {
@@ -217,7 +217,7 @@ func TestShowCompletionsAtCursorLoadsColumnsAfterCatalog(t *testing.T) {
 	if _, err := a.testSession(t).RunStatement(t.Context(), `CREATE TABLE a3_u (zz_two TEXT)`); err != nil {
 		t.Fatal(err)
 	}
-	a.catalog.invalidate(prof.ID)
+	a.session.Catalog.invalidate(prof.ID)
 	rec, _ := a.consoleMgr().Create(prof.ID, "列补全")
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
@@ -232,7 +232,7 @@ func TestShowCompletionsAtCursorLoadsColumnsAfterCatalog(t *testing.T) {
 	n := len([]rune("select * from a3_u."))
 	a.code.SetSelection(n, n)
 	a.showCompletionsAtCursor()
-	if _, ok := a.catalog.getColumns(prof.ID, "a3_u"); !ok {
+	if _, ok := a.session.Catalog.getColumns(prof.ID, "a3_u"); !ok {
 		t.Fatal("dot context must trigger a column load")
 	}
 }
@@ -253,7 +253,7 @@ func setupA4(t *testing.T) (*root, app.ConnProfile) {
 			t.Fatal(err)
 		}
 	}
-	a.catalog.invalidate(prof.ID)
+	a.session.Catalog.invalidate(prof.ID)
 	rec, err := a.consoleMgr().Create(prof.ID, "语句列")
 	if err != nil {
 		t.Fatal(err)
@@ -514,7 +514,7 @@ func TestColumnLoadDoesNotPopCompletionsWithoutRequest(t *testing.T) {
 		`CREATE TABLE zz_phantom_tbl (id INTEGER)`); err != nil {
 		t.Fatal(err)
 	}
-	a.catalog.invalidate(prof.ID)
+	a.session.Catalog.invalidate(prof.ID)
 	rec, err := a.consoleMgr().Create(prof.ID, "浮窗")
 	if err != nil {
 		t.Fatal(err)

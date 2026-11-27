@@ -295,8 +295,8 @@ func (a *root) refreshConnMeta(connID string) {
 	if schema != "" {
 		a.tree.ConnSchema[connID] = schema
 	}
-	if a.catalog != nil {
-		a.catalog.invalidate(connID)
+	if a.session.Catalog != nil {
+		a.session.Catalog.invalidate(connID)
 	}
 	a.forgetAIDDL(connID)
 	a.forgetAIRelations(connID)

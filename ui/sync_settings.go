@@ -231,12 +231,12 @@ func (a *root) finishSync(res app.SyncOutcome) {
 // refreshAfterSync 丢弃旧会话与编辑器缓存，按新 store 重新加载活动工作区/控制台。
 func (a *root) refreshAfterSync() {
 	a.closeAllSessions()
-	a.sessionErr = map[string]string{}
+	a.session.Err = map[string]string{}
 	for _, id := range append([]string(nil), a.tabs.ViewerOrder...) {
 		a.closeViewerTab(id)
 	}
 	a.reloadTree()
-	a.catalog = newCatalogCache()
+	a.session.Catalog = newCatalogCache()
 	if m := a.consoleMgr(); m != nil {
 		m.ResetForSync()
 	}

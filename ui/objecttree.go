@@ -799,8 +799,8 @@ func (a *root) onEditorDefinition(offset int) {
 func (a *root) knownObjects(connID string) map[string]engine.ObjectKind {
 	key, _ := a.completionScope(connID)
 	out := map[string]engine.ObjectKind{}
-	if a.catalog != nil {
-		if tables, views, ok := a.catalog.objects(key); ok {
+	if a.session.Catalog != nil {
+		if tables, views, ok := a.session.Catalog.objects(key); ok {
 			for _, n := range views {
 				out[strings.ToLower(n)] = engine.ObjectView
 			}
@@ -873,10 +873,10 @@ func isIdentRune(r rune) bool {
 
 // ddlViewState 返回 DDL 只读编辑器状态（首次用时创建）：SQL 高亮、可选中复制。
 func (a *root) ddlViewState() *myeditor.State {
-	if a.ddlState == nil {
+	if a.modal.DDLState == nil {
 		buf := myeditor.NewBuffer("")
 		buf.SetLanguage(sqlLanguageForKind(a.connKind()))
-		a.ddlState = &myeditor.State{
+		a.modal.DDLState = &myeditor.State{
 			Buffer:       buf,
 			ReadOnly:     true,
 			LineNumbers:  myeditor.LineNumbersOff,
@@ -884,12 +884,12 @@ func (a *root) ddlViewState() *myeditor.State {
 			NoFolding:    true,
 		}
 	}
-	return a.ddlState
+	return a.modal.DDLState
 }
 
 // setDDL 把格式化后的 DDL 装进只读高亮视图并打开弹窗。
 func (a *root) setDDL(title, ddl string) {
-	a.ddlTitle, a.ddlText, a.ddlOpen = title, ddl, true
+	a.modal.DDLTitle, a.modal.DDLText, a.modal.DDLOpen = title, ddl, true
 	text := ddl
 	if out, err := app.FormatSQL(ddl); err == nil {
 		text = out
@@ -902,7 +902,7 @@ func (a *root) setDDL(title, ddl string) {
 
 // setDDLNote 在弹窗里显示一行提示（不支持 / 读取失败），不做格式化。
 func (a *root) setDDLNote(title, msg string) {
-	a.ddlTitle, a.ddlText, a.ddlOpen = title, msg, true
+	a.modal.DDLTitle, a.modal.DDLText, a.modal.DDLOpen = title, msg, true
 	st := a.ddlViewState()
 	st.Buffer.Reset(msg)
 	st.SetScrollY(0)
@@ -910,19 +910,19 @@ func (a *root) setDDLNote(title, msg string) {
 
 // ddlPanel 渲染 DDL 弹窗：只读 SQL 编辑器支持高亮与部分选中复制。
 func (a *root) ddlPanel(c *ui.Context) {
-	if !a.ddlOpen {
+	if !a.modal.DDLOpen {
 		return
 	}
-	ui.Modal(c, &a.ddlOpen, func() {
-		ui.Text(c, locales.TreeDDLTitle(a.ddlTitle)).Bold().SingleLine()
+	ui.Modal(c, &a.modal.DDLOpen, func() {
+		ui.Text(c, locales.TreeDDLTitle(a.modal.DDLTitle)).Bold().SingleLine()
 		myeditor.View(c, a.ddlViewState()).FillWidth().Height(ddlPanelHeight - 110)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.TreeCopyAll()).Tooltip(locales.TreeCopyAllTip()).
 				Clicked() {
-				c.WriteClipboard(a.ddlState.Buffer.String())
+				c.WriteClipboard(a.modal.DDLState.Buffer.String())
 			}
 			if ui.PrimaryButton(c, locales.CommonClose()).Clicked() {
-				a.ddlOpen = false
+				a.modal.DDLOpen = false
 			}
 		})
 	}).Width(ddlPanelWidth).Height(ddlPanelHeight)

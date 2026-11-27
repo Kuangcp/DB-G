@@ -63,7 +63,7 @@ func (a *root) resultFooter(c *ui.Context) {
 		if a.store != nil {
 			p, _ = a.store.Get(connID)
 		}
-		info := a.serverInfo[connID]
+		info := a.session.ServerInfo[connID]
 		database := info.Database
 		if database == "" {
 			database = p.Database
@@ -79,9 +79,9 @@ func (a *root) resultFooter(c *ui.Context) {
 		case info.Version != "":
 			ui.Text(c, locales.FooterVersion()).FontSize(11).TextColor(t.TextMuted)
 			ui.Text(c, info.Version).FontSize(11.5).SingleLine()
-		case a.serverInfoErr[connID] != "":
+		case a.session.ServerInfoErr[connID] != "":
 			msg := ui.Text(c, locales.FooterVersionUnknown()).FontSize(11).TextColor(t.TextMuted)
-			msg.Tooltip(a.serverInfoErr[connID])
+			msg.Tooltip(a.session.ServerInfoErr[connID])
 		case a.connected(connID):
 			ui.Text(c, locales.FooterVersionLoading()).FontSize(11).TextColor(t.TextMuted)
 		}

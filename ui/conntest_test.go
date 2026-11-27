@@ -59,8 +59,8 @@ func TestConnFormTestConnectionOK(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connTestErr || !strings.HasPrefix(a.connTestMsg, "连接成功") {
-		t.Fatalf("test connection: %q (err=%v)", a.connTestMsg, a.connTestErr)
+	if a.connForm.TestErr || !strings.HasPrefix(a.connForm.TestMsg, "连接成功") {
+		t.Fatalf("test connection: %q (err=%v)", a.connForm.TestMsg, a.connForm.TestErr)
 	}
 	if !tt.HasText("连接成功") {
 		t.Fatalf("结果没显示在弹窗里: %q", tt.Texts())
@@ -75,8 +75,8 @@ func TestConnFormTestConnectionFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.connTestErr || !strings.HasPrefix(a.connTestMsg, "失败：") {
-		t.Fatalf("test connection should fail: %q (err=%v)", a.connTestMsg, a.connTestErr)
+	if !a.connForm.TestErr || !strings.HasPrefix(a.connForm.TestMsg, "失败：") {
+		t.Fatalf("test connection should fail: %q (err=%v)", a.connForm.TestMsg, a.connForm.TestErr)
 	}
 	if !tt.HasText("失败：") {
 		t.Fatalf("失败原因没显示: %q", tt.Texts())
@@ -95,8 +95,8 @@ func TestConnFormCopyToClipboard(t *testing.T) {
 	if got := tt.Clipboard(); !strings.Contains(got, "名称: 本地") || !strings.Contains(got, "文件: /tmp/app.db") {
 		t.Fatalf("clipboard: %q", got)
 	}
-	if a.connTestErr || !strings.Contains(a.connTestMsg, "已复制") {
-		t.Fatalf("copy feedback: %q", a.connTestMsg)
+	if a.connForm.TestErr || !strings.Contains(a.connForm.TestMsg, "已复制") {
+		t.Fatalf("copy feedback: %q", a.connForm.TestMsg)
 	}
 }
 
@@ -139,8 +139,8 @@ func TestConnFormCopyIncludesPassword(t *testing.T) {
 	if got := tt.Clipboard(); !strings.Contains(got, "密码: secret") {
 		t.Fatalf("clipboard must include plaintext password: %q", got)
 	}
-	if !strings.Contains(a.connTestMsg, "含明文密码") {
-		t.Fatalf("copy feedback: %q", a.connTestMsg)
+	if !strings.Contains(a.connForm.TestMsg, "含明文密码") {
+		t.Fatalf("copy feedback: %q", a.connForm.TestMsg)
 	}
 }
 
@@ -185,8 +185,8 @@ func TestDuplicateConnAddsExactlyOneCopy(t *testing.T) {
 			t.Fatalf("副本应继承原数据源字段: %+v", p)
 		}
 	}
-	if len(a.toastQueue) != 0 {
-		t.Fatalf("复制不应报错: %v", a.toastQueue)
+	if len(a.toasts.Queue) != 0 {
+		t.Fatalf("复制不应报错: %v", a.toasts.Queue)
 	}
 	var copies int
 	for _, p := range list {
@@ -221,8 +221,8 @@ func TestConnRowContextMenu(t *testing.T) {
 	if err := tt.ChooseMenuItem("删除连接…"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.connDeleteOpen || a.connDeleting != a.store.List()[0].ID {
-		t.Fatalf("删除应打开确认弹窗: open=%v id=%q", a.connDeleteOpen, a.connDeleting)
+	if !a.connForm.DeleteOpen || a.connForm.Deleting != a.store.List()[0].ID {
+		t.Fatalf("删除应打开确认弹窗: open=%v id=%q", a.connForm.DeleteOpen, a.connForm.Deleting)
 	}
 	if len(a.store.List()) != 1 {
 		t.Fatal("确认前不得删除连接")
@@ -232,7 +232,7 @@ func TestConnRowContextMenu(t *testing.T) {
 // 测试连接进行中按钮变成「取消测试」，点了能自己取消。
 func TestCancelConnTest(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connTestBusy, a.connTestMsg = true, "测试中…"
+	a.connForm.TestBusy, a.connForm.TestMsg = true, "测试中…"
 	tt.Frame()
 	if !tt.HasText("取消测试") {
 		t.Fatalf("busy 时应显示取消按钮: %v", tt.Texts())
@@ -240,11 +240,11 @@ func TestCancelConnTest(t *testing.T) {
 	if err := tt.Click("取消测试"); err != nil {
 		t.Fatal(err)
 	}
-	if a.connTestBusy {
+	if a.connForm.TestBusy {
 		t.Fatal("取消后不能再处于测试中")
 	}
-	if a.connTestMsg != "已取消测试" {
-		t.Fatalf("取消反馈: %q", a.connTestMsg)
+	if a.connForm.TestMsg != "已取消测试" {
+		t.Fatalf("取消反馈: %q", a.connForm.TestMsg)
 	}
 }
 

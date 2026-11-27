@@ -51,7 +51,7 @@ func TestCtrlClickObjectOpensDDL(t *testing.T) {
 	}
 	tt.ClickAtWith(ui.Ctrl, rect.X+2, rect.Y+rect.H/2)
 	tt.Frame()
-	if !a.ddlOpen {
+	if !a.modal.DDLOpen {
 		t.Fatalf("Ctrl+点击应打开 DDL: calls=%d", fake.calls)
 	}
 	if fake.calls != 1 {
@@ -67,8 +67,8 @@ func TestPlainClickObjectDoesNotOpenDDL(t *testing.T) {
 	}
 	tt.ClickAt(rect.X+2, rect.Y+rect.H/2)
 	tt.Frame()
-	if a.ddlOpen || fake.calls != 0 {
-		t.Fatalf("普通点击不应打开 DDL: open=%v calls=%d", a.ddlOpen, fake.calls)
+	if a.modal.DDLOpen || fake.calls != 0 {
+		t.Fatalf("普通点击不应打开 DDL: open=%v calls=%d", a.modal.DDLOpen, fake.calls)
 	}
 }
 

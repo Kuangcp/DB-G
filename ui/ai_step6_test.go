@@ -86,7 +86,7 @@ func TestAIContextHydratesTablesAndColumns(t *testing.T) {
 		t.Fatalf("columns missing: %+v", got.Tables)
 	}
 	// 负载回填 catalog，下一次请求不再查库。
-	if tables, _, ok := a.catalog.objects(prof.ID); !ok || len(tables) != 2 {
+	if tables, _, ok := a.session.Catalog.objects(prof.ID); !ok || len(tables) != 2 {
 		t.Fatalf("catalog not warmed: %v %v", tables, ok)
 	}
 	objects, columns := fake.objectCalls, fake.columnCalls

@@ -25,34 +25,34 @@ const connTestTimeout = 5 * time.Second
 
 // resetConnTest 清掉弹窗里那一行反馈（换类型、重新打开弹窗时）；递增轮次让在途结果作废。
 func (a *root) resetConnTest() {
-	a.connTestSeq++
-	a.connTestMsg, a.connTestErr, a.connTestBusy = "", false, false
+	a.connForm.TestSeq++
+	a.connForm.TestMsg, a.connForm.TestErr, a.connForm.TestBusy = "", false, false
 }
 
 // cancelConnTest 取消正在进行的「测试连接」：递增轮次，在途 goroutine 的结果会被丢弃。
 func (a *root) cancelConnTest() {
-	if !a.connTestBusy {
+	if !a.connForm.TestBusy {
 		return
 	}
-	a.connTestSeq++
-	a.connTestBusy = false
-	a.connTestMsg, a.connTestErr = locales.ConnTestCanceled(), false
+	a.connForm.TestSeq++
+	a.connForm.TestBusy = false
+	a.connForm.TestMsg, a.connForm.TestErr = locales.ConnTestCanceled(), false
 }
 
 // testConnForm 用表单当前内容试连一次：先按类型建会话，Open（内含 ping）再跑
 // 一条 SELECT 1，确认账号真能查。有窗口时在后台跑，结果回投到 UI 线程。
 func (a *root) testConnForm() {
-	if a.connTestBusy {
+	if a.connForm.TestBusy {
 		return
 	}
 	p, err := a.connFormProfile()
 	if err != nil {
-		a.connTestMsg, a.connTestErr = err.Error(), true
+		a.connForm.TestMsg, a.connForm.TestErr = err.Error(), true
 		return
 	}
-	a.connTestMsg, a.connTestErr, a.connTestBusy = locales.ConnTestRunning(), false, true
-	a.connTestSeq++
-	seq := a.connTestSeq
+	a.connForm.TestMsg, a.connForm.TestErr, a.connForm.TestBusy = locales.ConnTestRunning(), false, true
+	a.connForm.TestSeq++
+	seq := a.connForm.TestSeq
 	probe := func() (string, bool) {
 		start := time.Now()
 		sess, err := engine.Open(engineProfile(p))
@@ -71,11 +71,11 @@ func (a *root) testConnForm() {
 		return locales.ConnTestOK(int(time.Since(start).Milliseconds())), false
 	}
 	done := func(msg string, failed bool) {
-		if a.connTestSeq != seq {
+		if a.connForm.TestSeq != seq {
 			return // 已取消或被新一轮取代
 		}
-		a.connTestBusy = false
-		a.connTestMsg, a.connTestErr = msg, failed
+		a.connForm.TestBusy = false
+		a.connForm.TestMsg, a.connForm.TestErr = msg, failed
 		app.LogInfo("conn", "test", "kind", p.Kind, "name", p.Name, "ok", !failed, "msg", msg)
 	}
 	if a.win == nil {
@@ -129,9 +129,9 @@ func connFormSummary(p app.ConnProfile) string {
 func (a *root) copyConnForm(c *ui.Context) {
 	p, err := a.connFormProfile()
 	if err != nil {
-		a.connTestMsg, a.connTestErr = err.Error(), true
+		a.connForm.TestMsg, a.connForm.TestErr = err.Error(), true
 		return
 	}
 	c.WriteClipboard(connFormSummary(p))
-	a.connTestMsg, a.connTestErr = locales.ConnInfoCopied(), false
+	a.connForm.TestMsg, a.connForm.TestErr = locales.ConnInfoCopied(), false
 }

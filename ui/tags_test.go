@@ -30,7 +30,7 @@ func TestResultFooterShowsDatabaseVersionAndTags(t *testing.T) {
 	if err := a.openConn(p); err != nil {
 		t.Fatal(err)
 	}
-	info, ok := a.serverInfo[p.ID]
+	info, ok := a.session.ServerInfo[p.ID]
 	if !ok || info.Version == "" {
 		t.Fatalf("server info = %+v", info)
 	}

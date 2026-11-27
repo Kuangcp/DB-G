@@ -26,13 +26,13 @@ type extFile struct {
 
 // externalState 取/建某控制台的外部文件状态。
 func (a *root) externalState(id string) *extFile {
-	if a.extFiles == nil {
-		a.extFiles = map[string]*extFile{}
+	if a.external.Files == nil {
+		a.external.Files = map[string]*extFile{}
 	}
-	st, ok := a.extFiles[id]
+	st, ok := a.external.Files[id]
 	if !ok {
 		st = &extFile{}
-		a.extFiles[id] = st
+		a.external.Files[id] = st
 	}
 	return st
 }
@@ -175,14 +175,14 @@ func (a *root) ensureExternal(id string) {
 
 // pollExternalFiles 每秒扫一次已打开的外部控制台；force 供测试/显式检查用。
 func (a *root) pollExternalFiles(force bool) {
-	if a.store == nil || a.mgr == nil {
+	if a.store == nil || a.session.Mgr == nil {
 		return
 	}
-	if !a.extPollAt.IsZero() && !force && time.Since(a.extPollAt) < time.Second {
+	if !a.external.PollAt.IsZero() && !force && time.Since(a.external.PollAt) < time.Second {
 		return
 	}
-	a.extPollAt = time.Now()
-	for _, rec := range a.mgr.Open() {
+	a.external.PollAt = time.Now()
+	for _, rec := range a.session.Mgr.Open() {
 		if rec.External {
 			a.ensureExternal(rec.ID)
 		}
@@ -226,7 +226,7 @@ func (a *root) handleDroppedFiles(paths []string) {
 	for _, raw := range paths {
 		norm, err := app.CheckExternalSQL(raw)
 		if err != nil {
-			a.extMsg = filepath.Base(raw) + "：" + err.Error()
+			a.external.Msg = filepath.Base(raw) + "：" + err.Error()
 			continue
 		}
 		if seen[norm] {
@@ -247,8 +247,8 @@ func (a *root) handleDroppedFiles(paths []string) {
 		if a.win != nil {
 			a.win.Focus()
 		}
-		a.extPickPaths = pending
-		a.extPickOpen = true
+		a.external.PickPaths = pending
+		a.external.PickOpen = true
 	}
 }
 
@@ -290,7 +290,7 @@ func (a *root) activateExternalRecord(rec app.ConsoleRecord) {
 		a.initExternal(rec.ID, rec.FilePath)
 	}
 	if !a.activateConsole(rec.ID) {
-		a.extMsg = locales.ExtOpenFailed(rec.Name)
+		a.external.Msg = locales.ExtOpenFailed(rec.Name)
 	}
 }
 
@@ -300,14 +300,14 @@ func (a *root) bindExternal(connID string) {
 		return
 	}
 	var last string
-	for _, path := range a.extPickPaths {
+	for _, path := range a.external.PickPaths {
 		if rec, ok := a.store.GetConsoleByFilePath(path); ok {
 			last = rec.ID
 			continue
 		}
 		rec, err := a.store.CreateExternalConsole(connID, filepath.Base(path), path)
 		if err != nil {
-			a.extMsg = locales.ExtBindFailed(err.Error())
+			a.external.Msg = locales.ExtBindFailed(err.Error())
 			continue
 		}
 		a.initExternal(rec.ID, path)
@@ -315,11 +315,11 @@ func (a *root) bindExternal(connID string) {
 		app.LogInfo("external", "bind sql file", "console", rec.ID, "conn", connID, "path", path)
 		last = rec.ID
 	}
-	a.extPickOpen = false
-	a.extPickPaths = nil
+	a.external.PickOpen = false
+	a.external.PickPaths = nil
 	if last != "" {
 		if !a.activateConsole(last) {
-			a.extMsg = locales.ExtOpenTitle()
+			a.external.Msg = locales.ExtOpenTitle()
 		}
 	}
 }
@@ -368,7 +368,7 @@ func (a *root) externalResolveModal(c *ui.Context) {
 	if !ok {
 		return
 	}
-	ui.Modal(c, &a.extResolveOpen, func() {
+	ui.Modal(c, &a.external.ResolveOpen, func() {
 		ui.Text(c, locales.ExtChangedTitle()).Bold()
 		ui.Text(c, rec.FilePath).Font("monospace").FontSize(11).
 			TextColor(c.Theme().TextMuted).SingleLine().Tooltip(rec.FilePath)
@@ -377,29 +377,29 @@ func (a *root) externalResolveModal(c *ui.Context) {
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.extResolveOpen = false
+				a.external.ResolveOpen = false
 			}
 			if st.missing {
 				if ui.PrimaryButton(c, locales.ExtSaveAs()).Clicked() {
-					a.extResolveOpen = false
+					a.external.ResolveOpen = false
 					a.pickExternalSaveAs()
 				}
 				if ui.Button(c, locales.ExtRecreate()).Clicked() {
-					a.extResolveOpen = false
+					a.external.ResolveOpen = false
 					a.recreateExternal()
 				}
 				return
 			}
 			if ui.Button(c, locales.ExtReload()).Clicked() {
-				a.extResolveOpen = false
+				a.external.ResolveOpen = false
 				a.reloadExternal()
 			}
 			if ui.Button(c, locales.ExtKeepLocal()).Clicked() {
-				a.extResolveOpen = false
+				a.external.ResolveOpen = false
 				a.keepLocalExternal()
 			}
 			if ui.PrimaryButton(c, locales.ExtSaveAs()).Clicked() {
-				a.extResolveOpen = false
+				a.external.ResolveOpen = false
 				a.pickExternalSaveAs()
 			}
 		})
@@ -408,14 +408,14 @@ func (a *root) externalResolveModal(c *ui.Context) {
 
 // externalPickerModal 让拖入的新文件选择数据源。
 func (a *root) externalPickerModal(c *ui.Context) {
-	ui.Modal(c, &a.extPickOpen, func() {
+	ui.Modal(c, &a.external.PickOpen, func() {
 		ui.Text(c, locales.ExtChooseDatasource()).Bold()
-		names := make([]string, 0, len(a.extPickPaths))
-		for _, p := range a.extPickPaths {
+		names := make([]string, 0, len(a.external.PickPaths))
+		for _, p := range a.external.PickPaths {
 			names = append(names, filepath.Base(p))
 		}
 		ui.Text(c, locales.ExtBindTo(strings.Join(names, locales.ListSeparator()))).FontSize(12).
-			TextColor(c.Theme().TextMuted).SingleLine().Tooltip(strings.Join(a.extPickPaths, "\n"))
+			TextColor(c.Theme().TextMuted).SingleLine().Tooltip(strings.Join(a.external.PickPaths, "\n"))
 		ui.Scroll(c).Height(220).Children(func() {
 			if a.store == nil {
 				return
@@ -432,8 +432,8 @@ func (a *root) externalPickerModal(c *ui.Context) {
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.extPickOpen = false
-				a.extPickPaths = nil
+				a.external.PickOpen = false
+				a.external.PickPaths = nil
 			}
 		})
 	}).Width(520).Height(340)
@@ -458,11 +458,11 @@ func (a *root) pickExternalSaveAs() {
 		path += ".sql"
 	}
 	if err := a.rebindExternal(rec.ID, path); err != nil {
-		a.extMsg = locales.ExtSaveAsFailed(err.Error())
+		a.external.Msg = locales.ExtSaveAsFailed(err.Error())
 		return
 	}
 	app.LogInfo("external", "save as", "console", rec.ID, "path", path)
-	a.extMsg = locales.ExtSavedAs(path)
+	a.external.Msg = locales.ExtSavedAs(path)
 }
 
 // rebindExternal 把缓冲写到 newPath 并把控制台改绑过去（测试直接调用）。
@@ -504,7 +504,7 @@ func (a *root) reloadExternal() {
 	text, err := app.ReadExternalSQL(rec.FilePath)
 	if err != nil {
 		st.missing = true
-		a.extMsg = locales.ExtReadFailed(err.Error())
+		a.external.Msg = locales.ExtReadFailed(err.Error())
 		return
 	}
 	m := a.consoleMgr()
@@ -527,9 +527,9 @@ func (a *root) requestReloadConsole(id string) {
 	}
 	if m := a.consoleMgr(); m != nil && m.Dirty(id) {
 		m.SetSavePaused(id, true)
-		a.reloadPausedID = id
-		a.reloadConsoleID = id
-		a.reloadConfirmOpen = true
+		a.modal.ReloadPausedID = id
+		a.modal.ReloadConsoleID = id
+		a.modal.ReloadConfirmOpen = true
 		return
 	}
 	a.reloadConsoleFromDisk(id)
@@ -575,18 +575,18 @@ func (a *root) reloadConsoleFromDisk(id string) {
 
 // consoleReloadModal 是「重新加载」覆盖未保存改动前的确认。
 func (a *root) consoleReloadModal(c *ui.Context) {
-	if !a.reloadConfirmOpen {
+	if !a.modal.ReloadConfirmOpen {
 		a.resumeReloadPause()
 		return
 	}
-	id := a.reloadConsoleID
+	id := a.modal.ReloadConsoleID
 	rec, ok := a.store.GetConsole(id)
 	if !ok {
-		a.reloadConfirmOpen = false
+		a.modal.ReloadConfirmOpen = false
 		a.resumeReloadPause()
 		return
 	}
-	ui.Modal(c, &a.reloadConfirmOpen, func() {
+	ui.Modal(c, &a.modal.ReloadConfirmOpen, func() {
 		ui.Text(c, locales.ConsoleReloadTitle()).Bold()
 		if rec.External {
 			ui.Text(c, rec.FilePath).Font("monospace").FontSize(11).
@@ -596,11 +596,11 @@ func (a *root) consoleReloadModal(c *ui.Context) {
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.reloadConfirmOpen = false
+				a.modal.ReloadConfirmOpen = false
 			}
 			if ui.PrimaryButton(c, locales.ExtReload()).Clicked() {
-				a.reloadConfirmOpen = false
-				a.reloadPausedID = ""
+				a.modal.ReloadConfirmOpen = false
+				a.modal.ReloadPausedID = ""
 				a.reloadConsoleFromDisk(id)
 			}
 		})
@@ -609,12 +609,12 @@ func (a *root) consoleReloadModal(c *ui.Context) {
 
 // resumeReloadPause 在确认弹窗取消/关闭后恢复自动写盘；外部文件仍冲突或缺失时保持暂停。
 func (a *root) resumeReloadPause() {
-	id := a.reloadPausedID
+	id := a.modal.ReloadPausedID
 	if id == "" {
 		return
 	}
-	a.reloadPausedID = ""
-	if st, ok := a.extFiles[id]; ok && (st.conflict || st.missing) {
+	a.modal.ReloadPausedID = ""
+	if st, ok := a.external.Files[id]; ok && (st.conflict || st.missing) {
 		return
 	}
 	if m := a.consoleMgr(); m != nil {
@@ -635,7 +635,7 @@ func (a *root) keepLocalExternal() {
 	m.SetSavePaused(rec.ID, false)
 	if err := m.FlushForce(rec.ID); err != nil {
 		m.SetSavePaused(rec.ID, true)
-		a.extMsg = locales.ExtSaveFailed(err.Error())
+		a.external.Msg = locales.ExtSaveFailed(err.Error())
 		return
 	}
 	text := a.localText(rec.ID)
@@ -653,7 +653,7 @@ func (a *root) recreateExternal() {
 	}
 	text := a.localText(rec.ID)
 	if err := app.WriteExternalSQL(rec.FilePath, text); err != nil {
-		a.extMsg = locales.ExtRecreateFailed(err.Error())
+		a.external.Msg = locales.ExtRecreateFailed(err.Error())
 		return
 	}
 	m := a.consoleMgr()
@@ -682,10 +682,10 @@ func (a *root) externalHasLocalChanges(id string) bool {
 
 // firstBlockedExternal 返回第一个需要用户先处理的外部控制台（窗口关闭保护用）。
 func (a *root) firstBlockedExternal() string {
-	if a.mgr == nil {
+	if a.session.Mgr == nil {
 		return ""
 	}
-	for _, rec := range a.mgr.Open() {
+	for _, rec := range a.session.Mgr.Open() {
 		if rec.External && a.externalHasLocalChanges(rec.ID) {
 			return rec.ID
 		}
@@ -702,7 +702,7 @@ func (a *root) externalBlocked() bool {
 	if !st.conflict && !st.missing {
 		return false
 	}
-	a.extResolveOpen = true
+	a.external.ResolveOpen = true
 	return true
 }
 
@@ -713,7 +713,7 @@ func (a *root) externalFlushFailed(err error) bool {
 		return false
 	}
 	a.ensureExternal(rec.ID)
-	a.extMsg = locales.ExtSaveFailed(err.Error())
+	a.external.Msg = locales.ExtSaveFailed(err.Error())
 	a.externalBlocked()
 	return true
 }
@@ -733,5 +733,5 @@ func (a *root) externalAfterSave(id string) {
 
 // RemoveExternalState 丢弃某控制台的外部状态（删除控制台时用）。
 func (a *root) removeExternalState(id string) {
-	delete(a.extFiles, id)
+	delete(a.external.Files, id)
 }

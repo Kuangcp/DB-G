@@ -128,7 +128,7 @@ func TestSchemaSwitchScopesCompletionCache(t *testing.T) {
 	}
 	a.ensureColumns(stored.ID, "t")
 	key, _ := a.completionScope(stored.ID)
-	cols, ok := a.catalog.getColumns(key, "t")
+	cols, ok := a.session.Catalog.getColumns(key, "t")
 	if !ok || !hasCompletion(cols, "col_db1") {
 		t.Fatalf("db1 列未缓存: %v", labelsOf(cols))
 	}
@@ -141,7 +141,7 @@ func TestSchemaSwitchScopesCompletionCache(t *testing.T) {
 	}
 	a.ensureColumns(stored.ID, "t")
 	db2Key, _ := a.completionScope(stored.ID)
-	cols, ok = a.catalog.getColumns(db2Key, "t")
+	cols, ok = a.session.Catalog.getColumns(db2Key, "t")
 	if !ok || !hasCompletion(cols, "col_db2") || hasCompletion(cols, "col_db1") {
 		t.Fatalf("切库后列缓存不对: ok=%v %v", ok, labelsOf(cols))
 	}

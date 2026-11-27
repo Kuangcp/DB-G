@@ -28,9 +28,9 @@ func (a *root) showStats(p app.ConnProfile, o engine.DBObject) {
 		return
 	}
 	// 先把弹窗按「加载中」打开：建连/取数的网络等待都在后台，不卡界面。
-	a.statsOpen, a.statsLoading = true, true
-	a.statsTitle, a.statsKind = o.Name, p.Kind
-	a.stats, a.statsErr, a.statsSQLOpen = nil, "", false
+	a.modal.StatsOpen, a.modal.StatsLoading = true, true
+	a.modal.StatsTitle, a.modal.StatsKind = o.Name, p.Kind
+	a.modal.Stats, a.modal.StatsErr, a.modal.StatsSQLOpen = nil, "", false
 	a.connectAsync(p, func(err error) {
 		if err != nil {
 			a.setStatsNote(app.ErrorText(err))
@@ -89,21 +89,21 @@ func (a *root) loadStats(p app.ConnProfile, o engine.DBObject) {
 
 // setStats 把统计结果装进弹窗；SQL 默认折叠，但缓冲区先备好，复制不受折叠影响。
 func (a *root) setStats(stats *engine.ObjectStats) {
-	a.stats, a.statsErr, a.statsLoading = stats, "", false
+	a.modal.Stats, a.modal.StatsErr, a.modal.StatsLoading = stats, "", false
 	view := a.statsSQLView()
-	view.Buffer.SetLanguage(sqlLanguageForKind(a.statsKind))
+	view.Buffer.SetLanguage(sqlLanguageForKind(a.modal.StatsKind))
 	view.Buffer.Reset(joinStatsSQL(stats))
 }
 
 // setStatsNote 在弹窗里显示一行提示（不支持 / 读取失败）。
 func (a *root) setStatsNote(msg string) {
-	a.stats, a.statsErr, a.statsLoading = nil, msg, false
+	a.modal.Stats, a.modal.StatsErr, a.modal.StatsLoading = nil, msg, false
 }
 
 // statsSQLView 返回统计 SQL 的只读高亮视图（首次用时创建）。
 func (a *root) statsSQLView() *myeditor.State {
-	if a.statsSQLState == nil {
-		a.statsSQLState = &myeditor.State{
+	if a.modal.StatsSQLState == nil {
+		a.modal.StatsSQLState = &myeditor.State{
 			Buffer:       myeditor.NewBuffer(""),
 			ReadOnly:     true,
 			LineNumbers:  myeditor.LineNumbersOff,
@@ -111,7 +111,7 @@ func (a *root) statsSQLView() *myeditor.State {
 			NoFolding:    true,
 		}
 	}
-	return a.statsSQLState
+	return a.modal.StatsSQLState
 }
 
 // joinStatsSQL 把驱动实际执行的语句拼成可复制的脚本文本。
@@ -141,21 +141,21 @@ func joinStatsSQL(stats *engine.ObjectStats) string {
 
 // statsPanel 渲染统计弹窗：常用指标 + 数据源特有项 + 可折叠、可复制的统计 SQL。
 func (a *root) statsPanel(c *ui.Context) {
-	if !a.statsOpen {
+	if !a.modal.StatsOpen {
 		return
 	}
 	t := c.Theme()
-	ui.Modal(c, &a.statsOpen, func() {
-		ui.Text(c, locales.StatsTitle(a.statsTitle)).Bold().SingleLine()
+	ui.Modal(c, &a.modal.StatsOpen, func() {
+		ui.Text(c, locales.StatsTitle(a.modal.StatsTitle)).Bold().SingleLine()
 		switch {
-		case a.statsLoading:
+		case a.modal.StatsLoading:
 			ui.Text(c, locales.StatsLoading()).TextColor(t.TextMuted)
-		case a.statsErr != "":
-			note := ui.Text(c, a.statsErr).SingleLine().TextColor(t.Danger)
-			note.Tooltip(a.statsErr)
-		case a.stats != nil:
+		case a.modal.StatsErr != "":
+			note := ui.Text(c, a.modal.StatsErr).SingleLine().TextColor(t.Danger)
+			note.Tooltip(a.modal.StatsErr)
+		case a.modal.Stats != nil:
 			bodyHeight := float32(420)
-			if a.statsSQLOpen {
+			if a.modal.StatsSQLOpen {
 				bodyHeight = 270
 			}
 			ui.Scroll(c).Height(bodyHeight).Children(func() {
@@ -168,14 +168,14 @@ func (a *root) statsPanel(c *ui.Context) {
 			}
 			header.Children(func() {
 				ic := ui.Icon(c, iconChevronDown).FontSize(14)
-				if !a.statsSQLOpen {
+				if !a.modal.StatsSQLOpen {
 					ic.Rotate(-90)
 				}
 				ic.TextColor(t.TextMuted)
 				ui.Text(c, locales.StatsSQL())
 				ui.Spacer(c)
-				n := len(a.stats.SQL)
-				if a.stats.ExactRowsSQL != "" {
+				n := len(a.modal.Stats.SQL)
+				if a.modal.Stats.ExactRowsSQL != "" {
 					n++
 				}
 				if n == 0 {
@@ -185,20 +185,20 @@ func (a *root) statsPanel(c *ui.Context) {
 				}
 			})
 			if header.Clicked() {
-				a.statsSQLOpen = !a.statsSQLOpen
+				a.modal.StatsSQLOpen = !a.modal.StatsSQLOpen
 			}
-			if a.statsSQLOpen {
+			if a.modal.StatsSQLOpen {
 				myeditor.View(c, a.statsSQLView()).FillWidth().Height(150)
 			}
 		}
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-			if a.stats != nil && len(a.stats.SQL) > 0 &&
+			if a.modal.Stats != nil && len(a.modal.Stats.SQL) > 0 &&
 				ui.Button(c, locales.HistoryCopySQL()).Tooltip(locales.StatsCopySQLTip()).Clicked() {
-				c.WriteClipboard(joinStatsSQL(a.stats))
+				c.WriteClipboard(joinStatsSQL(a.modal.Stats))
 			}
 			if ui.PrimaryButton(c, locales.CommonClose()).Clicked() {
-				a.statsOpen = false
+				a.modal.StatsOpen = false
 			}
 		})
 	}).Width(statsPanelWidth).Height(statsPanelHeight)
@@ -218,13 +218,13 @@ func (a *root) statsBody(c *ui.Context) {
 		}
 		return formatByteSize(*v), strconv.FormatInt(*v, 10) + " B"
 	}
-	statsKV(c, locales.StatsRows(), count(a.stats.Rows), "")
-	statsKV(c, locales.StatsColumns(), count(a.stats.Columns), "")
-	value, tip := size(a.stats.DataBytes)
+	statsKV(c, locales.StatsRows(), count(a.modal.Stats.Rows), "")
+	statsKV(c, locales.StatsColumns(), count(a.modal.Stats.Columns), "")
+	value, tip := size(a.modal.Stats.DataBytes)
 	statsKV(c, locales.StatsDataSize(), value, tip)
-	value, tip = size(a.stats.IndexBytes)
+	value, tip = size(a.modal.Stats.IndexBytes)
 	statsKV(c, locales.StatsIndexSize(), value, tip)
-	for _, item := range a.stats.Extra {
+	for _, item := range a.modal.Stats.Extra {
 		value, tip = statDisplay(item.Key, item.Value)
 		statsKV(c, statLabel(item.Key), value, tip)
 	}

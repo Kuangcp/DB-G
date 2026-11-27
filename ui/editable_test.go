@@ -111,21 +111,21 @@ func TestEditInsertRowCellsThroughUI(t *testing.T) {
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
 	r := a.currentRuntime().Result()
 	ins := a.addInsertRow(r)
-	if ins != 0 || !a.inlineEditOn || a.inlineEditRow != -1 || a.inlineEditCol != 1 {
+	if ins != 0 || !a.edit.InlineOn || a.edit.InlineRow != -1 || a.edit.InlineCol != 1 {
 		t.Fatalf("add row should edit first non-pk column: ins=%d inline=%v row=%d col=%d",
-			ins, a.inlineEditOn, a.inlineEditRow, a.inlineEditCol)
+			ins, a.edit.InlineOn, a.edit.InlineRow, a.edit.InlineCol)
 	}
-	a.inlineEditText = "bob"
+	a.edit.InlineText = "bob"
 	a.commitInlineEdit()
 	if got, ok := a.editSet().Inserts[0][1]; !ok || got != "bob" {
 		t.Fatalf("insert name: %v %v", got, ok)
 	}
 	// 主键列对已有行只读，但对新增行必须可填。
 	a.beginEditAt(r, -1, 0)
-	if !a.inlineEditOn || a.inlineEditRow != -1 || a.inlineEditCol != 0 {
-		t.Fatalf("insert pk editor: %v %d %d", a.inlineEditOn, a.inlineEditRow, a.inlineEditCol)
+	if !a.edit.InlineOn || a.edit.InlineRow != -1 || a.edit.InlineCol != 0 {
+		t.Fatalf("insert pk editor: %v %d %d", a.edit.InlineOn, a.edit.InlineRow, a.edit.InlineCol)
 	}
-	a.inlineEditText = "2"
+	a.edit.InlineText = "2"
 	a.commitInlineEdit()
 	if got, ok := a.editSet().Inserts[0][0]; !ok || got != int64(2) {
 		t.Fatalf("insert pk: %v %v", got, ok)
@@ -198,7 +198,7 @@ func TestCommitThroughPreviewModal(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.previewOpen || !tt.HasText("提交 1 条改动") {
+	if !a.edit.PreviewOpen || !tt.HasText("提交 1 条改动") {
 		t.Fatalf("preview missing: %q", tt.Texts())
 	}
 	if err := tt.Click("确认提交"); err != nil {
@@ -251,20 +251,20 @@ func TestCtrlDoubleClickEditsShortCellInline(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	tt.HoldModifiers(0)
-	if !a.inlineEditOn || a.editCellOpen {
-		t.Fatalf("short cell must edit inline: inline=%v modal=%v view=%v row=%d cursor=%q plan=%v err=%q", a.inlineEditOn, a.editCellOpen, a.cellView.Open, a.grid.row, a.grid.state.Cells.Cursor, a.grid.plan, a.consoleErr)
+	if !a.edit.InlineOn || a.edit.CellOpen {
+		t.Fatalf("short cell must edit inline: inline=%v modal=%v view=%v row=%d cursor=%q plan=%v err=%q", a.edit.InlineOn, a.edit.CellOpen, a.cellView.Open, a.grid.row, a.grid.state.Cells.Cursor, a.grid.plan, a.consoleErr)
 	}
-	if a.inlineEditRow != 0 || a.inlineEditCol != 1 {
-		t.Fatalf("inline target = (%d,%d)", a.inlineEditRow, a.inlineEditCol)
+	if a.edit.InlineRow != 0 || a.edit.InlineCol != 1 {
+		t.Fatalf("inline target = (%d,%d)", a.edit.InlineRow, a.edit.InlineCol)
 	}
 	tt.Type("2")
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if a.inlineEditOn {
+	if a.edit.InlineOn {
 		t.Fatal("Enter must finish inline editing")
 	}
-	if a.cellView.Open || a.editCellOpen {
-		t.Fatalf("Enter must not open another panel: view=%v modal=%v", a.cellView.Open, a.editCellOpen)
+	if a.cellView.Open || a.edit.CellOpen {
+		t.Fatalf("Enter must not open another panel: view=%v modal=%v", a.cellView.Open, a.edit.CellOpen)
 	}
 	got, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]
 	if !ok || got != "alice2" {
@@ -303,22 +303,22 @@ func TestCtrlDoubleClickLongCellOpensModal(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	tt.HoldModifiers(0)
-	if !a.editCellOpen || a.inlineEditOn {
-		t.Fatalf("long cell must open modal: modal=%v inline=%v view=%v row=%d cursor=%q plan=%v err=%q", a.editCellOpen, a.inlineEditOn, a.cellView.Open, a.grid.row, a.grid.state.Cells.Cursor, a.grid.plan, a.consoleErr)
+	if !a.edit.CellOpen || a.edit.InlineOn {
+		t.Fatalf("long cell must open modal: modal=%v inline=%v view=%v row=%d cursor=%q plan=%v err=%q", a.edit.CellOpen, a.edit.InlineOn, a.cellView.Open, a.grid.row, a.grid.state.Cells.Cursor, a.grid.plan, a.consoleErr)
 	}
-	if a.editCellText != long {
-		t.Fatalf("modal text = %q", a.editCellText)
+	if a.edit.CellText != long {
+		t.Fatalf("modal text = %q", a.edit.CellText)
 	}
 	if !tt.HasText("编辑 name · 第 1 行") {
 		t.Fatalf("modal title missing: %q", tt.Texts())
 	}
-	a.editCellText = long + "改"
+	a.edit.CellText = long + "改"
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.editCellOpen {
+	if a.edit.CellOpen {
 		t.Fatal("save must close the edit modal")
 	}
 	got, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]
@@ -425,8 +425,8 @@ func TestEditingNullStartsWithEmptyText(t *testing.T) {
 		t.Fatalf("precondition: result=%v plan=%v reason=%q", r, a.grid.plan, a.grid.readonly)
 	}
 	a.beginEditAt(r, 0, 1)
-	if !a.inlineEditOn || a.inlineEditText != "" {
-		t.Fatalf("NULL cell must open an empty editor, got inline=%v text=%q", a.inlineEditOn, a.inlineEditText)
+	if !a.edit.InlineOn || a.edit.InlineText != "" {
+		t.Fatalf("NULL cell must open an empty editor, got inline=%v text=%q", a.edit.InlineOn, a.edit.InlineText)
 	}
 	a.commitInlineEdit()
 	if _, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; ok {
@@ -547,8 +547,8 @@ func TestCommitSuccessStatusShownInResultToolbar(t *testing.T) {
 	if a.consoleErr != "" {
 		t.Fatalf("提交成功不应占用顶栏错误: %q", a.consoleErr)
 	}
-	if a.editStatus != "提交成功" {
-		t.Fatalf("edit status = %q", a.editStatus)
+	if a.edit.Status != "提交成功" {
+		t.Fatalf("edit status = %q", a.edit.Status)
 	}
 	if !tt.HasText("提交成功") {
 		t.Fatalf("结果工具条缺少提交状态: %q", tt.Texts())
@@ -581,8 +581,8 @@ func TestMouseDoubleClickPlainEditsWhenSwapped(t *testing.T) {
 	tt.ClickAt(rect.X+2, rect.Y+2)
 	tt.Frame()
 	tt.Frame()
-	if !a.inlineEditOn || a.cellView.Open {
-		t.Fatalf("普通双击应变成编辑: inline=%v view=%v", a.inlineEditOn, a.cellView.Open)
+	if !a.edit.InlineOn || a.cellView.Open {
+		t.Fatalf("普通双击应变成编辑: inline=%v view=%v", a.edit.InlineOn, a.cellView.Open)
 	}
 }
 
@@ -597,7 +597,7 @@ func TestMouseDoubleClickCtrlPreviewsWhenSwapped(t *testing.T) {
 	if a.resultClickMods != ui.Ctrl {
 		t.Fatalf("应记录双击时的 Ctrl 修饰键，得到 %v", a.resultClickMods)
 	}
-	if !a.cellView.Open || a.inlineEditOn {
-		t.Fatalf("Ctrl+双击应变成预览: view=%v inline=%v", a.cellView.Open, a.inlineEditOn)
+	if !a.cellView.Open || a.edit.InlineOn {
+		t.Fatalf("Ctrl+双击应变成预览: view=%v inline=%v", a.cellView.Open, a.edit.InlineOn)
 	}
 }

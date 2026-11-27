@@ -17,7 +17,7 @@ func TestAICompletionRequestsAndStoresSuggestion(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.session.Catalog.finish(prof.ID, []string{"users"}, nil, "")
 	text := "select * from us"
 	a.setActiveText(text)
 	a.setSelection(len(text), len(text))

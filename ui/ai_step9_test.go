@@ -24,8 +24,8 @@ func TestAIPreviewOneOffContextToggles(t *testing.T) {
 		t.Fatal("activate")
 	}
 	a.setActiveText("select id from users")
-	a.catalog.finish(prof.ID, []string{"users"}, nil, "")
-	a.catalog.finishColumns(prof.ID, "users", []engine.Column{{Name: "id", Type: "INTEGER"}}, "")
+	a.session.Catalog.finish(prof.ID, []string{"users"}, nil, "")
+	a.session.Catalog.finishColumns(prof.ID, "users", []engine.Column{{Name: "id", Type: "INTEGER"}}, "")
 	a.ai.Prefs.AllowDDL = true
 	a.ai.Prefs.AllowSampleRows = true
 	a.ai.Prefs.AllowHistory = true

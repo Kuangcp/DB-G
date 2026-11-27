@@ -552,7 +552,7 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 		}
 		menu.Separator()
 		if menu.Item(locales.ConnMenuDelete()).Chosen() {
-			a.connDeleting, a.connDeleteOpen = p.ID, true
+			a.connForm.Deleting, a.connForm.DeleteOpen = p.ID, true
 		}
 	})
 	// 点数据源名/行就是「连上它并展开」：启动时不预连，连接时机只有这一处。
@@ -677,7 +677,7 @@ const (
 )
 
 func (a *root) connModal(c *ui.Context) {
-	if a.connDeleteOpen {
+	if a.connForm.DeleteOpen {
 		a.deleteModal(c)
 		return
 	}
@@ -801,20 +801,20 @@ func (a *root) connModal(c *ui.Context) {
 				}
 				// 留白：按钮沉到面板底部，上方空着。
 				ui.Spacer(c)
-				if a.connTestMsg != "" {
+				if a.connForm.TestMsg != "" {
 					col := c.Theme().Success
-					if a.connTestErr {
+					if a.connForm.TestErr {
 						col = c.Theme().Danger
 					}
-					ui.Text(c, a.connTestMsg).FontSize(12).TextColor(col).
-						SingleLine().Tooltip(a.connTestMsg)
+					ui.Text(c, a.connForm.TestMsg).FontSize(12).TextColor(col).
+						SingleLine().Tooltip(a.connForm.TestMsg)
 				}
 				if a.connForm.URLErr != "" {
 					ui.Text(c, a.connForm.URLErr).FontSize(11).TextColor(c.Theme().Danger).
 						SingleLine().Tooltip(a.connForm.URLErr)
 				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					if a.connTestBusy {
+					if a.connForm.TestBusy {
 						if ui.Button(c, locales.ConnFormCancelTest()).Radius(radius).Clicked() {
 							a.cancelConnTest()
 						}
@@ -918,26 +918,26 @@ func (a *root) switchConnKind(kind string) {
 func (a *root) deleteModal(c *ui.Context) {
 	name := ""
 	for _, p := range a.store.List() {
-		if p.ID == a.connDeleting {
+		if p.ID == a.connForm.Deleting {
 			name = p.Name
 		}
 	}
-	ui.Modal(c, &a.connDeleteOpen, func() {
+	ui.Modal(c, &a.connForm.DeleteOpen, func() {
 		ui.Text(c, locales.ConnDeleteTitle(name)).Bold()
 		ui.Text(c, locales.ConnDeleteHint()).TextColor(c.Theme().TextMuted)
 		if m := a.consoleMgr(); m != nil {
-			if n := len(m.ConsolesOf(a.connDeleting)); n > 0 {
+			if n := len(m.ConsolesOf(a.connForm.Deleting)); n > 0 {
 				ui.Text(c, locales.ConnDeleteConsoles(n)).
 					TextColor(c.Theme().Danger)
 			}
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.connDeleteOpen = false
+				a.connForm.DeleteOpen = false
 			}
 			if ui.Button(c, locales.ConnDeleteButton()).Clicked() {
-				a.removeConn(a.connDeleting)
-				a.connDeleting, a.connDeleteOpen = "", false
+				a.removeConn(a.connForm.Deleting)
+				a.connForm.Deleting, a.connForm.DeleteOpen = "", false
 			}
 		})
 	})
@@ -1116,11 +1116,11 @@ func (a *root) saveConnForm() {
 		if err == nil && had && app.MetaFingerprint(old) != app.MetaFingerprint(p) {
 			// 目标库变了：关掉旧会话，旧元数据缓存与内存树都不再适用。
 			a.closeSession(p.ID, "connection changed")
-			if a.catalog != nil {
-				a.catalog.invalidate(p.ID)
+			if a.session.Catalog != nil {
+				a.session.Catalog.invalidate(p.ID)
 			}
-			if a.sessionErr != nil {
-				delete(a.sessionErr, p.ID)
+			if a.session.Err != nil {
+				delete(a.session.Err, p.ID)
 			}
 			a.forgetConnMeta(p.ID)
 		}
@@ -1183,7 +1183,7 @@ func (a *root) openNewConnForm(folderID string) {
 
 // openFolderModal 打开文件夹弹窗；new 用 target 作父文件夹，rename/delete 用 target 作文件夹 ID。
 func (a *root) openFolderModal(kind, target, text string) {
-	a.folderModalKind, a.folderModalTarget, a.folderModalText, a.folderModalErr = kind, target, text, ""
+	a.modal.FolderKind, a.modal.FolderTarget, a.modal.FolderText, a.modal.FolderErr = kind, target, text, ""
 }
 
 func (a *root) folderContentCounts(id string) (conns, folders int) {
@@ -1205,80 +1205,80 @@ func (a *root) folderContentCounts(id string) (conns, folders int) {
 
 // folderModal 渲染新建/重命名/删除文件夹；数据层负责校验与落盘。
 func (a *root) folderModal(c *ui.Context) {
-	if a.folderModalKind == "" {
+	if a.modal.FolderKind == "" {
 		return
 	}
 	if a.store == nil {
-		a.folderModalKind = ""
+		a.modal.FolderKind = ""
 		return
 	}
 	open := true
 	ui.Modal(c, &open, func() {
-		switch a.folderModalKind {
+		switch a.modal.FolderKind {
 		case "new":
 			title := locales.FolderModalNew()
-			if a.folderModalTarget != "" {
+			if a.modal.FolderTarget != "" {
 				title = locales.FolderModalNewSub()
 			}
 			ui.Text(c, title).Bold()
-			ui.TextInput(c, &a.folderModalText).Placeholder(locales.FolderNamePlaceholder()).AutoFocus()
+			ui.TextInput(c, &a.modal.FolderText).Placeholder(locales.FolderNamePlaceholder()).AutoFocus()
 		case "rename":
 			ui.Text(c, locales.FolderRename()).Bold()
-			ui.TextInput(c, &a.folderModalText).Placeholder(locales.FolderNamePlaceholder()).AutoFocus()
+			ui.TextInput(c, &a.modal.FolderText).Placeholder(locales.FolderNamePlaceholder()).AutoFocus()
 		case "delete":
-			conns, folders := a.folderContentCounts(a.folderModalTarget)
-			ui.Text(c, locales.FolderDeleteTitle(a.folderModalText)).Bold()
+			conns, folders := a.folderContentCounts(a.modal.FolderTarget)
+			ui.Text(c, locales.FolderDeleteTitle(a.modal.FolderText)).Bold()
 			ui.Text(c, locales.FolderDeleteHint(conns, folders)).
 				TextColor(c.Theme().TextMuted)
 		}
-		if a.folderModalErr != "" {
-			ui.Text(c, a.folderModalErr).TextColor(c.Theme().Danger)
+		if a.modal.FolderErr != "" {
+			ui.Text(c, a.modal.FolderErr).TextColor(c.Theme().Danger)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.folderModalKind = ""
+				a.modal.FolderKind = ""
 			}
-			if a.folderModalKind == "delete" {
+			if a.modal.FolderKind == "delete" {
 				btn := ui.Button(c, locales.ConnDeleteButton()).TextColor(c.Theme().Danger)
 				if btn.Clicked() {
-					if err := a.store.DeleteFolder(a.folderModalTarget); err != nil {
-						a.folderModalErr = locales.ModalDeleteFailed(err.Error())
+					if err := a.store.DeleteFolder(a.modal.FolderTarget); err != nil {
+						a.modal.FolderErr = locales.ModalDeleteFailed(err.Error())
 						return
 					}
-					delete(a.tree.FolderCollapsed, a.folderModalTarget)
-					app.LogInfo("conn", "folder deleted", "id", a.folderModalTarget)
-					a.folderModalKind = ""
+					delete(a.tree.FolderCollapsed, a.modal.FolderTarget)
+					app.LogInfo("conn", "folder deleted", "id", a.modal.FolderTarget)
+					a.modal.FolderKind = ""
 				}
 				return
 			}
 			if ui.PrimaryButton(c, locales.CommonSave()).Clicked() {
-				name := strings.TrimSpace(a.folderModalText)
+				name := strings.TrimSpace(a.modal.FolderText)
 				if name == "" {
-					a.folderModalErr = locales.ModalNameEmpty()
+					a.modal.FolderErr = locales.ModalNameEmpty()
 					return
 				}
-				switch a.folderModalKind {
+				switch a.modal.FolderKind {
 				case "new":
-					f, err := a.store.AddFolder(name, a.folderModalTarget)
+					f, err := a.store.AddFolder(name, a.modal.FolderTarget)
 					if err != nil {
-						a.folderModalErr = locales.FolderCreateFailed(err.Error())
+						a.modal.FolderErr = locales.FolderCreateFailed(err.Error())
 						return
 					}
-					delete(a.tree.FolderCollapsed, a.folderModalTarget) // 父级展开，新文件夹可见
+					delete(a.tree.FolderCollapsed, a.modal.FolderTarget) // 父级展开，新文件夹可见
 					app.LogInfo("conn", "folder added", "id", f.ID, "name", f.Name, "parent", f.ParentID)
 				case "rename":
-					if err := a.store.RenameFolder(a.folderModalTarget, name); err != nil {
-						a.folderModalErr = locales.ModalRenameFailed(err.Error())
+					if err := a.store.RenameFolder(a.modal.FolderTarget, name); err != nil {
+						a.modal.FolderErr = locales.ModalRenameFailed(err.Error())
 						return
 					}
-					app.LogInfo("conn", "folder renamed", "id", a.folderModalTarget, "name", name)
+					app.LogInfo("conn", "folder renamed", "id", a.modal.FolderTarget, "name", name)
 				}
-				a.folderModalKind = ""
+				a.modal.FolderKind = ""
 			}
 		})
 	})
 	if !open {
-		a.folderModalKind = ""
+		a.modal.FolderKind = ""
 	}
 }
 

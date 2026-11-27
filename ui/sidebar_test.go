@@ -161,11 +161,11 @@ func TestOpenConnFailureKeepsState(t *testing.T) {
 	if err := a.openConn(bad); err == nil {
 		t.Fatal("missing file must fail")
 	}
-	if len(a.toastQueue) != 1 {
-		t.Fatalf("打开失败应排队一条浮窗提示: %v", a.toastQueue)
+	if len(a.toasts.Queue) != 1 {
+		t.Fatalf("打开失败应排队一条浮窗提示: %v", a.toasts.Queue)
 	}
-	if len(a.sessions) != 1 || !a.connected(good.ID) {
-		t.Fatalf("failed open must keep previous session: %d", len(a.sessions))
+	if len(a.session.Sessions) != 1 || !a.connected(good.ID) {
+		t.Fatalf("failed open must keep previous session: %d", len(a.session.Sessions))
 	}
 	if got := a.connErrOf(bad.ID); got == "" {
 		t.Fatal("失败原因要记在该数据源名下（圆点变红）")
@@ -183,8 +183,8 @@ func TestRemoveActiveConnClearsSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.removeConn(stored.ID)
-	if len(a.sessions) != 0 {
-		t.Fatalf("删除连接应关掉会话: %d", len(a.sessions))
+	if len(a.session.Sessions) != 0 {
+		t.Fatalf("删除连接应关掉会话: %d", len(a.session.Sessions))
 	}
 	if _, ok := a.store.Get(stored.ID); ok {
 		t.Fatal("profile must be removed")
@@ -316,7 +316,7 @@ func TestExpandInactiveAutoConnects(t *testing.T) {
 	a.tree.Expand[stored.ID] = true
 	a.expandConn(stored)
 	if !a.connected(stored.ID) {
-		t.Fatalf("expand of inactive conn must connect: %d sessions", len(a.sessions))
+		t.Fatalf("expand of inactive conn must connect: %d sessions", len(a.session.Sessions))
 	}
 }
 
@@ -511,7 +511,7 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 		t.Fatalf("re-expand must clear sticky treeErr, got %q", a.tree.Err[p.ID])
 	}
 	if !a.connected(p.ID) {
-		t.Fatalf("retry must open: %d sessions", len(a.sessions))
+		t.Fatalf("retry must open: %d sessions", len(a.session.Sessions))
 	}
 	a.reloadTree()
 	a.loadGroupsIn(p, "")
@@ -632,7 +632,7 @@ func TestSidebarReopenClosedConsole(t *testing.T) {
 func TestSidebarCreateConsoleWithoutConnection(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
-	if len(a.sessions) != 0 {
+	if len(a.session.Sessions) != 0 {
 		t.Fatal("precondition: not connected")
 	}
 	a.tree.Expand[prof.ID] = true
@@ -684,7 +684,7 @@ func TestSidebarRenameConsoleFlow(t *testing.T) {
 	if !tt.HasText("重命名控制台") {
 		t.Fatalf("rename modal missing: %q", tt.Texts())
 	}
-	a.modalText = "新名"
+	a.modal.Text = "新名"
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
@@ -935,7 +935,7 @@ func TestSidebarFolderCreateRenameDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	a.folderModalText = "生产"
+	a.modal.FolderText = "生产"
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
@@ -963,7 +963,7 @@ func TestSidebarFolderCreateRenameDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	a.folderModalText = "线上"
+	a.modal.FolderText = "线上"
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)

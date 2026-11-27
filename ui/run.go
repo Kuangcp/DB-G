@@ -40,8 +40,8 @@ func (a *root) removeConn(id string) {
 	if m := a.consoleMgr(); m != nil {
 		recs = m.ConsolesOf(id)
 	}
-	if a.catalog != nil {
-		a.catalog.invalidate(id)
+	if a.session.Catalog != nil {
+		a.session.Catalog.invalidate(id)
 	}
 	a.forgetAIDDL(id)
 	a.forgetAIRelations(id)
@@ -49,7 +49,7 @@ func (a *root) removeConn(id string) {
 	a.closeViewersOf(id)
 	a.closeSession(id, "connection removed")
 	if a.connErrOf(id) != "" {
-		delete(a.sessionErr, id)
+		delete(a.session.Err, id)
 	}
 	if act, ok := a.store.Active(); ok && act.ID == id {
 		a.store.SetActive("")
@@ -108,9 +108,9 @@ func (a *root) rekeyRuntime(oldID, newID string) {
 			delete(a.tabs.Consoles, oldID+suffix)
 		}
 	}
-	if es, ok := a.editSets[oldID]; ok {
-		a.editSets[newID] = es
-		delete(a.editSets, oldID)
+	if es, ok := a.edit.Sets[oldID]; ok {
+		a.edit.Sets[newID] = es
+		delete(a.edit.Sets, oldID)
 	}
 }
 
@@ -230,9 +230,9 @@ func (a *root) dropStmtRunsOf(consoleIDs []string) {
 		kept = append(kept, run)
 	}
 	// 连没有结果 tab 的控制台编辑缓存也一起清掉（多语句的 id 是 console#i）。
-	for id := range a.editSets {
+	for id := range a.edit.Sets {
 		if owner[baseID(id)] {
-			delete(a.editSets, id)
+			delete(a.edit.Sets, id)
 		}
 	}
 	a.tabs.StmtRuns = kept
@@ -264,7 +264,7 @@ func (a *root) runSQL() {
 		if p, ok := a.store.Get(a.activeConnID()); ok {
 			blocked = p.GuardBlock
 		}
-		a.guardOpen, a.guardBlocked, a.guardRisks = true, blocked, risks
+		a.modal.GuardOpen, a.modal.GuardBlocked, a.modal.GuardRisks = true, blocked, risks
 		if blocked {
 			a.consoleErr = locales.RunGuardBlocked(risks[0].Message)
 			app.LogWarn("exec", "risky sql blocked", "rule", risks[0].Rule)

@@ -86,7 +86,7 @@ func (a *root) topBar(c *ui.Context) {
 				a.pickOpenSQLFiles()
 			}
 			if iconButtonPlain(c, iconHistory, locales.TopHistory(), t.TextMuted).Clicked() {
-				a.historyOpen = true
+				a.modal.HistoryOpen = true
 			}
 			aiColor := t.TextMuted
 			if a.ai.Chat.open {
@@ -161,9 +161,9 @@ func (a *root) connBar(c *ui.Context) {
 				a.consoleErr = ""
 			}
 		}
-		if !a.viewerActive() && a.extMsg != "" {
-			if ui.Button(c, a.extMsg).FontSize(12).TextColor(t.TextMuted).SingleLine().Clicked() {
-				a.extMsg = ""
+		if !a.viewerActive() && a.external.Msg != "" {
+			if ui.Button(c, a.external.Msg).FontSize(12).TextColor(t.TextMuted).SingleLine().Clicked() {
+				a.external.Msg = ""
 			}
 		}
 		if a.install.Need.NeedInstall {

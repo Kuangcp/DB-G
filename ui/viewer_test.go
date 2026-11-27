@@ -284,8 +284,8 @@ func TestViewerCloseFallsBackToConsole(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
-	rec, err := a.mgr.Create(prof.ID, "q")
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.session.Mgr.Create(prof.ID, "q")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,8 +405,8 @@ func TestGridStateSurvivesTabSwitch(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
-	rec, err := a.mgr.Create(prof.ID, "q")
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.session.Mgr.Create(prof.ID, "q")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,9 +476,9 @@ func TestViewerInlineEditThroughGrid(t *testing.T) {
 	tt.Frame()
 	tt.Frame()
 	tt.HoldModifiers(0)
-	if !a.inlineEditOn || a.inlineEditRow != 0 || a.inlineEditCol != 1 {
+	if !a.edit.InlineOn || a.edit.InlineRow != 0 || a.edit.InlineCol != 1 {
 		t.Fatalf("应就地编辑 name 格: inline=%v row=%d col=%d plan=%v err=%q",
-			a.inlineEditOn, a.inlineEditRow, a.inlineEditCol, a.grid.plan, a.grid.readonly)
+			a.edit.InlineOn, a.edit.InlineRow, a.edit.InlineCol, a.grid.plan, a.grid.readonly)
 	}
 	tt.Type("2")
 	tt.Key(0, ui.KeyEnter)

@@ -10,14 +10,14 @@ import (
 // 多连接并存的用例请直接用 sessionFor(connID)。
 func (a *root) testSession(t *testing.T) engine.Session {
 	t.Helper()
-	if len(a.sessions) != 1 {
-		ids := make([]string, 0, len(a.sessions))
-		for id := range a.sessions {
+	if len(a.session.Sessions) != 1 {
+		ids := make([]string, 0, len(a.session.Sessions))
+		for id := range a.session.Sessions {
 			ids = append(ids, id)
 		}
-		t.Fatalf("测试只应有 1 个会话，实际 %d 个: %v", len(a.sessions), ids)
+		t.Fatalf("测试只应有 1 个会话，实际 %d 个: %v", len(a.session.Sessions), ids)
 	}
-	for _, s := range a.sessions {
+	for _, s := range a.session.Sessions {
 		return s
 	}
 	return nil
@@ -26,10 +26,10 @@ func (a *root) testSession(t *testing.T) engine.Session {
 // testConnID 返回唯一那条已连接的连接 id。
 func (a *root) testConnID(t *testing.T) string {
 	t.Helper()
-	if len(a.sessions) != 1 {
-		t.Fatalf("测试只应有 1 个会话，实际 %d 个", len(a.sessions))
+	if len(a.session.Sessions) != 1 {
+		t.Fatalf("测试只应有 1 个会话，实际 %d 个", len(a.session.Sessions))
 	}
-	for id := range a.sessions {
+	for id := range a.session.Sessions {
 		return id
 	}
 	return ""
@@ -37,9 +37,9 @@ func (a *root) testConnID(t *testing.T) string {
 
 // testSetSession 直接往会话表里塞一个假会话（测试用，跳过真正的建连）。
 func (a *root) testSetSession(connID string, sess engine.Session) {
-	if a.sessions == nil {
-		a.sessions = map[string]engine.Session{}
+	if a.session.Sessions == nil {
+		a.session.Sessions = map[string]engine.Session{}
 	}
-	a.sessions[connID] = sess
+	a.session.Sessions[connID] = sess
 	a.touchSession(connID)
 }

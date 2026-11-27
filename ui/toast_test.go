@@ -28,8 +28,8 @@ func TestConnFailureShowsToastNotTopBar(t *testing.T) {
 	if err := a.openConn(profA); err != nil {
 		t.Fatal(err)
 	}
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
-	rec, err := a.mgr.Create(profA.ID, "q")
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.session.Mgr.Create(profA.ID, "q")
 	if err != nil {
 		t.Fatal(err)
 	}

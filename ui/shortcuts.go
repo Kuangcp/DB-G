@@ -90,8 +90,8 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 	case "copyCell":
 		a.copyCurrentCell(c, a.currentRuntime().Result())
 	case "setNull":
-		if a.resultsHidden || a.inlineEditOn || a.editCellOpen || a.cellView.Open ||
-			a.filterOpen || a.previewOpen || a.ai.Chat.open {
+		if a.resultsHidden || a.edit.InlineOn || a.edit.CellOpen || a.cellView.Open ||
+			a.grid.filterOpen || a.edit.PreviewOpen || a.ai.Chat.open {
 			return
 		}
 		a.setSelectedNull(a.currentRuntime().Result())

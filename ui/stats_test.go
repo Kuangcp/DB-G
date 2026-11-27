@@ -64,8 +64,8 @@ func TestObjectStatsModal(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.statsOpen || a.statsLoading || a.statsErr != "" {
-		t.Fatalf("stats modal: open=%v loading=%v err=%q", a.statsOpen, a.statsLoading, a.statsErr)
+	if !a.modal.StatsOpen || a.modal.StatsLoading || a.modal.StatsErr != "" {
+		t.Fatalf("stats modal: open=%v loading=%v err=%q", a.modal.StatsOpen, a.modal.StatsLoading, a.modal.StatsErr)
 	}
 	for _, want := range []string{"统计：users", "3", "2", "2.0 KiB", "1.0 KiB", "InnoDB"} {
 		if !tt.HasText(want) {
@@ -89,15 +89,15 @@ func TestObjectStatsModal(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.statsSQLOpen || !strings.Contains(a.statsSQLView().Buffer.String(), "SELECT COUNT(*) FROM users") || !strings.Contains(a.statsSQLView().Buffer.String(), "精确行数") {
-		t.Fatalf("expanded statistics SQL missing: open=%v text=%q", a.statsSQLOpen, a.statsSQLView().Buffer.String())
+	if !a.modal.StatsSQLOpen || !strings.Contains(a.statsSQLView().Buffer.String(), "SELECT COUNT(*) FROM users") || !strings.Contains(a.statsSQLView().Buffer.String(), "精确行数") {
+		t.Fatalf("expanded statistics SQL missing: open=%v text=%q", a.modal.StatsSQLOpen, a.statsSQLView().Buffer.String())
 	}
 	// 关闭后不再渲染。
 	if err := tt.Click("关闭"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.statsOpen {
+	if a.modal.StatsOpen {
 		t.Fatal("stats modal must close")
 	}
 }
@@ -121,8 +121,8 @@ func TestObjectStatsUnsupported(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !strings.Contains(a.statsErr, "统计查询炸了") {
-		t.Fatalf("stats error = %q", a.statsErr)
+	if !strings.Contains(a.modal.StatsErr, "统计查询炸了") {
+		t.Fatalf("stats error = %q", a.modal.StatsErr)
 	}
 }
 
@@ -152,7 +152,7 @@ func TestObjectStatsOnlyForTables(t *testing.T) {
 	}
 	p, _ := a.store.Get(connID)
 	a.showStats(p, engine.DBObject{Kind: engine.ObjectView, Name: "user_view"})
-	if a.statsOpen {
+	if a.modal.StatsOpen {
 		t.Fatal("showStats must reject views")
 	}
 }

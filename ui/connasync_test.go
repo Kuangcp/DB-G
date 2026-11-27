@@ -110,7 +110,7 @@ func slowProfile(t *testing.T, a *root, name, key string) app.ConnProfile {
 func asyncWindow(t *testing.T, a *root) (wait func()) {
 	t.Helper()
 	finished := make(chan struct{})
-	a.bgRun = func(work, done func()) {
+	a.session.BgRun = func(work, done func()) {
 		go func() {
 			work()
 			done()

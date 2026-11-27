@@ -105,8 +105,8 @@ func (a *root) aiSnapshotWith(opts aiEgressPolicy) ai.ContextSnapshot {
 	if connID != "" {
 		key, schema := a.completionScope(connID)
 		var tables, views []string
-		if a.catalog != nil {
-			tables, views, _ = a.catalog.objects(key)
+		if a.session.Catalog != nil {
+			tables, views, _ = a.session.Catalog.objects(key)
 		}
 		// 补全目录没加载时退回对象树/元数据缓存，AI 不再拿到空 schema。
 		if len(tables)+len(views) == 0 {
@@ -128,8 +128,8 @@ func (a *root) aiSnapshotWith(opts aiEgressPolicy) ai.ContextSnapshot {
 				}
 				seen[strings.ToLower(name)] = true
 				t := ai.TableContext{Name: name, Schema: schema}
-				if a.catalog != nil {
-					if cols, ok := a.catalog.columns(key, name); ok {
+				if a.session.Catalog != nil {
+					if cols, ok := a.session.Catalog.columns(key, name); ok {
 						for i, c := range cols {
 							if i >= aiHydrateColumnsMax {
 								break

@@ -59,7 +59,7 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 		return nil
 	}
 	key, schema := a.completionScope(connID)
-	tables, views, ok := a.catalog.objects(key)
+	tables, views, ok := a.session.Catalog.objects(key)
 	if !ok || len(tables)+len(views) == 0 {
 		return nil // 目录未加载时不做猜测
 	}
@@ -110,7 +110,7 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 		}
 		aliasToTable[alias] = lower
 		aliasToTable[lower] = lower
-		if cols, ok := a.catalog.columns(key, rel.Table); ok {
+		if cols, ok := a.session.Catalog.columns(key, rel.Table); ok {
 			set := map[string]bool{}
 			for _, c := range cols {
 				set[strings.ToLower(c.Name)] = true

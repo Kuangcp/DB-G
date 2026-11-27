@@ -573,8 +573,8 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 					a.exportState.Path = ""
 				}
 			}
-			if a.editStatus != "" {
-				ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
+			if a.edit.Status != "" {
+				ui.Text(c, a.edit.Status).FontSize(12).TextColor(c.Theme().Success).SingleLine()
 			}
 			if n := len(a.grid.view.filters); n > 0 {
 				ui.Text(c, locales.FilterColumns(n)).FontSize(12).TextColor(c.Theme().TextMuted)
@@ -599,7 +599,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 				a.grid.view.sortBy(r, -1, false)
 			}
 			if m.Item(locales.FilterMenu()).Chosen() {
-				a.filterOpen, a.filterCol, a.filterText = true, idx, a.grid.view.filters[idx]
+				a.grid.filterOpen, a.grid.filterCol, a.grid.filterText = true, idx, a.grid.view.filters[idx]
 			}
 			if _, has := a.grid.view.filters[idx]; has {
 				if m.Item(locales.FilterClearColumn()).Chosen() {
@@ -710,9 +710,9 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 		}
 		if a.grid.plan != nil && dataCol >= 0 {
 			if it := m.Item(locales.EditCellMenu()); it.Disabled(!a.grid.plan.Editable[dataCol]).Chosen() {
-				a.editCellRow, a.editCellCol = row, dataCol
-				a.editCellText = editTextFor(kind, r, dataCol, a.editCellValue(row, dataCol))
-				a.editCellOpen = true
+				a.edit.CellRow, a.edit.CellCol = row, dataCol
+				a.edit.CellText = editTextFor(kind, r, dataCol, a.editCellValue(row, dataCol))
+				a.edit.CellOpen = true
 			}
 			if a.grid.plan.Editable[dataCol] && m.Item(locales.SetNull()).Chosen() {
 				a.setCellEdit(row, dataCol, nil)
@@ -749,7 +749,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 				ui.Text(c, "+").TextColor(c.Theme().Success)
 				return
 			}
-			if a.inlineEditOn && a.inlineEditRow == -1-insIdx && a.inlineEditCol == col-1 {
+			if a.edit.InlineOn && a.edit.InlineRow == -1-insIdx && a.edit.InlineCol == col-1 {
 				a.inlineCellEditor(c)
 				return
 			}
@@ -782,7 +782,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 		if col-1 >= len(r.Rows[ri]) {
 			return
 		}
-		if a.inlineEditOn && a.inlineEditRow == ri && a.inlineEditCol == col-1 {
+		if a.edit.InlineOn && a.edit.InlineRow == ri && a.edit.InlineCol == col-1 {
 			a.inlineCellEditor(c)
 			return
 		}
@@ -1186,23 +1186,23 @@ func countResult(res *engine.QueryResult) (int64, bool) {
 
 // filterModal 渲染每列筛选输入。
 func (a *root) filterModal(c *ui.Context) {
-	if !a.filterOpen {
+	if !a.grid.filterOpen {
 		return
 	}
-	ui.Modal(c, &a.filterOpen, func() {
+	ui.Modal(c, &a.grid.filterOpen, func() {
 		title := locales.FilterTitle()
-		if r := a.currentRuntime().Result(); r != nil && a.filterCol >= 0 && a.filterCol < len(r.Columns) {
-			title = locales.FilterTitleColumn(r.Columns[a.filterCol])
+		if r := a.currentRuntime().Result(); r != nil && a.grid.filterCol >= 0 && a.grid.filterCol < len(r.Columns) {
+			title = locales.FilterTitleColumn(r.Columns[a.grid.filterCol])
 		}
 		ui.Text(c, title).Bold()
-		ui.TextInput(c, &a.filterText).Placeholder(locales.FilterPlaceholder()).AutoFocus()
+		ui.TextInput(c, &a.grid.filterText).Placeholder(locales.FilterPlaceholder()).AutoFocus()
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.filterOpen = false
+				a.grid.filterOpen = false
 			}
 			if ui.PrimaryButton(c, locales.FilterApply()).Clicked() {
-				a.grid.view.setFilter(a.filterCol, a.filterText)
-				a.filterOpen = false
+				a.grid.view.setFilter(a.grid.filterCol, a.grid.filterText)
+				a.grid.filterOpen = false
 			}
 		})
 	})

@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -37,24 +36,11 @@ type root struct {
 	hasSelObj       bool
 	sidebarWidth    float32
 	store           *app.ConnStore
-	toastQueue      []ui.Toast // 下一帧弹出的浮窗提示（错误自动消失，不再占顶栏）
-	toastSeq        uint64
-	connForm        connFormState                // 新建/编辑连接弹窗
-	connProto       int                          // ClickHouse 协议：0 native / 1 http / 2 https
-	serverInfo      map[string]engine.ServerInfo // connID → 数据库名/版本
-	serverInfoErr   map[string]string            // connID → 版本查询失败原因
-	serverInfoSeq   map[string]uint64            // connID → 异步查询轮次（旧结果作废）
-	settings        settingsState                // 设置窗口与全部偏好
-	gitSync         syncState                    // Git 同步：配置、密钥弹窗、发现项
-	guardOpen       bool
-	guardBlocked    bool
-	guardRisks      []app.SQLRisk
-	connTestMsg     string // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
-	connTestErr     bool
-	connTestBusy    bool
-	connTestSeq     int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
-	connDeleteOpen  bool
-	connDeleting    string
+	toasts          toastState
+	connForm        connFormState // 新建/编辑连接弹窗
+	connProto       int           // ClickHouse 协议：0 native / 1 http / 2 https
+	settings        settingsState // 设置窗口与全部偏好
+	gitSync         syncState     // Git 同步：配置、密钥弹窗、发现项
 	tree            treeState
 	deferred        []func()      // 下一帧帧首执行的动作（FIFO）
 	modals          modalRegistry // 每帧按顺序询问的弹窗
@@ -62,82 +48,21 @@ type root struct {
 	appIconPNG []byte       // 窗口图标；自举安装时写入图标目录
 	install    installState // 自举安装/升级（仅发布构建）
 
-	extFiles       map[string]*extFile // consoleID → 外部 .sql 的磁盘一致性状态
-	extPollAt      time.Time
-	extPickOpen    bool
-	extPickPaths   []string
-	extResolveOpen bool
-	extMsg         string
+	external externalState
 
-	reloadConfirmOpen bool
-	reloadConsoleID   string
-	reloadPausedID    string
-
-	mgr                 *app.ConsoleManager
-	catalog             *catalogCache
-	sessions            map[string]engine.Session // connID → 会话（最多 maxOpenSessions 个）
-	sessionUse          map[string]uint64         // connID → 最近使用序号（LRU）
-	sessionErr          map[string]string         // connID → 上次打开失败的原因
-	connOpening         map[string]bool           // connID → 后台建连中
-	connWaiters         map[string][]func(error)  // connID → 等这次建连结果的回调（UI 线程执行）
-	bgRun               func(work, done func())   // 后台执行 + 回投 UI 的注入点（测试用；nil = 按窗口有无决定）
-	useSeq              uint64
+	session             sessionState
 	tabs                consoleTabsState
-	filterOpen          bool
-	filterCol           int
-	filterText          string
 	history             *app.History
-	editSets            map[string]*app.EditSet
-	editBusy            bool
-	editCellOpen        bool
-	editCellRow         int
-	editCellCol         int
-	editCellText        string
-	inlineEditOn        bool // 结果表格内联编辑进行中
-	inlineEditRow       int  // 数据行下标
-	inlineEditCol       int  // 数据列下标
-	inlineEditText      string
-	inlineEditHadFocus  bool // 输入框已经拿到过焦点（用于失焦提交）
-	previewOpen         bool
-	previewLines        []string
-	ddlOpen             bool
-	ddlTitle            string
-	ddlText             string
-	ddlState            *myeditor.State // DDL 弹窗的只读高亮编辑器（惰性创建）
-	statsOpen           bool
-	statsLoading        bool
-	statsTitle          string
-	statsKind           string // 打开统计弹窗时数据源类型（决定 SQL 高亮方言）
-	stats               *engine.ObjectStats
-	statsErr            string
-	statsSQLOpen        bool
-	statsSQLState       *myeditor.State // 统计 SQL 的只读高亮编辑器（惰性创建）
-	historyOpen         bool
-	paletteOpen         bool   // 命令面板（标题栏搜索框 / Ctrl+P）
-	paletteQuery        string // 命令面板当前查询
-	paletteJumpID       string // 面板选中的 SQL 命中所在控制台（待跳转）
-	paletteJumpSel      [2]int // 跳转后要选中的 rune 范围
+	edit                editState
+	modal               modalState
 	exportState         exportState
 	revealPath          func(string) error // 测试注入；nil = app.RevealPath
-	editStatus          string
-	editStatusSeq       atomic.Uint64
 	cellView            cellViewState
 	consoleErr          string
 	computingCompletion bool
 	retriggerPending    bool
-	completionWanted    bool   // 编辑器正在等/持有补全弹层（用户触发）
-	completionWordStart int    // 触发时词起点的字节偏移；光标离开这个词就不再重弹
-	tabMenuAction       string // "close" / "rename" / "delete"
-	tabMenuTarget       string
-	modalKind           string // "" / "rename" / "delete" / "ws-new" / "ws-rename" / "ws-delete"
-	modalTarget         string
-	modalText           string
-	modalErr            string
-	folderModalKind     string // "" / "new" / "rename" / "delete"
-	folderModalTarget   string
-	folderModalText     string
-	folderModalErr      string
-	ddlConn             app.ConnProfile // DDL 查询用的连接（可能来自编辑器光标）
+	completionWanted    bool // 编辑器正在等/持有补全弹层（用户触发）
+	completionWordStart int  // 触发时词起点的字节偏移；光标离开这个词就不再重弹
 }
 
 func newRoot(text string) *root {
@@ -174,21 +99,23 @@ func newRoot(text string) *root {
 			ConsolePrefs:  app.DefaultConsolePrefs(),
 			ThemePrefs:    app.DefaultThemePrefs(),
 		},
-		sessions:      map[string]engine.Session{},
-		sessionUse:    map[string]uint64{},
-		sessionErr:    map[string]string{},
-		connOpening:   map[string]bool{},
-		connWaiters:   map[string][]func(error){},
-		serverInfo:    map[string]engine.ServerInfo{},
-		serverInfoErr: map[string]string{},
-		serverInfoSeq: map[string]uint64{},
+		session: sessionState{
+			Sessions:      map[string]engine.Session{},
+			Use:           map[string]uint64{},
+			Err:           map[string]string{},
+			Opening:       map[string]bool{},
+			Waiters:       map[string][]func(error){},
+			ServerInfo:    map[string]engine.ServerInfo{},
+			ServerInfoErr: map[string]string{},
+			ServerInfoSeq: map[string]uint64{},
+		},
 		tabs: consoleTabsState{
 			Consoles:   map[string]*app.Console{},
 			ViewerTabs: map[string]*viewerTab{},
 			LastVer:    map[string]uint64{},
 			PageStates: map[string]*pageState{},
 		},
-		extFiles: map[string]*extFile{},
+		external: externalState{Files: map[string]*extFile{}},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.con.SetPageSize(a.settings.ResultPrefs.PageSize)
@@ -196,7 +123,7 @@ func newRoot(text string) *root {
 	a.grid = newGridState()
 	a.tabs.ConsoleGrid = a.grid
 	a.code.SetActive("", text)
-	a.catalog = newCatalogCache()
+	a.session.Catalog = newCatalogCache()
 	a.code.state.OnCompletion = a.onCompletion
 	// 编辑器里 Ctrl+点击 / F12 标识符 = Ctrl+Q：打开该表/视图的 DDL。
 	a.code.state.OnDefinition = a.onEditorDefinition
@@ -306,7 +233,7 @@ func newRootWithStore(storePath string) *root {
 	}
 	files := app.ConsoleFiles{Dir: r.store.ConsolesDir(), Store: r.store}
 	files.Migrate()
-	r.mgr = app.NewConsoleManager(r.store, files)
+	r.session.Mgr = app.NewConsoleManager(r.store, files)
 	r.applyConsolePrefs()
 	r.pruneMissingExternal()
 	r.restoreSession()
@@ -314,8 +241,8 @@ func newRootWithStore(storePath string) *root {
 	if r.install.Self {
 		r.install.Need = app.CheckInstall()
 	}
-	ws, _ := r.mgr.ActiveWorkspace()
-	app.LogInfo("startup", "session restored", "consoles", len(r.mgr.Open()), "workspace", ws.Name, "conn_warning", r.store.Warning())
+	ws, _ := r.session.Mgr.ActiveWorkspace()
+	app.LogInfo("startup", "session restored", "consoles", len(r.session.Mgr.Open()), "workspace", ws.Name, "conn_warning", r.store.Warning())
 	return r
 }
 
@@ -343,10 +270,10 @@ func (a *root) FlushAll() {
 
 // consoleMgr 懒初始化控制台管理器；没有连接库（无持久化）时返回 nil。
 func (a *root) consoleMgr() *app.ConsoleManager {
-	if a.mgr == nil && a.store != nil {
-		a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	if a.session.Mgr == nil && a.store != nil {
+		a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
 	}
-	return a.mgr
+	return a.session.Mgr
 }
 
 // execDoneLogger 返回一次执行结束的日志回调（连接名在执行时读取，避免陈旧）。
@@ -673,7 +600,7 @@ func (a *root) Attach(win *mygo.Window) {
 		if id := a.firstBlockedExternal(); id != "" {
 			e.PreventDefault()
 			a.deferActivateConsole(id, "")
-			a.extResolveOpen = true
+			a.external.ResolveOpen = true
 			return
 		}
 		a.FlushAll()

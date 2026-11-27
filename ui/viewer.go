@@ -121,7 +121,7 @@ func (a *root) activateViewer(id string) {
 	}
 	a.grid = t.grid
 	a.stopInlineEdit()
-	a.editCellOpen, a.previewOpen, a.filterOpen = false, false, false
+	a.edit.CellOpen, a.edit.PreviewOpen, a.grid.filterOpen = false, false, false
 	a.touchConsoleMRU(viewerRuntimeID(id))
 	a.ensureViewerPage(t)
 }
@@ -137,7 +137,7 @@ func (a *root) leaveViewer() {
 	}
 	a.grid = a.tabs.ConsoleGrid
 	a.stopInlineEdit()
-	a.editCellOpen, a.previewOpen, a.filterOpen = false, false, false
+	a.edit.CellOpen, a.edit.PreviewOpen, a.grid.filterOpen = false, false, false
 }
 
 // closeViewerTab 关闭一个表视图标签；关的是当前标签时回落到控制台。
@@ -150,7 +150,7 @@ func (a *root) closeViewerTab(id string) {
 		t.rt.Cancel()
 	}
 	delete(a.tabs.ViewerTabs, id)
-	delete(a.editSets, viewerRuntimeID(id))
+	delete(a.edit.Sets, viewerRuntimeID(id))
 	for i, v := range a.tabs.ViewerOrder {
 		if v == id {
 			a.tabs.ViewerOrder = append(a.tabs.ViewerOrder[:i], a.tabs.ViewerOrder[i+1:]...)
@@ -586,8 +586,8 @@ func (a *root) viewerDataPage(c *ui.Context, t *viewerTab) {
 	a.viewerDataToolbar(c, t, r)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Toolbar(c, func() { a.editToolbar(c, r) }).Padding(0).Shrink(0).Label(locales.ResultActions())
-		if a.editStatus != "" {
-			ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
+		if a.edit.Status != "" {
+			ui.Text(c, a.edit.Status).FontSize(12).TextColor(c.Theme().Success).SingleLine()
 		}
 		if r.Truncated {
 			ui.Badge(c, locales.ResultTruncated(a.settings.ResultPrefs.BudgetMB))

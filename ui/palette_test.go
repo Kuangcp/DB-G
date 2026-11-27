@@ -33,7 +33,7 @@ func TestPaletteSearchesSQLAndSwitchesConsole(t *testing.T) {
 		t.Fatalf("点击标题栏搜索框: %v", err)
 	}
 	tt.Frame()
-	if !a.paletteOpen {
+	if !a.modal.PaletteOpen {
 		t.Fatal("搜索框应打开命令面板")
 	}
 	if !tt.HasText(locales.PaletteSectionConsoles()) {
@@ -49,7 +49,7 @@ func TestPaletteSearchesSQLAndSwitchesConsole(t *testing.T) {
 	}
 	tt.Frame()
 	tt.Frame()
-	if a.paletteOpen {
+	if a.modal.PaletteOpen {
 		t.Fatal("选中后面板应关闭")
 	}
 	if a.tabs.ActiveConsole != first.ID {
@@ -70,7 +70,7 @@ func TestPaletteShortcutAndActionSearch(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyP)
 	tt.Frame()
-	if !a.paletteOpen {
+	if !a.modal.PaletteOpen {
 		t.Fatal("Ctrl+P 应打开命令面板")
 	}
 	if !tt.HasText(locales.KeySaveConsole()) {

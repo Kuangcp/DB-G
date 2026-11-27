@@ -75,7 +75,7 @@ func (a *root) viewerTabButton(c *ui.Context, t *viewerTab, first bool) {
 	}
 	btn.ContextMenu(func(menu *ui.Menu) {
 		if menu.Item(locales.ViewerRefresh()).Chosen() {
-			if es := a.editSets[viewerRuntimeID(t.id)]; es != nil && es.Count() > 0 {
+			if es := a.edit.Sets[viewerRuntimeID(t.id)]; es != nil && es.Count() > 0 {
 				a.toastError(locales.PageDirty())
 			} else {
 				a.viewerReload(t, nil)
@@ -117,7 +117,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 	}
 	dirty := m != nil && m.Dirty(rec.ID)
 	warn := false
-	if st, ok := a.extFiles[rec.ID]; ok && (st.conflict || st.missing) {
+	if st, ok := a.external.Files[rec.ID]; ok && (st.conflict || st.missing) {
 		warn = true
 	}
 	label := src
@@ -342,8 +342,8 @@ func (a *root) closeConsole(id string) {
 	}
 	if a.externalHasLocalChanges(id) {
 		a.deferActivateConsole(id, "")
-		a.extResolveOpen = true
-		a.extMsg = locales.TabExtUnresolved()
+		a.external.ResolveOpen = true
+		a.external.Msg = locales.TabExtUnresolved()
 		return
 	}
 	wasActive := a.tabs.ActiveConsole == id
@@ -408,94 +408,94 @@ func (a *root) workspaceMenu(menu *ui.Menu) {
 
 // openModal 打开标签/工作区相关弹窗。
 func (a *root) openModal(kind, target, text string) {
-	a.modalKind, a.modalTarget, a.modalText, a.modalErr = kind, target, text, ""
+	a.modal.Kind, a.modal.Target, a.modal.Text, a.modal.Err = kind, target, text, ""
 }
 
 // tabModal 渲染重命名/删除/工作区弹窗。
 func (a *root) tabModal(c *ui.Context) {
-	if a.modalKind == "" {
+	if a.modal.Kind == "" {
 		return
 	}
 	m := a.consoleMgr()
 	if m == nil {
-		a.modalKind = ""
+		a.modal.Kind = ""
 		return
 	}
 	open := true
 	ui.Modal(c, &open, func() {
-		switch a.modalKind {
+		switch a.modal.Kind {
 		case "rename":
 			ui.Text(c, locales.ModalRenameConsole()).Bold()
-			ui.TextInput(c, &a.modalText).Placeholder(locales.ModalName()).AutoFocus()
+			ui.TextInput(c, &a.modal.Text).Placeholder(locales.ModalName()).AutoFocus()
 			a.modalButtons(c, func() {
-				if strings.TrimSpace(a.modalText) == "" {
-					a.modalErr = locales.ModalNameEmpty()
+				if strings.TrimSpace(a.modal.Text) == "" {
+					a.modal.Err = locales.ModalNameEmpty()
 					return
 				}
-				if err := m.Rename(a.modalTarget, a.modalText); err != nil {
-					a.modalErr = locales.ModalRenameFailed(err.Error())
+				if err := m.Rename(a.modal.Target, a.modal.Text); err != nil {
+					a.modal.Err = locales.ModalRenameFailed(err.Error())
 					return
 				}
-				app.LogInfo("console", "rename", "id", a.modalTarget, "name", a.modalText)
-				a.modalKind = ""
+				app.LogInfo("console", "rename", "id", a.modal.Target, "name", a.modal.Text)
+				a.modal.Kind = ""
 			})
 		case "delete":
-			ui.Text(c, locales.ModalDeleteConsole(a.modalText)).Bold()
+			ui.Text(c, locales.ModalDeleteConsole(a.modal.Text)).Bold()
 			hint := locales.ModalDeleteConsoleHint()
-			if rec, ok := a.store.GetConsole(a.modalTarget); ok && rec.External {
+			if rec, ok := a.store.GetConsole(a.modal.Target); ok && rec.External {
 				hint = locales.ModalUnlinkConsoleHint()
 			}
 			ui.Text(c, hint).TextColor(c.Theme().TextMuted)
 			a.modalButtons(c, func() {
-				wasActive := a.tabs.ActiveConsole == a.modalTarget
-				if err := m.DeleteConsole(a.modalTarget); err != nil {
-					a.modalErr = locales.ModalDeleteFailed(err.Error())
-					app.LogWarn("console", "delete failed", "id", a.modalTarget, "err", err.Error())
+				wasActive := a.tabs.ActiveConsole == a.modal.Target
+				if err := m.DeleteConsole(a.modal.Target); err != nil {
+					a.modal.Err = locales.ModalDeleteFailed(err.Error())
+					app.LogWarn("console", "delete failed", "id", a.modal.Target, "err", err.Error())
 					return
 				}
-				app.LogInfo("console", "delete", "id", a.modalTarget)
-				delete(a.tabs.Consoles, a.modalTarget)
-				delete(a.tabs.LastVer, a.modalTarget)
-				a.removeExternalState(a.modalTarget)
-				a.dropStmtRunsOf([]string{a.modalTarget})
-				a.code.Drop(a.modalTarget)
-				a.modalKind = ""
+				app.LogInfo("console", "delete", "id", a.modal.Target)
+				delete(a.tabs.Consoles, a.modal.Target)
+				delete(a.tabs.LastVer, a.modal.Target)
+				a.removeExternalState(a.modal.Target)
+				a.dropStmtRunsOf([]string{a.modal.Target})
+				a.code.Drop(a.modal.Target)
+				a.modal.Kind = ""
 				if wasActive {
 					a.afterActiveRemoved()
 				}
 			})
 		case "ws-new":
 			ui.Text(c, locales.ModalNewWorkspace()).Bold()
-			ui.TextInput(c, &a.modalText).Placeholder(locales.ModalWorkspaceNamePlaceholder()).AutoFocus()
+			ui.TextInput(c, &a.modal.Text).Placeholder(locales.ModalWorkspaceNamePlaceholder()).AutoFocus()
 			a.modalButtons(c, func() {
-				ws, err := m.CreateWorkspace(a.modalText)
+				ws, err := m.CreateWorkspace(a.modal.Text)
 				if err != nil {
-					a.modalErr = locales.ModalNewWorkspaceFailed(err.Error())
+					a.modal.Err = locales.ModalNewWorkspaceFailed(err.Error())
 					return
 				}
-				a.modalKind = ""
+				a.modal.Kind = ""
 				a.clearEditorConsole()
 				_ = ws
 			})
 		case "ws-rename":
 			ui.Text(c, locales.ModalRenameWorkspace()).Bold()
-			ui.TextInput(c, &a.modalText).Placeholder(locales.ModalName()).AutoFocus()
+			ui.TextInput(c, &a.modal.Text).Placeholder(locales.ModalName()).AutoFocus()
 			a.modalButtons(c, func() {
-				if err := m.RenameWorkspace(a.modalTarget, a.modalText); err != nil {
-					a.modalErr = locales.ModalRenameFailed(err.Error())
+				if err := m.RenameWorkspace(a.modal.Target, a.modal.Text); err != nil {
+					a.modal.Err = locales.ModalRenameFailed(err.Error())
 					return
 				}
-				a.modalKind = ""
+				a.modal.Kind = ""
 			})
 		case "ws-delete":
-			ui.Text(c, locales.ModalDeleteWorkspace(a.modalText)).Bold()
+			ui.Text(c, locales.ModalDeleteWorkspace(a.modal.Text)).Bold()
 			ui.Text(c, locales.ModalDeleteWorkspaceHint()).TextColor(c.Theme().TextMuted)
 			a.modalButtons(c, func() {
-				if err := m.DeleteWorkspace(a.modalTarget); err != nil {
-					a.modalErr = locales.ModalDeleteFailed(err.Error())
+				if err := m.DeleteWorkspace(a.modal.Target); err != nil {
+					a.modal.Err = locales.ModalDeleteFailed(err.Error())
 					return
 				}
-				a.modalKind = ""
+				a.modal.Kind = ""
 				if rec, ok := m.Active(); ok {
 					a.deferActivateConsole(rec.ID, "")
 				} else {
@@ -503,12 +503,12 @@ func (a *root) tabModal(c *ui.Context) {
 				}
 			})
 		}
-		if a.modalErr != "" {
-			ui.Text(c, a.modalErr).TextColor(c.Theme().Danger)
+		if a.modal.Err != "" {
+			ui.Text(c, a.modal.Err).TextColor(c.Theme().Danger)
 		}
 	})
 	if !open {
-		a.modalKind = ""
+		a.modal.Kind = ""
 	}
 }
 
@@ -516,7 +516,7 @@ func (a *root) tabModal(c *ui.Context) {
 func (a *root) modalButtons(c *ui.Context, save func()) {
 	ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 		if ui.Button(c, locales.CommonCancel()).Clicked() {
-			a.modalKind = ""
+			a.modal.Kind = ""
 		}
 		if ui.PrimaryButton(c, locales.CommonSave()).Clicked() {
 			save()

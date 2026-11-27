@@ -22,10 +22,10 @@ const openTimeout = 5 * time.Second
 // sessionFor 返回该数据源的会话并刷新它的 LRU 序号；没连上返回 nil。
 // 所有按数据源取会话的地方都走这里，不要缓存返回值。
 func (a *root) sessionFor(connID string) engine.Session {
-	if a.sessions == nil {
+	if a.session.Sessions == nil {
 		return nil
 	}
-	sess, ok := a.sessions[connID]
+	sess, ok := a.session.Sessions[connID]
 	if !ok {
 		return nil
 	}
@@ -35,28 +35,28 @@ func (a *root) sessionFor(connID string) engine.Session {
 
 // connected 报告该数据源当前是否连着（不刷新 LRU：画圆点是只读的）。
 func (a *root) connected(connID string) bool {
-	if a.sessions == nil {
+	if a.session.Sessions == nil {
 		return false
 	}
-	_, ok := a.sessions[connID]
+	_, ok := a.session.Sessions[connID]
 	return ok
 }
 
 // connErrOf 返回该数据源上次打开失败的原因（空 = 没有失败记录）。
 func (a *root) connErrOf(connID string) string {
-	if a.sessionErr == nil {
+	if a.session.Err == nil {
 		return ""
 	}
-	return a.sessionErr[connID]
+	return a.session.Err[connID]
 }
 
 // touchSession 把该数据源标成「刚用过」。
 func (a *root) touchSession(connID string) {
-	if a.sessionUse == nil {
-		a.sessionUse = map[string]uint64{}
+	if a.session.Use == nil {
+		a.session.Use = map[string]uint64{}
 	}
-	a.useSeq++
-	a.sessionUse[connID] = a.useSeq
+	a.session.Seq++
+	a.session.Use[connID] = a.session.Seq
 }
 
 // activeConnID 返回当前的执行目标数据源：优先激活控制台所属的那个；
@@ -74,7 +74,7 @@ func (a *root) activeConnID() string {
 // latestSessionID 返回最近用过的会话的 id（没有会话时为空）。
 func (a *root) latestSessionID() string {
 	latest, use := "", uint64(0)
-	for id, u := range a.sessionUse {
+	for id, u := range a.session.Use {
 		if latest == "" || u > use {
 			latest, use = id, u
 		}
@@ -158,15 +158,15 @@ func probeConn(p app.ConnProfile, sess engine.Session, curSchema string) connPro
 
 // installSession 把刚建好的会话装进会话表（UI 线程）。
 func (a *root) installSession(p app.ConnProfile, sess engine.Session) {
-	if a.sessions == nil {
-		a.sessions = map[string]engine.Session{}
+	if a.session.Sessions == nil {
+		a.session.Sessions = map[string]engine.Session{}
 	}
-	a.sessions[p.ID] = sess
+	a.session.Sessions[p.ID] = sess
 	a.touchSession(p.ID)
-	delete(a.sessionErr, p.ID)
+	delete(a.session.Err, p.ID)
 	a.loadServerInfo(p.ID, sess)
-	if a.catalog != nil {
-		a.catalog.invalidate(p.ID) // 重连后目录可能变了
+	if a.session.Catalog != nil {
+		a.session.Catalog.invalidate(p.ID) // 重连后目录可能变了
 	}
 	if a.store != nil && p.ID != "" {
 		a.store.SetActive(p.ID)
@@ -195,15 +195,15 @@ func (a *root) applyProbe(p app.ConnProfile, probe connProbe) {
 // connect 同步打开一个数据源的会话并装进会话表；已经连着就只刷新 LRU。
 // 打开失败会记进 sessionErr（侧栏圆点变红）。UI 路径请用 connectAsync，别在事件回调里直连。
 func (a *root) connect(p app.ConnProfile) error {
-	if a.sessions == nil {
-		a.sessions = map[string]engine.Session{}
+	if a.session.Sessions == nil {
+		a.session.Sessions = map[string]engine.Session{}
 	}
-	if _, ok := a.sessions[p.ID]; ok {
+	if _, ok := a.session.Sessions[p.ID]; ok {
 		a.touchSession(p.ID)
-		delete(a.sessionErr, p.ID)
+		delete(a.session.Err, p.ID)
 		return nil
 	}
-	if a.connOpening[p.ID] {
+	if a.session.Opening[p.ID] {
 		return errors.New(locales.SessionConnecting())
 	}
 	a.clearServerInfo(p.ID)
@@ -222,27 +222,27 @@ func (a *root) connect(p app.ConnProfile) error {
 // 全部放到后台，完成后回投 UI 线程安装会话并调用 done。
 // 同一数据源重复触发只发一次建连，其余回调排队等这一次的结果。
 func (a *root) connectAsync(p app.ConnProfile, done func(error)) {
-	if sess, ok := a.sessions[p.ID]; ok && sess != nil {
+	if sess, ok := a.session.Sessions[p.ID]; ok && sess != nil {
 		a.touchSession(p.ID)
-		delete(a.sessionErr, p.ID)
+		delete(a.session.Err, p.ID)
 		if done != nil {
 			done(nil)
 		}
 		return
 	}
-	if a.connWaiters == nil {
-		a.connWaiters = map[string][]func(error){}
+	if a.session.Waiters == nil {
+		a.session.Waiters = map[string][]func(error){}
 	}
 	if done != nil {
-		a.connWaiters[p.ID] = append(a.connWaiters[p.ID], done)
+		a.session.Waiters[p.ID] = append(a.session.Waiters[p.ID], done)
 	}
-	if a.connOpening == nil {
-		a.connOpening = map[string]bool{}
+	if a.session.Opening == nil {
+		a.session.Opening = map[string]bool{}
 	}
-	if a.connOpening[p.ID] {
+	if a.session.Opening[p.ID] {
 		return
 	}
-	a.connOpening[p.ID] = true
+	a.session.Opening[p.ID] = true
 	a.clearServerInfo(p.ID)
 	app.LogInfo("conn", "open", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path))
 	cur := a.tree.ConnSchema[p.ID]
@@ -260,7 +260,7 @@ func (a *root) connectAsync(p app.ConnProfile, done func(error)) {
 
 // finishConnect 在 UI 线程收尾一次异步建连：安装会话、投递 schema、唤醒等待者。
 func (a *root) finishConnect(p app.ConnProfile, sess engine.Session, probe connProbe, err error) {
-	delete(a.connOpening, p.ID)
+	delete(a.session.Opening, p.ID)
 	if err == nil && a.store != nil && p.ID != "" {
 		if _, ok := a.store.Get(p.ID); !ok {
 			// 建连期间连接被删掉了：不要留下一个没有档案的会话。
@@ -272,7 +272,7 @@ func (a *root) finishConnect(p app.ConnProfile, sess engine.Session, probe connP
 		}
 	}
 	if err == nil && sess != nil {
-		if _, ok := a.sessions[p.ID]; ok {
+		if _, ok := a.session.Sessions[p.ID]; ok {
 			// 已经有别的路径把它连上了：丢弃这次多出来的会话。
 			go func() { _ = sess.Close() }()
 			sess = nil
@@ -284,8 +284,8 @@ func (a *root) finishConnect(p app.ConnProfile, sess engine.Session, probe connP
 		a.installSession(p, sess)
 		a.applyProbe(p, probe)
 	}
-	waiters := a.connWaiters[p.ID]
-	delete(a.connWaiters, p.ID)
+	waiters := a.session.Waiters[p.ID]
+	delete(a.session.Waiters, p.ID)
 	for _, w := range waiters {
 		w(err)
 	}
@@ -293,14 +293,14 @@ func (a *root) finishConnect(p app.ConnProfile, sess engine.Session, probe connP
 
 // connOpeningNow 报告该数据源是否正在后台建连（侧栏画「连接中」）。
 func (a *root) connOpeningNow(connID string) bool {
-	return a.connOpening[connID]
+	return a.session.Opening[connID]
 }
 
 // runBackground 把 work 放到后台执行，完成后把 done 投回 UI 线程。
 // headless（无窗口）同步执行，测试才能在调用后立刻断言。
 func (a *root) runBackground(work, done func()) {
-	if a.bgRun != nil {
-		a.bgRun(work, done)
+	if a.session.BgRun != nil {
+		a.session.BgRun(work, done)
 		return
 	}
 	if a.win == nil {
@@ -320,33 +320,33 @@ func (a *root) runBackground(work, done func()) {
 func (a *root) loadServerInfo(connID string, sess engine.Session) {
 	si, ok := sess.(engine.ServerInfoer)
 	if !ok {
-		if a.serverInfoErr == nil {
-			a.serverInfoErr = map[string]string{}
+		if a.session.ServerInfoErr == nil {
+			a.session.ServerInfoErr = map[string]string{}
 		}
-		a.serverInfoErr[connID] = locales.SessionNoVersion()
+		a.session.ServerInfoErr[connID] = locales.SessionNoVersion()
 		return
 	}
-	if a.serverInfoSeq == nil {
-		a.serverInfoSeq = map[string]uint64{}
+	if a.session.ServerInfoSeq == nil {
+		a.session.ServerInfoSeq = map[string]uint64{}
 	}
-	a.serverInfoSeq[connID]++
-	seq := a.serverInfoSeq[connID]
+	a.session.ServerInfoSeq[connID]++
+	seq := a.session.ServerInfoSeq[connID]
 	apply := func(info engine.ServerInfo, err error) {
-		if a.serverInfoSeq[connID] != seq {
+		if a.session.ServerInfoSeq[connID] != seq {
 			return
 		}
 		if err != nil {
-			if a.serverInfoErr == nil {
-				a.serverInfoErr = map[string]string{}
+			if a.session.ServerInfoErr == nil {
+				a.session.ServerInfoErr = map[string]string{}
 			}
-			a.serverInfoErr[connID] = app.ErrorText(err)
+			a.session.ServerInfoErr[connID] = app.ErrorText(err)
 			return
 		}
-		if a.serverInfo == nil {
-			a.serverInfo = map[string]engine.ServerInfo{}
+		if a.session.ServerInfo == nil {
+			a.session.ServerInfo = map[string]engine.ServerInfo{}
 		}
-		a.serverInfo[connID] = info
-		delete(a.serverInfoErr, connID)
+		a.session.ServerInfo[connID] = info
+		delete(a.session.ServerInfoErr, connID)
 	}
 	run := func() (engine.ServerInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
@@ -368,20 +368,20 @@ func (a *root) loadServerInfo(connID string, sess engine.Session) {
 // clearServerInfo 丢弃某个数据源的版本信息；会话关闭/重连时调用，
 // 同时递增轮次让还在路上的旧结果作废。
 func (a *root) clearServerInfo(connID string) {
-	if a.serverInfoSeq == nil {
-		a.serverInfoSeq = map[string]uint64{}
+	if a.session.ServerInfoSeq == nil {
+		a.session.ServerInfoSeq = map[string]uint64{}
 	}
-	a.serverInfoSeq[connID]++
-	delete(a.serverInfo, connID)
-	delete(a.serverInfoErr, connID)
+	a.session.ServerInfoSeq[connID]++
+	delete(a.session.ServerInfo, connID)
+	delete(a.session.ServerInfoErr, connID)
 }
 
 // setSessionErr 记住失败原因，并把它显示给用户看。
 func (a *root) setSessionErr(connID string, err error, p app.ConnProfile) {
-	if a.sessionErr == nil {
-		a.sessionErr = map[string]string{}
+	if a.session.Err == nil {
+		a.session.Err = map[string]string{}
 	}
-	a.sessionErr[connID] = app.ErrorText(err)
+	a.session.Err[connID] = app.ErrorText(err)
 	app.LogError("conn", "open failed", "kind", p.Kind, "name", p.Name,
 		"dsn", app.RedactDSN(p.Path), "err", err.Error())
 	// 顶栏原本固定显示一行错误，但现在打开的可能不是当前控制台的数据源：
@@ -391,12 +391,12 @@ func (a *root) setSessionErr(connID string, err error, p app.ConnProfile) {
 
 // closeSession 关掉一个数据源的会话（LRU 淘汰、删除连接、退出时用）。
 func (a *root) closeSession(connID, reason string) {
-	sess, ok := a.sessions[connID]
+	sess, ok := a.session.Sessions[connID]
 	if !ok {
 		return
 	}
-	delete(a.sessions, connID)
-	delete(a.sessionUse, connID)
+	delete(a.session.Sessions, connID)
+	delete(a.session.Use, connID)
 	a.clearServerInfo(connID)
 	app.LogInfo("conn", "close", "id", connID, "reason", reason)
 	if sess != nil {
@@ -465,12 +465,12 @@ func (a *root) forceStopRuntime(rt *app.Console, gen uint64, connID string) {
 // dropSession 只把会话从内存里摘掉，关闭动作放到后台：
 // 驱动/网络卡死时 DB.Close 可能等当前查询，这里不能阻塞 UI。
 func (a *root) dropSession(connID, reason string) {
-	sess, ok := a.sessions[connID]
+	sess, ok := a.session.Sessions[connID]
 	if !ok {
 		return
 	}
-	delete(a.sessions, connID)
-	delete(a.sessionUse, connID)
+	delete(a.session.Sessions, connID)
+	delete(a.session.Use, connID)
 	a.clearServerInfo(connID)
 	app.LogWarn("conn", "drop session", "id", connID, "reason", reason)
 	if sess != nil {
@@ -480,17 +480,17 @@ func (a *root) dropSession(connID, reason string) {
 
 // closeAllSessions 关掉全部会话（退出时用）。
 func (a *root) closeAllSessions() {
-	for id := range a.sessions {
+	for id := range a.session.Sessions {
 		a.closeSession(id, "shutdown")
 	}
 }
 
 // evictSessions 在超过上限时按 LRU 关掉最久没用、且没在跑语句的数据源。
 func (a *root) evictSessions(keep string) {
-	for len(a.sessions) > maxOpenSessions {
+	for len(a.session.Sessions) > maxOpenSessions {
 		victim := a.lruVictim(keep)
 		if victim == "" {
-			app.LogWarn("conn", "evict skipped", "open", len(a.sessions))
+			app.LogWarn("conn", "evict skipped", "open", len(a.session.Sessions))
 			return
 		}
 		a.closeSession(victim, "lru")
@@ -500,11 +500,11 @@ func (a *root) evictSessions(keep string) {
 // lruVictim 找最久没用、不是 keep、也不在跑语句的数据源；找不到返回空。
 func (a *root) lruVictim(keep string) string {
 	victim, oldest := "", ^uint64(0)
-	for id := range a.sessions {
+	for id := range a.session.Sessions {
 		if id == keep || a.connBusy(id) {
 			continue
 		}
-		use := a.sessionUse[id]
+		use := a.session.Use[id]
 		if victim == "" || use < oldest {
 			victim, oldest = id, use
 		}
@@ -612,9 +612,9 @@ func (a *root) disconnectConn(p app.ConnProfile) {
 	}
 	a.cancelConnRuns(p.ID)
 	a.closeSession(p.ID, "user disconnect")
-	delete(a.sessionErr, p.ID)
-	if a.catalog != nil {
-		a.catalog.invalidate(p.ID)
+	delete(a.session.Err, p.ID)
+	if a.session.Catalog != nil {
+		a.session.Catalog.invalidate(p.ID)
 	}
 	a.markConnTreeStale(p.ID)
 	app.LogInfo("conn", "disconnect", "id", p.ID, "name", p.Name)

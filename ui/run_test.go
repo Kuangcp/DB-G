@@ -50,8 +50,8 @@ func TestOpenSQLiteErrors(t *testing.T) {
 	if a.connErrOf("") == "" {
 		t.Fatal("打开失败的原因要记在数据源名下")
 	}
-	if len(a.toastQueue) != 1 {
-		t.Fatalf("打开失败应排队一条浮窗提示: %v", a.toastQueue)
+	if len(a.toasts.Queue) != 1 {
+		t.Fatalf("打开失败应排队一条浮窗提示: %v", a.toasts.Queue)
 	}
 }
 
@@ -61,8 +61,8 @@ func TestRunSQLiteEndToEnd(t *testing.T) {
 	if err := a.openSQLite(path); err != nil {
 		t.Fatal(err)
 	}
-	if len(a.sessions) != 1 {
-		t.Fatalf("openSQLite must install one session, got %d", len(a.sessions))
+	if len(a.session.Sessions) != 1 {
+		t.Fatalf("openSQLite must install one session, got %d", len(a.session.Sessions))
 	}
 	a.setActiveText("SELECT id, name FROM users ORDER BY id")
 	tt := ui.NewTester(rootView(a), 1200, 800)

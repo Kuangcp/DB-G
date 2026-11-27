@@ -136,8 +136,8 @@ func TestShowDDLOpensPanel(t *testing.T) {
 	tt.Frame()
 	a.showDDL(prof, engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
 	tt.Frame()
-	if !a.ddlOpen || !strings.Contains(strings.ToUpper(a.ddlText), "CREATE TABLE") {
-		t.Fatalf("ddl: open=%v text=%q", a.ddlOpen, a.ddlText)
+	if !a.modal.DDLOpen || !strings.Contains(strings.ToUpper(a.modal.DDLText), "CREATE TABLE") {
+		t.Fatalf("ddl: open=%v text=%q", a.modal.DDLOpen, a.modal.DDLText)
 	}
 	if !tt.HasText("DDL：users") {
 		t.Fatalf("panel title missing: %q", tt.Texts())
@@ -171,10 +171,10 @@ func TestDDLPanelFormatsAndSupportsPartialCopy(t *testing.T) {
 	a := newConsoleRoot(t)
 	raw := "create table users ( id integer primary key, name text )"
 	a.setDDL("users", raw)
-	if a.ddlText != raw {
-		t.Fatalf("raw ddl must be kept for copy-all: %q", a.ddlText)
+	if a.modal.DDLText != raw {
+		t.Fatalf("raw ddl must be kept for copy-all: %q", a.modal.DDLText)
 	}
-	formatted := a.ddlState.Buffer.String()
+	formatted := a.modal.DDLState.Buffer.String()
 	if !strings.Contains(formatted, "CREATE TABLE") || !strings.Contains(formatted, "PRIMARY KEY") {
 		t.Fatalf("ddl must be formatted (keywords uppercased): %q", formatted)
 	}
@@ -185,7 +185,7 @@ func TestDDLPanelFormatsAndSupportsPartialCopy(t *testing.T) {
 	}
 	// 选中前 6 个字符再 Ctrl+C：剪贴板只该有选区内容。
 	if n := len(formatted); n > 6 {
-		a.ddlState.Select(0, 6)
+		a.modal.DDLState.Select(0, 6)
 		tt.Frame()
 		tt.Key(ui.Ctrl, ui.KeyC)
 		tt.Frame()

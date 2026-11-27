@@ -16,17 +16,17 @@ func externalRoot(t *testing.T, text string) (*root, app.ConnProfile, string) {
 	t.Helper()
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
 	path := filepath.Join(t.TempDir(), "note.sql")
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	a.handleDroppedFiles([]string{path})
-	if !a.extPickOpen || len(a.extPickPaths) != 1 {
-		t.Fatalf("拖入后应弹数据源选择: %+v", a.extPickPaths)
+	if !a.external.PickOpen || len(a.external.PickPaths) != 1 {
+		t.Fatalf("拖入后应弹数据源选择: %+v", a.external.PickPaths)
 	}
 	a.bindExternal(prof.ID)
-	if a.extPickOpen {
+	if a.external.PickOpen {
 		t.Fatal("绑定后应关闭选择弹窗")
 	}
 	if _, ok := a.externalRecord(a.tabs.ActiveConsole); !ok {
@@ -47,8 +47,8 @@ func TestDropExternalSQLBinds(t *testing.T) {
 	// 同一文件再次拖入应复用，不新建控制台。
 	before := len(a.store.ListConsoles(prof.ID))
 	a.handleDroppedFiles([]string{path})
-	if a.extPickOpen || len(a.store.ListConsoles(prof.ID)) != before {
-		t.Fatalf("重复拖入不应新建: pick=%v n=%d", a.extPickOpen, len(a.store.ListConsoles(prof.ID)))
+	if a.external.PickOpen || len(a.store.ListConsoles(prof.ID)) != before {
+		t.Fatalf("重复拖入不应新建: pick=%v n=%d", a.external.PickOpen, len(a.store.ListConsoles(prof.ID)))
 	}
 }
 
@@ -73,7 +73,7 @@ func TestConsoleReloadConfirmsDirtyChanges(t *testing.T) {
 		t.Fatalf("右键菜单缺少重新加载: %v", err)
 	}
 	tt.Frame()
-	if !a.reloadConfirmOpen {
+	if !a.modal.ReloadConfirmOpen {
 		t.Fatal("未保存改动应先弹确认")
 	}
 	if got := a.code.Text(); got != "local edit\n" {
@@ -167,7 +167,7 @@ func TestExternalConflictAndResolve(t *testing.T) {
 		t.Fatalf("冲突缓冲应留在内存: %q", got)
 	}
 	// 执行/保存入口应弹处理窗。
-	if !a.externalBlocked() || !a.extResolveOpen {
+	if !a.externalBlocked() || !a.external.ResolveOpen {
 		t.Fatal("冲突时应阻止执行并打开处理弹窗")
 	}
 	if got := a.firstBlockedExternal(); got != recID(a) {
@@ -178,7 +178,7 @@ func TestExternalConflictAndResolve(t *testing.T) {
 	if _, still := a.externalRecord(a.tabs.ActiveConsole); !still {
 		t.Fatal("冲突未处理时不应关闭标签")
 	}
-	a.extResolveOpen = false
+	a.external.ResolveOpen = false
 	a.reloadExternal()
 	if got := a.code.Text(); got != "outside edit\n" {
 		t.Fatalf("重新加载: %q", got)
@@ -247,7 +247,7 @@ func TestExternalStartupPrunesMissing(t *testing.T) {
 	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
 	rec, err := a.store.CreateExternalConsole(prof.ID, "gone", path)
 	if err != nil {
 		t.Fatal(err)
@@ -275,7 +275,7 @@ func TestExternalStartupPrunesMissing(t *testing.T) {
 func TestExternalDropPickerUI(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
 	path := filepath.Join(t.TempDir(), "ui.sql")
 	if err := os.WriteFile(path, []byte("SELECT 42\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -298,14 +298,14 @@ func TestExternalDropPickerUI(t *testing.T) {
 func TestOpenSQLFilesFromCLI(t *testing.T) {
 	a := newConsoleRoot(t)
 	prof := seedConsoleConn(t, a, "本地")
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
 	path := filepath.Join(t.TempDir(), "cli.sql")
 	if err := os.WriteFile(path, []byte("SELECT 42;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	a.OpenSQLFiles([]string{path})
-	if !a.extPickOpen || len(a.extPickPaths) != 1 {
-		t.Fatalf("-o 后应弹数据源选择: %+v", a.extPickPaths)
+	if !a.external.PickOpen || len(a.external.PickPaths) != 1 {
+		t.Fatalf("-o 后应弹数据源选择: %+v", a.external.PickPaths)
 	}
 	a.bindExternal(prof.ID)
 	rec, ok := a.store.GetConsoleByFilePath(path)
@@ -317,7 +317,7 @@ func TestOpenSQLFilesFromCLI(t *testing.T) {
 	}
 	// 已绑定文件再次通过 -o 打开：直接激活，不再弹选择。
 	a.OpenSQLFiles([]string{path})
-	if a.extPickOpen || a.tabs.ActiveConsole != rec.ID {
-		t.Fatalf("重复打开不应新建/弹窗: pick=%v active=%q", a.extPickOpen, a.tabs.ActiveConsole)
+	if a.external.PickOpen || a.tabs.ActiveConsole != rec.ID {
+		t.Fatalf("重复打开不应新建/弹窗: pick=%v active=%q", a.external.PickOpen, a.tabs.ActiveConsole)
 	}
 }

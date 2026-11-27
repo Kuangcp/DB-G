@@ -16,8 +16,8 @@ func TestSettingsErrorsDoNotUseTopBar(t *testing.T) {
 	if a.consoleErr != "keep" {
 		t.Fatalf("consoleErr = %q, want unchanged", a.consoleErr)
 	}
-	if len(a.toastQueue) != 1 || a.toastQueue[0].Title != "导入失败：bad file" {
-		t.Fatalf("toast = %+v", a.toastQueue)
+	if len(a.toasts.Queue) != 1 || a.toasts.Queue[0].Title != "导入失败：bad file" {
+		t.Fatalf("toast = %+v", a.toasts.Queue)
 	}
 	notice, ok := a.settings.Notice["profiles"]
 	if !ok || notice.text != "导入失败：bad file" || !notice.err {
@@ -32,8 +32,8 @@ func TestSettingsSuccessDoesNotToast(t *testing.T) {
 	if a.consoleErr != "keep" {
 		t.Fatalf("consoleErr = %q", a.consoleErr)
 	}
-	if len(a.toastQueue) != 0 {
-		t.Fatalf("success must not toast: %+v", a.toastQueue)
+	if len(a.toasts.Queue) != 0 {
+		t.Fatalf("success must not toast: %+v", a.toasts.Queue)
 	}
 	if n := a.settings.Notice["profiles"]; n.err || n.text == "" {
 		t.Fatalf("notice = %+v", n)

@@ -33,7 +33,7 @@ func (s *cancelCountSession) Cancel() bool {
 func TestStopRunsCancelsContextOnly(t *testing.T) {
 	a := newConsoleRoot(t)
 	sess := &cancelCountSession{started: make(chan struct{})}
-	a.sessions["c1"] = sess
+	a.session.Sessions["c1"] = sess
 	a.touchSession("c1")
 	if !a.con.Run(sess, "SELECT slow") {
 		t.Fatal("run must start")

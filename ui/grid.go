@@ -20,6 +20,10 @@ type gridState struct {
 	editKey   string
 	plan      *app.EditPlan
 	readonly  string
+
+	filterOpen bool
+	filterCol  int
+	filterText string
 }
 
 // newGridState 返回一块空网格的状态。

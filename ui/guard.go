@@ -11,20 +11,20 @@ import (
 
 // guardModal 展示高危 SQL 风险；硬阻断连接不提供“仍然执行”。
 func (a *root) guardModal(c *ui.Context) {
-	if !a.guardOpen {
+	if !a.modal.GuardOpen {
 		return
 	}
 	t := c.Theme()
 	title := locales.GuardTitle()
-	if a.guardBlocked {
+	if a.modal.GuardBlocked {
 		title = locales.GuardBlockedTitle()
 	}
-	ui.Modal(c, &a.guardOpen, func() {
+	ui.Modal(c, &a.modal.GuardOpen, func() {
 		ui.Text(c, title).Bold().TextColor(t.Danger)
 		ui.Text(c, locales.GuardExplain()).
 			FontSize(11).TextColor(t.TextMuted)
 		ui.Column(c).Gap(4).Children(func() {
-			for _, risk := range a.guardRisks {
+			for _, risk := range a.modal.GuardRisks {
 				msg := risk.Message
 				if risk.Rule != "" {
 					msg = fmt.Sprintf("[%s] %s", risk.Rule, msg)
@@ -32,7 +32,7 @@ func (a *root) guardModal(c *ui.Context) {
 				ui.Text(c, msg).FontSize(12).TextColor(t.Danger)
 			}
 		})
-		if a.guardBlocked {
+		if a.modal.GuardBlocked {
 			ui.Text(c, locales.GuardBlockedBody()).
 				FontSize(12).TextColor(t.TextMuted)
 		} else {
@@ -42,12 +42,12 @@ func (a *root) guardModal(c *ui.Context) {
 		ui.Spacer(c)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.guardOpen = false
+				a.modal.GuardOpen = false
 			}
-			if !a.guardBlocked {
+			if !a.modal.GuardBlocked {
 				if ui.PrimaryButton(c, locales.GuardRunAnyway()).Clicked() {
-					a.guardOpen = false
-					app.LogWarn("exec", "risky sql confirmed", "rules", guardRules(a.guardRisks))
+					a.modal.GuardOpen = false
+					app.LogWarn("exec", "risky sql confirmed", "rules", guardRules(a.modal.GuardRisks))
 					a.runSQLNow()
 				}
 			}

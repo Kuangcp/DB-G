@@ -84,11 +84,11 @@ func TestCtrlQShowsDDL(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyQ)
 	tt.Frame()
-	if !a.ddlOpen {
+	if !a.modal.DDLOpen {
 		t.Fatal("Ctrl+Q should open the DDL panel")
 	}
-	if !strings.Contains(a.ddlTitle, "users") {
-		t.Fatalf("ddl title: %q", a.ddlTitle)
+	if !strings.Contains(a.modal.DDLTitle, "users") {
+		t.Fatalf("ddl title: %q", a.modal.DDLTitle)
 	}
 }
 
@@ -100,8 +100,8 @@ func TestCtrlQFromEditorCaret(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 激活控制台绑定到该连接（只连库、不选中任何树节点）。
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
-	rec, err := a.mgr.Create(prof.ID, "t")
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.session.Mgr.Create(prof.ID, "t")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,14 +119,14 @@ func TestCtrlQFromEditorCaret(t *testing.T) {
 	}
 	tt.Key(ui.Ctrl, ui.KeyQ)
 	tt.Frame()
-	if !a.ddlOpen {
+	if !a.modal.DDLOpen {
 		t.Fatal("Ctrl+Q 应打开光标处对象的 DDL 弹窗")
 	}
-	if !strings.Contains(a.ddlTitle, "users") {
-		t.Fatalf("ddl title: %q", a.ddlTitle)
+	if !strings.Contains(a.modal.DDLTitle, "users") {
+		t.Fatalf("ddl title: %q", a.modal.DDLTitle)
 	}
-	if !strings.Contains(a.ddlText, "CREATE TABLE") {
-		t.Fatalf("ddl text: %q", a.ddlText)
+	if !strings.Contains(a.modal.DDLText, "CREATE TABLE") {
+		t.Fatalf("ddl text: %q", a.modal.DDLText)
 	}
 }
 
@@ -142,8 +142,8 @@ func TestCtrlQFromEditorCaretOnView(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.ensureCatalog(prof.ID) // headless：同步把表/视图装进目录
-	a.mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
-	rec, err := a.mgr.Create(prof.ID, "t")
+	a.session.Mgr = app.NewConsoleManager(a.store, app.ConsoleFiles{Dir: a.store.ConsolesDir(), Store: a.store})
+	rec, err := a.session.Mgr.Create(prof.ID, "t")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,11 +158,11 @@ func TestCtrlQFromEditorCaretOnView(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyQ)
 	tt.Frame()
-	if !a.ddlOpen {
+	if !a.modal.DDLOpen {
 		t.Fatal("Ctrl+Q should open the view DDL panel")
 	}
-	if !strings.Contains(strings.ToUpper(a.ddlText), "CREATE VIEW") {
-		t.Fatalf("view DDL expected, got %q", a.ddlText)
+	if !strings.Contains(strings.ToUpper(a.modal.DDLText), "CREATE VIEW") {
+		t.Fatalf("view DDL expected, got %q", a.modal.DDLText)
 	}
 }
 
@@ -211,8 +211,8 @@ func TestCtrlQIgnoresNonTableWord(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyQ)
 	tt.Frame()
-	if a.ddlOpen {
-		t.Fatalf("光标在关键字上不该弹 DDL：%q", a.ddlTitle)
+	if a.modal.DDLOpen {
+		t.Fatalf("光标在关键字上不该弹 DDL：%q", a.modal.DDLTitle)
 	}
 }
 

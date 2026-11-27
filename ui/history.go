@@ -14,7 +14,7 @@ import (
 // historyPanel 渲染 SQL 历史面板：当前数据源最近 100 条，可插入光标或复制。
 // 完整记录在面板标题显示的 <connectionID>.jsonl 里。
 func (a *root) historyPanel(c *ui.Context) {
-	if !a.historyOpen {
+	if !a.modal.HistoryOpen {
 		return
 	}
 	connID := a.activeConnID()
@@ -24,7 +24,7 @@ func (a *root) historyPanel(c *ui.Context) {
 		entries = a.history.List(connID, 100)
 		path = a.history.Path(connID)
 	}
-	ui.Modal(c, &a.historyOpen, func() {
+	ui.Modal(c, &a.modal.HistoryOpen, func() {
 		title := locales.HistoryTitle()
 		if connID != "" {
 			title = locales.HistoryTitleConn(a.activeConnName(), len(entries))
@@ -48,7 +48,7 @@ func (a *root) historyPanel(c *ui.Context) {
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.PrimaryButton(c, locales.CommonClose()).Clicked() {
-				a.historyOpen = false
+				a.modal.HistoryOpen = false
 			}
 		})
 	})
@@ -74,7 +74,7 @@ func (a *root) historyRow(c *ui.Context, e app.HistoryEntry) {
 		ui.Text(c, summary).FontSize(12).SingleLine().Grow(1)
 		if iconButtonPlain(c, iconInsert, locales.HistoryInsertAtCursor(), ui.Transparent).Clicked() {
 			a.code.Insert(e.SQL)
-			a.historyOpen = false
+			a.modal.HistoryOpen = false
 		}
 		if iconButtonPlain(c, iconCopy, locales.HistoryCopySQL(), ui.Transparent).Clicked() {
 			c.WriteClipboard(e.SQL)

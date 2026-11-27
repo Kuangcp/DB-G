@@ -511,8 +511,8 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowD
 		}
 		if got.tablesLoaded {
 			snap.Tables = got.tables
-			if a.catalog != nil {
-				a.catalog.finish(key, got.tableNames, got.viewNames, a.connKindOf(connID))
+			if a.session.Catalog != nil {
+				a.session.Catalog.finish(key, got.tableNames, got.viewNames, a.connKindOf(connID))
 			}
 		}
 		for i := range snap.Tables {
@@ -531,8 +531,8 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowD
 						t.PrimaryKey = append(t.PrimaryKey, c.Name)
 					}
 				}
-				if a.catalog != nil {
-					a.catalog.finishColumns(key, t.Name, cols, a.connKindOf(connID))
+				if a.session.Catalog != nil {
+					a.session.Catalog.finishColumns(key, t.Name, cols, a.connKindOf(connID))
 				}
 			}
 		}

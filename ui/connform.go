@@ -25,4 +25,11 @@ type connFormState struct {
 	Tags     []connTagDraft
 	TagInput string // 标签输入框正文
 	TagColor string // 下一个新标签使用的调色板键
+
+	DeleteOpen bool   // 删除确认弹窗
+	Deleting   string // 正在删除的连接 id
+	TestMsg    string // 「测试连接」「复制」的一行反馈
+	TestErr    bool
+	TestBusy   bool
+	TestSeq    int // 测试连接轮次
 }
