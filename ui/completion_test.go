@@ -467,6 +467,7 @@ func TestSQLInComment(t *testing.T) {
 		{"block closed", "SELECT /* us */ 1", len("SELECT /* us */ 1"), "sqlite", false},
 		{"unterminated block", "SELECT /* us", len("SELECT /* us"), "sqlite", true},
 		{"string", "SELECT '-- us'", len("SELECT '-- us'"), "sqlite", false},
+		{"comment after string", "SELECT 'x' -- us", len("SELECT 'x' -- us"), "sqlite", true},
 		{"quoted ident", "SELECT `-- us`", len("SELECT `-- us`"), "sqlite", false},
 		{"mysql hash", "SELECT 1 # us", len("SELECT 1 # us"), "mysql", true},
 		{"pg hash operator", "SELECT 1 # us", len("SELECT 1 # us"), "postgres", false},
@@ -474,6 +475,29 @@ func TestSQLInComment(t *testing.T) {
 	for _, tc := range cases {
 		if got := sqlInComment(tc.text, tc.offset, tc.kind); got != tc.want {
 			t.Errorf("%s: sqlInComment(%q, %d, %s) = %v, want %v", tc.name, tc.text, tc.offset, tc.kind, got, tc.want)
+		}
+	}
+}
+
+func TestSQLInString(t *testing.T) {
+	cases := []struct {
+		name   string
+		text   string
+		offset int
+		kind   string
+		want   bool
+	}{
+		{"single", "name = 'alice", len("name = 'alice"), "sqlite", true},
+		{"single closed", "name = 'alice'", len("name = 'alice'"), "sqlite", false},
+		{"after close", "name = 'alice' AND", len("name = 'alice' AND"), "sqlite", false},
+		{"double ident", `SELECT "na`, len(`SELECT "na`), "sqlite", true},
+		{"backtick", "SELECT `na", len("SELECT `na"), "mysql", true},
+		{"comment quote", "SELECT 1 -- 'x", len("SELECT 1 -- 'x"), "sqlite", false},
+		{"dash in string", "SELECT '-- x", len("SELECT '-- x"), "sqlite", true},
+	}
+	for _, tc := range cases {
+		if got := sqlInString(tc.text, tc.offset, tc.kind); got != tc.want {
+			t.Errorf("%s: sqlInString(%q, %d, %s) = %v, want %v", tc.name, tc.text, tc.offset, tc.kind, got, tc.want)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
@@ -542,13 +543,7 @@ func (a *root) viewerDataToolbar(c *ui.Context, t *viewerTab, r *engine.QueryRes
 		box.Children(func() {
 			ui.Icon(c, iconSearch).FontSize(13).TextColor(th.TextMuted)
 			ui.Text(c, "WHERE").Font("monospace").FontSize(11.5).TextColor(th.TextMuted)
-			in := ui.TextInput(c, &t.query.whereIn).FontSize(12).Fill().Padding(2, 0).
-				Placeholder(locales.ViewerWherePlaceholder()).Label(locales.ViewerWhereLabel())
-			if in.Submitted() {
-				t.query.where = strings.TrimSpace(t.query.whereIn)
-				t.query.offset = 0
-				a.viewerReload(t, nil)
-			}
+			a.viewerWhereField(c, t, r)
 			if t.query.where != "" {
 				if iconButtonPlain(c, iconClose, locales.ViewerClearWhere(), ui.Transparent).Clicked() {
 					t.query.where, t.query.whereIn = "", ""
@@ -636,6 +631,96 @@ func (a *root) viewerDataToolbar(c *ui.Context, t *viewerTab, r *engine.QueryRes
 			a.viewerReload(t, nil)
 		}
 	})
+}
+
+// viewerWhereField 是 WHERE 条件输入框：输入当前词时补全结果集的列名。
+// 选中候选后只替换光标所在的词，条件其余部分保持不变。
+func (a *root) viewerWhereField(c *ui.Context, t *viewerTab, r *engine.QueryResult) {
+	kind := a.viewerKind(t)
+	cb := ui.ComboboxBase(c, &t.query.whereIn)
+	in := cb.Input.FontSize(12).Fill().Padding(2, 0).
+		Placeholder(locales.ViewerWherePlaceholder()).Label(locales.ViewerWhereLabel()).
+		AutoComplete(ui.AutoCompleteList)
+
+	_, caret := in.TextAnchorCaret()
+	start, end, prefix := viewerFilterWordAt(t.query.whereIn, caret)
+	columns := viewerFilterColumns(r.Columns, prefix, cb.Filtering())
+	if sqlInComment(t.query.whereIn, caret, kind) || sqlInString(t.query.whereIn, caret, kind) {
+		columns = nil
+	}
+	cb.Popup(func(panel ui.Element) {
+		th := c.Theme()
+		panel.Padding(4).Radius(th.Radius).Background(th.Background).Border(1, th.Border)
+		for _, name := range columns {
+			item := cb.Item(name).Padding(3, 8).Radius(th.Radius)
+			if item.Highlighted() {
+				item.Background(th.Accent.Alpha(0.12))
+			}
+			item.Children(func() {
+				ui.Text(c, name).FontSize(12).SingleLine()
+			})
+		}
+	})
+	if chosen, ok := cb.Chosen(); ok {
+		in.ReplaceText(start, end, viewerFilterInsert(kind, chosen))
+	}
+	if in.Submitted() {
+		t.query.where = strings.TrimSpace(t.query.whereIn)
+		t.query.offset = 0
+		a.viewerReload(t, nil)
+	}
+}
+
+// viewerFilterWordAt 返回光标所在标识符的起止（rune 偏移）与光标前的词前缀。
+func viewerFilterWordAt(text string, caret int) (start, end int, prefix string) {
+	rs := []rune(text)
+	caret = min(max(caret, 0), len(rs))
+	start, end = caret, caret
+	for start > 0 && completionWordRune(rs[start-1]) {
+		start--
+	}
+	for end < len(rs) && completionWordRune(rs[end]) {
+		end++
+	}
+	return start, end, string(rs[start:caret])
+}
+
+// viewerFilterColumns 按前缀过滤列名；刚点开（没有键入）时给全部列。
+// 已经完整输入列名时不再提示它自己，让下一次 Enter 直接应用条件。
+func viewerFilterColumns(columns []string, prefix string, filtering bool) []string {
+	if filtering && prefix == "" {
+		return nil
+	}
+	out := make([]string, 0, len(columns))
+	lower := strings.ToLower(prefix)
+	for _, name := range columns {
+		if name == "" {
+			continue
+		}
+		if filtering {
+			if !strings.HasPrefix(strings.ToLower(name), lower) || strings.EqualFold(name, prefix) {
+				continue
+			}
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+// viewerFilterInsert 返回插入条件的列名：普通标识符原样，其余按方言加引号。
+func viewerFilterInsert(kind, name string) string {
+	simple := name != ""
+	for i, r := range name {
+		if r == '_' || r == '$' || unicode.IsLetter(r) || (i > 0 && unicode.IsDigit(r)) {
+			continue
+		}
+		simple = false
+		break
+	}
+	if simple {
+		return name
+	}
+	return app.QuoteIdent(kind, name)
 }
 
 // pageSize 返回结果页大小（设置里的每页行数）。

@@ -34,8 +34,20 @@ func (a *root) onCompletion(r myeditor.CompletionRequest) {
 }
 
 // sqlInComment 报告 offset 是否落在 SQL 注释（--、#、/* */）里。
-// 字符串与引号标识符里的注释记号不算注释；# 仅 MySQL 支持。
 func sqlInComment(text string, offset int, kind string) bool {
+	inComment, _ := sqlLexAt(text, offset, kind)
+	return inComment
+}
+
+// sqlInString 报告 offset 是否落在带引号的字面量或标识符里。
+func sqlInString(text string, offset int, kind string) bool {
+	_, inString := sqlLexAt(text, offset, kind)
+	return inString
+}
+
+// sqlLexAt 判断 offset 是否落在注释或引号文本里。字符串与引号标识符里的
+// 注释记号不算注释；# 仅 MySQL 支持。
+func sqlLexAt(text string, offset int, kind string) (inComment, inString bool) {
 	if offset > len(text) {
 		offset = len(text)
 	}
@@ -48,7 +60,7 @@ func sqlInComment(text string, offset int, kind string) bool {
 				end = i + nl
 			}
 			if offset > i && offset <= end {
-				return true
+				return true, false
 			}
 			i = end
 		case hashComments && text[i] == '#':
@@ -57,7 +69,7 @@ func sqlInComment(text string, offset int, kind string) bool {
 				end = i + nl
 			}
 			if offset > i && offset <= end {
-				return true
+				return true, false
 			}
 			i = end
 		case text[i] == '/' && i+1 < len(text) && text[i+1] == '*':
@@ -66,12 +78,14 @@ func sqlInComment(text string, offset int, kind string) bool {
 				end = i + 2 + close + 2
 			}
 			if offset > i && (end == len(text) || offset < end) {
-				return true
+				return true, false
 			}
 			i = end
 		case text[i] == '\'' || text[i] == '"' || text[i] == '`':
 			quote := text[i]
+			open := i + 1
 			i++
+			closed := false
 			for i < len(text) {
 				if text[i] == '\\' && quote != '`' && i+1 < len(text) {
 					i += 2
@@ -85,14 +99,21 @@ func sqlInComment(text string, offset int, kind string) bool {
 					i += 2 // 连写两个引号是转义
 					continue
 				}
-				i++
+				closed = true
 				break
 			}
+			if !closed {
+				return false, true
+			}
+			if offset <= i {
+				return false, offset >= open
+			}
+			i++ // 引号后面可能还有注释，继续扫
 		default:
 			i++
 		}
 	}
-	return false
+	return false, false
 }
 
 // activeConsoleConnID 返回当前控制台的数据源 id（无控制台为空）。

@@ -294,6 +294,42 @@ func TestViewerCloseFallsBackToConsole(t *testing.T) {
 	}
 }
 
+// 表视图 WHERE 输入框：补全当前结果集的列名，只替换光标所在的词。
+func TestViewerWhereColumnCompletion(t *testing.T) {
+	fake := &viewerFakeSession{result: &engine.QueryResult{IsQuery: true, Columns: []string{"id", "name", "status"}}}
+	a, p, id := viewerRoot(t, fake, engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
+	a.openViewerTab(p, engine.DBObject{Kind: engine.ObjectTable, Name: "users"})
+	tb := waitViewer(t, a, id)
+	tt := ui.NewTester(rootView(a), 1400, 800)
+	tt.Frame()
+	rect, ok := tt.Find("WHERE")
+	if !ok {
+		t.Fatalf("WHERE 标签缺失: %q", tt.Texts())
+	}
+	tt.ClickAt(rect.X+rect.W+24, rect.Y+rect.H/2)
+	tt.Frame()
+	tt.Type("id > 1 AND na")
+	tt.Frame()
+	if !tt.HasText("name") {
+		t.Fatalf("条件输入应有列名补全: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if got, want := tb.query.whereIn, "id > 1 AND name"; got != want {
+		t.Fatalf("补全应只替换当前词: got %q want %q", got, want)
+	}
+	if tb.query.where != "" {
+		t.Fatalf("选择补全不应直接执行: %q", tb.query.where)
+	}
+	// 列名已完整时不再提示自己，下一次 Enter 直接应用条件。
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if got, want := tb.query.where, "id > 1 AND name"; got != want {
+		t.Fatalf("完整列名后 Enter 应应用条件: got %q want %q", got, want)
+	}
+	waitViewerQuiet(t, tb)
+}
+
 // 数据页工具条：WHERE、排序、复制 SQL、在控制台打开、翻页都在。
 func TestViewerDataToolbarVisible(t *testing.T) {
 	fake := &viewerFakeSession{result: &engine.QueryResult{IsQuery: true, Columns: []string{"id", "name"}}}
