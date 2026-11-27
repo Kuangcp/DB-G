@@ -273,6 +273,11 @@
 
 ### ARCH-10 `app/conn.go` 一个文件混了四个聚合
 
+**已完成（2026-11-27）**：`app/conn.go` 按聚合拆成 5 个文件（零 API 变化）：
+`conn_store.go`（类型/加载/落盘/快照，353 行）、`conn_profiles.go`（159）、
+`conn_folders.go`（258）、`conn_consoles.go`（303）、`conn_workspaces.go`（274）。
+全部 < 400 行；`go test ./app` 不变。后续若需要再拆成独立 Repo 类型。
+
 **证据**：`app/conn.go:20-1307`：`ConnProfile`/`ConnTag`、`ConnStore`、文件夹树、
 控制台元数据、工作区，以及落盘、回滚快照、加密迁移全部在一个文件、一个
 `ConnStore` 类型上（60+ 方法）。
