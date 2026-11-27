@@ -1051,7 +1051,7 @@ func (a *root) changePage(delta int) {
 	if ps.TotalKnown && int64(target)*int64(ps.Size) >= ps.Total {
 		return
 	}
-	sql, ok := pageSQL(ps.BaseSQL, target*ps.Size, ps.Size)
+	sql, ok := app.PageSQL(ps.BaseSQL, target*ps.Size, ps.Size)
 	if !ok {
 		a.consoleErr = locales.PageUnsupported()
 		return
@@ -1113,7 +1113,7 @@ func (a *root) countRows() {
 	if ps == nil || ps.TotalKnown || a.pageBusy(ps) {
 		return
 	}
-	sql, ok := pageCountSQL(a.connKind(), ps.BaseSQL)
+	sql, ok := app.PageCountSQL(a.connKind(), ps.BaseSQL)
 	if !ok {
 		a.consoleErr = locales.CountUnsupported()
 		return
@@ -1224,7 +1224,7 @@ func (a *root) recordPageState(runtimeID, sql string, res *engine.QueryResult) {
 			size = n
 		}
 	}
-	if _, ok := pageSQL(sql, 0, size); !ok {
+	if _, ok := app.PageSQL(sql, 0, size); !ok {
 		return
 	}
 	a.tabs.PageStates[runtimeID] = &pageState{
@@ -1448,7 +1448,7 @@ func (a *root) exportTo(path, format string, full bool) (int, error) {
 func (a *root) exportToProgress(path, format string, full bool, progress func(int)) (int, error) {
 	kind := a.connKind()
 	table := ""
-	if _, ok := pageBody(a.tabs.LastExecSQL); ok {
+	if _, ok := app.PageBody(a.tabs.LastExecSQL); ok {
 		if t, ok := a.rowTable(); ok {
 			table = t
 		}

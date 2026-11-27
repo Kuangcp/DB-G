@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"db-g/engine"
+	"db-g/metrics"
 )
 
 func TestResultGridFrameBudget(t *testing.T) {
@@ -46,7 +47,7 @@ func TestResultGridFrameBudget(t *testing.T) {
 		tt.Frame()
 		samples = append(samples, time.Since(t0))
 	}
-	p50, p99 := median(samples), pct(samples, 0.99)
+	p50, p99 := metrics.Median(samples), metrics.Pct(samples, 0.99)
 	t.Logf("result grid 100k x %d: frame p50=%v p99=%v", cols, p50, p99)
 	if p50 > 16*time.Millisecond {
 		t.Errorf("frame p50 %v exceeds 16ms budget", p50)

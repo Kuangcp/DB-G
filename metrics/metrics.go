@@ -1,13 +1,13 @@
-package ui
+package metrics
 
 import (
 	"sort"
 	"time"
 )
 
-// percentile returns the value at position p (0..1) of a sorted slice,
+// Percentile returns the value at position p (0..1) of a sorted slice,
 // using idx = int(p*(len-1)).
-func percentile(sorted []time.Duration, p float64) time.Duration {
+func Percentile(sorted []time.Duration, p float64) time.Duration {
 	if len(sorted) == 0 {
 		return 0
 	}
@@ -59,20 +59,20 @@ func (s *Sampler) Sorted() []time.Duration {
 	return out
 }
 
-func (s *Sampler) Median() time.Duration { return percentile(s.Sorted(), 0.5) }
-func (s *Sampler) P90() time.Duration    { return percentile(s.Sorted(), 0.9) }
-func (s *Sampler) P99() time.Duration    { return percentile(s.Sorted(), 0.99) }
+func (s *Sampler) Median() time.Duration { return Percentile(s.Sorted(), 0.5) }
+func (s *Sampler) P90() time.Duration    { return Percentile(s.Sorted(), 0.9) }
+func (s *Sampler) P99() time.Duration    { return Percentile(s.Sorted(), 0.99) }
 
-// median returns the median of unsorted samples (测试与基准用）。
-func median(v []time.Duration) time.Duration {
+// Median returns the median of unsorted samples (测试与基准用）。
+func Median(v []time.Duration) time.Duration {
 	s := append([]time.Duration(nil), v...)
 	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
-	return percentile(s, 0.5)
+	return Percentile(s, 0.5)
 }
 
-// pct returns percentile p of unsorted samples.
-func pct(v []time.Duration, p float64) time.Duration {
+// Pct returns percentile p of unsorted samples.
+func Pct(v []time.Duration, p float64) time.Duration {
 	s := append([]time.Duration(nil), v...)
 	sort.Slice(s, func(a, b int) bool { return s[a] < s[b] })
-	return percentile(s, p)
+	return Percentile(s, p)
 }

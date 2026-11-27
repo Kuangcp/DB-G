@@ -9,6 +9,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"db-g/app"
+	_ "db-g/driver/clickhouse"
+
 	"db-g/engine"
 )
 
@@ -27,15 +30,15 @@ func TestPageSQL(t *testing.T) {
 		{"", false, ""},
 	}
 	for _, c := range cases {
-		got, ok := pageSQL(c.sql, 500, 100)
+		got, ok := app.PageSQL(c.sql, 500, 100)
 		if ok != c.ok || (ok && got != c.want) {
-			t.Fatalf("pageSQL(%q) = %q,%v want %q,%v", c.sql, got, ok, c.want, c.ok)
+			t.Fatalf("app.PageSQL(%q) = %q,%v want %q,%v", c.sql, got, ok, c.want, c.ok)
 		}
 	}
-	if got, ok := pageCountSQL("clickhouse", "SELECT 1"); !ok || got != "SELECT count() FROM (SELECT 1) AS dbg_count" {
+	if got, ok := app.PageCountSQL("clickhouse", "SELECT 1"); !ok || got != "SELECT count() FROM (SELECT 1) AS dbg_count" {
 		t.Fatalf("clickhouse count: %q %v", got, ok)
 	}
-	if got, ok := pageCountSQL("sqlite", "SELECT 1;"); !ok || got != "SELECT COUNT(*) FROM (SELECT 1) AS dbg_count" {
+	if got, ok := app.PageCountSQL("sqlite", "SELECT 1;"); !ok || got != "SELECT COUNT(*) FROM (SELECT 1) AS dbg_count" {
 		t.Fatalf("sqlite count: %q %v", got, ok)
 	}
 }

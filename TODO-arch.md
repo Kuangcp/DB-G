@@ -245,8 +245,9 @@
 - `preset.go`：BuildSQL（原 `ui/preset.go`）。
 `ui/sqlwords.go`/`sqldialect.go`/`sqlhighlight.go` 只保留 mygo 类型映射与语言包装；
 `AGENTS.md` 分层表已加 `sql/`。
-**剩余**：`metrics`（通用采样器，不属于 SQL）、`resultview` 分页 SQL 生成（依赖 app/engine）
-可按后续需要再下沉；mygo tokenizer 包装必须留在 ui。
+**已完成（2026-11-27 追加）**：`metrics/` 纯叶包（Sampler/Percentile/Median/Pct），
+`app/querypage.go`（PageBody/PageSQL/PageCountSQL）已下沉；`ui/resultview.go` 只保留排序/过滤视图状态。
+剩余仅 mygo tokenizer/补全类型映射，必须留在 ui。
 
 **证据**：`ui` 下 132 个 Go 文件（64 生产 + 68 测试）同属一个包；其中 11 个**完全不 import mygo**：
 `ai_context.go`、`ai_request.go`、`ai_selfcheck.go`、`completioncontext.go`、`metacache.go`、

@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
 
+	"db-g/metrics"
 	"db-g/sql"
 )
 
@@ -76,7 +77,7 @@ func TestEditorTypingPerf(t *testing.T) {
 			tt.TypeKey(0, ui.KeyA, "a")
 			tt.Frame()
 		})
-		p50, p99 := median(samples), pct(samples, 0.99)
+		p50, p99 := metrics.Median(samples), metrics.Pct(samples, 0.99)
 		t.Logf("size=%d typing: p50=%v p99=%v", size, p50, p99)
 		if lim, ok := perfBudget[size]; ok && lim.typing > 0 && p99 > lim.typing {
 			t.Fatalf("size=%d typing p99 %v exceeds %v", size, p99, lim.typing)
@@ -92,7 +93,7 @@ func TestEditorScrollPerf(t *testing.T) {
 			tt.Scroll(600, 400, 0, 400)
 			tt.Frame()
 		})
-		p50, p99 := median(samples), pct(samples, 0.99)
+		p50, p99 := metrics.Median(samples), metrics.Pct(samples, 0.99)
 		t.Logf("size=%d scroll: p50=%v p99=%v", size, p50, p99)
 		if lim, ok := perfBudget[size]; ok && lim.scroll > 0 && p99 > lim.scroll {
 			t.Fatalf("size=%d scroll p99 %v exceeds %v", size, p99, lim.scroll)
@@ -126,7 +127,7 @@ func TestEditorTypingWithCompletionsOpen(t *testing.T) {
 			tt.TypeKey(0, ui.KeyA, "a")
 			tt.Frame()
 		})
-		p50, p99 := median(samples), pct(samples, 0.99)
+		p50, p99 := metrics.Median(samples), metrics.Pct(samples, 0.99)
 		t.Logf("size=%d completion-open typing: p50=%v p99=%v", size, p50, p99)
 		if lim, ok := perfBudget[size]; ok && lim.completion > 0 && p99 > lim.completion {
 			t.Fatalf("size=%d completion typing p99 %v exceeds %v", size, p99, lim.completion)
@@ -143,7 +144,7 @@ func TestEditorSteadyFramePerf(t *testing.T) {
 			tt.Frame()
 		}
 		samples := sampleFrames(20, func() { tt.Frame() })
-		p50, p99 := median(samples), pct(samples, 0.99)
+		p50, p99 := metrics.Median(samples), metrics.Pct(samples, 0.99)
 		t.Logf("size=%d steady frame: p50=%v p99=%v", size, p50, p99)
 		if p99 > steadyFrameLimit {
 			t.Fatalf("size=%d steady frame p99 %v exceeds %v", size, p99, steadyFrameLimit)
