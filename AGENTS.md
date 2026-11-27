@@ -290,10 +290,11 @@ tt.Texts() / tt.Clipboard() / tt.Image()      // 文案表 / 剪贴板 / 像素
 - 每次改完必须过：
 
   ```bash
-  CGO_ENABLED=0 go build ./... && CGO_ENABLED=0 go vet ./... && CGO_ENABLED=0 go test -p 1 ./...
-  go tool mygo vet .
-  gofmt -l .        # 必须为空
+  make ci          # gofmt + vet + mygo vet + l10n + go test -short -p 1
+  make test        # 全量测试（含性能基准；需要安静机器）
   ```
+
+  CI 与本地共用 `make ci`；`-race` 因项目强制 `CGO_ENABLED=0` 不可用。
 
 - 修 bug 先写**失败的测试**再改（不写测试的修复不算修完）。
 

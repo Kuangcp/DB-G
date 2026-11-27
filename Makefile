@@ -1,4 +1,7 @@
-.PHONY: run build release localRelease install test vet i18n-status i18n-check
+.PHONY: run build release localRelease install test test-short vet gofmt-check i18n-status i18n-check ci
+
+# 本机工具链默认 go1.27；CI 用 setup-go 的 go
+GO ?= go1.27
 
 # 发布版本号：有 tag 用 tag（v1.0.0），否则 git describe / dev
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -10,11 +13,11 @@ RELEASE_LDFLAGS := -s -w -X db-g/app.buildVersion=$(VERSION) -X db-g/app.release
 
 # 交互窗口（本机 cgo 链接有 .sframe 问题，统一关掉 cgo）
 run:
-	CGO_ENABLED=0 go1.27 run -ldflags "$(DEV_LDFLAGS)" .
+	CGO_ENABLED=0 $(GO) run -ldflags "$(DEV_LDFLAGS)" .
 
 # 分发物就是这个静态二进制，不做 AppImage/Deb/安装器
 build:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)"
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)"
 
 # 发布产物：安装包 + 签名更新清单（需要 MYGO_UPDATER_PRIVATE_KEY）
 release:
@@ -27,7 +30,7 @@ CONFIG_DIR ?= $(if $(XDG_CONFIG_HOME),$(XDG_CONFIG_HOME),$(HOME)/.config)/db-g
 # Linux Local Release
 lo:
 	@mkdir -p "$(CONFIG_DIR)/bin"
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go1.27 build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o "$(CONFIG_DIR)/bin/db-g" .
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(RELEASE_FLAGS) -ldflags "$(RELEASE_LDFLAGS)" -o "$(CONFIG_DIR)/bin/db-g" .
 	@ver="$(VERSION)"; ver="$${ver#v}"; base="$${ver%%-*}"; \
 	build=$$(printf '%s\n' "$$base" | awk -F. 'NF==3 && $$1 ~ /^[0-9]+$$/ && $$2 ~ /^[0-9]+$$/ && $$3 ~ /^[0-9]+$$/ && $$2 <= 99 && $$3 <= 99 { printf "%d", $$1*10000+$$2*100+$$3; next } { printf "0" }'); \
 	printf '[db-g]\nbuild=%s\nversion=%s\n' "$$build" "$$ver" > "$(CONFIG_DIR)/version.tmp"; \
@@ -36,20 +39,33 @@ lo:
 	@printf 'installed %s -> %s\n' "$(VERSION)" "$(CONFIG_DIR)"
 
 install:
-	go1.27 install -ldflags "$(DEV_LDFLAGS)"
+	$(GO) install -ldflags "$(DEV_LDFLAGS)"
 
 # -p 1：避免并行包争 CPU 让编辑器/结果网格基准超限
 test:
-	CGO_ENABLED=0 go1.27 test -p 1 ./...
+	CGO_ENABLED=0 $(GO) test -p 1 ./...
+
+# CI 用的短测试：跳过慢/环境相关的用例，仍按 -p 1 避免基准争 CPU
+test-short:
+	CGO_ENABLED=0 $(GO) test -short -p 1 ./...
 
 vet:
-	CGO_ENABLED=0 go1.27 vet ./...
-	go1.27 tool mygo vet .
+	CGO_ENABLED=0 $(GO) vet ./...
+	$(GO) tool mygo vet .
 
 # 国际化：status 列出全部中文字面量，check 只报 ui/app 的未翻译项（CI 用）
 i18n-status:
-	CGO_ENABLED=0 go1.27 run ./tools/l10nscan -all
+	CGO_ENABLED=0 $(GO) run ./tools/l10nscan -all
 
 i18n-check:
-	CGO_ENABLED=0 go1.27 run ./tools/l10nscan
-	go1.27 tool mygo i18n check
+	CGO_ENABLED=0 $(GO) run ./tools/l10nscan
+	$(GO) tool mygo i18n check
+
+gofmt-check:
+	@unformatted="$$(gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt found unformatted files:"; echo "$$unformatted"; exit 1; \
+	fi
+
+# 本地与 CI 共用的验证入口（CI 传 GO=go）。
+ci: gofmt-check vet i18n-check test-short

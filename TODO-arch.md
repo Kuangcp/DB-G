@@ -480,6 +480,14 @@ ServerInfoer/ForeignKeyer 等），不再有 scoped/flat 双分支。
 
 ### ARCH-17 CI 与本地验证口径不一致
 
+**已完成（2026-11-27）**：
+- Makefile 增加 `GO ?= go1.27`、`gofmt-check`、`test-short`、`ci`
+  （gofmt + vet + mygo vet + l10n + `go test -short -p 1`）。
+- GitHub Actions 改为直接 `make ci GO=go`，与本地同一入口。
+- `AGENTS.md` 验证命令改为 `make ci` / `make test`。
+- `-race` 明确不启用：项目强制 `CGO_ENABLED=0`，Go race detector 需要 cgo；
+  在 CI 注释与文档中记录该限制。
+
 **证据**：`.github/workflows/ci.yml` 跑 `go test -short -p 1 ./...`；`Makefile` 的 `make test`
 跑全量；性能基准依赖 `-p 1`（`Makefile` 注释与 `ui/perf_test.go` 的预算）。CI 没有 `-race`。
 
