@@ -250,6 +250,26 @@ func TestResultCopyRowInsertViaMenu(t *testing.T) {
 	}
 }
 
+func TestResultHeaderMenuCopiesColumnName(t *testing.T) {
+	a := newTestRoot()
+	a.con.SetOutcome(&engine.QueryResult{
+		IsQuery: true,
+		Columns: []string{"user_name", "age"},
+		Rows:    [][]any{{"alice", int64(30)}},
+	}, "")
+	tt := ui.NewTester(rootView(a), 1200, 800)
+	tt.Frame()
+	if err := tt.RightClick("user_name"); err != nil {
+		t.Fatalf("right click header failed: %v", err)
+	}
+	if err := tt.ChooseMenuItem(locales.CopyColumnName()); err != nil {
+		t.Fatal(err)
+	}
+	if got := tt.Clipboard(); got != "user_name" {
+		t.Fatalf("clipboard: %q", got)
+	}
+}
+
 func TestExportIconOpensMenu(t *testing.T) {
 	a := newTestRoot()
 	a.con.SetOutcome(resultWith([]string{"id"}, []any{int64(1)}), "")

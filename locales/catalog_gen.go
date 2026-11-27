@@ -2514,6 +2514,16 @@ func (msgs Messages) DeleteInsertedRow() string {
 	return Catalog.Format(msgs.locale, "deleteInsertedRow", nil)
 }
 
+// CopyColumnName says "Copy Column Name"
+// in the language the app shows.
+func CopyColumnName() string { return In(i18n.Locale()).CopyColumnName() }
+
+// CopyColumnName says "Copy Column Name"
+// in the language of msgs.
+func (msgs Messages) CopyColumnName() string {
+	return Catalog.Format(msgs.locale, "copyColumnName", nil)
+}
+
 // CopyCell says "Copy Cell"
 // in the language the app shows.
 func CopyCell() string { return In(i18n.Locale()).CopyCell() }

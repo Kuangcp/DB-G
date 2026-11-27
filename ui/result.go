@@ -590,6 +590,9 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 				return
 			}
 			idx := col - 1
+			if idx < len(r.Columns) && m.Item(locales.CopyColumnName()).Chosen() {
+				c.WriteClipboard(r.Columns[idx])
+			}
 			if m.Item(locales.SortAsc()).Chosen() {
 				a.grid.view.sortBy(r, idx, false)
 			}
