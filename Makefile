@@ -1,4 +1,4 @@
-.PHONY: run build release localRelease install test test-short vet gofmt-check i18n-status i18n-check ci
+.PHONY: run build release localRelease install test test-short vet gofmt-check gen-check icons i18n-status i18n-check ci
 
 # 本机工具链默认 go1.27；CI 用 setup-go 的 go
 GO ?= go1.27
@@ -67,5 +67,15 @@ gofmt-check:
 		echo "gofmt found unformatted files:"; echo "$$unformatted"; exit 1; \
 	fi
 
+# 生成物漂移检查：mygo 生成的 locale catalog 必须与源一致。
+gen-check:
+	$(GO) tool mygo generate
+	@git diff --exit-code -- locales/catalog_gen.go || { \
+		echo "locales/catalog_gen.go is stale; run: make gen-check"; exit 1; }
+
+# 图标需要本机 lucide-react 缓存，不在 CI 跑；改了 icons 表后手动执行。
+icons:
+	node tools/lucideicons/main.mjs
+
 # 本地与 CI 共用的验证入口（CI 传 GO=go）。
-ci: gofmt-check vet i18n-check test-short
+ci: gofmt-check gen-check vet i18n-check test-short

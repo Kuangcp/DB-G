@@ -526,6 +526,14 @@ fonts/theme/keymap，断言新 root 不读取、也不创建真实 history 目�
 
 ### ARCH-19 生成物与契约文档漂移
 
+**已完成（2026-11-27）**：
+- `make gen-check`：重跑 `go tool mygo generate` 并校验 `locales/catalog_gen.go` 无 diff；
+  已纳入 `make ci`。
+- `make icons` 保留为手动目标（需要本机 lucide-react 缓存，CI 不跑）。
+- `engine` 增加能力位稳定名称表 `capabilityInfos` 与 `TestEveryCapabilityHasName`；
+  新增能力位漏登记名称会测试失败。
+- `AGENTS.md` 能力位表补上 `CapIndexes`。
+
 **证据**：`locales/catalog_gen.go`（9,835 行）、`ui/icons_gen.go`、`ui/lobe/tokens_gen.go`
 都是生成物；`AGENTS.md` 的能力位表缺 `CapIndexes`；`engine` 可选接口列表与文档描述不完全一致。
 
