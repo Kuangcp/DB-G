@@ -74,7 +74,7 @@ func (a *root) topBar(c *ui.Context) {
 		AlignItems(ui.Center).DragWindow().Background(t.Surface)
 	bar.Children(func() {
 		if a.sidebarHidden {
-			if iconButtonPlain(c, iconPanelLeftOpen, locales.SidebarShow(), t.TextMuted).Clicked() {
+			if iconButtonPlain(c, iconSidebar, locales.SidebarShow(), t.TextMuted).Clicked() {
 				a.sidebarHidden = false
 			}
 		}

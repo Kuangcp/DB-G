@@ -57,8 +57,7 @@ const icons = {
   iconTable:       "table",
   iconView:        "view",
   iconIndex:       "list-ordered",
-  iconPanelLeftClose: "panel-left-close",
-  iconPanelLeftOpen:  "panel-left-open",
+  iconSidebar:      "panel-left",
 };
 
 // loadIcon 读一个图标的 __iconData；别名文件（只有 re-export）跟着跳过去。

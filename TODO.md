@@ -19,19 +19,14 @@
 
 
 ## 自动补全
-- 补全作用域残留：上一条语句漏写分号、光标在下一条语句的 SELECT 列表 / WHERE 等位置时，
-  前一条语句的 FROM 表仍可能进入列补全候选。
+- 补全作用域残留：上一条语句漏写分号、光标在下一条语句的 SELECT 列表 / WHERE 等位置时，  前一条语句的 FROM 表仍可能进入列补全候选。
     - 复现：`select * from b\nselect id, na| from med_school`（光标在 `na` 后），
       候选里可能混入 `b` 的列；当前语句自己的列也可能被前一条语句带偏。
     - 已做：FROM/JOIN/UPDATE/INTO 的关系名位置优先给表（方案 A）；
       光标之后的行首 `SELECT`/`INSERT` 等新语句已隔离（方案 B）。
     - 未做：光标之前缺分号的语句做软切分（方案 C，需处理 UNION / CTE / INSERT…SELECT 误切）。
-    - 相关代码：`ui/sqlscope.go` 的 `stmtScopeAtOffset` / `statementBounds` /
-      `softStatementEnd` / `relationPositionAt`；测试 `TestStmtScopeAtSoftBoundaryGuards`、
-      `TestCompletionRelationPositionWithPreviousStatement`。
-- AI 助手后续阶段（Chat-to-SQL、EXPLAIN 可视化 + AI 诊断、SQL 错误修复、高危 SQL 拦截、
-  内联 AI 补全已完成，设计与计划见 `docs/superpowers/specs/2026-11-09-ai-context-design.md`、
-  `docs/superpowers/plans/2026-11-09-ai-context.md`）：
+    - 相关代码：`ui/sqlscope.go` 的 `stmtScopeAtOffset` / `statementBounds` / `softStatementEnd` / `relationPositionAt`；测试 `TestStmtScopeAtSoftBoundaryGuards`、`TestCompletionRelationPositionWithPreviousStatement`。
+- AI 助手后续阶段（Chat-to-SQL、EXPLAIN 可视化 + AI 诊断、SQL 错误修复、高危 SQL 拦截、  内联 AI 补全已完成，设计与计划见 `docs/superpowers/specs/2026-11-09-ai-context-design.md`、  `docs/superpowers/plans/2026-11-09-ai-context.md`）：
     - 向量/embedding 检索（当前仅词法 + 外键扩展）
     - 发送给Ai的 提示词构成以及优化
         - 现在只是接了个对话，还需要看怎么把软件内当前的查询结果表的DDL，explain或者analysis的结果合理，有取舍的给到模型。
@@ -40,7 +35,7 @@
 # 查询结果
 - ClickHouse 作为一个大宽表分析型数据库，用户最核心的诉求通常不是 DDL 查看或简单的只读，而是大数据量的高效流式导出（TSV/Parquet）、复杂的聚合查询可视化（执行计划/火焰图分析）。
 - ~~Explain 的各数据源的渲染支持~~（已做：四类库统一计划树，PG/MySQL 结构化 actual rows/loops；PG BUFFERS；MySQL TREE actual；ClickHouse 通用 JSON。SQLite/ClickHouse 不提供 ANALYZE）
-- 现在双击单元格是预览，Ctrl 双击是编辑，可以设置-快捷键里配置化，用户习惯不同可以更改
+
 
 
 # 设置窗口

@@ -94,6 +94,12 @@ func (a *root) tabsRow(c *ui.Context) {
 	})
 }
 
+// tabRowHeight 是控制台标签行的高度；侧栏搜索框行按同一高度对齐。
+func (a *root) tabRowHeight(c *ui.Context) float32 {
+	t := c.Theme()
+	return max(t.Space(6.5), a.tabFontSize()*1.7+4)
+}
+
 // tabFontSize 返回控制台标签的字号；配置越界时回退默认值。
 func (a *root) tabFontSize() float32 {
 	size := a.settings.FontPrefs.TabSize
@@ -132,7 +138,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 	}
 	active := rec.ID == a.tabs.ActiveConsole && !a.viewerActive()
 	size := a.tabFontSize()
-	height := max(t.Space(6.5), size*1.7+4)
+	height := a.tabRowHeight(c)
 	// 简约标签：无边框无底色，标签之间一条竖分隔线（第一个没有）。
 	// 激活标签用 2px accent 上边线；上边线画出来而不是边框，切换时尺寸与文字位置不动。
 	btn := ui.ButtonBase(c).Label(label).Gap(5).Height(height).Padding(2, 9)

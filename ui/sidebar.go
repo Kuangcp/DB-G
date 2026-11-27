@@ -16,7 +16,7 @@ import (
 )
 
 func (a *root) sidebar(c *ui.Context) {
-	ui.Column(c).Fill().Padding(8).Gap(6).Children(func() {
+	ui.Column(c).Fill().Padding(4, 8, 8, 8).Gap(6).Children(func() {
 		ui.Toolbar(c, func() {
 			if iconButton(c, iconPlug, locales.SidebarNewConn(), ui.Transparent).Clicked() {
 				a.openNewConnForm("")
@@ -28,18 +28,18 @@ func (a *root) sidebar(c *ui.Context) {
 				a.reloadTree()
 			}
 			ui.Spacer(c)
-			if iconButtonPlain(c, iconPanelLeftClose, locales.SidebarHide(), ui.Transparent).Clicked() {
+			if iconButtonPlain(c, iconSidebar, locales.SidebarHide(), ui.Transparent).Clicked() {
 				a.sidebarHidden = true
 			}
-		}).Label(locales.SidebarDatasourceActions()).DragWindow()
+		}).Padding(0, 4).Label(locales.SidebarDatasourceActions()).DragWindow()
 		if a.store == nil {
 			ui.Text(c, locales.SidebarStartHint()).TextColor(c.Theme().TextMuted)
 			a.connModal(c)
 			a.folderModal(c)
 			return
 		}
-		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			ui.TextInput(c, &a.tree.ObjSearch).Placeholder(locales.SidebarSearchPlaceholder()).Label(locales.SidebarSearchObjects()).Fill()
+		ui.Row(c).Height(a.tabRowHeight(c)).Gap(4).AlignItems(ui.Center).Children(func() {
+			ui.TextInput(c, &a.tree.ObjSearch).Placeholder(locales.SidebarSearchPlaceholder()).Label(locales.SidebarSearchObjects()).Padding(c.Theme().Space(1), c.Theme().Space(2.5)).Fill()
 			if a.tree.ObjSearch != "" {
 				if iconButtonPlain(c, iconClose, locales.SidebarClearSearch(), ui.Transparent).Clicked() {
 					a.tree.ObjSearch = ""

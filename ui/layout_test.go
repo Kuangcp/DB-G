@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -307,6 +308,32 @@ func TestSidebarToggleHidesAndShowsPanel(t *testing.T) {
 	}
 	if _, ok := tt.Find(locales.SidebarSearchObjects()); !ok {
 		t.Fatalf("恢复后侧栏搜索框应可见: %v", tt.Texts())
+	}
+}
+
+// 侧栏工具栏行压缩后，搜索框与控制台标签行垂直对齐（标签字号变化也保持居中）。
+func TestSidebarSearchAlignsWithConsoleTabs(t *testing.T) {
+	for _, size := range []float64{app.DefaultTabFontSize, 20} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			a, prof := topBarTestRoot(t)
+			a.settings.FontPrefs.TabSize = size
+			if _, err := a.consoleMgr().Create(prof.ID, "查询二"); err != nil {
+				t.Fatal(err)
+			}
+			tt := ui.NewTester(rootView(a), 1400, 800)
+			tt.Frame()
+			search, ok := tt.Find(locales.SidebarSearchObjects())
+			if !ok {
+				t.Fatalf("找不到侧栏搜索框: %v", tt.Texts())
+			}
+			tab, ok := tt.Find("本地 / 查询")
+			if !ok {
+				t.Fatalf("找不到控制台标签: %v", tt.Texts())
+			}
+			if d := (search.Y + search.H/2) - (tab.Y + tab.H/2); d < -1.5 || d > 1.5 {
+				t.Fatalf("搜索框应与标签行垂直居中: search=%v tab=%v", search, tab)
+			}
+		})
 	}
 }
 
