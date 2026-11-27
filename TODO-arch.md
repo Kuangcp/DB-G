@@ -460,6 +460,11 @@ Unmarshal → 本地化错误 → Normalize → MkdirAll → MarshalIndent → �
 
 ### ARCH-18 测试隔离：`newRootWithStore` 仍读真实用户配置
 
+**已完成（2026-11-27）**：随 ARCH-14 的 `app.ConfigPaths` 一并修复。
+`newRootWithStore` 全部路径从连接库所在目录派生；新增
+`TestNewRootWithStoreIgnoresUserConfig`：在 `XDG_CONFIG_HOME` 下放伪造的
+fonts/theme/keymap，断言新 root 不读取、也不创建真实 history 目录。
+
 **证据**：`ui/root.go:378-430` 的 `newRootWithStore(storePath)`：
 - `keymapPath = app.DefaultKeymapPath()`（`:380`）、`fontPrefsPath = app.DefaultFontPrefsPath()`
   （`:383`）、`themePath = app.DefaultThemePrefsPath()`（`:391`）、
