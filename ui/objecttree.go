@@ -158,22 +158,14 @@ func (a *root) loadAllObjectKinds(sess engine.Session, schema string) (map[engin
 	if sess == nil {
 		return nil, nil
 	}
-	lister, ok := sess.(engine.ObjectLister)
-	if !ok || !sess.Caps().Has(engine.CapObjects) {
+	if !sess.Caps().Has(engine.CapObjects) {
 		return nil, errors.New(locales.TreeUnsupported())
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	data := map[engine.ObjectKind][]engine.DBObject{}
-	scoped, multi := sess.(engine.SchemaLister)
 	for _, g := range objectKinds {
-		var objs []engine.DBObject
-		var err error
-		if schema != "" && multi {
-			objs, err = scoped.ObjectsIn(ctx, schema, g.kind)
-		} else {
-			objs, err = lister.Objects(ctx, g.kind)
-		}
+		objs, err := engine.ObjectsOf(ctx, sess, schema, g.kind)
 		if err != nil {
 			return nil, err
 		}
@@ -259,8 +251,7 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 		a.setTreeErr(base, locales.TreeUnsupported())
 		return
 	}
-	counter, ok := sess.(engine.ObjectCounter)
-	if !ok {
+	if _, ok := sess.(engine.ObjectCounter); !ok {
 		a.loadAllObjects(p, schema, base)
 		return
 	}
@@ -269,7 +260,7 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 	load := func() (map[engine.ObjectKind]int, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return counter.ObjectCounts(ctx, schema)
+		return engine.ObjectCountsOf(ctx, sess, schema)
 	}
 	done := func(counts map[engine.ObjectKind]int, err error) {
 		delete(a.tree.Loading, countKey)
@@ -347,8 +338,7 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 	if sess == nil {
 		return
 	}
-	pager, ok := sess.(engine.PagedObjectLister)
-	if !ok {
+	if _, ok := sess.(engine.PagedObjectLister); !ok {
 		a.loadAllObjects(p, schema, base)
 		return
 	}
@@ -370,7 +360,7 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 	load := func() ([]engine.DBObject, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return pager.ObjectsPage(ctx, schema, kind, loaded, limit)
+		return engine.ObjectsPageOf(ctx, sess, schema, kind, loaded, limit)
 	}
 	done := func(objs []engine.DBObject, err error) {
 		delete(a.tree.Loading, groupKey)
@@ -679,16 +669,13 @@ func fetchObjectDDL(ctx context.Context, sess engine.Session, o engine.DBObject)
 	if sess == nil {
 		return "", false, nil
 	}
-	lister, hasDDL := sess.(engine.ObjectDDLer)
-	scoped, hasScoped := sess.(engine.SchemaObjectDDLer)
-	if !sess.Caps().Has(engine.CapObjectDDL) || (!hasDDL && !hasScoped) {
+	if !sess.Caps().Has(engine.CapObjectDDL) {
 		return "", false, nil
 	}
-	if hasScoped {
-		ddl, err := scoped.ObjectDDLIn(ctx, o.Schema, o.Kind, o.Name)
-		return ddl, true, err
+	ddl, err := engine.ObjectDDLOf(ctx, sess, o.Schema, o.Kind, o.Name)
+	if errors.Is(err, engine.ErrUnsupported) {
+		return "", false, nil
 	}
-	ddl, err := lister.ObjectDDL(ctx, o.Kind, o.Name)
 	return ddl, true, err
 }
 
@@ -758,7 +745,7 @@ func (a *root) viewDDLForWord(word string) bool {
 	if sess == nil {
 		return false
 	}
-	if _, ok := sess.(engine.ObjectDDLer); !ok || !sess.Caps().Has(engine.CapObjectDDL) {
+	if !sess.Caps().Has(engine.CapObjectDDL) {
 		return false
 	}
 	// 对象树/补全目录已加载时先确认光标处的词确实是个表/视图，

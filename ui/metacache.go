@@ -211,8 +211,7 @@ func (a *root) refreshStaleMeta(p app.ConnProfile) {
 		return
 	}
 	delete(a.tree.MetaCacheStale, p.ID)
-	counter, ok := sess.(engine.ObjectCounter)
-	if !ok {
+	if _, ok := sess.(engine.ObjectCounter); !ok {
 		return
 	}
 	cachedSchemas := a.schemasForConn(p.ID)
@@ -233,7 +232,7 @@ func (a *root) refreshStaleMeta(p app.ConnProfile) {
 		counts := map[string]map[engine.ObjectKind]int{}
 		for _, schema := range schemas {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			c, err := counter.ObjectCounts(ctx, schema)
+			c, err := engine.ObjectCountsOf(ctx, sess, schema)
 			cancel()
 			if err != nil {
 				app.LogWarn("catalog", "meta cache refresh counts failed",

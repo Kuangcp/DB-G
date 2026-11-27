@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -49,18 +50,15 @@ func (a *root) loadStats(p app.ConnProfile, o engine.DBObject) {
 		unsupported bool
 	)
 	a.runBackground(func() {
-		statter, hasStats := sess.(engine.ObjectStatter)
-		scoped, hasScoped := sess.(engine.SchemaObjectStatter)
-		if sess == nil || !sess.Caps().Has(engine.CapObjectStats) || (!hasStats && !hasScoped) {
+		if sess == nil || !sess.Caps().Has(engine.CapObjectStats) {
 			unsupported = true
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if hasScoped {
-			stats, err = scoped.ObjectStatsIn(ctx, o.Schema, o.Kind, o.Name)
-		} else {
-			stats, err = statter.ObjectStats(ctx, o.Kind, o.Name)
+		stats, err = engine.ObjectStatsOf(ctx, sess, o.Schema, o.Kind, o.Name)
+		if errors.Is(err, engine.ErrUnsupported) {
+			unsupported = true
 		}
 	}, func() {
 		if unsupported {

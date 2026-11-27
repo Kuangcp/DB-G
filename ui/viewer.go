@@ -354,15 +354,7 @@ func (a *root) viewerLoadColumns(t *viewerTab) {
 		a.ensureViewerSession(t, func() { a.viewerLoadColumns(t) })
 		return
 	}
-	scoped, hasScoped := sess.(engine.SchemaColumnLister)
-	lister, hasCols := sess.(engine.ColumnLister)
-	if !sess.Caps().Has(engine.CapColumns) || (!hasScoped && !hasCols) {
-		t.colsErr = locales.ViewerColumnsUnsupported()
-		return
-	}
-	if t.schema != "" && hasScoped {
-		// 有 schema 的多库数据源：按对象所属 schema 读。
-	} else if !hasCols {
+	if !sess.Caps().Has(engine.CapColumns) {
 		t.colsErr = locales.ViewerColumnsUnsupported()
 		return
 	}
@@ -370,10 +362,11 @@ func (a *root) viewerLoadColumns(t *viewerTab) {
 	load := func() ([]engine.Column, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
 		defer cancel()
-		if t.schema != "" && hasScoped {
-			return scoped.ColumnsIn(ctx, t.schema, t.obj.Name)
+		cols, err := engine.ColumnsOf(ctx, sess, t.schema, t.obj.Name)
+		if errors.Is(err, engine.ErrUnsupported) {
+			return nil, nil
 		}
-		return lister.Columns(ctx, t.obj.Name)
+		return cols, err
 	}
 	done := func(cols []engine.Column, err error) {
 		t.colsLoading = false
@@ -407,15 +400,7 @@ func (a *root) viewerLoadIndexes(t *viewerTab) {
 		a.ensureViewerSession(t, func() { a.viewerLoadIndexes(t) })
 		return
 	}
-	scoped, hasScoped := sess.(engine.SchemaIndexLister)
-	lister, hasIdx := sess.(engine.IndexLister)
-	if !sess.Caps().Has(engine.CapIndexes) || (!hasScoped && !hasIdx) {
-		t.idxErr = locales.ViewerIndexesUnsupported()
-		return
-	}
-	if t.schema != "" && hasScoped {
-		// 有 schema 的多库数据源：按对象所属 schema 读。
-	} else if !hasIdx {
+	if !sess.Caps().Has(engine.CapIndexes) {
 		t.idxErr = locales.ViewerIndexesUnsupported()
 		return
 	}
@@ -423,10 +408,11 @@ func (a *root) viewerLoadIndexes(t *viewerTab) {
 	load := func() ([]engine.Index, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
 		defer cancel()
-		if t.schema != "" && hasScoped {
-			return scoped.IndexesIn(ctx, t.schema, t.obj.Name)
+		idx, err := engine.IndexesOf(ctx, sess, t.schema, t.obj.Name)
+		if errors.Is(err, engine.ErrUnsupported) {
+			return nil, nil
 		}
-		return lister.Indexes(ctx, t.obj.Name)
+		return idx, err
 	}
 	done := func(idx []engine.Index, err error) {
 		t.idxLoading = false

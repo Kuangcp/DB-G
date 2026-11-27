@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -126,17 +127,6 @@ func (a *root) aiPlanContext() *ai.PlanContext {
 		SQL: a.ai.Plan.sql, Analyze: a.ai.Plan.analyze,
 		Text: plan.Text(a.ai.Plan.nodes),
 	}
-}
-
-// hasColumnLister / hasSchemaColumnLister 避免在多个分支重复类型断言。
-func hasColumnLister(sess engine.Session) bool {
-	_, ok := sess.(engine.ColumnLister)
-	return ok
-}
-
-func hasSchemaColumnLister(sess engine.Session) bool {
-	_, ok := sess.(engine.SchemaColumnLister)
-	return ok
 }
 
 // aiDDLKey 是缓存键：连接 + schema + 表名（大小写不敏感）。
@@ -377,11 +367,6 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowD
 		done(snap)
 		return
 	}
-	scoped, hasScoped := sess.(engine.SchemaObjectDDLer)
-	lister, hasLister := sess.(engine.ObjectDDLer)
-	if !hasScoped && !hasLister {
-		missingDDL = nil
-	}
 	if !sess.Caps().Has(engine.CapObjectDDL) {
 		missingDDL = nil
 	}
@@ -392,8 +377,7 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowD
 	if needTables && (!sess.Caps().Has(engine.CapObjects)) {
 		needTables = false
 	}
-	if needColumns && (!sess.Caps().Has(engine.CapColumns) ||
-		(!hasSchemaColumnLister(sess) && !hasColumnLister(sess))) {
+	if needColumns && !sess.Caps().Has(engine.CapColumns) {
 		needColumns = false
 	}
 	if !needTables && !needColumns && len(missingRel) == 0 && len(missingDDL) == 0 {
@@ -459,14 +443,11 @@ func (a *root) prepareAIContext(question string, snap ai.ContextSnapshot, allowD
 			}
 		}
 		for _, req := range missingDDL {
-			var ddl string
-			var err error
-			if hasScoped {
-				ddl, err = scoped.ObjectDDLIn(ctx, req.schema, req.kind, req.table)
-			} else {
-				ddl, err = lister.ObjectDDL(ctx, req.kind, req.table)
-			}
+			ddl, err := engine.ObjectDDLOf(ctx, sess, req.schema, req.kind, req.table)
 			if err != nil {
+				if errors.Is(err, engine.ErrUnsupported) {
+					continue
+				}
 				app.LogWarn("ai", "context ddl failed", "conn", p.ID, "table", req.table, "err", err.Error())
 				continue
 			}

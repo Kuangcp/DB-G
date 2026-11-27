@@ -406,6 +406,16 @@ Unmarshal → 本地化错误 → Normalize → MkdirAll → MarshalIndent → �
 
 ### ARCH-15 可选接口成对出现（scoped/flat），UI 侧 38 处类型断言
 
+**进度（2026-11-27）**：新增 `engine/catalog.go` 的解析助手：
+`ObjectsOf` / `ColumnsOf` / `IndexesOf` / `ObjectDDLOf` / `ObjectStatsOf` /
+`ObjectCountsOf` / `ObjectsPageOf`，优先 schema 感知实现、再退回单 schema 实现，
+不支持时返回 `engine.ErrUnsupported`。
+UI 的成对断言已全部改为调用助手；`sess.(engine.Xxx)` 从 38 降到 19，
+剩下都是单接口能力探测（SchemaLister/Switcher/Transactional/PlanExplainer/RowStreamer/
+ServerInfoer/ForeignKeyer 等），不再有 scoped/flat 双分支。
+**剩余**：四个驱动仍保留 flat 包装方法（helper 会优先走 scoped），可按需再删；
+新增驱动只需实现 schema 感知一套即可被 helper 选中。
+
 **证据**
 - `engine` 有 10 对「单 schema / 带 schema」接口：`ObjectLister`/`SchemaLister`、
   `ColumnLister`/`SchemaColumnLister`、`IndexLister`/`SchemaIndexLister`、

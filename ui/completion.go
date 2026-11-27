@@ -216,14 +216,11 @@ func columnsOf(sess engine.Session, schema, table string) ([]engine.Column, erro
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
 	defer cancel()
-	if lister, ok := sess.(engine.SchemaColumnLister); ok {
-		return lister.ColumnsIn(ctx, schema, table)
-	}
-	lister, ok := sess.(engine.ColumnLister)
-	if !ok {
+	cols, err := engine.ColumnsOf(ctx, sess, schema, table)
+	if errors.Is(err, engine.ErrUnsupported) {
 		return nil, nil // 能力不足：降级为只有关键字/表
 	}
-	return lister.Columns(ctx, table)
+	return cols, err
 }
 
 // catalogObjectLimit 是补全目录最多取的表/视图数量。大库（几万张表）不全量拉，
@@ -237,25 +234,18 @@ func objectsOf(sess engine.Session) (tables, views []string, err error) {
 
 // objectsOfIn 用会话枚举指定 schema/库的表与视图；schema 为空表示默认 schema。
 func objectsOfIn(sess engine.Session, schema string) (tables, views []string, err error) {
-	lister, ok := sess.(engine.ObjectLister)
-	if !ok || !sess.Caps().Has(engine.CapObjects) {
+	if !sess.Caps().Has(engine.CapObjects) {
 		return nil, nil, nil // 能力不足：降级为只有关键字
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
 	defer cancel()
-	pager, _ := sess.(engine.PagedObjectLister)
-	scoped, multi := sess.(engine.SchemaLister)
+	_, paged := sess.(engine.PagedObjectLister)
 	names := func(kind engine.ObjectKind) ([]string, error) {
 		var objs []engine.DBObject
-		if pager != nil {
-			objs, err = pager.ObjectsPage(ctx, schema, kind, 0, catalogObjectLimit)
-		} else if schema != "" && multi {
-			objs, err = scoped.ObjectsIn(ctx, schema, kind)
-			if len(objs) > catalogObjectLimit {
-				objs = objs[:catalogObjectLimit]
-			}
+		if paged {
+			objs, err = engine.ObjectsPageOf(ctx, sess, schema, kind, 0, catalogObjectLimit)
 		} else {
-			objs, err = lister.Objects(ctx, kind)
+			objs, err = engine.ObjectsOf(ctx, sess, schema, kind)
 			if len(objs) > catalogObjectLimit {
 				objs = objs[:catalogObjectLimit]
 			}

@@ -24,11 +24,16 @@ type ObjectLister interface {
 	Objects(ctx context.Context, kind ObjectKind) ([]DBObject, error)
 }
 
+// SchemaObjectLister 是可选能力接口：按 schema/库枚举对象。
+type SchemaObjectLister interface {
+	ObjectsIn(ctx context.Context, schema string, kind ObjectKind) ([]DBObject, error)
+}
+
 // SchemaLister 是可选能力接口：数据源有多个 schema/库可切换（PG、MySQL、CK）。
 // UI 先列 Schemas，再用 ObjectsIn 取某个 schema 的对象。
 type SchemaLister interface {
 	Schemas(ctx context.Context) ([]string, error)
-	ObjectsIn(ctx context.Context, schema string, kind ObjectKind) ([]DBObject, error)
+	SchemaObjectLister
 }
 
 // ObjectCounter 是可选能力接口：快速返回某 schema 下各类型对象的数量。
