@@ -156,12 +156,12 @@ func (a *root) connBar(c *ui.Context) {
 			}
 		}
 		a.schemaPicker(c)
-		if a.consoleErr != "" {
+		if !a.viewerActive() && a.consoleErr != "" {
 			if ui.Button(c, a.consoleErr).TextColor(t.Danger).SingleLine().Clicked() {
 				a.consoleErr = ""
 			}
 		}
-		if a.extMsg != "" {
+		if !a.viewerActive() && a.extMsg != "" {
 			if ui.Button(c, a.extMsg).FontSize(12).TextColor(t.TextMuted).SingleLine().Clicked() {
 				a.extMsg = ""
 			}
@@ -182,18 +182,23 @@ func (a *root) connBar(c *ui.Context) {
 		if a.installNote != "" {
 			ui.Text(c, a.installNote).FontSize(12).TextColor(t.TextMuted).SingleLine()
 		}
-		ui.Toolbar(c, func() {
-			if iconButton(c, iconPlay, locales.TopExec(), t.Success).
-				Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-				a.execPending = true
-			}
-			if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).
-				Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
-				a.runExplain(false)
-			}
-		}).Padding(0).Shrink(0).Label(locales.TopActions())
-		ui.Spacer(c)
-		a.editorToolButtons(c)
+		// 表视图只读浏览，执行/计划/编辑工具不适用，整组隐藏。
+		if !a.viewerActive() {
+			ui.Toolbar(c, func() {
+				if iconButton(c, iconPlay, locales.TopExec(), t.Success).
+					Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+					a.execPending = true
+				}
+				if iconButton(c, iconPlan, locales.TopExecPlan(), ui.Transparent).
+					Disabled(a.currentRuntime().Running() || a.activeSession() == nil).Clicked() {
+					a.runExplain(false)
+				}
+			}).Padding(0).Shrink(0).Label(locales.TopActions())
+			ui.Spacer(c)
+			a.editorToolButtons(c)
+		} else {
+			ui.Spacer(c)
+		}
 		ui.Toolbar(c, func() {
 			ui.MenuButton(c, a.workspaceName(), a.workspaceMenu)
 		}).Padding(0).Shrink(0)

@@ -154,6 +154,20 @@ func (a *root) ensureCatalog(connID string) {
 // ensureColumns 在主线程调用：没有新鲜列缓存时发起一次加载（同 ensureCatalog 的线程语义）。
 func (a *root) ensureColumns(connID, table string) {
 	key, schema := a.completionScope(connID)
+	a.ensureColumnsKey(key, connID, schema, table)
+}
+
+// catalogKey 是某数据源某个 schema 的目录/列缓存键（与 completionScope 一致）。
+func catalogKey(connID, schema string) string {
+	if schema == "" {
+		return connID
+	}
+	return connID + "|" + schema
+}
+
+// ensureColumnsKey 是 ensureColumns 的显式 schema 版本：表视图按对象所属 schema 读列，
+// 不依赖顶栏当前选的 schema。
+func (a *root) ensureColumnsKey(key, connID, schema, table string) {
 	kind := a.connKindOf(connID)
 	if table == "" || !a.catalog.beginColumns(key, table) {
 		return

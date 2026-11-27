@@ -21,16 +21,70 @@ func (a *root) consoleTabs(c *ui.Context) {
 	for _, rec := range open {
 		counts[rec.ConnectionID]++
 	}
-	if len(open) == 0 {
+	if len(open) == 0 && len(a.viewerOrder) == 0 {
 		ui.Text(c, locales.TabEmptyHint()).TextColor(c.Theme().TextMuted).FontSize(a.tabFontSize()).SingleLine()
 		ui.Spacer(c)
 		return
 	}
 	ui.Toolbar(c, func() {
-		for i, rec := range open {
-			a.tab(c, rec, counts[rec.ConnectionID] > 1, i == 0)
+		first := true
+		for _, rec := range open {
+			a.tab(c, rec, counts[rec.ConnectionID] > 1, first)
+			first = false
+		}
+		// 表视图是临时标签，排在控制台之后。
+		for _, id := range a.viewerOrder {
+			if t := a.viewerTabs[id]; t != nil {
+				a.viewerTabButton(c, t, first)
+				first = false
+			}
 		}
 	}).Padding(0).Grow(1).Label(locales.TabToolbarLabel())
+}
+
+// viewerTabButton 渲染一个表/视图浏览标签（图标 + 对象名，关闭/刷新走右键菜单）。
+func (a *root) viewerTabButton(c *ui.Context, t *viewerTab, first bool) {
+	th := c.Theme()
+	size := a.tabFontSize()
+	height := max(th.Space(6.5), size*1.7+4)
+	active := a.activeViewer == t.id
+	btn := ui.ButtonBase(c).Label(t.obj.Name).Gap(5).Height(height).Padding(2, 9)
+	if !first {
+		btn.BorderWidth(0, 0, 0, 1).BorderColor(th.Border)
+	}
+	if active {
+		btn.Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: 2}, th.Accent, 0)
+		})
+	} else if btn.Hovered() {
+		btn.Background(th.SurfaceHover)
+	}
+	label := t.obj.Name
+	btn.Children(func() {
+		if icon := objectKindIcon(t.obj.Kind); icon != nil {
+			ui.Icon(c, icon).FontSize(size).TextColor(th.TextMuted)
+		}
+		txt := ui.Text(c, t.obj.Name).FontSize(size).SingleLine()
+		if active {
+			txt.Bold()
+		}
+	})
+	btn.Tooltip(locales.ViewerTabTooltip(a.connName(t.connID), label))
+	if btn.Clicked() {
+		a.pendingActivateViewer = t.id
+	}
+	btn.ContextMenu(func(menu *ui.Menu) {
+		if menu.Item(locales.ViewerRefresh()).Chosen() {
+			if es := a.editSets[viewerRuntimeID(t.id)]; es != nil && es.Count() > 0 {
+				a.toastError(locales.PageDirty())
+			} else {
+				a.viewerReload(t, nil)
+			}
+		}
+		if menu.Item(locales.TabMenuClose()).Chosen() {
+			a.closeViewerTab(t.id)
+		}
+	})
 }
 
 // tabsRow 是标题栏下的控制台标签行（标签之间用竖线分隔）。
@@ -76,7 +130,7 @@ func (a *root) tab(c *ui.Context, rec app.ConsoleRecord, showConsole, first bool
 	if dirty {
 		label = "● " + label
 	}
-	active := rec.ID == a.activeConsole
+	active := rec.ID == a.activeConsole && !a.viewerActive()
 	size := a.tabFontSize()
 	height := max(t.Space(6.5), size*1.7+4)
 	// 简约标签：无边框无底色，标签之间一条竖分隔线（第一个没有）。
@@ -240,23 +294,41 @@ func (a *root) touchConsoleMRU(id string) {
 	a.consoleMRU = kept
 }
 
-// switchToRecentConsole 切到当前工作区里最近使用过的那个控制台；
+// switchToRecentConsole 切到最近使用过的那个标签（控制台或表视图）；
 // 连续按就在最近两个之间来回切（Alt-Tab 式）。
 func (a *root) switchToRecentConsole() {
 	m := a.consoleMgr()
-	if m == nil {
-		return
+	open := map[string]bool{}
+	if m != nil {
+		for _, rec := range m.Open() {
+			open[rec.ID] = true
+		}
 	}
-	open := make(map[string]bool)
-	for _, rec := range m.Open() {
-		open[rec.ID] = true
-	}
-	for _, id := range a.consoleMRU {
-		if id != a.activeConsole && open[id] {
-			a.pendingActivate = id
+	current := a.activeTabKey()
+	for _, key := range a.consoleMRU {
+		if key == current {
+			continue
+		}
+		if id, ok := strings.CutPrefix(key, "vw:"); ok {
+			if _, exists := a.viewerTabs[id]; exists {
+				a.pendingActivateViewer = id
+				return
+			}
+			continue
+		}
+		if open[key] {
+			a.pendingActivate = key
 			return
 		}
 	}
+}
+
+// activeTabKey 返回当前标签在最近使用序列里的键。
+func (a *root) activeTabKey() string {
+	if a.viewerActive() {
+		return viewerRuntimeID(a.activeViewer)
+	}
+	return a.activeConsole
 }
 
 // closeConsole 把控制台移出当前工作区（文件与元数据保留）。

@@ -188,8 +188,13 @@ type root struct {
 	useSeq                uint64
 	consoles              map[string]*app.Console // consoleID → 运行态
 	activeConsole         string
-	consoleMRU            []string // 最近使用过的控制台（Ctrl+Tab 切换用，队首最新）
+	consoleMRU            []string // 最近使用过的标签（控制台 id 或 "vw:"+viewerID；Ctrl+Tab 用，队首最新）
 	pendingActivate       string
+	pendingActivateViewer string                // 下一帧要激活的表视图标签
+	viewerTabs            map[string]*viewerTab // 表/视图临时标签（只在内存，关应用即丢）
+	viewerOrder           []string              // 表视图标签的创建顺序（标签行渲染用）
+	activeViewer          string                // 非空 = 当前展示表视图
+	consoleGrid           gridSnap              // 切到表视图时暂存的控制台结果网格状态
 	pendingClose          string
 	pendingSwitchWS       string
 	lastVer               map[string]uint64
@@ -336,6 +341,7 @@ func newRoot(text string) *root {
 		serverInfoErr:    map[string]string{},
 		serverInfoSeq:    map[string]uint64{},
 		consoles:         map[string]*app.Console{},
+		viewerTabs:       map[string]*viewerTab{},
 		lastVer:          map[string]uint64{},
 		extFiles:         map[string]*extFile{},
 	}
@@ -564,6 +570,12 @@ func (a *root) activateConsole(id string) bool {
 	m := a.consoleMgr()
 	if m == nil {
 		return false
+	}
+	if a.viewerActive() {
+		a.leaveViewer()
+		if id == a.activeConsole {
+			return true
+		}
 	}
 	if id == a.activeConsole {
 		return true
@@ -834,6 +846,11 @@ func (a *root) view(c *ui.Context) {
 			a.pendingActivate = ""
 			a.activateConsole(id)
 		}
+		if a.pendingActivateViewer != "" {
+			id := a.pendingActivateViewer
+			a.pendingActivateViewer = ""
+			a.activateViewer(id)
+		}
 		a.applyPaletteJump()
 		if a.pendingAppend != "" {
 			sql := a.pendingAppend
@@ -878,6 +895,11 @@ func (a *root) view(c *ui.Context) {
 					a.connBar(c)
 					// 内容区取三行下面剩下的高度：Fill() 会按整窗高度算，把状态栏挤出窗口。
 					ui.Column(c).Grow(1).FillWidth().Padding(8).Gap(6).Children(func() {
+						if a.viewerActive() {
+							a.viewerPane(c)
+							a.resultFooter(c)
+							return
+						}
 						// 编辑器 / 结果 分屏：按窗口高度取比例，结果区可 Alt+D 隐藏。
 						editor := func() {
 							a.externalBanner(c)

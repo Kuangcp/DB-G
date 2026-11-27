@@ -46,6 +46,7 @@ func (a *root) removeConn(id string) {
 	a.forgetAIDDL(id)
 	a.forgetAIRelations(id)
 	a.forgetConnMeta(id)
+	a.closeViewersOf(id)
 	a.closeSession(id, "connection removed")
 	if a.connErrOf(id) != "" {
 		delete(a.sessionErr, id)
@@ -486,18 +487,25 @@ func (a *root) startStmt(i int) {
 	}
 	a.stmtRuns[i].started = true
 	a.activeStmt = i
-	sql := a.stmtRuns[i].sql
-	app.LogInfo("exec", "start", "conn", a.activeConnName(), "console", a.activeConsole, "sql", truncateLogSQL(sql))
+	run := a.stmtRuns[i]
+	sql := run.sql
+	// 会话按运行态所属的控制台取，而不是「当前激活的数据源」：
+	// 多语句执行途中切到表视图/别的数据源时，后续语句仍要跑在原数据源上。
+	connID := a.runtimeConnID(run.runtimeID)
+	sess := a.sessionFor(connID)
+	if sess == nil {
+		sess = a.activeSession() // 临时缓冲执行（无控制台）
+	}
+	app.LogInfo("exec", "start", "conn", a.connName(connID), "console", a.activeConsole, "sql", truncateLogSQL(sql))
 	a.lastExecSQL = sql
-	rt := a.runtimeFor(a.stmtRuns[i].runtimeID)
+	rt := a.runtimeFor(run.runtimeID)
 	rt.SetPageSize(a.resultPrefs.PageSize)
-	rt.SetOnDone(a.stmtDone(i))
-	sess := a.activeSession()
+	rt.SetOnDone(a.stmtDoneFor(run.runtimeID, sql, connID))
 	if sess == nil {
 		app.LogWarn("exec", "no session", "index", i)
 		return
 	}
-	if !rt.RunTimeout(sess, sql, a.queryTimeoutFor()) {
+	if !rt.RunTimeout(sess, sql, a.queryTimeoutForConn(connID)) {
 		app.LogWarn("exec", "statement not started", "index", i)
 	}
 	a.refreshStmtMarks()
@@ -516,14 +524,31 @@ func (a *root) queryTimeoutFor() time.Duration {
 	return time.Duration(p.QueryTimeout) * time.Second
 }
 
-// stmtDone 返回第 i 条语句的完成回调：记日志，并在成功时推进下一条。
-func (a *root) stmtDone(i int) func(*engine.QueryResult, string, time.Duration) {
-	// 捕获运行态 id：回调里不能再按 i 索引 stmtRuns（切控制台或 pin 重排后索引会变）。
-	rtID := a.stmtRuns[i].runtimeID
+// runtimeConnID 返回运行态所属控制台的数据源 id（"consoleID#i"/"#page"/"#count"/"#pin" 都归 base）。
+func (a *root) runtimeConnID(runtimeID string) string {
+	base, _, _ := strings.Cut(runtimeID, "#")
+	if id := a.consoleConnID(base); id != "" {
+		return id
+	}
+	return ""
+}
+
+// queryTimeoutForConn 返回指定数据源的查询超时（0 = 默认）。
+func (a *root) queryTimeoutForConn(connID string) time.Duration {
+	if a.store == nil || connID == "" {
+		return 0
+	}
+	p, ok := a.store.Get(connID)
+	if !ok || p.QueryTimeout <= 0 {
+		return 0
+	}
+	return time.Duration(p.QueryTimeout) * time.Second
+}
+
+// stmtDoneFor 是 stmtDone 的实现：connID 在语句启动时捕获，切标签不会把历史记到别的数据源。
+func (a *root) stmtDoneFor(rtID, sql, connID string) func(*engine.QueryResult, string, time.Duration) {
 	logDone := a.execDoneLogger(rtID)
-	// 在主线程捕获历史所需字段（回调在后台协程）。
-	sql := a.stmtRuns[i].sql
-	connID, connName := a.activeConnID(), a.activeConnName()
+	connName := a.connName(connID)
 	return func(res *engine.QueryResult, errMsg string, dur time.Duration) {
 		logDone(res, errMsg, dur)
 		if a.history != nil {

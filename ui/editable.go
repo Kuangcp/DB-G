@@ -21,7 +21,7 @@ func (a *root) editStateKey(r *engine.QueryResult) string {
 	if r == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s|%p|%d", a.currentRuntimeID(), r, len(r.Rows))
+	return fmt.Sprintf("%s|%p|%d", a.gridRuntimeID(), r, len(r.Rows))
 }
 
 // discardEditState 丢弃某个运行态的编辑缓存。执行新语句替换结果时调用；
@@ -30,7 +30,7 @@ func (a *root) discardEditState(id string) {
 	if a.editSets != nil {
 		delete(a.editSets, id)
 	}
-	if id != a.currentRuntimeID() {
+	if id != a.gridRuntimeID() {
 		return
 	}
 	a.editKey = ""
@@ -56,11 +56,11 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	if r == nil || !r.IsQuery {
 		return
 	}
-	id := a.currentRuntimeID()
+	id := a.gridRuntimeID()
 	if a.editSets[id] == nil {
 		a.editSets[id] = app.NewEditSet()
 	}
-	sess := a.activeSession()
+	sess := a.gridSession()
 	if sess == nil || !sess.Caps().Has(engine.CapEditableResult) {
 		a.readonlyReason = locales.EditReadonlyNoWrite()
 		return
@@ -69,32 +69,43 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		a.readonlyReason = locales.EditReadonlyNoTx()
 		return
 	}
-	rels := relationsIn(stmtScopeAt(a.lastExecSQL, 0))
-	seen := map[string]string{}
-	for _, rel := range rels {
-		if rel.Table != "" {
-			seen[strings.ToLower(rel.Table)] = rel.Table
-		}
-	}
-	if len(seen) != 1 {
-		a.readonlyReason = locales.EditReadonlySingleTable()
-		return
-	}
-	for _, rel := range rels {
-		if rel.Table != "" && rel.Schema != "" {
+	var table, schema string
+	connID := a.gridConnID()
+	if t := a.activeViewerTab(); t != nil {
+		// 表视图总是浏览一个已知对象：直接用它，不必从 SQL 里反推关系名。
+		// 编辑 SQL 用裸表名（会话当前 schema）；浏览别的 schema 时按跨 schema 只读处理。
+		if cur := a.connSchema[connID]; t.schema != "" && cur != "" && t.schema != cur {
 			a.readonlyReason = locales.EditReadonlyCrossSchema()
 			return
 		}
+		table, schema = t.obj.Name, t.schema
+	} else {
+		rels := relationsIn(stmtScopeAt(a.gridSQL(), 0))
+		seen := map[string]string{}
+		for _, rel := range rels {
+			if rel.Table != "" {
+				seen[strings.ToLower(rel.Table)] = rel.Table
+			}
+		}
+		if len(seen) != 1 {
+			a.readonlyReason = locales.EditReadonlySingleTable()
+			return
+		}
+		for _, rel := range rels {
+			if rel.Table != "" && rel.Schema != "" {
+				a.readonlyReason = locales.EditReadonlyCrossSchema()
+				return
+			}
+		}
+		for _, name := range seen {
+			table = name
+		}
+		schema = a.connSchema[connID]
 	}
-	var table string
-	for _, name := range seen {
-		table = name
-	}
-	connID := a.activeConsoleConnID()
-	scopeKey, _ := a.completionScope(connID)
+	scopeKey := catalogKey(connID, schema)
 	cols, all := a.catalog.getColumnsMany(scopeKey, []string{table})
 	if !all {
-		a.ensureColumns(connID, table)
+		a.ensureColumnsKey(scopeKey, connID, schema, table)
 		// headless（无窗口）下加载是同步的，这里再读一次即可立刻判定。
 		cols, all = a.catalog.getColumnsMany(scopeKey, []string{table})
 		if !all {
@@ -107,7 +118,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	for _, c := range cols[0] {
 		infos = append(infos, app.ColumnInfo{Name: c.Name, Type: c.Type, Nullable: c.Nullable, PrimaryKey: c.PrimaryKey})
 	}
-	plan, err := app.BuildEditPlan(a.connKind(), table, r.Columns, infos)
+	plan, err := app.BuildEditPlan(a.gridKind(), table, r.Columns, infos)
 	if err != nil {
 		a.readonlyReason = err.Error()
 		return
@@ -117,7 +128,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 
 // editSet 返回当前结果的本地改动集。
 func (a *root) editSet() *app.EditSet {
-	id := a.currentRuntimeID()
+	id := a.gridRuntimeID()
 	if a.editSets == nil {
 		a.editSets = map[string]*app.EditSet{}
 	}
@@ -129,7 +140,7 @@ func (a *root) editSet() *app.EditSet {
 
 // rowsForPlan 返回当前结果的数据行（编辑用的行下标是结果行下标）。
 func (a *root) rowsForPlan() [][]any {
-	if r := a.currentRuntime().Result(); r != nil {
+	if r := a.gridRuntime().Result(); r != nil {
 		return r.Rows
 	}
 	return nil
@@ -158,7 +169,7 @@ func (a *root) setSelectedNull(r *engine.QueryResult) {
 	}
 	if a.editPlan == nil {
 		if a.readonlyReason != "" {
-			a.consoleErr = locales.EditReadonlyPrefix(a.readonlyReason)
+			a.gridErr(locales.EditReadonlyPrefix(a.readonlyReason))
 		}
 		return
 	}
@@ -208,9 +219,9 @@ func (a *root) setSelectedNull(r *engine.QueryResult) {
 	}
 	switch {
 	case nullCol != "":
-		a.consoleErr = locales.EditColumnNotNull(nullCol)
+		a.gridErr(locales.EditColumnNotNull(nullCol))
 	case readonly > 0:
-		a.consoleErr = locales.EditPkNotNull()
+		a.gridErr(locales.EditPkNotNull())
 	}
 }
 
@@ -309,7 +320,7 @@ func (a *root) applyEditsSync() error {
 	if len(ops) == 0 {
 		return errors.New(locales.EditNoEffectiveChange())
 	}
-	txer, ok := a.activeSession().(engine.Transactional)
+	txer, ok := a.gridSession().(engine.Transactional)
 	if !ok {
 		return errors.New(locales.EditReadonlyNoTx())
 	}
@@ -335,7 +346,7 @@ func (a *root) applyEditsSync() error {
 func (a *root) commitEdits() {
 	lines, err := a.previewEdits()
 	if err != nil {
-		a.consoleErr = err.Error()
+		a.gridErr(err.Error())
 		return
 	}
 	a.previewLines = lines
@@ -343,7 +354,7 @@ func (a *root) commitEdits() {
 }
 
 // setEditStatus 在结果工具条显示一条短状态，3 秒后自动消失。
-// 只用于提交成功这类非错误反馈；失败仍走顶栏 consoleErr。
+// 只用于提交成功这类非错误反馈；失败走 gridErr（控制台顶栏 / 表视图浮窗）。
 func (a *root) setEditStatus(msg string) {
 	a.editStatus = msg
 	seq := a.editStatusSeq.Add(1)
@@ -374,13 +385,13 @@ func (a *root) applyConfirmedEdits() {
 		a.editBusy = false
 		if err != nil {
 			a.setEditStatus("")
-			a.consoleErr = locales.EditCommitFailed(err.Error())
+			a.gridErr(locales.EditCommitFailed(err.Error()))
 			app.LogWarn("write", "commit failed", "err", err.Error())
 			return
 		}
-		a.consoleErr = ""
+		a.gridErr("")
 		a.editKey = ""
-		a.refreshResult(func() { a.setEditStatus(locales.EditCommitOK()) })
+		a.refreshGrid(func() { a.setEditStatus(locales.EditCommitOK()) })
 	}
 	if a.win == nil {
 		done(a.applyEditsSync())
@@ -396,15 +407,15 @@ func (a *root) applyConfirmedEdits() {
 // refreshResult 重跑最近一次语句（刷新结果，保持排序/筛选与分页状态）。
 // onDone 在结果回投并更新状态后调用，可为 nil。
 func (a *root) refreshResult(onDone func()) {
-	sql := a.lastExecSQL
-	sess := a.activeSession()
+	sql := a.gridSQL()
+	sess := a.gridSession()
 	if sql == "" || sess == nil {
 		if onDone != nil {
 			onDone()
 		}
 		return
 	}
-	id := a.currentRuntimeID()
+	id := a.gridRuntimeID()
 	rt := a.runtimeFor(id)
 	rt.SetPageSize(a.resultPrefs.PageSize)
 	rt.SetOnDone(func(res *engine.QueryResult, errMsg string, dur time.Duration) {
@@ -561,15 +572,15 @@ func editTextFor(kind string, r *engine.QueryResult, col int, v any) string {
 func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
 	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Editable) {
 		if a.readonlyReason != "" {
-			a.consoleErr = locales.EditReadonlyPrefix(a.readonlyReason)
+			a.gridErr(locales.EditReadonlyPrefix(a.readonlyReason))
 		}
 		return
 	}
 	if row >= 0 && !a.editPlan.Editable[col] {
-		a.consoleErr = locales.EditPkReadonly()
+		a.gridErr(locales.EditPkReadonly())
 		return
 	}
-	kind := a.connKind()
+	kind := a.gridKind()
 	var text string
 	if row < 0 {
 		idx := -row - 1
@@ -640,7 +651,7 @@ func (a *root) commitCellEdit(row, col int, text string) {
 	if app.EqualCell(cur, next) {
 		return
 	}
-	if app.EqualCell(next, cellValueOf(a.currentRuntime().Result(), row, col)) {
+	if app.EqualCell(next, cellValueOf(a.gridRuntime().Result(), row, col)) {
 		a.editSet().ClearCell(row, col)
 		return
 	}
@@ -659,7 +670,7 @@ func (a *root) editCellValue(row, col int) any {
 	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
 		return pending
 	}
-	return cellValueOf(a.currentRuntime().Result(), row, col)
+	return cellValueOf(a.gridRuntime().Result(), row, col)
 }
 
 // commitInlineEdit 把内联编辑写进待提交改动。

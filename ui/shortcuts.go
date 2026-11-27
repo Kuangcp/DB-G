@@ -40,6 +40,30 @@ func (a *root) dispatchKeys(c *ui.Context) {
 
 // runKeyAction 执行一个窗口级动作。
 func (a *root) runKeyAction(c *ui.Context, id string) {
+	if a.viewerActive() {
+		switch id {
+		case "exec":
+			if t := a.activeViewerTab(); t != nil && t.page == viewerData {
+				a.viewerReload(t, nil)
+			}
+			return
+		case "viewDDL":
+			if t := a.activeViewerTab(); t != nil {
+				t.page = viewerDDL
+				a.ensureViewerPage(t)
+			}
+			return
+		case "copyCell":
+			if t := a.activeViewerTab(); t != nil {
+				a.copyCurrentCell(c, a.gridRuntimeResult(t))
+			}
+			return
+		case "nextConsole", "commandPalette":
+			// 通用动作，继续往下走。
+		default:
+			return // 编辑器/控制台动作在表视图里不生效
+		}
+	}
 	switch id {
 	case "exec":
 		a.execPending = true

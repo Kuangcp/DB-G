@@ -27,7 +27,6 @@
 - ~~Explain 的各数据源的渲染支持~~（已做：四类库统一计划树，PG/MySQL 结构化 actual rows/loops；PG BUFFERS；MySQL TREE actual；ClickHouse 通用 JSON。SQLite/ClickHouse 不提供 ANALYZE）
 - 现在双击单元格是预览，Ctrl 双击是编辑，可以设置-快捷键里配置化，用户习惯不同可以更改
 
-- 支持dbvaer nvicat类的先看数据，写条件，不需要写sql，临时性的查询 ， （支持复制sql 或者点击直接带去控制台）
 
 # 设置窗口
 

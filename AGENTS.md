@@ -98,6 +98,23 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
   （`sessionErr`，Tooltip 给原因）、绿 = 有会话、灰 = 没连。没连上时**不要往树里写
   「未连接」这类错误行**，圆点/Tooltip 已经说明状态。
 
+## 表/视图临时浏览标签（viewer tab，★ 必读）
+
+双击对象树的表/视图打开的表视图标签，是**内存里的临时标签**，不是控制台：
+
+- `ui/viewer.go`：`viewerTab`（页签 数据/结构/DDL）；`connID|schema|name|kind` 唯一，
+  重复双击只激活；不写 `connections.json`/`consoles/`，退出即丢。
+- 数据页走服务端 SQL：`SELECT * FROM <对象> [WHERE] [ORDER BY] LIMIT/OFFSET`；
+  WHERE 是用户输入片段，拼好后必须 `app.SplitStatements` 恰好 1 条才发给数据库。
+- **与控制台结果区共用网格**：`ui/grid.go` 的 `gridSnap` + `gridRuntime/gridSession/gridKind/
+  gridConnID/gridSQL` 访问器；`gridTable(c, r, mode)` 是两边共同的表格渲染与单元格菜单。
+  切换标签用 `stashGrid/loadGrid` 搬状态；编辑集按 `gridRuntimeID`（控制台运行态 id /
+  `vw:<viewerID>`）分桶，互不污染。表视图保留编辑能力，隐藏钉住、重跑与全量导出。
+- 表视图里执行/保存/格式化/AI 等控制台动作不生效；`Ctrl+Enter` 刷新数据页、`Ctrl+Q` 切 DDL。
+- 多语句执行途中切标签时，后续语句的会话按运行态所属控制台取（`runtimeConnID`），
+  不能再用「当前激活数据源」——`activeConnID()` 在表视图激活时会返回表视图的数据源。
+- 删连接/同步刷新会关闭对应表视图标签（`closeViewersOf`）。
+
 ## 线程与并发（★ 必读）
 
 - **构建 UI 只在主线程**：`root.view()` 每帧重建界面；所有状态字段读写都在这一条线程上。

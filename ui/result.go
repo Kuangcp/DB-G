@@ -46,7 +46,7 @@ func (a *root) cursorDataCol(r *engine.QueryResult) int {
 
 // copyCurrentCell 复制当前选区（多格时按 TSV）或光标所在单元格（Ctrl+C 与「复制」按钮共用）。
 func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
-	kind := a.connKind()
+	kind := a.gridKind()
 	if rows, cols, multi := a.resultSelection(r); multi {
 		c.WriteClipboard(rowsTSVFor(kind, r, rows, cols, false))
 		return
@@ -258,7 +258,7 @@ func dataCols(r *engine.QueryResult) []int {
 
 // rowTable 返回「复制本行 → INSERT」用的表名：从最近执行语句里取唯一的关系名。
 func (a *root) rowTable() (string, bool) {
-	rels := relationsIn(a.lastExecSQL)
+	rels := relationsIn(a.gridSQL())
 	seen := map[string]string{}
 	for _, r := range rels {
 		if r.Table != "" {
@@ -292,7 +292,7 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 	if pending, ok := a.editSet().Cells[app.CellKey{Row: row, Col: col}]; ok {
 		v = pending
 	}
-	text, isJSON := formatCellText(cellStringFor(a.connKind(), r, col, v))
+	text, isJSON := formatCellText(cellStringFor(a.gridKind(), r, col, v))
 	a.cellViewTitle = r.Columns[col]
 	if isJSON {
 		a.cellViewTitle += "（JSON）"
@@ -479,7 +479,19 @@ func (a *root) cellViewer(c *ui.Context) {
 	}
 }
 
+const (
+	gridConsole = iota
+	gridViewer
+)
+
+// resultTable 渲染控制台的结果网格：与表视图数据页共用 gridTable。
 func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
+	a.gridTable(c, r, gridConsole)
+}
+
+// gridTable 渲染一块结果网格（只读/可编辑由编辑计划决定）。
+// mode 区分控制台结果区与表视图数据页：钉住、导出、本地排序筛选只给控制台。
+func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 	widths := a.columnWidths(r)
 	cols := make([]ui.TableColumn, 0, len(r.Columns)+1)
 	cols = append(cols, ui.TableColumn{Title: "#", ID: "#", Width: rowHeaderWidth, Fixed: true, Align: ui.End})
@@ -499,95 +511,100 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 	totalRows := len(displayRows) + insertRows
 
 	// 顶部操作条：刷新/取更多/钉住/编辑。工具条里的按钮悬停前没有面孔。
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Toolbar(c, func() {
-			if sql, ok := a.rerunnableSQL(); ok {
-				if iconButton(c, iconRefresh, locales.ResultRerun(), ui.Transparent).
-					Disabled(a.anyRunRunning() || a.activeSession() == nil).Clicked() {
-					a.rerunQuery(sql)
+	if mode == gridConsole {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Toolbar(c, func() {
+				if sql, ok := a.rerunnableSQL(); ok {
+					if iconButton(c, iconRefresh, locales.ResultRerun(), ui.Transparent).
+						Disabled(a.anyRunRunning() || a.activeSession() == nil).Clicked() {
+						a.rerunQuery(sql)
+					}
+				}
+				a.pageToolbar(c, r)
+				a.editToolbar(c, r)
+			}).Label(locales.ResultActions())
+			ui.Divider(c)
+			a.pinButton(c)
+			iconButtonPlain(c, iconDownload, locales.ExportMenu(), ui.Transparent).Disabled(a.exportBusy).Menu(func(m *ui.Menu) {
+				if m.Item(locales.ExportCurrentCSV()).Chosen() {
+					a.pickExport("csv", false)
+				}
+				if m.Item(locales.ExportCurrentJSON()).Chosen() {
+					a.pickExport("json", false)
+				}
+				if m.Item(locales.ExportCurrentJSONL()).Chosen() {
+					a.pickExport("jsonl", false)
+				}
+				if m.Item(locales.ExportCurrentInsert()).Chosen() {
+					a.pickExport("insert", false)
+				}
+				m.Separator()
+				full := a.canStream()
+				if it := m.Item(locales.ExportFullCSV()); it.Disabled(!full).Chosen() {
+					a.confirmFullExport("csv")
+				}
+				if it := m.Item(locales.ExportFullJSON()); it.Disabled(!full).Chosen() {
+					a.confirmFullExport("json")
+				}
+				if it := m.Item(locales.ExportFullJSONL()); it.Disabled(!full).Chosen() {
+					a.confirmFullExport("jsonl")
+				}
+			})
+			if a.exportBusy {
+				ui.Spinner(c)
+				label := locales.ExportRunning(strings.ToUpper(a.exportFormat))
+				if a.exportFull {
+					label = locales.ExportFullRunning(strings.ToUpper(a.exportFormat))
+				}
+				if n := a.exportRows.Load(); n > 0 {
+					label += locales.ExportWritten(int(n))
+				}
+				ui.Text(c, label).FontSize(12).TextColor(c.Theme().Accent).SingleLine()
+			} else if a.exportStatus != "" {
+				status := ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+				if a.exportPath != "" {
+					status.Tooltip(locales.ExportOpenFolderTip())
+					if status.DoubleClicked() {
+						a.openExportFolder()
+					}
+				}
+				if iconButtonPlain(c, iconClose, locales.ExportClearTip(), ui.Transparent).Clicked() {
+					a.exportStatus = ""
+					a.exportPath = ""
 				}
 			}
-			a.pageToolbar(c, r)
-			a.editToolbar(c, r)
-		}).Label(locales.ResultActions())
-		ui.Divider(c)
-		a.pinButton(c)
-		iconButtonPlain(c, iconDownload, locales.ExportMenu(), ui.Transparent).Disabled(a.exportBusy).Menu(func(m *ui.Menu) {
-			if m.Item(locales.ExportCurrentCSV()).Chosen() {
-				a.pickExport("csv", false)
+			if a.editStatus != "" {
+				ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
 			}
-			if m.Item(locales.ExportCurrentJSON()).Chosen() {
-				a.pickExport("json", false)
-			}
-			if m.Item(locales.ExportCurrentJSONL()).Chosen() {
-				a.pickExport("jsonl", false)
-			}
-			if m.Item(locales.ExportCurrentInsert()).Chosen() {
-				a.pickExport("insert", false)
-			}
-			m.Separator()
-			full := a.canStream()
-			if it := m.Item(locales.ExportFullCSV()); it.Disabled(!full).Chosen() {
-				a.confirmFullExport("csv")
-			}
-			if it := m.Item(locales.ExportFullJSON()); it.Disabled(!full).Chosen() {
-				a.confirmFullExport("json")
-			}
-			if it := m.Item(locales.ExportFullJSONL()); it.Disabled(!full).Chosen() {
-				a.confirmFullExport("jsonl")
+			if n := len(a.resView.filters); n > 0 {
+				ui.Text(c, locales.FilterColumns(n)).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 		})
-		if a.exportBusy {
-			ui.Spinner(c)
-			label := locales.ExportRunning(strings.ToUpper(a.exportFormat))
-			if a.exportFull {
-				label = locales.ExportFullRunning(strings.ToUpper(a.exportFormat))
-			}
-			if n := a.exportRows.Load(); n > 0 {
-				label += locales.ExportWritten(int(n))
-			}
-			ui.Text(c, label).FontSize(12).TextColor(c.Theme().Accent).SingleLine()
-		} else if a.exportStatus != "" {
-			status := ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
-			if a.exportPath != "" {
-				status.Tooltip(locales.ExportOpenFolderTip())
-				if status.DoubleClicked() {
-					a.openExportFolder()
-				}
-			}
-			if iconButtonPlain(c, iconClose, locales.ExportClearTip(), ui.Transparent).Clicked() {
-				a.exportStatus = ""
-				a.exportPath = ""
-			}
-		}
-		if a.editStatus != "" {
-			ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
-		}
-		if n := len(a.resView.filters); n > 0 {
-			ui.Text(c, locales.FilterColumns(n)).FontSize(12).TextColor(c.Theme().TextMuted)
-		}
-	})
+	}
 
-	a.resultState.HeaderMenu = func(m *ui.Menu, col int) {
-		if col <= 0 {
-			return
-		}
-		idx := col - 1
-		if m.Item(locales.SortAsc()).Chosen() {
-			a.resView.sortBy(r, idx, false)
-		}
-		if m.Item(locales.SortDesc()).Chosen() {
-			a.resView.sortBy(r, idx, true)
-		}
-		if m.Item(locales.SortClear()).Chosen() {
-			a.resView.sortBy(r, -1, false)
-		}
-		if m.Item(locales.FilterMenu()).Chosen() {
-			a.filterOpen, a.filterCol, a.filterText = true, idx, a.resView.filters[idx]
-		}
-		if _, has := a.resView.filters[idx]; has {
-			if m.Item(locales.FilterClearColumn()).Chosen() {
-				a.resView.clearFilter(idx)
+	a.resultState.HeaderMenu = nil
+	if mode == gridConsole {
+		a.resultState.HeaderMenu = func(m *ui.Menu, col int) {
+			if col <= 0 {
+				return
+			}
+			idx := col - 1
+			if m.Item(locales.SortAsc()).Chosen() {
+				a.resView.sortBy(r, idx, false)
+			}
+			if m.Item(locales.SortDesc()).Chosen() {
+				a.resView.sortBy(r, idx, true)
+			}
+			if m.Item(locales.SortClear()).Chosen() {
+				a.resView.sortBy(r, -1, false)
+			}
+			if m.Item(locales.FilterMenu()).Chosen() {
+				a.filterOpen, a.filterCol, a.filterText = true, idx, a.resView.filters[idx]
+			}
+			if _, has := a.resView.filters[idx]; has {
+				if m.Item(locales.FilterClearColumn()).Chosen() {
+					a.resView.clearFilter(idx)
+				}
 			}
 		}
 	}
@@ -614,7 +631,7 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 		Row:      c.Theme().Accent.Alpha(0.12),
 		Stripe:   c.Theme().Text.Alpha(0.035),
 	}
-	kind := a.connKind()
+	kind := a.gridKind()
 	a.resultState.CellMenu = func(m *ui.Menu, row, col int) {
 		// resultRow 与 Table 一致，存「显示顺序」；取数据时再映射到结果行。
 		displayRow := row
@@ -671,20 +688,22 @@ func (a *root) resultTable(c *ui.Context, r *engine.QueryResult) {
 				}
 			})
 			_, hasTable := a.rowTable()
-			m.Submenu(locales.ExportSelection(), func(sm *ui.Menu) {
-				if sm.Item("CSV…").Chosen() {
-					a.pickExportSelection("csv", rows, cols)
-				}
-				if sm.Item("JSON…").Chosen() {
-					a.pickExportSelection("json", rows, cols)
-				}
-				if sm.Item("JSONL…").Chosen() {
-					a.pickExportSelection("jsonl", rows, cols)
-				}
-				if it := sm.Item("SQL INSERT…"); it.Disabled(!hasTable).Chosen() {
-					a.pickExportSelection("insert", rows, cols)
-				}
-			})
+			if mode == gridConsole {
+				m.Submenu(locales.ExportSelection(), func(sm *ui.Menu) {
+					if sm.Item("CSV…").Chosen() {
+						a.pickExportSelection("csv", rows, cols)
+					}
+					if sm.Item("JSON…").Chosen() {
+						a.pickExportSelection("json", rows, cols)
+					}
+					if sm.Item("JSONL…").Chosen() {
+						a.pickExportSelection("jsonl", rows, cols)
+					}
+					if it := sm.Item("SQL INSERT…"); it.Disabled(!hasTable).Chosen() {
+						a.pickExportSelection("insert", rows, cols)
+					}
+				})
+			}
 		}
 		if dataCol >= 0 && m.Item(locales.ViewFullContent()).Chosen() {
 			a.openCellViewer(r, row, dataCol)
