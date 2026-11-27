@@ -7,6 +7,7 @@ import (
 	"db-g/app"
 	"db-g/engine"
 	"db-g/locales"
+	dbsql "db-g/sql"
 )
 
 // aiSQLIssue 是 AI 生成 SQL 在本地 schema 上的一个高置信度问题。
@@ -70,12 +71,12 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 	for _, name := range views {
 		known[strings.ToLower(name)] = engine.ObjectView
 	}
-	rels := relationsIn(sql)
+	rels := dbsql.Relations(sql)
 	if len(rels) == 0 {
 		return nil
 	}
-	toks := tokenizeSQL(sql)
-	cte := cteNames(toks)
+	toks := dbsql.Tokenize(sql)
+	cte := dbsql.CTENames(toks)
 
 	aliasToTable := map[string]string{}
 	tableNames := map[string]string{} // lower -> display
@@ -122,10 +123,10 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 	// 限定列：alias.col / table.col。
 	skip := map[int]bool{}
 	for i := 0; i+2 < len(toks); i++ {
-		if toks[i].kind != 'i' || toks[i+1].text != "." || toks[i+2].kind != 'i' {
+		if toks[i].Kind != 'i' || toks[i+1].Text != "." || toks[i+2].Kind != 'i' {
 			continue
 		}
-		left, col := strings.ToLower(toks[i].text), toks[i+2].text
+		left, col := strings.ToLower(toks[i].Text), toks[i+2].Text
 		table, ok := aliasToTable[left]
 		if !ok {
 			continue // schema.table / 未知限定，交给表检查或跳过
@@ -147,22 +148,22 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 		keywords := sqlCheckKeywords()
 		colAliases := map[string]bool{}
 		for i := 0; i+1 < len(toks); i++ {
-			if toks[i].kind == 'i' && strings.EqualFold(toks[i].text, "as") && toks[i+1].kind == 'i' {
-				colAliases[strings.ToLower(toks[i+1].text)] = true
+			if toks[i].Kind == 'i' && strings.EqualFold(toks[i].Text, "as") && toks[i+1].Kind == 'i' {
+				colAliases[strings.ToLower(toks[i+1].Text)] = true
 			}
 		}
 		for i, tok := range toks {
-			if tok.kind != 'i' || skip[i] {
+			if tok.Kind != 'i' || skip[i] {
 				continue
 			}
-			name := strings.ToLower(tok.text)
+			name := strings.ToLower(tok.Text)
 			if keywords[name] || aliasToTable[name] != "" || cte[name] || colAliases[name] {
 				continue
 			}
-			if i+1 < len(toks) && (toks[i+1].text == "(" || toks[i+1].text == ".") {
+			if i+1 < len(toks) && (toks[i+1].Text == "(" || toks[i+1].Text == ".") {
 				continue
 			}
-			if i > 0 && toks[i-1].text == "." {
+			if i > 0 && toks[i-1].Text == "." {
 				continue
 			}
 			found := false
@@ -178,7 +179,7 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 					names = append(names, display)
 				}
 				sort.Strings(names)
-				add(strings.Join(names, ","), tok.text)
+				add(strings.Join(names, ","), tok.Text)
 			}
 		}
 	}
@@ -186,35 +187,6 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 		issues = issues[:8]
 	}
 	return issues
-}
-
-// cteNames 收集 WITH ... AS 的 CTE 名，避免把 CTE 引用当成缺失表。
-func cteNames(toks []sqlToken) map[string]bool {
-	out := map[string]bool{}
-	for i := 0; i < len(toks); i++ {
-		if toks[i].kind == 'i' && strings.EqualFold(toks[i].text, "with") {
-			for i+1 < len(toks) {
-				if toks[i+1].kind != 'i' {
-					break
-				}
-				out[strings.ToLower(toks[i+1].text)] = true
-				// 找下一个 AS (
-				j := i + 2
-				for j+1 < len(toks) && !(strings.EqualFold(toks[j].text, "as") && toks[j+1].text == "(") {
-					j++
-				}
-				if j+1 >= len(toks) {
-					break
-				}
-				_, next := parenBody(toks, j+1)
-				if next >= len(toks) || toks[next].text != "," {
-					break
-				}
-				i = next - 1 // 循环结束 i++ 指向逗号后的名字
-			}
-		}
-	}
-	return out
 }
 
 // sqlCheckKeywords 是裸标识符自检时跳过的词表。

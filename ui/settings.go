@@ -10,6 +10,7 @@ import (
 
 	"db-g/app"
 	"db-g/locales"
+	"db-g/sql"
 )
 
 // settingsSection 是设置窗口左侧导航的一项。
@@ -392,7 +393,7 @@ func (a *root) applyEditorPreset(n int) {
 	if a.tabs.ActiveConsole == "" {
 		return
 	}
-	a.setActiveText(buildSQL(n))
+	a.setActiveText(sql.BuildSQL(n))
 	a.syncActiveBuffer()
 	_ = a.flushActive()
 }

@@ -19,6 +19,7 @@ import (
 
 	"db-g/engine"
 	"db-g/locales"
+	"db-g/sql"
 )
 
 // displayToResult 把显示顺序的行号换成结果行下标（排序/筛选后两者不同）。
@@ -258,7 +259,7 @@ func dataCols(r *engine.QueryResult) []int {
 
 // rowTable 返回「复制本行 → INSERT」用的表名：从最近执行语句里取唯一的关系名。
 func (a *root) rowTable() (string, bool) {
-	rels := relationsIn(a.gridSQL())
+	rels := sql.Relations(a.gridSQL())
 	seen := map[string]string{}
 	for _, r := range rels {
 		if r.Table != "" {

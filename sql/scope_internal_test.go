@@ -1,4 +1,4 @@
-package ui
+package sql
 
 import (
 	"strings"
@@ -8,26 +8,26 @@ import (
 
 func TestStmtScopeAt(t *testing.T) {
 	text := "select * from a; select id, na from b where id in (select x from c); -- tail"
-	inner := stmtScopeAt(text, strings.Index(text, "select x"))
+	inner := StatementScopeOnly(text, strings.Index(text, "select x"))
 	if !strings.HasPrefix(inner, "select x from c") {
 		t.Fatalf("inner scope: %q", inner)
 	}
-	outer := stmtScopeAt(text, strings.Index(text, "select id"))
-	// 外层作用域是整条语句（CTE 定义要可见），但 relationsIn 只取本层关系：
+	outer := StatementScopeOnly(text, strings.Index(text, "select id"))
+	// 外层作用域是整条语句（CTE 定义要可见），但 Relations 只取本层关系：
 	if got := relationsOf(outer); strings.Join(got, ",") != "b" {
 		t.Fatalf("outer scope relations must exclude the subquery: %v (scope=%q)", got, outer)
 	}
-	if got := stmtScopeAt("select 1; select 2", strings.Index("select 1; select 2", "select 2")); got != "select 2" {
+	if got := StatementScopeOnly("select 1; select 2", strings.Index("select 1; select 2", "select 2")); got != "select 2" {
 		t.Fatalf("statement split: %q", got)
 	}
-	if got := stmtScopeAt("select ';' from a", 10); !strings.Contains(got, "select ';' from a") {
+	if got := StatementScopeOnly("select ';' from a", 10); !strings.Contains(got, "select ';' from a") {
 		t.Fatalf("semicolon in string must not split: %q", got)
 	}
 }
 
 func relationsOf(sql string) []string {
 	var out []string
-	for _, r := range relationsIn(sql) {
+	for _, r := range Relations(sql) {
 		if r.Table != "" {
 			out = append(out, r.Table)
 		}
@@ -35,7 +35,7 @@ func relationsOf(sql string) []string {
 	return out
 }
 
-func relationsOfRefs(sql string) []relationRef { return relationsIn(sql) }
+func relationsOfRefs(sql string) []Relation { return Relations(sql) }
 
 func TestRelationsBasicClauses(t *testing.T) {
 	for _, c := range []struct {
@@ -86,7 +86,7 @@ func TestRelationsDerivedTableSkipped(t *testing.T) {
 
 func TestAliasMap(t *testing.T) {
 	rels := relationsOfRefs("select * from med_school m join b on true join c")
-	m := aliasMap(rels)
+	m := AliasMap(rels)
 	if m["m"] != "med_school" || m["b"] != "b" || m["c"] != "c" {
 		t.Fatalf("alias map: %v", m)
 	}
@@ -97,15 +97,15 @@ func TestAliasMap(t *testing.T) {
 
 func TestStmtScopeAtIsBounded(t *testing.T) {
 	// 大文件下补全不能全文扫描：100k 行（11MB）也要在毫秒级完成。
-	text := buildSQL(100_000)
+	text := BuildSQL(100_000)
 	start := time.Now()
-	scope := stmtScopeAt(text, len(text)/2)
+	scope := StatementScopeOnly(text, len(text)/2)
 	d := time.Since(start)
 	if scope == "" {
 		t.Fatal("empty scope")
 	}
 	if d > 2*time.Millisecond {
-		t.Fatalf("stmtScopeAt on %d bytes took %v (must stay bounded)", len(text), d)
+		t.Fatalf("StatementScopeOnly on %d bytes took %v (must stay bounded)", len(text), d)
 	}
 	if got := relationsOf(scope); len(got) == 0 {
 		t.Fatalf("relations lost in the windowed scan: %q", scope)
@@ -124,14 +124,14 @@ func TestScopeFunctionParenKeepsStatementRelations(t *testing.T) {
 		if strings.Contains(text, "count(*)") {
 			offset = strings.Index(text, "amount")
 		}
-		if got := relationsOf(stmtScopeAt(text, offset)); strings.Join(got, ",") != "record" {
-			t.Fatalf("%q → relations %v (scope %q)", text, got, stmtScopeAt(text, offset))
+		if got := relationsOf(StatementScopeOnly(text, offset)); strings.Join(got, ",") != "record" {
+			t.Fatalf("%q → relations %v (scope %q)", text, got, StatementScopeOnly(text, offset))
 		}
 	}
 	// 函数里的子查询仍按子查询作用域解析。
 	text := "select max((select zz from inner_t)) from record"
 	offset := strings.Index(text, "zz") + 2
-	if got := relationsOf(stmtScopeAt(text, offset)); strings.Join(got, ",") != "inner_t" {
+	if got := relationsOf(StatementScopeOnly(text, offset)); strings.Join(got, ",") != "inner_t" {
 		t.Fatalf("subquery in function: %v", got)
 	}
 }
@@ -163,7 +163,7 @@ func TestRelationPositionAt(t *testing.T) {
 			t.Fatalf("missing marker: %q", c.sql)
 		}
 		text := strings.Replace(c.sql, "|", "", 1)
-		if got := relationPositionAt(text, at); got != c.want {
+		if got := RelationPositionAt(text, at); got != c.want {
 			t.Errorf("%q: got %v want %v", c.sql, got, c.want)
 		}
 	}
@@ -172,7 +172,7 @@ func TestRelationPositionAt(t *testing.T) {
 func TestStmtScopeAtCutsFollowingStatementWithoutSemicolon(t *testing.T) {
 	text := "select * from channel_config_bak0915;\n\nselect * from m\n\nselect * from channel_config_bench;"
 	offset := strings.Index(text, "select * from m") + len("select * from m")
-	got := stmtScopeAt(text, offset)
+	got := StatementScopeOnly(text, offset)
 	if got != "select * from m" {
 		t.Fatalf("scope must stop at the next line-leading SELECT: %q", got)
 	}
@@ -220,7 +220,7 @@ func TestStmtScopeAtSoftBoundaryGuards(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if got := stmtScopeAt(c.sql, c.offset); got != c.want {
+		if got := StatementScopeOnly(c.sql, c.offset); got != c.want {
 			t.Errorf("%s: got %q want %q", c.name, got, c.want)
 		}
 	}
@@ -228,16 +228,16 @@ func TestStmtScopeAtSoftBoundaryGuards(t *testing.T) {
 
 func TestTokenizeSQLUnclosedQuoteDoesNotPanic(t *testing.T) {
 	for _, s := range []string{`select "`, "select `", `select "x`} {
-		_ = tokenizeSQL(s)
-		_ = stmtScopeAt(s, len(s))
-		_ = relationPositionAt(s, len(s))
+		_ = Tokenize(s)
+		_ = StatementScopeOnly(s, len(s))
+		_ = RelationPositionAt(s, len(s))
 	}
 }
 
 func TestStmtScopeAtWhitespaceOnlyDoesNotPanic(t *testing.T) {
 	for _, text := range []string{"    ", "\n\t ", "select 1;    "} {
 		for _, offset := range []int{0, 1, len(text)} {
-			_ = stmtScopeAt(text, offset)
+			_ = StatementScopeOnly(text, offset)
 		}
 	}
 }

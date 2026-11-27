@@ -43,7 +43,7 @@ var allowedPkg = []string{
 
 // allowedFile 是单个文件的白名单（保存的解释/示例数据，不是界面文案）。
 var allowedFile = map[string]string{
-	"ui/preset.go": "演示 SQL 数据",
+	"sql/preset.go": "演示 SQL 数据",
 }
 
 // allowedText 是文件里允许保留的特定字面量（兼容旧持久化数据等）。

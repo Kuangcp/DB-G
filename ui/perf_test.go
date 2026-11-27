@@ -6,6 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	myeditor "github.com/egoist/mygo/ui/editor"
+
+	"db-g/sql"
 )
 
 // perfSizes 是基准的文档规模（行）。
@@ -31,7 +33,7 @@ const steadyFrameLimit = 2 * time.Millisecond
 func newPerfEditor(t *testing.T, lines int, completionItems int) (*codeEditor, *ui.Tester) {
 	t.Helper()
 	c := newCodeEditor("")
-	c.SetActive("perf", buildSQL(lines))
+	c.SetActive("perf", sql.BuildSQL(lines))
 	if completionItems > 0 {
 		items := make([]myeditor.Completion, completionItems)
 		for i := range items {
@@ -102,7 +104,7 @@ func TestEditorFirstFramePerf(t *testing.T) {
 	skipPerf(t)
 	for _, size := range perfSizes {
 		c := newCodeEditor("")
-		c.SetActive("perf", buildSQL(size))
+		c.SetActive("perf", sql.BuildSQL(size))
 		total := len([]rune(c.Text()))
 		c.SetSelection(total, total)
 		tt := ui.NewTester(func(ctx *ui.Context) { c.View(ctx).AutoFocus() }, 1200, 800)

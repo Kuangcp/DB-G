@@ -1,4 +1,4 @@
-package ui
+package sql
 
 import (
 	"sort"
@@ -6,24 +6,24 @@ import (
 	"unicode/utf8"
 )
 
-// relationRef 是语句里出现的一张表；Alias 非空表示 FROM/JOIN 给了别名。
+// Relation 是语句里出现的一张表；Alias 非空表示 FROM/JOIN 给了别名。
 // Table 为空、Alias 非空表示派生表（FROM (SELECT …) d）：不提供列，只挡住目录回退。
-type relationRef struct {
+type Relation struct {
 	Table  string
 	Schema string // 限定名里的 schema（"" = 未限定）
 	Alias  string
 }
 
-// sqlToken 是词法扫描的最小单位：标识符（去掉引号包裹）、标点、或需要忽略的字面量。
-type sqlToken struct {
-	kind byte // 'i' ident, 'p' punct
-	text string
+// Token 是词法扫描的最小单位：标识符（去掉引号包裹）、标点、或需要忽略的字面量。
+type Token struct {
+	Kind byte // 'i' ident, 'p' punct
+	Text string
 }
 
-// tokenizeSQL 做补全所需的词法近似：标识符、标点；字符串与注释整体跳过。
+// Tokenize 做补全所需的词法近似：标识符、标点；字符串与注释整体跳过。
 // 带引号的标识符（"x" / `x` / [x]）按标识符返回并去掉包裹。
-func tokenizeSQL(s string) []sqlToken {
-	var out []sqlToken
+func Tokenize(s string) []Token {
+	var out []Token
 	for i := 0; i < len(s); {
 		c := s[i]
 		switch {
@@ -47,7 +47,7 @@ func tokenizeSQL(s string) []sqlToken {
 			end := skipQuoted(s, i, c)
 			if end > i+1 {
 				if inner := s[i+1 : end-1]; inner != "" {
-					out = append(out, sqlToken{kind: 'i', text: inner})
+					out = append(out, Token{Kind: 'i', Text: inner})
 				}
 			}
 			i = end
@@ -58,21 +58,21 @@ func tokenizeSQL(s string) []sqlToken {
 				continue
 			}
 			if end > 1 {
-				out = append(out, sqlToken{kind: 'i', text: s[i+1 : i+end]})
+				out = append(out, Token{Kind: 'i', Text: s[i+1 : i+end]})
 			}
 			i += end + 1
-		case isIdentStart(c):
+		case IsIdentStart(c):
 			start := i
-			for i < len(s) && isIdentPart(s[i]) {
+			for i < len(s) && IsIdentPart(s[i]) {
 				i++
 			}
-			out = append(out, sqlToken{kind: 'i', text: s[start:i]})
+			out = append(out, Token{Kind: 'i', Text: s[start:i]})
 		case c >= '0' && c <= '9':
 			for i < len(s) && (s[i] >= '0' && s[i] <= '9' || s[i] == '.') {
 				i++
 			}
 		default:
-			out = append(out, sqlToken{kind: 'p', text: string(c)})
+			out = append(out, Token{Kind: 'p', Text: string(c)})
 			i++
 		}
 	}
@@ -100,15 +100,15 @@ func skipQuoted(s string, i int, quote byte) int {
 // 「只看窗口内的片段」，属于可接受的上限。
 const sqlScopeWindow = 64 << 10
 
-// stmtScopeAt 返回光标所在的作用域文本：最内层包住光标的括号块（子查询），
+// StatementScopeOnly 返回光标所在的作用域文本：最内层包住光标的括号块（子查询），
 // 没有括号时是光标所在的整条语句（按 ; 切，跳过字符串/注释）。offset 为字节偏移。
-func stmtScopeAt(text string, offset int) string {
-	scope, _ := stmtScopeAtOffset(text, offset)
+func StatementScopeOnly(text string, offset int) string {
+	scope, _ := StatementScope(text, offset)
 	return scope
 }
 
-// stmtScopeAtOffset 同 stmtScopeAt，额外返回光标在返回作用域文本里的字节偏移。
-func stmtScopeAtOffset(text string, offset int) (string, int) {
+// StatementScope 同 StatementScopeOnly，额外返回光标在返回作用域文本里的字节偏移。
+func StatementScope(text string, offset int) (string, int) {
 	if offset < 0 {
 		offset = 0
 	}
@@ -232,11 +232,11 @@ func scopeInSegment(text string, offset int) (string, int) {
 
 // isSubqueryBody 报告括号内容是否是子查询（首个词是 SELECT / WITH）。
 func isSubqueryBody(body string) bool {
-	for _, tok := range tokenizeSQL(body) {
-		if tok.kind != 'i' {
+	for _, tok := range Tokenize(body) {
+		if tok.Kind != 'i' {
 			continue
 		}
-		return strings.EqualFold(tok.text, "select") || strings.EqualFold(tok.text, "with")
+		return strings.EqualFold(tok.Text, "select") || strings.EqualFold(tok.Text, "with")
 	}
 	return false
 }
@@ -369,9 +369,9 @@ func softStatementEnd(text string, start, offset, hardEnd int) int {
 			prev = string(c)
 			continue
 		}
-		if isIdentStart(c) {
+		if IsIdentStart(c) {
 			tokStart := i
-			for i < hardEnd && isIdentPart(text[i]) {
+			for i < hardEnd && IsIdentPart(text[i]) {
 				i++
 			}
 			up := strings.ToUpper(text[tokStart:i])
@@ -412,10 +412,10 @@ func softStatementEnd(text string, start, offset, hardEnd int) int {
 	return hardEnd
 }
 
-// relationPositionAt 报告 scope 的 offset 处是否正在等待表/视图名：
+// RelationPositionAt 报告 scope 的 offset 处是否正在等待表/视图名：
 // FROM/JOIN 列表、UPDATE 目标、INSERT INTO / TABLE 目标。
 // 输入没写分号时多条语句可能被并进同一作用域，这里只用到光标之前的子句状态。
-func relationPositionAt(scope string, offset int) bool {
+func RelationPositionAt(scope string, offset int) bool {
 	if offset < 0 {
 		offset = 0
 	}
@@ -424,10 +424,10 @@ func relationPositionAt(scope string, offset int) bool {
 	}
 	// 正在输入的词还没完成：截到词首，把它当成不存在。
 	word := offset
-	for word > 0 && isIdentPart(scope[word-1]) {
+	for word > 0 && IsIdentPart(scope[word-1]) {
 		word--
 	}
-	toks := tokenizeSQL(scope[:word])
+	toks := Tokenize(scope[:word])
 	const (
 		clauseNone = iota
 		clauseSelect
@@ -441,8 +441,8 @@ func relationPositionAt(scope string, offset int) bool {
 	expect, after, qualified, derived := false, false, false, false
 	depth := 0
 	for _, tok := range toks {
-		if tok.kind == 'p' {
-			switch tok.text {
+		if tok.Kind == 'p' {
+			switch tok.Text {
 			case "(":
 				if depth == 0 && expect {
 					expect, after, derived = false, false, true
@@ -469,7 +469,7 @@ func relationPositionAt(scope string, offset int) bool {
 		if depth > 0 {
 			continue
 		}
-		up := strings.ToUpper(tok.text)
+		up := strings.ToUpper(tok.Text)
 		if expect {
 			if up == "ONLY" || up == "LATERAL" {
 				continue
@@ -514,40 +514,40 @@ func relationPositionAt(scope string, offset int) bool {
 // relationsIn 从作用域文本里提取表：FROM 列表、JOIN、UPDATE、INTO；
 // CTE（WITH 名 AS (…)) 展开为其内部 FROM 的表（递归，深度上限 8，环保护）；
 // 派生表（FROM (SELECT …) s）登记为 Table 空、Alias 非空的占位。
-func relationsIn(scope string) []relationRef {
+func Relations(scope string) []Relation {
 	return relationsInDepth(scope, nil, 0)
 }
 
-func relationsInDepth(scope string, inherited map[string][]relationRef, depth int) []relationRef {
+func relationsInDepth(scope string, inherited map[string][]Relation, depth int) []Relation {
 	if depth > 8 {
 		return nil
 	}
-	toks := tokenizeSQL(scope)
-	cte := map[string][]relationRef{}
+	toks := Tokenize(scope)
+	cte := map[string][]Relation{}
 	for k, v := range inherited {
 		cte[k] = v
 	}
 
 	i := 0
 	// CTE 头：WITH [RECURSIVE] name AS ( … ) [, name AS ( … )]*
-	if i < len(toks) && toks[i].kind == 'i' && strings.EqualFold(toks[i].text, "with") {
+	if i < len(toks) && toks[i].Kind == 'i' && strings.EqualFold(toks[i].Text, "with") {
 		i++
-		if i < len(toks) && toks[i].kind == 'i' && strings.EqualFold(toks[i].text, "recursive") {
+		if i < len(toks) && toks[i].Kind == 'i' && strings.EqualFold(toks[i].Text, "recursive") {
 			i++
 		}
 		for i < len(toks) {
-			name := toks[i].text
-			if i+1 >= len(toks) || !strings.EqualFold(toks[i+1].text, "as") {
+			name := toks[i].Text
+			if i+1 >= len(toks) || !strings.EqualFold(toks[i+1].Text, "as") {
 				break
 			}
 			open := i + 2
-			if open >= len(toks) || toks[open].text != "(" {
+			if open >= len(toks) || toks[open].Text != "(" {
 				break
 			}
 			body, next := parenBody(toks, open)
 			cte[strings.ToLower(name)] = relationsInDepth(body, cte, depth+1)
 			i = next
-			if i < len(toks) && toks[i].text == "," {
+			if i < len(toks) && toks[i].Text == "," {
 				i++
 				continue
 			}
@@ -555,7 +555,7 @@ func relationsInDepth(scope string, inherited map[string][]relationRef, depth in
 		}
 	}
 
-	var out []relationRef
+	var out []Relation
 	seen := map[string]bool{}
 	add := func(table, alias string) {
 		if table != "" {
@@ -571,8 +571,8 @@ func relationsInDepth(scope string, inherited map[string][]relationRef, depth in
 	nest := 0
 	for ; i < len(toks); i++ {
 		tok := toks[i]
-		if tok.kind == 'p' {
-			switch tok.text {
+		if tok.Kind == 'p' {
+			switch tok.Text {
 			case "(":
 				nest++
 			case ")":
@@ -585,7 +585,7 @@ func relationsInDepth(scope string, inherited map[string][]relationRef, depth in
 		if nest != 0 {
 			continue // 子查询内部不参与本层作用域
 		}
-		switch strings.ToUpper(tok.text) {
+		switch strings.ToUpper(tok.Text) {
 		case "FROM":
 			next := i + 1
 			for {
@@ -597,7 +597,7 @@ func relationsInDepth(scope string, inherited map[string][]relationRef, depth in
 					add(r.Table, r.Alias)
 				}
 				next = after
-				if next < len(toks) && toks[next].text == "," {
+				if next < len(toks) && toks[next].Text == "," {
 					next++
 					continue
 				}
@@ -617,7 +617,7 @@ func relationsInDepth(scope string, inherited map[string][]relationRef, depth in
 	return out
 }
 
-func add2(out *[]relationRef, seen map[string]bool, table, alias string) {
+func add2(out *[]Relation, seen map[string]bool, table, alias string) {
 	if table != "" {
 		key := strings.ToLower(table)
 		if seen[key] {
@@ -625,7 +625,7 @@ func add2(out *[]relationRef, seen map[string]bool, table, alias string) {
 		}
 		seen[key] = true
 	}
-	*out = append(*out, relationRef{Table: table, Alias: alias})
+	*out = append(*out, Relation{Table: table, Alias: alias})
 }
 
 // clauseKeywords 是 FROM/JOIN 列表的终止词：碰到它们说明关系列表结束。
@@ -640,57 +640,57 @@ var clauseKeywords = map[string]bool{
 
 // parseRelation 解析 `[[schema.]table] [AS] [alias]` 或派生表 `( … ) [AS] [alias]`。
 // 返回关系引用、下一个待读 token 下标、是否解析成功。
-func parseRelation(toks []sqlToken, i int) ([]relationRef, int, bool) {
-	for i < len(toks) && toks[i].kind == 'p' && toks[i].text == "," {
+func parseRelation(toks []Token, i int) ([]Relation, int, bool) {
+	for i < len(toks) && toks[i].Kind == 'p' && toks[i].Text == "," {
 		i++
 	}
 	if i >= len(toks) {
 		return nil, i, false
 	}
-	if toks[i].kind == 'p' && toks[i].text == "(" {
+	if toks[i].Kind == 'p' && toks[i].Text == "(" {
 		_, next := parenBody(toks, i)
 		alias := ""
-		if next < len(toks) && toks[next].kind == 'i' && strings.EqualFold(toks[next].text, "as") {
+		if next < len(toks) && toks[next].Kind == 'i' && strings.EqualFold(toks[next].Text, "as") {
 			next++
 		}
-		if next < len(toks) && toks[next].kind == 'i' && !clauseKeywords[strings.ToUpper(toks[next].text)] {
-			alias = toks[next].text
+		if next < len(toks) && toks[next].Kind == 'i' && !clauseKeywords[strings.ToUpper(toks[next].Text)] {
+			alias = toks[next].Text
 			next++
 		}
-		return []relationRef{{Alias: alias}}, next, true
+		return []Relation{{Alias: alias}}, next, true
 	}
-	if toks[i].kind != 'i' || clauseKeywords[strings.ToUpper(toks[i].text)] {
+	if toks[i].Kind != 'i' || clauseKeywords[strings.ToUpper(toks[i].Text)] {
 		return nil, i, false
 	}
-	ref := relationRef{Table: toks[i].text}
+	ref := Relation{Table: toks[i].Text}
 	i++
 	// schema.table
-	for i+1 < len(toks) && toks[i].kind == 'p' && toks[i].text == "." && toks[i+1].kind == 'i' {
+	for i+1 < len(toks) && toks[i].Kind == 'p' && toks[i].Text == "." && toks[i+1].Kind == 'i' {
 		ref.Schema = ref.Table
-		ref.Table = toks[i+1].text
+		ref.Table = toks[i+1].Text
 		i += 2
 	}
 	// [AS] alias
-	if i < len(toks) && toks[i].kind == 'i' && strings.EqualFold(toks[i].text, "as") {
+	if i < len(toks) && toks[i].Kind == 'i' && strings.EqualFold(toks[i].Text, "as") {
 		i++
 	}
-	if i < len(toks) && toks[i].kind == 'i' && !clauseKeywords[strings.ToUpper(toks[i].text)] {
-		ref.Alias = toks[i].text
+	if i < len(toks) && toks[i].Kind == 'i' && !clauseKeywords[strings.ToUpper(toks[i].Text)] {
+		ref.Alias = toks[i].Text
 		i++
 	}
-	return []relationRef{ref}, i, true
+	return []Relation{ref}, i, true
 }
 
 // parenBody 返回以 toks[i] == "(" 开头的括号体文本（再 token 化回字符串）与闭合后的下标。
 // 为了让内层解析复用同一套逻辑，这里把 body 重新拼成 SQL 片段。
-func parenBody(toks []sqlToken, i int) (string, int) {
+func parenBody(toks []Token, i int) (string, int) {
 	depth := 0
 	start := i + 1
 	for ; i < len(toks); i++ {
-		if toks[i].kind != 'p' {
+		if toks[i].Kind != 'p' {
 			continue
 		}
-		switch toks[i].text {
+		switch toks[i].Text {
 		case "(":
 			depth++
 		case ")":
@@ -698,14 +698,14 @@ func parenBody(toks []sqlToken, i int) (string, int) {
 			if depth == 0 {
 				var b strings.Builder
 				for _, t := range toks[start:i] {
-					if t.kind == 'i' && b.Len() > 0 {
+					if t.Kind == 'i' && b.Len() > 0 {
 						last := b.String()[b.Len()-1]
-						if isIdentPart(last) {
+						if IsIdentPart(last) {
 							b.WriteByte(' ')
 						}
 					}
-					b.WriteString(t.text)
-					if t.kind == 'i' {
+					b.WriteString(t.Text)
+					if t.Kind == 'i' {
 						b.WriteByte(' ')
 					}
 				}
@@ -716,8 +716,8 @@ func parenBody(toks []sqlToken, i int) (string, int) {
 	return "", len(toks)
 }
 
-// aliasMap 把别名映射到表名（点号分支用）；派生表别名映射到空串（明确不解析）。
-func aliasMap(rels []relationRef) map[string]string {
+// AliasMap 把别名映射到表名（点号分支用）；派生表别名映射到空串（明确不解析）。
+func AliasMap(rels []Relation) map[string]string {
 	m := map[string]string{}
 	for _, r := range rels {
 		if r.Alias != "" {
@@ -728,4 +728,32 @@ func aliasMap(rels []relationRef) map[string]string {
 		}
 	}
 	return m
+}
+
+// CTENames 收集 WITH ... AS 的 CTE 名，避免把 CTE 引用当成缺失表。
+func CTENames(toks []Token) map[string]bool {
+	out := map[string]bool{}
+	for i := 0; i < len(toks); i++ {
+		if toks[i].Kind == 'i' && strings.EqualFold(toks[i].Text, "with") {
+			for i+1 < len(toks) {
+				if toks[i+1].Kind != 'i' {
+					break
+				}
+				out[strings.ToLower(toks[i+1].Text)] = true
+				j := i + 2
+				for j+1 < len(toks) && !(strings.EqualFold(toks[j].Text, "as") && toks[j+1].Text == "(") {
+					j++
+				}
+				if j+1 >= len(toks) {
+					break
+				}
+				_, next := parenBody(toks, j+1)
+				if next >= len(toks) || toks[next].Text != "," {
+					break
+				}
+				i = next - 1
+			}
+		}
+	}
+	return out
 }

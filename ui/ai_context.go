@@ -9,6 +9,7 @@ import (
 	"db-g/ai/plan"
 	"db-g/app"
 	"db-g/engine"
+	"db-g/sql"
 )
 
 const (
@@ -254,8 +255,8 @@ func (a *root) aiDDLRequests(connID string, snap ai.ContextSnapshot) []aiDDLRequ
 	seen := map[string]bool{}
 	var out []aiDDLRequest
 	known := a.knownObjects(connID)
-	add := func(sql string) {
-		for _, rel := range relationsIn(sql) {
+	add := func(query string) {
+		for _, rel := range sql.Relations(query) {
 			if rel.Table == "" {
 				continue
 			}

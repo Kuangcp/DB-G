@@ -13,6 +13,7 @@ import (
 	"db-g/app"
 	"db-g/engine"
 	"db-g/locales"
+	dbsql "db-g/sql"
 )
 
 // planState 是执行计划结果区的状态。
@@ -55,7 +56,7 @@ func (a *root) runExplain(analyze bool) {
 		return
 	}
 	if analyze {
-		switch strings.ToUpper(firstWord(sql)) {
+		switch strings.ToUpper(dbsql.FirstWord(sql)) {
 		case "SELECT", "WITH":
 		default:
 			a.consoleErr = locales.PlanAnalyzeSelectOnly()

@@ -9,6 +9,7 @@ import (
 	"db-g/ai"
 	"db-g/app"
 	"db-g/locales"
+	"db-g/sql"
 )
 
 // aiCompletionState 是一次内联补全请求的状态。
@@ -35,7 +36,7 @@ func (a *root) requestAICompletion() {
 		return
 	}
 	start := offset
-	for start > 0 && isIdentPart(text[start-1]) {
+	for start > 0 && sql.IsIdentPart(text[start-1]) {
 		start--
 	}
 	st := &a.ai.Completion

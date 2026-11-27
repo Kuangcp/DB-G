@@ -1,6 +1,10 @@
 package ui
 
-import "strings"
+import (
+	"strings"
+
+	"db-g/sql"
+)
 
 // dotIdent 返回光标前紧邻的 `ident.` 里的 ident（未加引号的 [A-Za-z_][A-Za-z0-9_$]*）。
 //
@@ -19,11 +23,11 @@ func dotIdent(text string, offset int) (string, bool) {
 	}
 	body := before[:len(before)-1]
 	i := len(body)
-	for i > 0 && isIdentPart(body[i-1]) {
+	for i > 0 && sql.IsIdentPart(body[i-1]) {
 		i--
 	}
 	ident := body[i:]
-	if ident == "" || !isIdentStart(ident[0]) {
+	if ident == "" || !sql.IsIdentStart(ident[0]) {
 		return "", false
 	}
 	lineStart := strings.LastIndexByte(body, '\n') + 1
@@ -35,12 +39,4 @@ func dotIdent(text string, offset int) (string, bool) {
 		return "", false
 	}
 	return ident, true
-}
-
-func isIdentStart(b byte) bool {
-	return b == '_' || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
-}
-
-func isIdentPart(b byte) bool {
-	return isIdentStart(b) || (b >= '0' && b <= '9') || b == '$'
 }

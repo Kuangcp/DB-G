@@ -7,6 +7,7 @@ import (
 
 	"db-g/app"
 	"db-g/engine"
+	dbsql "db-g/sql"
 )
 
 // pageBody 返回可被派生表包裹的原始 SELECT/WITH 正文；其他语句不可分页。
@@ -16,7 +17,7 @@ func pageBody(sql string) (string, bool) {
 		return "", false
 	}
 	body := strings.TrimSpace(sql[stmts[0].Start:stmts[0].End])
-	head := strings.ToUpper(firstWord(body))
+	head := strings.ToUpper(dbsql.FirstWord(body))
 	if head != "SELECT" && head != "WITH" {
 		return "", false
 	}
@@ -43,16 +44,6 @@ func pageCountSQL(kind, sql string) (string, bool) {
 		fn = "count()"
 	}
 	return fmt.Sprintf("SELECT %s FROM (%s) AS dbg_count", fn, body), true
-}
-
-func firstWord(s string) string {
-	s = strings.TrimSpace(s)
-	for i := 0; i < len(s); i++ {
-		if !isIdentPart(s[i]) {
-			return s[:i]
-		}
-	}
-	return s
 }
 
 // resultView 是结果区的纯视图状态：排序与每列过滤（不重跑 SQL）。

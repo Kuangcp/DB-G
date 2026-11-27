@@ -14,6 +14,7 @@ import (
 	"db-g/app"
 	"db-g/engine"
 	"db-g/locales"
+	"db-g/sql"
 )
 
 // editStateKey 标识「当前结果」的可编辑状态；结果变了就重算。
@@ -80,7 +81,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		}
 		table, schema = t.obj.Name, t.schema
 	} else {
-		rels := relationsIn(stmtScopeAt(a.gridSQL(), 0))
+		rels := sql.Relations(sql.StatementScopeOnly(a.gridSQL(), 0))
 		seen := map[string]string{}
 		for _, rel := range rels {
 			if rel.Table != "" {

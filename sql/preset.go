@@ -1,13 +1,13 @@
-package ui
+package sql
 
 import "strings"
 
-// buildSQL returns "lines" lines of line-oriented SQL. Each line is a
+// BuildSQL returns "lines" lines of line-oriented SQL. Each line is a
 // self-contained statement fragment with keywords, identifiers, numbers,
 // quoted strings (incl. non-ASCII) and a trailing -- comment, so line-level
 // tokenization is exact. Block comments / multi-line strings are out of
 // scope by design (see plan notes).
-func buildSQL(lines int) string {
+func BuildSQL(lines int) string {
 	var b strings.Builder
 	cols := []string{"id", "customer_name", "region", "amount", "created_at", "status"}
 	for i := 0; i < lines; i++ {

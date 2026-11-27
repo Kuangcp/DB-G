@@ -14,6 +14,7 @@ import (
 	"db-g/app"
 	"db-g/engine"
 	"db-g/locales"
+	"db-g/sql"
 )
 
 // completionTimeout 限住一次目录枚举，避免慢库拖住补全。
@@ -392,9 +393,9 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 	connID := a.activeConsoleConnID()
 	key, _ := a.completionScope(connID)
 	kind := a.connKindOf(connID)
-	scope, scopeOff := stmtScopeAtOffset(text, offset)
-	rels := relationsIn(scope)
-	aliases := aliasMap(rels)
+	scope, scopeOff := sql.StatementScope(text, offset)
+	rels := sql.Relations(scope)
+	aliases := sql.AliasMap(rels)
 
 	// 1) 点号上下文：`表名.` / `别名.`
 	if ident, ok := dotIdent(text, offset); ok {
@@ -418,7 +419,7 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 	// 2) 关系名位置（FROM/JOIN 列表、UPDATE 目标、INSERT INTO）：优先给表/视图。
 	// 即使上一条语句没写分号、后续 SELECT 被并进同一作用域，也只按表名补全。
 	// 放在点号之后：`表名.` 仍然优先补列（与既有行为一致）。
-	if relationPositionAt(scope, scopeOff) {
+	if sql.RelationPositionAt(scope, scopeOff) {
 		if items, ok := a.session.Catalog.get(key); ok {
 			return items, false
 		}
@@ -459,7 +460,7 @@ func (a *root) catalogLoaded(connID string) bool {
 }
 
 // knownRelations 过滤出目录里认识的关系（大小写不敏感），去重保序，最多 8 张。
-func (a *root) knownRelations(connID string, rels []relationRef) []string {
+func (a *root) knownRelations(connID string, rels []sql.Relation) []string {
 	scopeKey, _ := a.completionScope(connID)
 	out := make([]string, 0, len(rels))
 	seen := map[string]bool{}

@@ -10,6 +10,7 @@ import (
 
 	"db-g/app"
 	"db-g/locales"
+	"db-g/sql"
 )
 
 // openSettingsSection 打开设置窗口并切到指定分区。
@@ -65,7 +66,7 @@ func TestSettingsPresetWritesActiveConsole(t *testing.T) {
 	if err := tt.Click("3k"); err != nil {
 		t.Fatal(err)
 	}
-	want := buildSQL(3_000)
+	want := sql.BuildSQL(3_000)
 	if got := a.activeText(); got != want {
 		t.Fatalf("preset must fill the editor: got %d runes, want %d", len([]rune(got)), len([]rune(want)))
 	}
