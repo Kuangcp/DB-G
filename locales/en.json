@@ -294,6 +294,7 @@
   "setNull": "Set NULL",
   "restoreCell": "Restore Cell",
   "deleteInsertedRow": "Delete Inserted Row",
+  "copyColumnName": "Copy Column Name",
   "copyCell": "Copy Cell",
   "copyRow": "Copy Row",
   "copyRowInsert": "Copy Row → INSERT",

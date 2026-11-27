@@ -248,6 +248,7 @@
   "setNull": "设为 NULL",
   "restoreCell": "还原本格",
   "deleteInsertedRow": "删除新增行",
+  "copyColumnName": "复制字段名",
   "copyCell": "复制单元格",
   "copyRow": "复制本行",
   "copyRowInsert": "复制本行 → INSERT",
