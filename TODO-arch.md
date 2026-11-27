@@ -237,12 +237,16 @@
 
 ### ARCH-09 `ui` 扁平包把纯 SQL 逻辑和视图绑死
 
-**进度（2026-11-27）**：新增纯叶包 `sql/`（只用标准库），已迁入：
-`sqlscope.go`（→ `sql/scope.go`：Tokenize/StatementScope/Relations/AliasMap/RelationPositionAt，
-含原 243 行测试）、标识符规则（`IsIdentStart/IsIdentPart/FirstWord`）、演示 SQL 生成
-（`BuildSQL`）。`ui` 已无 `sqlscope` 实现与重复词法/标识符代码，`AGENTS.md` 分层表已加 `sql/`。
-**剩余**：`sqlwords`/`sqlhighlight`/`sqldialect` 仍依赖 mygo editor 类型，需先解耦类型再迁；
-`completioncontext`、`metrics`、`resultview` 分页 SQL 生成可后续迁入/下沉。
+**进度（2026-11-27）**：新增纯叶包 `sql/`（只用标准库）：
+- `scope.go`：Tokenize/StatementScope/Relations/AliasMap/RelationPositionAt（含原 243 行测试）。
+- `ident.go`：IsIdentStart/IsIdentPart/FirstWord/IsSQLWord。
+- `dotident.go`：DotIdent（原 `completioncontext.go`）。
+- `words.go`：通用/各方言词表、DialectTermMap/DialectTerms、IsExtraKeyword。
+- `preset.go`：BuildSQL（原 `ui/preset.go`）。
+`ui/sqlwords.go`/`sqldialect.go`/`sqlhighlight.go` 只保留 mygo 类型映射与语言包装；
+`AGENTS.md` 分层表已加 `sql/`。
+**剩余**：`metrics`（通用采样器，不属于 SQL）、`resultview` 分页 SQL 生成（依赖 app/engine）
+可按后续需要再下沉；mygo tokenizer 包装必须留在 ui。
 
 **证据**：`ui` 下 132 个 Go 文件（64 生产 + 68 测试）同属一个包；其中 11 个**完全不 import mygo**：
 `ai_context.go`、`ai_request.go`、`ai_selfcheck.go`、`completioncontext.go`、`metacache.go`、

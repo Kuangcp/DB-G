@@ -157,7 +157,7 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 				continue
 			}
 			name := strings.ToLower(tok.Text)
-			if keywords[name] || aliasToTable[name] != "" || cte[name] || colAliases[name] {
+			if dbsql.IsSQLWord(name) || keywords[name] || aliasToTable[name] != "" || cte[name] || colAliases[name] {
 				continue
 			}
 			if i+1 < len(toks) && (toks[i+1].Text == "(" || toks[i+1].Text == ".") {
@@ -189,14 +189,9 @@ func (a *root) aiSQLLint(sql string) []aiSQLIssue {
 	return issues
 }
 
-// sqlCheckKeywords 是裸标识符自检时跳过的词表。
+// sqlCheckKeywords 是通用 SQL 词表之外、自检时需要跳过的额外词。
 func sqlCheckKeywords() map[string]bool {
 	out := map[string]bool{}
-	for _, words := range []string{sqlKeywordWords, sqlTypeWords, sqlConstWords, sqlFuncWords} {
-		for _, w := range strings.Fields(words) {
-			out[strings.ToLower(w)] = true
-		}
-	}
 	for _, w := range strings.Fields(`over partition range rows preceding following nulls first last
 		window qualify lateral tablesample offset fetch next only for update share nowait skip locked`) {
 		out[w] = true

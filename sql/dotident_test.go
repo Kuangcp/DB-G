@@ -1,4 +1,4 @@
-package ui
+package sql
 
 import "testing"
 
@@ -20,16 +20,16 @@ func TestDotIdent(t *testing.T) {
 		{"", 0, "", false},
 	}
 	for _, c := range cases {
-		got, ok := dotIdent(c.text, c.offset)
+		got, ok := DotIdent(c.text, c.offset)
 		if ok != c.ok || got != c.want {
-			t.Fatalf("dotIdent(%q,%d) = %q,%v want %q,%v", c.text, c.offset, got, ok, c.want, c.ok)
+			t.Fatalf("DotIdent(%q,%d) = %q,%v want %q,%v", c.text, c.offset, got, ok, c.want, c.ok)
 		}
 	}
 }
 
 func TestDotIdentQuotedPrefix(t *testing.T) {
 	// 引号标识符写作 `"tbl".`：v1 不解析（返回 false），退化为 A2 行为。
-	if _, ok := dotIdent(`SELECT "tbl".`, 13); ok {
+	if _, ok := DotIdent(`SELECT "tbl".`, 13); ok {
 		t.Fatal("quoted identifiers are out of scope in v1")
 	}
 }

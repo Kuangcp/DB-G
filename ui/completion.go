@@ -398,7 +398,7 @@ func (a *root) computeCompletion(offset int) (items []myeditor.Completion, more 
 	aliases := sql.AliasMap(rels)
 
 	// 1) 点号上下文：`表名.` / `别名.`
-	if ident, ok := dotIdent(text, offset); ok {
+	if ident, ok := sql.DotIdent(text, offset); ok {
 		table := ident
 		if t, isAlias := aliases[ident]; isAlias {
 			table = t

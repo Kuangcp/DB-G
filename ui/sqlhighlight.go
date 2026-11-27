@@ -1,27 +1,10 @@
 package ui
 
 import (
-	"strings"
-
 	myeditor "github.com/egoist/mygo/ui/editor"
-)
 
-// sqlExtraKeyword 报告 mygo 内置 SQL 词表里缺少、但编辑器高亮应该识别为关键字的整词。
-// 用长度 + EqualFold 避免每 token 分配小写字符串。
-func sqlExtraKeyword(s string) bool {
-	switch len(s) {
-	case 3:
-		return strings.EqualFold(s, "use")
-	case 4:
-		return strings.EqualFold(s, "call") || strings.EqualFold(s, "show") ||
-			strings.EqualFold(s, "desc")
-	case 5:
-		return strings.EqualFold(s, "merge")
-	case 8:
-		return strings.EqualFold(s, "truncate") || strings.EqualFold(s, "describe")
-	}
-	return false
-}
+	"db-g/sql"
+)
 
 // sqlKeywordTokenizer 在 mygo SQL 词法结果上补标扩展关键字。
 type sqlKeywordTokenizer struct {
@@ -41,7 +24,7 @@ func (t sqlKeywordTokenizer) Tokenize(line string, state uint64, tokens []myedit
 		case myeditor.TokenString, myeditor.TokenComment, myeditor.TokenEscape:
 			// 字符串/注释里的词不改。
 		default:
-			if end > start && sqlExtraKeyword(line[start:end]) {
+			if end > start && sql.IsExtraKeyword(line[start:end]) {
 				out[i].Kind = myeditor.TokenKeyword
 			}
 		}
