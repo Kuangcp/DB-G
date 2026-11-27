@@ -177,7 +177,7 @@ func (a *root) cachedAIRelations(key string) ([]ai.TableRef, bool) {
 
 // attachCachedAIRelations 把已缓存的外键挂到快照的表上，供排序做一跳扩展。
 func (a *root) attachCachedAIRelations(snap *ai.ContextSnapshot, connID string) {
-	schemaDefault := a.connSchema[connID]
+	schemaDefault := a.tree.ConnSchema[connID]
 	for i := range snap.Tables {
 		t := &snap.Tables[i]
 		schema := t.Schema
@@ -193,7 +193,7 @@ func (a *root) attachCachedAIRelations(snap *ai.ContextSnapshot, connID string) 
 // aiRelationRequests 为词法上最相关的几张表补齐外键（最多 6 张）。
 func (a *root) aiRelationRequests(question string, snap ai.ContextSnapshot, connID string) []aiRelationRequest {
 	candidates := ai.RankTables(question, snap.Tables, snap.ActiveSQL, 8)
-	schemaDefault := a.connSchema[connID]
+	schemaDefault := a.tree.ConnSchema[connID]
 	seen := map[string]bool{}
 	var out []aiRelationRequest
 	for _, t := range candidates {
@@ -250,7 +250,7 @@ func (a *root) aiDDLRequests(connID string, snap ai.ContextSnapshot) []aiDDLRequ
 	if connID == "" {
 		return nil
 	}
-	schema := a.connSchema[connID]
+	schema := a.tree.ConnSchema[connID]
 	seen := map[string]bool{}
 	var out []aiDDLRequest
 	known := a.knownObjects(connID)

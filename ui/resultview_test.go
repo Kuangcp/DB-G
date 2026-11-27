@@ -241,8 +241,8 @@ func TestExportCurrentAndFull(t *testing.T) {
 func TestExportStatusDoubleClickOpensFolder(t *testing.T) {
 	a := newTestRoot()
 	a.con.SetOutcome(&engine.QueryResult{IsQuery: true, Columns: []string{"id"}, Rows: [][]any{{int64(1)}}}, "")
-	a.exportStatus = "Exported 2 rows → /tmp/out.csv"
-	a.exportPath = "/tmp/out.csv"
+	a.exportState.Status = "Exported 2 rows → /tmp/out.csv"
+	a.exportState.Path = "/tmp/out.csv"
 	var got string
 	a.revealPath = func(path string) error {
 		got = path

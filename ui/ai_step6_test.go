@@ -107,7 +107,7 @@ func TestAISnapshotFallsBackToTreeData(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.treeData[prof.ID] = map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data[prof.ID] = map[engine.ObjectKind][]engine.DBObject{
 		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "tree_t"}},
 	}
 	snap := a.aiSnapshot()

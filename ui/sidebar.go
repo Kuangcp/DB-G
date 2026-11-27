@@ -37,10 +37,10 @@ func (a *root) sidebar(c *ui.Context) {
 			return
 		}
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			ui.TextInput(c, &a.objSearch).Placeholder(locales.SidebarSearchPlaceholder()).Label(locales.SidebarSearchObjects()).Fill()
-			if a.objSearch != "" {
+			ui.TextInput(c, &a.tree.ObjSearch).Placeholder(locales.SidebarSearchPlaceholder()).Label(locales.SidebarSearchObjects()).Fill()
+			if a.tree.ObjSearch != "" {
 				if iconButtonPlain(c, iconClose, locales.SidebarClearSearch(), ui.Transparent).Clicked() {
-					a.objSearch = ""
+					a.tree.ObjSearch = ""
 				}
 			}
 		})
@@ -129,17 +129,17 @@ func (a *root) connBranch(c *ui.Context, parent string, depth int, idx *connTree
 }
 
 // objSearchActive 报告对象树搜索是否生效。
-func (a *root) objSearchActive() bool { return strings.TrimSpace(a.objSearch) != "" }
+func (a *root) objSearchActive() bool { return strings.TrimSpace(a.tree.ObjSearch) != "" }
 
 // objMatch 报告名字是否命中当前搜索词（大小写不敏感）。
 func (a *root) objMatch(name string) bool {
-	q := strings.ToLower(strings.TrimSpace(a.objSearch))
+	q := strings.ToLower(strings.TrimSpace(a.tree.ObjSearch))
 	return q != "" && strings.Contains(strings.ToLower(name), q)
 }
 
 // connObjectMatches 报告连接已加载的对象里是否有命中搜索词的对象。
 func (a *root) connObjectMatches(connID string) bool {
-	for base, m := range a.treeData {
+	for base, m := range a.tree.Data {
 		if base != connID && !strings.HasPrefix(base, connID+"|") {
 			continue
 		}
@@ -186,7 +186,7 @@ func (a *root) folderMatches(idx *connTreeIndex, folderID string) bool {
 // schemaHasMatch 报告某 schema 下已加载对象是否有命中。
 func (a *root) schemaHasMatch(connID, schema string) bool {
 	base := objectTreeKey(connID, schema)
-	for _, objs := range a.treeData[base] {
+	for _, objs := range a.tree.Data[base] {
 		for _, o := range objs {
 			if a.objMatch(o.Name) {
 				return true
@@ -422,7 +422,7 @@ func (a *root) applyTreeDrop(drag treeDrag, targetKind, targetID string, spot dr
 		return
 	}
 	if spot == dropInto && targetKind == "folder" {
-		delete(a.folderCollapsed, targetID) // 移入后展开，结果立即可见
+		delete(a.tree.FolderCollapsed, targetID) // 移入后展开，结果立即可见
 	}
 	app.LogInfo("conn", "tree moved", "kind", drag.kind, "id", drag.id, "parent", parent, "before", before)
 }
@@ -442,7 +442,7 @@ func (a *root) attachTreeDrop(c *ui.Context, row ui.Element, targetKind, targetI
 }
 
 func (a *root) folderRow(c *ui.Context, f app.ConnFolder, depth int, idx *connTreeIndex) {
-	collapsed := a.folderCollapsed[f.ID] && !a.objSearchActive()
+	collapsed := a.tree.FolderCollapsed[f.ID] && !a.objSearchActive()
 	row := treeRowBase(c, locales.FolderRow(f.Name)).PaddingStart(float32(4 + depth*folderIndent))
 	row.Children(func() {
 		var label string
@@ -490,15 +490,15 @@ func (a *root) folderRow(c *ui.Context, f app.ConnFolder, depth int, idx *connTr
 }
 
 func (a *root) toggleFolder(id string) {
-	if a.folderCollapsed == nil {
-		a.folderCollapsed = map[string]bool{}
+	if a.tree.FolderCollapsed == nil {
+		a.tree.FolderCollapsed = map[string]bool{}
 	}
-	a.folderCollapsed[id] = !a.folderCollapsed[id]
+	a.tree.FolderCollapsed[id] = !a.tree.FolderCollapsed[id]
 }
 
 func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTreeIndex) {
 	live := a.connected(p.ID)
-	expanded := a.treeExpand[p.ID] || a.objSearchActive()
+	expanded := a.tree.Expand[p.ID] || a.objSearchActive()
 	row := treeRowBase(c, locales.ConnRow(p.Name)).PaddingStart(float32(4 + depth*folderIndent))
 	row.Children(func() {
 		var label string
@@ -520,24 +520,24 @@ func (a *root) connRow(c *ui.Context, p app.ConnProfile, depth int, idx *connTre
 		ui.Spacer(c)
 		a.connDot(c, p.ID)
 		if iconButtonPlain(c, iconSquarePen, locales.ConnEdit(), ui.Transparent).Clicked() {
-			a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, p.ID, p.Name, p.Path, ""
-			a.connFormURL, a.connFormURLErr = "", ""
-			a.connFormKind = p.Kind
-			a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
-			a.connFormShowPass = false
-			a.connFormPort = ""
+			a.connForm.Open, a.connForm.ID, a.connForm.Name, a.connForm.Path, a.connForm.Err = true, p.ID, p.Name, p.Path, ""
+			a.connForm.URL, a.connForm.URLErr = "", ""
+			a.connForm.Kind = p.Kind
+			a.connForm.Host, a.connForm.User, a.connForm.Pass, a.connForm.DB = p.Host, p.User, p.Password, p.Database
+			a.connForm.ShowPass = false
+			a.connForm.Port = ""
 			if p.Port > 0 {
-				a.connFormPort = strconv.Itoa(p.Port)
+				a.connForm.Port = strconv.Itoa(p.Port)
 			}
-			a.connFormParams = p.Params
-			a.connFormTimeout = ""
+			a.connForm.Params = p.Params
+			a.connForm.Timeout = ""
 			if p.QueryTimeout > 0 {
-				a.connFormTimeout = strconv.Itoa(p.QueryTimeout)
+				a.connForm.Timeout = strconv.Itoa(p.QueryTimeout)
 			}
-			a.connFormGuard = p.GuardBlock
-			a.connFormAIStrict = p.AIContextStrict
+			a.connForm.Guard = p.GuardBlock
+			a.connForm.AIStrict = p.AIContextStrict
 			a.connProto = connProtoIndex(p.Protocol)
-			a.connFormFolder = p.FolderID
+			a.connForm.Folder = p.FolderID
 			a.setConnTagForm(p.Tags)
 			a.resetConnTest()
 		}
@@ -681,10 +681,10 @@ func (a *root) connModal(c *ui.Context) {
 		a.deleteModal(c)
 		return
 	}
-	ui.Modal(c, &a.connFormOpen, func() {
+	ui.Modal(c, &a.connForm.Open, func() {
 		radius := controlRadius(c)
 		title := locales.ConnModalNew()
-		if a.connFormID != "" {
+		if a.connForm.ID != "" {
 			title = locales.ConnModalEdit()
 		}
 		ui.Text(c, title).Bold()
@@ -698,8 +698,8 @@ func (a *root) connModal(c *ui.Context) {
 			})
 			ui.Box(c).Width(1).FillHeight().Background(c.Theme().Border)
 			ui.Column(c).Fill().Padding(0, 16).Gap(8).Children(func() {
-				ui.Text(c, locales.ConnFormTitle(kindLabel(a.connFormKind))).Bold()
-				ui.TextInput(c, &a.connFormName).Placeholder(locales.ConnFormName()).Radius(radius).AutoFocus()
+				ui.Text(c, locales.ConnFormTitle(kindLabel(a.connForm.Kind))).Bold()
+				ui.TextInput(c, &a.connForm.Name).Placeholder(locales.ConnFormName()).Radius(radius).AutoFocus()
 				if a.store != nil && len(a.store.Folders()) > 0 {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, locales.ConnFormLocation()).FontSize(12).TextColor(c.Theme().TextMuted)
@@ -707,17 +707,17 @@ func (a *root) connModal(c *ui.Context) {
 						ui.Spacer(c)
 					})
 				}
-				if a.connFormKind != "sqlite" {
-					ui.TextInput(c, &a.connFormDB).Placeholder(locales.ConnFormDatabase()).Radius(radius)
+				if a.connForm.Kind != "sqlite" {
+					ui.TextInput(c, &a.connForm.DB).Placeholder(locales.ConnFormDatabase()).Radius(radius)
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormHost).Placeholder(locales.ConnFormHost()).Radius(radius).Fill()
-						ui.TextInput(c, &a.connFormPort).Placeholder(locales.ConnFormPort()).Radius(radius)
+						ui.TextInput(c, &a.connForm.Host).Placeholder(locales.ConnFormHost()).Radius(radius).Fill()
+						ui.TextInput(c, &a.connForm.Port).Placeholder(locales.ConnFormPort()).Radius(radius)
 					})
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormUser).Placeholder(locales.ConnFormUser()).Radius(radius).Fill()
+						ui.TextInput(c, &a.connForm.User).Placeholder(locales.ConnFormUser()).Radius(radius).Fill()
 						a.connPasswordInput(c, radius)
 					})
-					if a.connFormKind == "clickhouse" {
+					if a.connForm.Kind == "clickhouse" {
 						// 协议决定 DSN 的 scheme，也决定默认端口：native 9000、
 						// HTTP 8123、HTTPS 8443。填错端口会握手失败。
 						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -728,32 +728,32 @@ func (a *root) connModal(c *ui.Context) {
 							ui.Spacer(c)
 						})
 					}
-					ui.TextInput(c, &a.connFormParams).Placeholder(paramsPlaceholder(a.connFormKind)).Radius(radius)
+					ui.TextInput(c, &a.connForm.Params).Placeholder(paramsPlaceholder(a.connForm.Kind)).Radius(radius)
 				} else {
 					ui.Row(c).Gap(6).Children(func() {
-						ui.TextInput(c, &a.connFormPath).Placeholder(locales.ConnFormSqlitePath()).Radius(radius).Fill()
+						ui.TextInput(c, &a.connForm.Path).Placeholder(locales.ConnFormSqlitePath()).Radius(radius).Fill()
 						if ui.Button(c, locales.ConnFormBrowse()).Radius(radius).Clicked() {
 							a.browsePath()
 						}
 					})
 				}
-				ui.TextInput(c, &a.connFormTimeout).
+				ui.TextInput(c, &a.connForm.Timeout).
 					Placeholder(locales.ConnFormTimeout()).Radius(radius)
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					full := len(a.connFormTags) >= app.MaxConnTags
+					full := len(a.connForm.Tags) >= app.MaxConnTags
 					ui.Text(c, locales.ConnFormTags()).FontSize(12).TextColor(c.Theme().TextMuted).
 						Tooltip(locales.ConnFormTagsMax())
-					swatch := ui.Button(c, "●").FontSize(13).TextColor(tagColor(a.connFormTagColor)).
+					swatch := ui.Button(c, "●").FontSize(13).TextColor(tagColor(a.connForm.TagColor)).
 						Radius(radius).Padding(2, 8).Disabled(full)
-					swatch.Tooltip(locales.ConnFormTagColor(tagColorLabel(a.connFormTagColor)))
+					swatch.Tooltip(locales.ConnFormTagColor(tagColorLabel(a.connForm.TagColor)))
 					if swatch.Clicked() {
-						a.connFormTagColor = nextTagColor(a.connFormTagColor)
+						a.connForm.TagColor = nextTagColor(a.connForm.TagColor)
 					}
 					placeholder := locales.ConnFormTagPlaceholder()
 					if full {
 						placeholder = locales.ConnFormTagsFullPlaceholder()
 					}
-					cb := ui.ComboboxBase(c, &a.connFormTagInput)
+					cb := ui.ComboboxBase(c, &a.connForm.TagInput)
 					cb.Input.Placeholder(placeholder).Radius(radius).Fill().
 						Label(locales.ConnFormAddTag()).AutoComplete(ui.AutoCompleteList).Disabled(full)
 					cb.Popup(func(panel ui.Element) {
@@ -781,11 +781,11 @@ func (a *root) connModal(c *ui.Context) {
 					case ok:
 						a.addConnFormTag(chosen, a.tagColorByLabel(chosen))
 					case cb.Input.Submitted() && !full:
-						a.addConnFormTag(a.connFormTagInput, a.connFormTagColor)
+						a.addConnFormTag(a.connForm.TagInput, a.connForm.TagColor)
 					}
 					// 删除要等标签都画完再改切片，否则 range 期间缩短会越界。
 					removed := ""
-					for _, tag := range a.connFormTags {
+					for _, tag := range a.connForm.Tags {
 						tag := tag
 						editTagChip(c, tag, func() { removed = tag.label })
 					}
@@ -793,11 +793,11 @@ func (a *root) connModal(c *ui.Context) {
 						a.removeConnFormTag(removed)
 					}
 				})
-				ui.Checkbox(c, &a.connFormGuard, locales.ConnFormBlockGuard())
-				ui.Checkbox(c, &a.connFormAIStrict, locales.ConnFormAIStrict()).Tooltip(locales.ConnFormAIStrictTip())
+				ui.Checkbox(c, &a.connForm.Guard, locales.ConnFormBlockGuard())
+				ui.Checkbox(c, &a.connForm.AIStrict, locales.ConnFormAIStrict()).Tooltip(locales.ConnFormAIStrictTip())
 
-				if a.connFormErr != "" {
-					ui.Text(c, a.connFormErr).TextColor(c.Theme().Danger)
+				if a.connForm.Err != "" {
+					ui.Text(c, a.connForm.Err).TextColor(c.Theme().Danger)
 				}
 				// 留白：按钮沉到面板底部，上方空着。
 				ui.Spacer(c)
@@ -809,9 +809,9 @@ func (a *root) connModal(c *ui.Context) {
 					ui.Text(c, a.connTestMsg).FontSize(12).TextColor(col).
 						SingleLine().Tooltip(a.connTestMsg)
 				}
-				if a.connFormURLErr != "" {
-					ui.Text(c, a.connFormURLErr).FontSize(11).TextColor(c.Theme().Danger).
-						SingleLine().Tooltip(a.connFormURLErr)
+				if a.connForm.URLErr != "" {
+					ui.Text(c, a.connForm.URLErr).FontSize(11).TextColor(c.Theme().Danger).
+						SingleLine().Tooltip(a.connForm.URLErr)
 				}
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					if a.connTestBusy {
@@ -829,12 +829,12 @@ func (a *root) connModal(c *ui.Context) {
 						a.copyConnForm(c)
 					}
 					if ui.Button(c, locales.ConnFormURLParseClipboard()).Radius(radius).Clicked() {
-						a.connFormURL = c.ReadClipboard()
+						a.connForm.URL = c.ReadClipboard()
 						a.applyConnURL()
 					}
 					ui.Spacer(c)
 					if ui.Button(c, locales.CommonCancel()).Radius(radius).Clicked() {
-						a.connFormOpen = false
+						a.connForm.Open = false
 					}
 					if ui.PrimaryButton(c, locales.CommonSave()).Radius(radius).Clicked() {
 						a.saveConnForm()
@@ -848,14 +848,14 @@ func (a *root) connModal(c *ui.Context) {
 // connPasswordInput 是连接密码框：眼睛按钮叠在输入框内部右侧，
 // 点击在隐藏与明文之间切换（Password 只在隐藏时调用）。
 func (a *root) connPasswordInput(c *ui.Context, radius float32) {
-	passwordField(c, &a.connFormPass, &a.connFormShowPass, radius,
+	passwordField(c, &a.connForm.Pass, &a.connForm.ShowPass, radius,
 		locales.ConnFormPassword(), locales.ConnFormPassword())
 }
 
 // connKindRow 是左侧数据源类型的一行：走通用的侧边导航样式（无按钮外观、
 // 行底分隔线、选中高亮）。
 func (a *root) connKindRow(c *ui.Context, k connKind) {
-	selected := a.connFormKind == k.kind
+	selected := a.connForm.Kind == k.kind
 	row := sideNavRow(c, k.label, connKindIcon(k.kind), connKindColor(k.kind), selected)
 	if row.Clicked() {
 		a.switchConnKind(k.kind)
@@ -894,9 +894,9 @@ func kindLabel(kind string) string {
 
 // switchConnKind 切换数据源类型；端口还是旧默认值（或空）时跟随新类型的默认端口。
 func (a *root) switchConnKind(kind string) {
-	old := a.connFormKind
-	a.connFormKind = kind
-	port := strings.TrimSpace(a.connFormPort)
+	old := a.connForm.Kind
+	a.connForm.Kind = kind
+	port := strings.TrimSpace(a.connForm.Port)
 	if port == "" || port == strconv.Itoa(defaultPort(old)) {
 		var p int
 		if kind == "clickhouse" {
@@ -905,13 +905,13 @@ func (a *root) switchConnKind(kind string) {
 			p = defaultPort(kind)
 		}
 		if p > 0 {
-			a.connFormPort = strconv.Itoa(p)
+			a.connForm.Port = strconv.Itoa(p)
 		} else {
-			a.connFormPort = ""
+			a.connForm.Port = ""
 		}
 	}
-	a.connFormErr = ""
-	a.connFormURLErr = ""
+	a.connForm.Err = ""
+	a.connForm.URLErr = ""
 	a.resetConnTest()
 }
 
@@ -946,59 +946,59 @@ func (a *root) deleteModal(c *ui.Context) {
 // applyConnURL 解析连接弹窗顶部的 JDBC/URL 并填入表单；失败只提示，
 // 不改动用户已经填好的字段。成功后会清空 URL 输入（通常含密码）。
 func (a *root) applyConnURL() {
-	raw := strings.TrimSpace(a.connFormURL)
+	raw := strings.TrimSpace(a.connForm.URL)
 	if raw == "" {
-		a.connFormURLErr = ""
+		a.connForm.URLErr = ""
 		return
 	}
 	p, err := app.ParseConnURL(raw)
 	if err != nil {
 		if errors.Is(err, app.ErrConnURLUnsupported) {
-			a.connFormURLErr = locales.ConnFormURLUnsupported()
+			a.connForm.URLErr = locales.ConnFormURLUnsupported()
 		} else {
-			a.connFormURLErr = locales.ConnFormURLInvalid()
+			a.connForm.URLErr = locales.ConnFormURLInvalid()
 		}
 		return
 	}
-	a.connFormURLErr = ""
-	a.connFormErr = ""
-	a.connFormKind = p.Kind
-	a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = p.Host, p.User, p.Password, p.Database
-	a.connFormPath = p.Path
-	a.connFormParams = p.Params
+	a.connForm.URLErr = ""
+	a.connForm.Err = ""
+	a.connForm.Kind = p.Kind
+	a.connForm.Host, a.connForm.User, a.connForm.Pass, a.connForm.DB = p.Host, p.User, p.Password, p.Database
+	a.connForm.Path = p.Path
+	a.connForm.Params = p.Params
 	a.connProto = 0
 	if p.Kind == "clickhouse" {
 		a.connProto = connProtoIndex(p.Protocol)
 	}
-	a.connFormPort = ""
+	a.connForm.Port = ""
 	switch {
 	case p.Port > 0:
-		a.connFormPort = strconv.Itoa(p.Port)
+		a.connForm.Port = strconv.Itoa(p.Port)
 	case p.Kind == "clickhouse":
-		a.connFormPort = strconv.Itoa(clickhouseProtoPort(a.connProto))
+		a.connForm.Port = strconv.Itoa(clickhouseProtoPort(a.connProto))
 	case p.Kind != "sqlite":
 		if port := defaultPort(p.Kind); port > 0 {
-			a.connFormPort = strconv.Itoa(port)
+			a.connForm.Port = strconv.Itoa(port)
 		}
 	}
 	if p.Kind == "sqlite" {
-		a.connFormHost, a.connFormUser, a.connFormPass, a.connFormDB = "", "", "", ""
-		a.connFormParams = ""
+		a.connForm.Host, a.connForm.User, a.connForm.Pass, a.connForm.DB = "", "", "", ""
+		a.connForm.Params = ""
 	}
-	if strings.TrimSpace(a.connFormName) == "" && p.Name != "" {
-		a.connFormName = p.Name
+	if strings.TrimSpace(a.connForm.Name) == "" && p.Name != "" {
+		a.connForm.Name = p.Name
 	}
-	a.connFormShowPass = false
+	a.connForm.ShowPass = false
 	a.resetConnTest()
-	a.connFormURL = ""
+	a.connForm.URL = ""
 }
 
 // connFormProfile 把表单当前内容读成一份连接档案（只读，不落盘）：保存、测试连接
 // 和复制连接信息都用它，免得三处各读一遍表单。
 func (a *root) connFormProfile() (app.ConnProfile, error) {
-	p := app.ConnProfile{ID: a.connFormID, Name: a.connFormName, Kind: a.connFormKind, Path: a.connFormPath, FolderID: a.connFormFolder}
+	p := app.ConnProfile{ID: a.connForm.ID, Name: a.connForm.Name, Kind: a.connForm.Kind, Path: a.connForm.Path, FolderID: a.connForm.Folder}
 	sec := 0
-	if t := strings.TrimSpace(a.connFormTimeout); t != "" {
+	if t := strings.TrimSpace(a.connForm.Timeout); t != "" {
 		n, err := strconv.Atoi(t)
 		if err != nil {
 			return p, errQueryTimeout()
@@ -1009,27 +1009,27 @@ func (a *root) connFormProfile() (app.ConnProfile, error) {
 		sec = n
 	}
 	p.QueryTimeout = sec
-	p.GuardBlock = a.connFormGuard
-	p.AIContextStrict = a.connFormAIStrict
+	p.GuardBlock = a.connForm.Guard
+	p.AIContextStrict = a.connForm.AIStrict
 	p.Tags = a.connTagFormList()
-	if a.connFormKind == "sqlite" {
+	if a.connForm.Kind == "sqlite" {
 		return p, nil
 	}
-	portText := a.connFormPort
+	portText := a.connForm.Port
 	if portText == "" {
-		portText = strconv.Itoa(defaultPort(a.connFormKind))
+		portText = strconv.Itoa(defaultPort(a.connForm.Kind))
 	}
 	port, err := strconv.Atoi(portText)
 	if err != nil {
 		return p, errPort()
 	}
-	p.Host = a.connFormHost
+	p.Host = a.connForm.Host
 	p.Port = port
-	p.User = a.connFormUser
-	p.Password = a.connFormPass
-	p.Database = a.connFormDB
-	p.Params = strings.TrimSpace(a.connFormParams)
-	if a.connFormKind == "clickhouse" {
+	p.User = a.connForm.User
+	p.Password = a.connForm.Pass
+	p.Database = a.connForm.DB
+	p.Params = strings.TrimSpace(a.connForm.Params)
+	if a.connForm.Kind == "clickhouse" {
 		p.Protocol = connProtoName(a.connProto)
 	}
 	return p, nil
@@ -1070,7 +1070,7 @@ func clickhouseProtoPort(idx int) int {
 
 // applyConnProto 换协议后把端口跟着换成该协议的默认端口；用户自己填的端口不动。
 func (a *root) applyConnProto() {
-	port := strings.TrimSpace(a.connFormPort)
+	port := strings.TrimSpace(a.connForm.Port)
 	old := false
 	for _, p := range []int{9000, 8123, 8443} {
 		if port == "" || port == strconv.Itoa(p) {
@@ -1079,9 +1079,9 @@ func (a *root) applyConnProto() {
 		}
 	}
 	if old {
-		a.connFormPort = strconv.Itoa(clickhouseProtoPort(a.connProto))
+		a.connForm.Port = strconv.Itoa(clickhouseProtoPort(a.connProto))
 	}
-	a.connFormErr = ""
+	a.connForm.Err = ""
 	a.resetConnTest()
 }
 
@@ -1100,18 +1100,18 @@ func paramsPlaceholder(kind string) string {
 
 func (a *root) saveConnForm() {
 	if a.store == nil {
-		a.connFormErr = locales.ConnStoreUnavailable()
+		a.connForm.Err = locales.ConnStoreUnavailable()
 		return
 	}
 	p, err := a.connFormProfile()
 	if err != nil {
-		a.connFormErr = err.Error()
+		a.connForm.Err = err.Error()
 		return
 	}
-	if a.connFormID == "" {
+	if a.connForm.ID == "" {
 		err = a.store.Add(p)
 	} else {
-		old, had := a.store.Get(a.connFormID)
+		old, had := a.store.Get(a.connForm.ID)
 		err = a.store.Update(p)
 		if err == nil && had && app.MetaFingerprint(old) != app.MetaFingerprint(p) {
 			// 目标库变了：关掉旧会话，旧元数据缓存与内存树都不再适用。
@@ -1126,10 +1126,10 @@ func (a *root) saveConnForm() {
 		}
 	}
 	if err != nil {
-		a.connFormErr = err.Error()
+		a.connForm.Err = err.Error()
 		return
 	}
-	a.connFormOpen = false
+	a.connForm.Open = false
 	a.resetConnTest()
 }
 
@@ -1149,7 +1149,7 @@ func (a *root) browsePath() {
 		if err != nil || len(paths) == 0 {
 			return
 		}
-		a.safeUpdate(win, func() { a.connFormPath = paths[0] })
+		a.safeUpdate(win, func() { a.connForm.Path = paths[0] })
 	}()
 }
 
@@ -1168,15 +1168,15 @@ func defaultPort(kind string) int {
 
 // openNewConnForm 重置新建连接表单；folderID 为空表示根级。
 func (a *root) openNewConnForm(folderID string) {
-	a.connFormOpen, a.connFormID, a.connFormName, a.connFormPath, a.connFormErr = true, "", "", "", ""
-	a.connFormURL, a.connFormURLErr = "", ""
-	a.connFormKind, a.connFormHost, a.connFormPort = "sqlite", "", ""
-	a.connFormUser, a.connFormPass, a.connFormDB = "", "", ""
-	a.connFormShowPass = false
-	a.connFormParams, a.connFormTimeout, a.connProto = "", "", 0
-	a.connFormGuard = false
-	a.connFormAIStrict = false
-	a.connFormFolder = folderID
+	a.connForm.Open, a.connForm.ID, a.connForm.Name, a.connForm.Path, a.connForm.Err = true, "", "", "", ""
+	a.connForm.URL, a.connForm.URLErr = "", ""
+	a.connForm.Kind, a.connForm.Host, a.connForm.Port = "sqlite", "", ""
+	a.connForm.User, a.connForm.Pass, a.connForm.DB = "", "", ""
+	a.connForm.ShowPass = false
+	a.connForm.Params, a.connForm.Timeout, a.connProto = "", "", 0
+	a.connForm.Guard = false
+	a.connForm.AIStrict = false
+	a.connForm.Folder = folderID
 	a.resetConnTagForm()
 	a.resetConnTest()
 }
@@ -1245,7 +1245,7 @@ func (a *root) folderModal(c *ui.Context) {
 						a.folderModalErr = locales.ModalDeleteFailed(err.Error())
 						return
 					}
-					delete(a.folderCollapsed, a.folderModalTarget)
+					delete(a.tree.FolderCollapsed, a.folderModalTarget)
 					app.LogInfo("conn", "folder deleted", "id", a.folderModalTarget)
 					a.folderModalKind = ""
 				}
@@ -1264,7 +1264,7 @@ func (a *root) folderModal(c *ui.Context) {
 						a.folderModalErr = locales.FolderCreateFailed(err.Error())
 						return
 					}
-					delete(a.folderCollapsed, a.folderModalTarget) // 父级展开，新文件夹可见
+					delete(a.tree.FolderCollapsed, a.folderModalTarget) // 父级展开，新文件夹可见
 					app.LogInfo("conn", "folder added", "id", f.ID, "name", f.Name, "parent", f.ParentID)
 				case "rename":
 					if err := a.store.RenameFolder(a.folderModalTarget, name); err != nil {
@@ -1324,10 +1324,10 @@ func (a *root) folderLabel(id string) string {
 // folderSelect 是连接弹窗里的文件夹选择器：直接绑定 folder ID，避免标签映射。
 func (a *root) folderSelect(c *ui.Context) {
 	t := c.Theme()
-	sel := ui.SelectBase(c, &a.connFormFolder)
+	sel := ui.SelectBase(c, &a.connForm.Folder)
 	sel.Trigger.Gap(6).Padding(6, 10).Radius(t.Space(2)).Border(1, t.Border).
 		Children(func() {
-			ui.Text(c, a.folderLabel(a.connFormFolder)).SingleLine()
+			ui.Text(c, a.folderLabel(a.connForm.Folder)).SingleLine()
 			ui.Icon(c, iconChevronDown).FontSize(14).TextColor(t.TextMuted)
 		})
 	sel.Popup(func(panel ui.Element) {

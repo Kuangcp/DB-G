@@ -110,7 +110,7 @@ func (a *root) aiSnapshotWith(opts aiEgressPolicy) ai.ContextSnapshot {
 		}
 		// 补全目录没加载时退回对象树/元数据缓存，AI 不再拿到空 schema。
 		if len(tables)+len(views) == 0 {
-			if m := a.treeData[objectTreeKey(connID, schema)]; m != nil {
+			if m := a.tree.Data[objectTreeKey(connID, schema)]; m != nil {
 				for _, o := range m[engine.ObjectTable] {
 					tables = append(tables, o.Name)
 				}

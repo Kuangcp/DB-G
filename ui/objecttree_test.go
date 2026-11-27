@@ -63,7 +63,7 @@ func TestObjectTreeLargeSchemaUsesCountsAndPages(t *testing.T) {
 	stored := a.store.List()[0]
 	sess := &pagedFakeSession{total: 60000}
 	a.testSetSession(stored.ID, sess)
-	a.treeExpand[stored.ID] = true
+	a.tree.Expand[stored.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if sess.countCalls != 1 || sess.objectsCall != 0 || sess.pageCalls != 0 {
@@ -72,14 +72,14 @@ func TestObjectTreeLargeSchemaUsesCountsAndPages(t *testing.T) {
 	if !tt.HasText("表 (60000)") {
 		t.Fatalf("count label missing: %q", tt.Texts())
 	}
-	if len(a.treeData[stored.ID][engine.ObjectTable]) != 0 {
+	if len(a.tree.Data[stored.ID][engine.ObjectTable]) != 0 {
 		t.Fatal("objects must load only when the group opens")
 	}
 
 	// 展开表分组：只拉第一页。
 	*a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), false) = true
 	tt.Frame()
-	objs := a.treeData[stored.ID][engine.ObjectTable]
+	objs := a.tree.Data[stored.ID][engine.ObjectTable]
 	if len(objs) != objectPageSize {
 		t.Fatalf("first page = %d, want %d", len(objs), objectPageSize)
 	}
@@ -96,7 +96,7 @@ func TestObjectTreeLargeSchemaUsesCountsAndPages(t *testing.T) {
 	// 行在树底部、窗口外，直接走同一入口验证追加（点击路径由 Tester 的命中检查限制）。
 	a.loadObjectPage(stored, "", engine.ObjectTable, false)
 	tt.Frame()
-	if got := len(a.treeData[stored.ID][engine.ObjectTable]); got != 2*objectPageSize {
+	if got := len(a.tree.Data[stored.ID][engine.ObjectTable]); got != 2*objectPageSize {
 		t.Fatalf("second page = %d, want %d", got, 2*objectPageSize)
 	}
 	if sess.objectsCall != 0 {
@@ -129,24 +129,24 @@ func TestSidebarObjectSearch(t *testing.T) {
 	}
 	list := a.store.List()
 	main, store := list[0].ID, list[1].ID
-	a.treeData[main] = map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data[main] = map[engine.ObjectKind][]engine.DBObject{
 		engine.ObjectTable: {
 			{Kind: engine.ObjectTable, Name: "users"},
 			{Kind: engine.ObjectTable, Name: "orders"},
 		},
 		engine.ObjectView: {{Kind: engine.ObjectView, Name: "user_stats"}},
 	}
-	a.treeData[store] = map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data[store] = map[engine.ObjectKind][]engine.DBObject{
 		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "inventory"}},
 	}
-	a.treeExpand[main], a.treeExpand[store] = true, true
+	a.tree.Expand[main], a.tree.Expand[store] = true, true
 	a.groupOpenPtr(main+"|"+kindKey(engine.ObjectTable), true)
 	a.groupOpenPtr(main+"|"+kindKey(engine.ObjectView), true)
 	a.groupOpenPtr(store+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
 
-	a.objSearch = "user"
+	a.tree.ObjSearch = "user"
 	tt.Frame()
 	if !tt.HasText("users") || !tt.HasText("user_stats") {
 		t.Fatalf("matching objects should show: %q", tt.Texts())
@@ -159,13 +159,13 @@ func TestSidebarObjectSearch(t *testing.T) {
 	}
 
 	// 数据源名命中：展示完整子树，不按对象名过滤。
-	a.objSearch = "主"
+	a.tree.ObjSearch = "主"
 	tt.Frame()
 	if !tt.HasText("users") || !tt.HasText("orders") {
 		t.Fatalf("connection name match should show all its loaded objects: %q", tt.Texts())
 	}
 
-	a.objSearch = ""
+	a.tree.ObjSearch = ""
 	tt.Frame()
 	for _, want := range []string{"orders", "inventory"} {
 		if !tt.HasText(want) {

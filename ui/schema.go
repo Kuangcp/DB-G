@@ -46,7 +46,7 @@ func defaultSchemaFor(p app.ConnProfile, schemas []string) string {
 
 // ensureSchemas 惰性加载 schema/库列表；顶部下拉与对象树共用这份缓存。
 func (a *root) ensureSchemas(p app.ConnProfile) {
-	if len(a.treeSchemas[p.ID]) > 0 || a.schemaLoading[p.ID] {
+	if len(a.tree.Schemas[p.ID]) > 0 || a.tree.SchemaLoading[p.ID] {
 		return
 	}
 	sess := a.sessionFor(p.ID)
@@ -57,19 +57,19 @@ func (a *root) ensureSchemas(p app.ConnProfile) {
 	if !ok {
 		return
 	}
-	if a.schemaLoading == nil {
-		a.schemaLoading = map[string]bool{}
+	if a.tree.SchemaLoading == nil {
+		a.tree.SchemaLoading = map[string]bool{}
 	}
-	a.schemaLoading[p.ID] = true
-	gen := a.treeGen
+	a.tree.SchemaLoading[p.ID] = true
+	gen := a.tree.Gen
 	load := func() ([]string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return lister.Schemas(ctx)
 	}
 	done := func(schemas []string, err error) {
-		delete(a.schemaLoading, p.ID)
-		if gen != a.treeGen {
+		delete(a.tree.SchemaLoading, p.ID)
+		if gen != a.tree.Gen {
 			return
 		}
 		if err != nil {
@@ -79,11 +79,11 @@ func (a *root) ensureSchemas(p app.ConnProfile) {
 		if len(schemas) == 0 {
 			return
 		}
-		if a.treeSchemas == nil {
-			a.treeSchemas = map[string][]string{}
+		if a.tree.Schemas == nil {
+			a.tree.Schemas = map[string][]string{}
 		}
-		a.treeSchemas[p.ID] = schemas
-		if a.connSchema[p.ID] == "" {
+		a.tree.Schemas[p.ID] = schemas
+		if a.tree.ConnSchema[p.ID] == "" {
 			a.setActiveSchema(p, defaultSchemaFor(p, schemas))
 		}
 		a.saveMetaCache(p)
@@ -106,27 +106,27 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 	if schema == "" {
 		return
 	}
-	if a.connSchema == nil {
-		a.connSchema = map[string]string{}
+	if a.tree.ConnSchema == nil {
+		a.tree.ConnSchema = map[string]string{}
 	}
-	prev := a.connSchema[p.ID]
-	a.connSchema[p.ID] = schema
+	prev := a.tree.ConnSchema[p.ID]
+	a.tree.ConnSchema[p.ID] = schema
 	if a.catalog != nil {
 		a.catalog.invalidate(p.ID)
 	}
 	// 展开对象树里对应的 schema 节点，用户能立刻看到该库下的对象。
 	key := p.ID + "|" + schema + "|schema"
-	if a.treeOpen == nil {
-		a.treeOpen = map[string]*bool{}
+	if a.tree.Open == nil {
+		a.tree.Open = map[string]*bool{}
 	}
-	if pr, ok := a.treeOpen[key]; ok {
+	if pr, ok := a.tree.Open[key]; ok {
 		*pr = true
 	} else {
 		open := true
-		a.treeOpen[key] = &open
+		a.tree.Open[key] = &open
 	}
-	if a.treeErr != nil {
-		delete(a.treeErr, p.ID)
+	if a.tree.Err != nil {
+		delete(a.tree.Err, p.ID)
 	}
 	sess := a.sessionFor(p.ID)
 	sw, ok := sess.(engine.SchemaSwitcher)
@@ -140,8 +140,8 @@ func (a *root) setActiveSchema(p app.ConnProfile, schema string) {
 	}
 	done := func(err error) {
 		if err != nil {
-			if a.connSchema[p.ID] == schema {
-				a.connSchema[p.ID] = prev
+			if a.tree.ConnSchema[p.ID] == schema {
+				a.tree.ConnSchema[p.ID] = prev
 			}
 			a.consoleErr = locales.SchemaSwitchFailed(app.ErrorText(err))
 			app.LogWarn("conn", "schema switch failed", "conn", p.ID, "schema", schema, "err", err.Error())
@@ -183,16 +183,16 @@ func (a *root) schemaPicker(c *ui.Context) {
 	if !ok {
 		return
 	}
-	schemas := a.treeSchemas[id]
+	schemas := a.tree.Schemas[id]
 	if len(schemas) == 0 {
 		a.ensureSchemas(p)
-		if a.schemaLoading[id] {
+		if a.tree.SchemaLoading[id] {
 			ui.Text(c, locales.TreeLoadingSchemas()).FontSize(12).TextColor(c.Theme().TextMuted)
 		}
 		return
 	}
 	t := c.Theme()
-	cur := a.connSchema[id]
+	cur := a.tree.ConnSchema[id]
 	shown := cur
 	if shown == "" {
 		shown = defaultSchemaFor(p, schemas)
@@ -219,14 +219,14 @@ func (a *root) schemaPicker(c *ui.Context) {
 			})
 		}
 	})
-	if sel != a.connSchema[id] {
+	if sel != a.tree.ConnSchema[id] {
 		a.setActiveSchema(p, sel)
 	}
 }
 
 // completionScope 返回补全缓存的键与当前 schema：不同 schema 的表/列候选不能混用。
 func (a *root) completionScope(connID string) (key, schema string) {
-	schema = a.connSchema[connID]
+	schema = a.tree.ConnSchema[connID]
 	if schema == "" {
 		return connID, ""
 	}
@@ -235,7 +235,7 @@ func (a *root) completionScope(connID string) (key, schema string) {
 
 // schemaDisplayName 返回当前连接展示用的 schema 名（没有时为空）。
 func (a *root) schemaDisplayName(connID string) string {
-	schema := a.connSchema[connID]
+	schema := a.tree.ConnSchema[connID]
 	if schema == "" || a.store == nil {
 		return schema
 	}

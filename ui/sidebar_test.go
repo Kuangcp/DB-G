@@ -21,7 +21,7 @@ func newSidebarRoot(t *testing.T) *root {
 	t.Helper()
 	a := newTestRoot()
 	a.store = app.LoadStore(filepath.Join(t.TempDir(), "connections.json"))
-	a.metaCache = app.NewMetaCache(filepath.Join(t.TempDir(), "meta"))
+	a.tree.MetaCache = app.NewMetaCache(filepath.Join(t.TempDir(), "meta"))
 	return a
 }
 
@@ -65,16 +65,16 @@ func TestSidebarCreateConnFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.connFormOpen {
+	if !a.connForm.Open {
 		t.Fatal("modal must open")
 	}
-	a.connFormName = "本地库"
-	a.connFormPath = path
+	a.connForm.Name = "本地库"
+	a.connForm.Path = path
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
-	if a.connFormOpen {
+	if a.connForm.Open {
 		t.Fatal("modal must close after save")
 	}
 	if len(a.store.List()) != 1 || a.store.List()[0].Name != "本地库" {
@@ -94,14 +94,14 @@ func TestSidebarCreateConnValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	a.connFormName = "无路径"
-	a.connFormPath = filepath.Join(t.TempDir(), "missing.db")
+	a.connForm.Name = "无路径"
+	a.connForm.Path = filepath.Join(t.TempDir(), "missing.db")
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.connFormOpen || a.connFormErr == "" {
-		t.Fatalf("invalid form must stay open with error: open=%v err=%q", a.connFormOpen, a.connFormErr)
+	if !a.connForm.Open || a.connForm.Err == "" {
+		t.Fatalf("invalid form must stay open with error: open=%v err=%q", a.connForm.Open, a.connForm.Err)
 	}
 	if len(a.store.List()) != 0 {
 		t.Fatal("invalid form must not persist")
@@ -217,7 +217,7 @@ func TestObjectTreeRendersLeaves(t *testing.T) {
 	a.testSetSession(stored.ID, treeFakeSession{objs: []engine.DBObject{
 		{Kind: engine.ObjectTable, Name: "users"},
 	}})
-	a.treeExpand[stored.ID] = true
+	a.tree.Expand[stored.ID] = true
 	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -242,7 +242,7 @@ func TestObjectTreeConsolesAndKindsAreSiblings(t *testing.T) {
 	if _, err := a.consoleMgr().Create(stored.ID, "查询"); err != nil {
 		t.Fatal(err)
 	}
-	a.treeExpand[stored.ID] = true
+	a.tree.Expand[stored.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	// 控制台与表/视图分组是数据源下的同级项，不再套「数据库」虚拟文件夹。
@@ -287,7 +287,7 @@ func TestObjectTreeErrorLine(t *testing.T) {
 	}
 	stored := a.store.List()[0]
 	a.testSetSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
-	a.treeExpand[stored.ID] = true
+	a.tree.Expand[stored.ID] = true
 	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -298,11 +298,11 @@ func TestObjectTreeErrorLine(t *testing.T) {
 
 func TestReloadTreeClearsCache(t *testing.T) {
 	a := newSidebarRoot(t)
-	a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{"x": {}}
-	a.treeErr = map[string]string{"x|table": "boom"}
+	a.tree.Data = map[string]map[engine.ObjectKind][]engine.DBObject{"x": {}}
+	a.tree.Err = map[string]string{"x|table": "boom"}
 	a.reloadTree()
-	if a.treeData != nil || len(a.treeErr) != 0 {
-		t.Fatalf("reloadTree must clear cache: %v %v", a.treeData, a.treeErr)
+	if a.tree.Data != nil || len(a.tree.Err) != 0 {
+		t.Fatalf("reloadTree must clear cache: %v %v", a.tree.Data, a.tree.Err)
 	}
 }
 
@@ -313,7 +313,7 @@ func TestExpandInactiveAutoConnects(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored := a.store.List()[0]
-	a.treeExpand[stored.ID] = true
+	a.tree.Expand[stored.ID] = true
 	a.expandConn(stored)
 	if !a.connected(stored.ID) {
 		t.Fatalf("expand of inactive conn must connect: %d sessions", len(a.sessions))
@@ -330,7 +330,7 @@ func TestObjectTreeAfterReloadNoPanic(t *testing.T) {
 	a.testSetSession(stored.ID, treeFakeSession{err: errors.New("枚举失败")})
 	a.reloadTree()
 	a.loadGroupsIn(stored, "")
-	if got := a.treeErr[stored.ID]; got != "枚举失败" {
+	if got := a.tree.Err[stored.ID]; got != "枚举失败" {
 		t.Fatalf("treeErr = %q", got)
 	}
 }
@@ -344,10 +344,10 @@ func TestObjectTreeWithoutSessionDrawsNothing(t *testing.T) {
 	stored := a.store.List()[0]
 	a.reloadTree()
 	a.loadGroupsIn(stored, "")
-	if got := a.treeErr[stored.ID]; got != "" {
+	if got := a.tree.Err[stored.ID]; got != "" {
 		t.Fatalf("没连上不该写错误行（点已经是灰的）: %q", got)
 	}
-	if _, ok := a.treeData[stored.ID]; ok {
+	if _, ok := a.tree.Data[stored.ID]; ok {
 		t.Fatal("must not cache another connection's objects")
 	}
 }
@@ -393,30 +393,30 @@ func TestDuplicateNameConnsIsolated(t *testing.T) {
 	}
 	a.reloadTree()
 	a.loadGroupsIn(pa, "")
-	if objs := a.treeData[pa.ID][engine.ObjectTable]; len(objs) != 1 || objs[0].Name != "alpha" {
+	if objs := a.tree.Data[pa.ID][engine.ObjectTable]; len(objs) != 1 || objs[0].Name != "alpha" {
 		t.Fatalf("A cache: %+v", objs)
 	}
 	a.loadGroupsIn(pb, "")
-	if got := a.treeErr[pb.ID]; got != "" {
+	if got := a.tree.Err[pb.ID]; got != "" {
 		t.Fatalf("B 没连上时不该写错误行（圆点是灰的）: %q", got)
 	}
-	if _, ok := a.treeData[pb.ID]; ok {
+	if _, ok := a.tree.Data[pb.ID]; ok {
 		t.Fatal("must not cache A's objects under B's ID")
 	}
-	a.treeExpand[pb.ID] = true
+	a.tree.Expand[pb.ID] = true
 	a.expandConn(pb)
 	if !a.connected(pb.ID) || !a.connected(pa.ID) {
 		t.Fatal("expand must connect B, and A must stay connected")
 	}
 	a.reloadTree()
 	a.loadGroupsIn(pb, "")
-	if err := a.treeErr[pb.ID]; err != "" {
+	if err := a.tree.Err[pb.ID]; err != "" {
 		t.Fatalf("B load after reconnect: %q", err)
 	}
-	if objs := a.treeData[pb.ID][engine.ObjectTable]; len(objs) != 1 || objs[0].Name != "beta" {
+	if objs := a.tree.Data[pb.ID][engine.ObjectTable]; len(objs) != 1 || objs[0].Name != "beta" {
 		t.Fatalf("B cache must be B's objects: %+v", objs)
 	}
-	if _, ok := a.treeData[pa.ID]; ok {
+	if _, ok := a.tree.Data[pa.ID]; ok {
 		t.Fatal("must not overwrite A's cache while loading B")
 	}
 }
@@ -476,14 +476,14 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.toggleExpandConn(p)
-	if !a.treeExpand[p.ID] {
+	if !a.tree.Expand[p.ID] {
 		t.Fatal("toggle must expand")
 	}
 	// 连不上时不留错误行（树里不再写「未连接」），改为圆点变红 + 记失败原因
 	if got := a.connErrOf(p.ID); got == "" {
 		t.Fatal("failed expand must record the failure for the red dot")
 	}
-	if got := a.treeErr[p.ID]; got != "" {
+	if got := a.tree.Err[p.ID]; got != "" {
 		t.Fatalf("failed expand must not write a tree error line: %q", got)
 	}
 	f, err := os.Create(path)
@@ -503,20 +503,20 @@ func TestExpandRetryClearsStickyTreeErr(t *testing.T) {
 	}
 	_ = s.Close()
 	a.toggleExpandConn(p)
-	if a.treeExpand[p.ID] {
+	if a.tree.Expand[p.ID] {
 		t.Fatal("second toggle must collapse")
 	}
 	a.toggleExpandConn(p)
-	if a.treeErr[p.ID] != "" {
-		t.Fatalf("re-expand must clear sticky treeErr, got %q", a.treeErr[p.ID])
+	if a.tree.Err[p.ID] != "" {
+		t.Fatalf("re-expand must clear sticky treeErr, got %q", a.tree.Err[p.ID])
 	}
 	if !a.connected(p.ID) {
 		t.Fatalf("retry must open: %d sessions", len(a.sessions))
 	}
 	a.reloadTree()
 	a.loadGroupsIn(p, "")
-	if got := a.treeData[p.ID][engine.ObjectTable]; len(got) != 1 || got[0].Name != "recovered" {
-		t.Fatalf("recovered objects: %+v err=%q", got, a.treeErr[p.ID])
+	if got := a.tree.Data[p.ID][engine.ObjectTable]; len(got) != 1 || got[0].Name != "recovered" {
+		t.Fatalf("recovered objects: %+v err=%q", got, a.tree.Err[p.ID])
 	}
 }
 
@@ -532,21 +532,21 @@ func TestSidebarMySQLConnFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connFormKind != "mysql" {
-		t.Fatalf("kind toggle: %q", a.connFormKind)
+	if a.connForm.Kind != "mysql" {
+		t.Fatalf("kind toggle: %q", a.connForm.Kind)
 	}
-	a.connFormName = "远程库"
-	a.connFormDB = "app"
-	a.connFormHost = "10.0.0.1"
-	a.connFormPort = "3306"
-	a.connFormUser = "root"
-	a.connFormPass = "secret"
+	a.connForm.Name = "远程库"
+	a.connForm.DB = "app"
+	a.connForm.Host = "10.0.0.1"
+	a.connForm.Port = "3306"
+	a.connForm.User = "root"
+	a.connForm.Pass = "secret"
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
-	if a.connFormOpen {
-		t.Fatalf("save must close modal: %s", a.connFormErr)
+	if a.connForm.Open {
+		t.Fatalf("save must close modal: %s", a.connForm.Err)
 	}
 	stored := a.store.List()
 	if len(stored) != 1 {
@@ -561,8 +561,8 @@ func TestSidebarMySQLConnFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.connFormOpen || a.connFormKind != "mysql" || a.connFormHost != "10.0.0.1" || a.connFormPort != "3306" || a.connFormPass != "secret" {
-		t.Fatalf("edit refill: kind=%q host=%q port=%q pass=%q", a.connFormKind, a.connFormHost, a.connFormPort, a.connFormPass)
+	if !a.connForm.Open || a.connForm.Kind != "mysql" || a.connForm.Host != "10.0.0.1" || a.connForm.Port != "3306" || a.connForm.Pass != "secret" {
+		t.Fatalf("edit refill: kind=%q host=%q port=%q pass=%q", a.connForm.Kind, a.connForm.Host, a.connForm.Port, a.connForm.Pass)
 	}
 }
 
@@ -598,7 +598,7 @@ func TestSidebarConsolesListOpenState(t *testing.T) {
 	}
 	closed, _ := m.Create(prof.ID, "关掉的")
 	_ = m.CloseConsole(closed.ID)
-	a.treeExpand[prof.ID] = true
+	a.tree.Expand[prof.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if !tt.HasText("开着的") || !tt.HasText("关掉的") {
@@ -614,7 +614,7 @@ func TestSidebarReopenClosedConsole(t *testing.T) {
 	m.SetText(rec.ID, "SELECT 5")
 	_ = m.Flush(rec.ID)
 	_ = m.CloseConsole(rec.ID)
-	a.treeExpand[prof.ID] = true
+	a.tree.Expand[prof.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if err := tt.Click("草稿"); err != nil {
@@ -635,7 +635,7 @@ func TestSidebarCreateConsoleWithoutConnection(t *testing.T) {
 	if len(a.sessions) != 0 {
 		t.Fatal("precondition: not connected")
 	}
-	a.treeExpand[prof.ID] = true
+	a.tree.Expand[prof.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if err := tt.Click("新建控制台"); err != nil {
@@ -671,7 +671,7 @@ func TestSidebarRenameConsoleFlow(t *testing.T) {
 	prof := seedConsoleConn(t, a, "本地")
 	m := a.consoleMgr()
 	rec, _ := m.Create(prof.ID, "旧名")
-	a.treeExpand[prof.ID] = true
+	a.tree.Expand[prof.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if err := tt.RightClick("旧名"); err != nil {
@@ -707,7 +707,7 @@ func TestSidebarDeleteConsoleFlow(t *testing.T) {
 	if err := files.Write(rec.ID, "SELECT 1"); err != nil {
 		t.Fatal(err)
 	}
-	a.treeExpand[prof.ID] = true
+	a.tree.Expand[prof.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if err := tt.RightClick("要删的"); err != nil {
@@ -753,7 +753,7 @@ func TestSchemaTreeRendersSchemasThenObjects(t *testing.T) {
 	}
 	stored := a.store.List()[0]
 	a.testSetSession(stored.ID, treeSchemaFake{})
-	a.treeExpand[stored.ID] = true
+	a.tree.Expand[stored.ID] = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	for _, want := range []string{"app", "public"} {
@@ -811,11 +811,11 @@ func TestConnFormLeftRightNav(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connFormKind != "postgres" {
-		t.Fatalf("kind: %q", a.connFormKind)
+	if a.connForm.Kind != "postgres" {
+		t.Fatalf("kind: %q", a.connForm.Kind)
 	}
-	if a.connFormPort != "5432" {
-		t.Fatalf("default port must follow the kind: %q", a.connFormPort)
+	if a.connForm.Port != "5432" {
+		t.Fatalf("default port must follow the kind: %q", a.connForm.Port)
 	}
 	if !tt.HasText("PostgreSQL 连接") {
 		t.Fatalf("right pane title missing: %q", tt.Texts())
@@ -825,8 +825,8 @@ func TestConnFormLeftRightNav(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connFormPort != "9000" {
-		t.Fatalf("clickhouse default port: %q", a.connFormPort)
+	if a.connForm.Port != "9000" {
+		t.Fatalf("clickhouse default port: %q", a.connForm.Port)
 	}
 }
 
@@ -1012,9 +1012,9 @@ func TestSidebarConnFormFolderSelect(t *testing.T) {
 	if !tt.HasText("位置") {
 		t.Fatalf("folder select missing in conn form: %q", tt.Texts())
 	}
-	a.connFormName = "订单库"
-	a.connFormPath = path
-	a.connFormFolder = f.ID
+	a.connForm.Name = "订单库"
+	a.connForm.Path = path
+	a.connForm.Folder = f.ID
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
@@ -1053,8 +1053,8 @@ func TestConnFormFolderSelectChoosesFolder(t *testing.T) {
 		t.Fatalf("choose folder: %v (texts %q)", err, tt.Texts())
 	}
 	tt.Frame()
-	if a.connFormFolder != sub.ID {
-		t.Fatalf("folder select = %q, want %q", a.connFormFolder, sub.ID)
+	if a.connForm.Folder != sub.ID {
+		t.Fatalf("folder select = %q, want %q", a.connForm.Folder, sub.ID)
 	}
 	p, err := a.connFormProfile()
 	if err != nil {
@@ -1226,25 +1226,25 @@ func TestSidebarFolderRowClickToggles(t *testing.T) {
 func TestConnPasswordEyeTogglesPlaintext(t *testing.T) {
 	a := newSidebarRoot(t)
 	a.openNewConnForm("")
-	a.connFormKind = "mysql"
-	a.connFormPass = "s3cret"
+	a.connForm.Kind = "mysql"
+	a.connForm.Pass = "s3cret"
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if a.connFormShowPass {
+	if a.connForm.ShowPass {
 		t.Fatal("密码默认应隐藏")
 	}
 	if err := tt.Click(locales.ConnFormShowPassword()); err != nil {
 		t.Fatalf("密码框右侧应有显示密码按钮: %v", err)
 	}
 	tt.Frame()
-	if !a.connFormShowPass {
+	if !a.connForm.ShowPass {
 		t.Fatal("点击眼睛后应显示明文")
 	}
 	if err := tt.Click(locales.ConnFormHidePassword()); err != nil {
 		t.Fatalf("显示后按钮应变为隐藏密码: %v", err)
 	}
 	tt.Frame()
-	if a.connFormShowPass {
+	if a.connForm.ShowPass {
 		t.Fatal("再次点击后应恢复隐藏")
 	}
 }

@@ -33,13 +33,13 @@ func TestConnFormSummarySQLite(t *testing.T) {
 
 func TestConnFormSummaryIncludesPassword(t *testing.T) {
 	a, _ := openConnModal(t)
-	a.connFormKind = "mysql"
-	a.connFormName = "远程库"
-	a.connFormHost = "10.0.0.1"
-	a.connFormPort = "3306"
-	a.connFormUser = "root"
-	a.connFormPass = "secret"
-	a.connFormDB = "app"
+	a.connForm.Kind = "mysql"
+	a.connForm.Name = "远程库"
+	a.connForm.Host = "10.0.0.1"
+	a.connForm.Port = "3306"
+	a.connForm.User = "root"
+	a.connForm.Pass = "secret"
+	a.connForm.DB = "app"
 	p, err := a.connFormProfile()
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestConnFormSummaryIncludesPassword(t *testing.T) {
 
 func TestConnFormTestConnectionOK(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormKind, a.connFormPath = "sqlite", seedConnFile(t)
+	a.connForm.Kind, a.connForm.Path = "sqlite", seedConnFile(t)
 	tt.Frame()
 	if err := tt.Click("测试连接"); err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestConnFormTestConnectionOK(t *testing.T) {
 
 func TestConnFormTestConnectionFails(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormKind, a.connFormPath = "sqlite", filepath.Join(t.TempDir(), "missing.db")
+	a.connForm.Kind, a.connForm.Path = "sqlite", filepath.Join(t.TempDir(), "missing.db")
 	tt.Frame()
 	if err := tt.Click("测试连接"); err != nil {
 		t.Fatal(err)
@@ -85,8 +85,8 @@ func TestConnFormTestConnectionFails(t *testing.T) {
 
 func TestConnFormCopyToClipboard(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormKind, a.connFormPath = "sqlite", "/tmp/app.db"
-	a.connFormName = "本地"
+	a.connForm.Kind, a.connForm.Path = "sqlite", "/tmp/app.db"
+	a.connForm.Name = "本地"
 	tt.Frame()
 	if err := tt.Click("复制"); err != nil {
 		t.Fatal(err)
@@ -124,13 +124,13 @@ func TestConnFormButtonsFit(t *testing.T) {
 
 func TestConnFormCopyIncludesPassword(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormKind = "mysql"
-	a.connFormName = "远程库"
-	a.connFormHost = "10.0.0.1"
-	a.connFormPort = "3306"
-	a.connFormUser = "root"
-	a.connFormPass = "secret"
-	a.connFormDB = "app"
+	a.connForm.Kind = "mysql"
+	a.connForm.Name = "远程库"
+	a.connForm.Host = "10.0.0.1"
+	a.connForm.Port = "3306"
+	a.connForm.User = "root"
+	a.connForm.Pass = "secret"
+	a.connForm.DB = "app"
 	tt.Frame()
 	if err := tt.Click("复制"); err != nil {
 		t.Fatal(err)
@@ -251,7 +251,7 @@ func TestCancelConnTest(t *testing.T) {
 // 连接弹窗的查询超时：解析、校验、落盘与执行侧换算。
 func TestConnFormQueryTimeout(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormTimeout = "120"
+	a.connForm.Timeout = "120"
 	p, err := a.connFormProfile()
 	if err != nil || p.QueryTimeout != 120 {
 		t.Fatalf("profile: %+v err=%v", p, err)
@@ -259,25 +259,25 @@ func TestConnFormQueryTimeout(t *testing.T) {
 	if !strings.Contains(connFormSummary(p), "查询超时: 120 秒") {
 		t.Fatalf("summary: %q", connFormSummary(p))
 	}
-	a.connFormTimeout = "abc"
+	a.connForm.Timeout = "abc"
 	if _, err := a.connFormProfile(); err == nil {
 		t.Fatal("non-numeric timeout must fail")
 	}
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
-	if a.connFormErr == "" || !a.connFormOpen {
-		t.Fatalf("invalid timeout must keep the form open with an error: %q", a.connFormErr)
+	if a.connForm.Err == "" || !a.connForm.Open {
+		t.Fatalf("invalid timeout must keep the form open with an error: %q", a.connForm.Err)
 	}
-	a.connFormTimeout = "3600"
-	a.connFormKind, a.connFormPath = "sqlite", seedConnFile(t)
-	a.connFormName = "本地"
+	a.connForm.Timeout = "3600"
+	a.connForm.Kind, a.connForm.Path = "sqlite", seedConnFile(t)
+	a.connForm.Name = "本地"
 	tt.Frame()
 	if err := tt.Click("保存"); err != nil {
 		t.Fatal(err)
 	}
-	if a.connFormOpen {
-		t.Fatalf("form should close: %q", a.connFormErr)
+	if a.connForm.Open {
+		t.Fatalf("form should close: %q", a.connForm.Err)
 	}
 	stored := a.store.List()[0]
 	if stored.QueryTimeout != 3600 {

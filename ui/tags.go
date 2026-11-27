@@ -17,23 +17,23 @@ type connTagDraft struct {
 
 // resetConnTagForm 清空标签列表与输入框，颜色回到默认蓝。
 func (a *root) resetConnTagForm() {
-	a.connFormTags = nil
-	a.connFormTagInput = ""
-	a.connFormTagColor = defaultTagColor(0)
+	a.connForm.Tags = nil
+	a.connForm.TagInput = ""
+	a.connForm.TagColor = defaultTagColor(0)
 }
 
 // setConnTagForm 用档案里的标签填充编辑列表。
 func (a *root) setConnTagForm(tags []app.ConnTag) {
 	a.resetConnTagForm()
 	for _, tag := range app.NormalizeTags(tags) {
-		a.connFormTags = append(a.connFormTags, connTagDraft{label: tag.Label, color: tag.Color})
+		a.connForm.Tags = append(a.connForm.Tags, connTagDraft{label: tag.Label, color: tag.Color})
 	}
 }
 
 // connTagFormList 把编辑列表读成数据层标签。
 func (a *root) connTagFormList() []app.ConnTag {
-	tags := make([]app.ConnTag, 0, len(a.connFormTags))
-	for _, tag := range a.connFormTags {
+	tags := make([]app.ConnTag, 0, len(a.connForm.Tags))
+	for _, tag := range a.connForm.Tags {
 		tags = append(tags, app.ConnTag{Label: tag.label, Color: tag.color})
 	}
 	return app.NormalizeTags(tags)
@@ -43,27 +43,27 @@ func (a *root) connTagFormList() []app.ConnTag {
 // color 为空时用输入框左侧色点当前的颜色。
 func (a *root) addConnFormTag(label, color string) bool {
 	label = strings.TrimSpace(label)
-	if label == "" || len(a.connFormTags) >= app.MaxConnTags {
+	if label == "" || len(a.connForm.Tags) >= app.MaxConnTags {
 		return false
 	}
-	for _, tag := range a.connFormTags {
+	for _, tag := range a.connForm.Tags {
 		if strings.EqualFold(tag.label, label) {
 			return false
 		}
 	}
 	if color == "" {
-		color = a.connFormTagColor
+		color = a.connForm.TagColor
 	}
-	a.connFormTags = append(a.connFormTags, connTagDraft{label: label, color: color})
-	a.connFormTagInput = ""
+	a.connForm.Tags = append(a.connForm.Tags, connTagDraft{label: label, color: color})
+	a.connForm.TagInput = ""
 	return true
 }
 
 // removeConnFormTag 移除已添加的标签（调用方保证 label 来自当前列表）。
 func (a *root) removeConnFormTag(label string) {
-	for i, tag := range a.connFormTags {
+	for i, tag := range a.connForm.Tags {
 		if strings.EqualFold(tag.label, label) {
-			a.connFormTags = append(a.connFormTags[:i], a.connFormTags[i+1:]...)
+			a.connForm.Tags = append(a.connForm.Tags[:i], a.connForm.Tags[i+1:]...)
 			return
 		}
 	}
@@ -90,11 +90,11 @@ func (a *root) tagSuggestions() []app.ConnTag {
 	if a.store == nil {
 		return nil
 	}
-	selected := make(map[string]bool, len(a.connFormTags))
-	for _, tag := range a.connFormTags {
+	selected := make(map[string]bool, len(a.connForm.Tags))
+	for _, tag := range a.connForm.Tags {
 		selected[strings.ToLower(tag.label)] = true
 	}
-	query := strings.ToLower(strings.TrimSpace(a.connFormTagInput))
+	query := strings.ToLower(strings.TrimSpace(a.connForm.TagInput))
 	seen := map[string]bool{}
 	var starts, contains []app.ConnTag
 	for _, p := range a.store.List() {

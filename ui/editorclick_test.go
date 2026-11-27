@@ -65,7 +65,7 @@ func TestEditorCtrlClickNonTableDoesNothing(t *testing.T) {
 	if err := a.openConn(prof); err != nil {
 		t.Fatal(err)
 	}
-	a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data = map[string]map[engine.ObjectKind][]engine.DBObject{
 		objectTreeKey(prof.ID, ""): {
 			engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "users"}},
 		},

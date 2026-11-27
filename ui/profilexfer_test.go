@@ -12,7 +12,7 @@ import (
 // 导入文件只做解析，不能碰 root（树/主题）；落地必须在 UI 线程单独一步。
 func TestImportProfilesWorkDoesNotTouchUI(t *testing.T) {
 	a := newConsoleRoot(t)
-	a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data = map[string]map[engine.ObjectKind][]engine.DBObject{
 		"keep": {engine.ObjectTable: {{Name: "t"}}},
 	}
 	src := filepath.Join(t.TempDir(), "profiles.json")
@@ -29,7 +29,7 @@ func TestImportProfilesWorkDoesNotTouchUI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(a.treeData) == 0 {
+	if len(a.tree.Data) == 0 {
 		t.Fatal("parsing profiles must not clear the object tree")
 	}
 	if len(added) != 1 {
@@ -39,7 +39,7 @@ func TestImportProfilesWorkDoesNotTouchUI(t *testing.T) {
 	if n := a.applyImportedProfiles(added); n != 1 {
 		t.Fatalf("applied = %d", n)
 	}
-	if len(a.treeData) != 0 {
+	if len(a.tree.Data) != 0 {
 		t.Fatal("applying imports must reload the tree")
 	}
 	if got := len(a.store.List()); got != 1 {

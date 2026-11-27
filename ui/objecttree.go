@@ -68,48 +68,48 @@ func (a *root) groupOpen(key string, v bool) *bool {
 }
 
 func (a *root) groupOpenPtr(key string, v bool) *bool {
-	if a.treeOpen == nil {
-		a.treeOpen = map[string]*bool{}
+	if a.tree.Open == nil {
+		a.tree.Open = map[string]*bool{}
 	}
-	if p, ok := a.treeOpen[key]; ok {
+	if p, ok := a.tree.Open[key]; ok {
 		return p
 	}
 	p := new(bool)
 	*p = v
-	a.treeOpen[key] = p
+	a.tree.Open[key] = p
 	return p
 }
 
 func (a *root) reloadTree() {
-	a.treeGen++
+	a.tree.Gen++
 	a.aiDDL = nil
 	a.aiRelations = nil
-	a.treeData = nil
-	a.treeCounts = nil
-	a.treeLoading = nil
-	a.treePageStarted = nil
-	a.treeGroupStale = nil
-	a.treeSchemas = map[string][]string{}
-	a.schemaLoading = map[string]bool{}
-	a.metaCacheTried = nil
-	a.metaCacheLoading = nil
-	a.metaCacheStale = nil
-	a.treeErr = nil
-	if a.metaCache != nil {
-		a.metaCache.DeleteAll()
+	a.tree.Data = nil
+	a.tree.Counts = nil
+	a.tree.Loading = nil
+	a.tree.PageStarted = nil
+	a.tree.GroupStale = nil
+	a.tree.Schemas = map[string][]string{}
+	a.tree.SchemaLoading = map[string]bool{}
+	a.tree.MetaCacheTried = nil
+	a.tree.MetaCacheLoading = nil
+	a.tree.MetaCacheStale = nil
+	a.tree.Err = nil
+	if a.tree.MetaCache != nil {
+		a.tree.MetaCache.DeleteAll()
 	}
 }
 
 func (a *root) setTreeErr(key, msg string) {
-	if a.treeErr == nil {
-		a.treeErr = map[string]string{}
+	if a.tree.Err == nil {
+		a.tree.Err = map[string]string{}
 	}
-	a.treeErr[key] = msg
+	a.tree.Err[key] = msg
 }
 
 // treeCountOf 返回某组的总数；nil 计数视为未知（仍在加载或驱动不支持计数）。
 func (a *root) treeCountOf(base string, kind engine.ObjectKind) (int, bool) {
-	m, ok := a.treeCounts[base]
+	m, ok := a.tree.Counts[base]
 	if !ok {
 		return 0, false
 	}
@@ -118,12 +118,12 @@ func (a *root) treeCountOf(base string, kind engine.ObjectKind) (int, bool) {
 
 // expandConnAndTree 连上数据源（没连的话）并展开它的树：点数据源名走这里。
 func (a *root) expandConnAndTree(p app.ConnProfile) {
-	if a.treeExpand == nil {
-		a.treeExpand = map[string]bool{}
+	if a.tree.Expand == nil {
+		a.tree.Expand = map[string]bool{}
 	}
-	a.treeExpand[p.ID] = true
-	if a.treeErr != nil {
-		delete(a.treeErr, p.ID) // 重连后旧的报错不再作数
+	a.tree.Expand[p.ID] = true
+	if a.tree.Err != nil {
+		delete(a.tree.Err, p.ID) // 重连后旧的报错不再作数
 	}
 	a.loadMetaCache(p)
 	a.expandConn(p)
@@ -139,13 +139,13 @@ func (a *root) expandConn(p app.ConnProfile) {
 }
 
 func (a *root) toggleExpandConn(p app.ConnProfile) {
-	if a.treeExpand == nil {
-		a.treeExpand = map[string]bool{}
+	if a.tree.Expand == nil {
+		a.tree.Expand = map[string]bool{}
 	}
-	a.treeExpand[p.ID] = !a.treeExpand[p.ID]
-	if a.treeExpand[p.ID] {
-		if a.treeErr != nil {
-			delete(a.treeErr, p.ID)
+	a.tree.Expand[p.ID] = !a.tree.Expand[p.ID]
+	if a.tree.Expand[p.ID] {
+		if a.tree.Err != nil {
+			delete(a.tree.Err, p.ID)
 		}
 		a.loadMetaCache(p)
 		a.expandConn(p)
@@ -184,25 +184,25 @@ func (a *root) loadAllObjectKinds(sess engine.Session, schema string) (map[engin
 
 // loadAllObjects 异步/同步装载全量对象（兜底路径）并写进缓存。
 func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
-	if _, ok := a.treeData[base]; ok {
+	if _, ok := a.tree.Data[base]; ok {
 		return
 	}
 	key := base + "|all"
-	if a.treeLoading == nil {
-		a.treeLoading = map[string]bool{}
+	if a.tree.Loading == nil {
+		a.tree.Loading = map[string]bool{}
 	}
-	if a.treeLoading[key] {
+	if a.tree.Loading[key] {
 		return
 	}
 	sess := a.sessionFor(p.ID)
 	if sess == nil {
 		return
 	}
-	a.treeLoading[key] = true
-	gen := a.treeGen
+	a.tree.Loading[key] = true
+	gen := a.tree.Gen
 	done := func(data map[engine.ObjectKind][]engine.DBObject, err error) {
-		delete(a.treeLoading, key)
-		if gen != a.treeGen {
+		delete(a.tree.Loading, key)
+		if gen != a.tree.Gen {
 			return
 		}
 		if err != nil {
@@ -212,18 +212,18 @@ func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
 		if data == nil {
 			return
 		}
-		if a.treeData == nil {
-			a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{}
+		if a.tree.Data == nil {
+			a.tree.Data = map[string]map[engine.ObjectKind][]engine.DBObject{}
 		}
-		if a.treeCounts == nil {
-			a.treeCounts = map[string]map[engine.ObjectKind]int{}
+		if a.tree.Counts == nil {
+			a.tree.Counts = map[string]map[engine.ObjectKind]int{}
 		}
-		a.treeData[base] = data
+		a.tree.Data[base] = data
 		counts := map[engine.ObjectKind]int{}
 		for kind, objs := range data {
 			counts[kind] = len(objs)
 		}
-		a.treeCounts[base] = counts
+		a.tree.Counts[base] = counts
 		a.saveMetaCache(p)
 	}
 	if a.win == nil {
@@ -242,14 +242,14 @@ func (a *root) loadAllObjects(p app.ConnProfile, schema string, base string) {
 // 否则退化为全量加载（内置驱动都已实现计数）。
 func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 	base := objectTreeKey(p.ID, schema)
-	if _, ok := a.treeCounts[base]; ok {
+	if _, ok := a.tree.Counts[base]; ok {
 		return
 	}
 	countKey := base + "|counts"
-	if a.treeLoading == nil {
-		a.treeLoading = map[string]bool{}
+	if a.tree.Loading == nil {
+		a.tree.Loading = map[string]bool{}
 	}
-	if a.treeLoading[countKey] {
+	if a.tree.Loading[countKey] {
 		return
 	}
 	sess := a.sessionFor(p.ID)
@@ -265,26 +265,26 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 		a.loadAllObjects(p, schema, base)
 		return
 	}
-	a.treeLoading[countKey] = true
-	gen := a.treeGen
+	a.tree.Loading[countKey] = true
+	gen := a.tree.Gen
 	load := func() (map[engine.ObjectKind]int, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return counter.ObjectCounts(ctx, schema)
 	}
 	done := func(counts map[engine.ObjectKind]int, err error) {
-		delete(a.treeLoading, countKey)
-		if gen != a.treeGen {
+		delete(a.tree.Loading, countKey)
+		if gen != a.tree.Gen {
 			return
 		}
 		if err != nil {
 			a.setTreeErr(base, app.ErrorText(err))
 			return
 		}
-		if a.treeCounts == nil {
-			a.treeCounts = map[string]map[engine.ObjectKind]int{}
+		if a.tree.Counts == nil {
+			a.tree.Counts = map[string]map[engine.ObjectKind]int{}
 		}
-		a.treeCounts[base] = counts
+		a.tree.Counts[base] = counts
 		a.saveMetaCache(p)
 	}
 	if a.win == nil {
@@ -303,24 +303,24 @@ func (a *root) ensureObjectCounts(p app.ConnProfile, schema string) {
 // 避免开着的分组每一帧都自动拉下一页。
 func (a *root) ensureObjectPage(p app.ConnProfile, schema string, kind engine.ObjectKind) {
 	groupKey := objectGroupKey(objectTreeKey(p.ID, schema), kind)
-	if a.treePageStarted == nil {
-		a.treePageStarted = map[string]bool{}
+	if a.tree.PageStarted == nil {
+		a.tree.PageStarted = map[string]bool{}
 	}
-	if a.treeGroupStale[groupKey] {
+	if a.tree.GroupStale[groupKey] {
 		if a.sessionFor(p.ID) == nil {
 			return // 还没连上：保留 stale 标记，连上后再刷新
 		}
-		delete(a.treeGroupStale, groupKey)
+		delete(a.tree.GroupStale, groupKey)
 		a.loadObjectPage(p, schema, kind, true)
 		return
 	}
-	if a.treePageStarted[groupKey] {
+	if a.tree.PageStarted[groupKey] {
 		return
 	}
 	if a.sessionFor(p.ID) == nil {
 		return // 不留下 started 标记，连上后下一帧再加载
 	}
-	a.treePageStarted[groupKey] = true
+	a.tree.PageStarted[groupKey] = true
 	a.loadObjectPage(p, schema, kind, false)
 }
 
@@ -328,14 +328,14 @@ func (a *root) ensureObjectPage(p app.ConnProfile, schema string, kind engine.Ob
 func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.ObjectKind, replace bool) {
 	base := objectTreeKey(p.ID, schema)
 	groupKey := objectGroupKey(base, kind)
-	if a.treeLoading == nil {
-		a.treeLoading = map[string]bool{}
+	if a.tree.Loading == nil {
+		a.tree.Loading = map[string]bool{}
 	}
-	if a.treeLoading[groupKey] {
+	if a.tree.Loading[groupKey] {
 		return
 	}
 	loaded := 0
-	if m := a.treeData[base]; m != nil && !replace {
+	if m := a.tree.Data[base]; m != nil && !replace {
 		loaded = len(m[kind])
 	}
 	total, hasTotal := a.treeCountOf(base, kind)
@@ -367,32 +367,32 @@ func (a *root) loadObjectPage(p app.ConnProfile, schema string, kind engine.Obje
 	if limit <= 0 {
 		return
 	}
-	a.treeLoading[groupKey] = true
-	gen := a.treeGen
+	a.tree.Loading[groupKey] = true
+	gen := a.tree.Gen
 	load := func() ([]engine.DBObject, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return pager.ObjectsPage(ctx, schema, kind, loaded, limit)
 	}
 	done := func(objs []engine.DBObject, err error) {
-		delete(a.treeLoading, groupKey)
-		if gen != a.treeGen {
+		delete(a.tree.Loading, groupKey)
+		if gen != a.tree.Gen {
 			return
 		}
 		if err != nil {
 			a.setTreeErr(groupKey, app.ErrorText(err))
 			return
 		}
-		if a.treeData == nil {
-			a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{}
+		if a.tree.Data == nil {
+			a.tree.Data = map[string]map[engine.ObjectKind][]engine.DBObject{}
 		}
-		if a.treeData[base] == nil {
-			a.treeData[base] = map[engine.ObjectKind][]engine.DBObject{}
+		if a.tree.Data[base] == nil {
+			a.tree.Data[base] = map[engine.ObjectKind][]engine.DBObject{}
 		}
 		if replace {
-			a.treeData[base][kind] = objs
+			a.tree.Data[base][kind] = objs
 		} else {
-			a.treeData[base][kind] = append(a.treeData[base][kind], objs...)
+			a.tree.Data[base][kind] = append(a.tree.Data[base][kind], objs...)
 		}
 		a.saveMetaCache(p)
 	}
@@ -418,28 +418,28 @@ func (a *root) loadGroupsIn(p app.ConnProfile, schema string) {
 
 func (a *root) objectGroups(c *ui.Context, p app.ConnProfile, depth int) {
 	base := objectTreeKey(p.ID, "")
-	if err := a.treeErr[base]; err != "" {
+	if err := a.tree.Err[base]; err != "" {
 		treeInfoRow(c, err, depth, c.Theme().Danger)
 		return
 	}
-	if a.metaCacheLoading[p.ID] {
+	if a.tree.MetaCacheLoading[p.ID] {
 		treeInfoRow(c, locales.TreeLoadingMeta(), depth, c.Theme().TextMuted)
 		return
 	}
 	if a.connOpeningNow(p.ID) && !a.connected(p.ID) {
 		treeInfoRow(c, locales.SessionConnecting(), depth, c.Theme().TextMuted)
 	}
-	if a.metaCacheStale[p.ID] && a.connected(p.ID) {
+	if a.tree.MetaCacheStale[p.ID] && a.connected(p.ID) {
 		a.refreshStaleMeta(p)
 	}
 	// 多 schema 数据源：先列 schema，再在 schema 下列对象分组；
 	// 有磁盘缓存时即使还没连上也先把 schema 节点画出来。
-	if lister, ok := a.schemaLister(p); ok || len(a.treeSchemas[p.ID]) > 0 {
+	if lister, ok := a.schemaLister(p); ok || len(a.tree.Schemas[p.ID]) > 0 {
 		a.schemaTree(c, p, lister, depth)
 		return
 	}
 	a.ensureObjectCounts(p, "")
-	if err := a.treeErr[base]; err != "" {
+	if err := a.tree.Err[base]; err != "" {
 		treeInfoRow(c, err, depth, c.Theme().Danger)
 		return
 	}
@@ -458,12 +458,12 @@ func (a *root) schemaLister(p app.ConnProfile) (engine.SchemaLister, bool) {
 
 // schemaTree 渲染 schema 列表（懒加载）。
 func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.SchemaLister, depth int) {
-	if a.treeSchemas == nil {
-		a.treeSchemas = map[string][]string{}
+	if a.tree.Schemas == nil {
+		a.tree.Schemas = map[string][]string{}
 	}
-	if _, ok := a.treeSchemas[p.ID]; !ok {
+	if _, ok := a.tree.Schemas[p.ID]; !ok {
 		a.ensureSchemas(p)
-		if a.schemaLoading[p.ID] {
+		if a.tree.SchemaLoading[p.ID] {
 			treeInfoRow(c, locales.TreeLoadingSchemas(), depth, c.Theme().TextMuted)
 			return
 		}
@@ -471,7 +471,7 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 			return
 		}
 	}
-	for _, schema := range a.treeSchemas[p.ID] {
+	for _, schema := range a.tree.Schemas[p.ID] {
 		if a.searchFiltersObjects(p) && !a.schemaHasMatch(p.ID, schema) {
 			continue
 		}
@@ -486,7 +486,7 @@ func (a *root) schemaTree(c *ui.Context, p app.ConnProfile, lister engine.Schema
 			continue
 		}
 		a.ensureObjectCounts(p, schema)
-		if err := a.treeErr[base]; err != "" {
+		if err := a.tree.Err[base]; err != "" {
 			treeInfoRow(c, err, depth+1, c.Theme().Danger)
 			continue
 		}
@@ -515,7 +515,7 @@ func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string, depth
 		label := g.label()
 		if searching {
 			n := 0
-			for _, o := range a.treeData[base][g.kind] {
+			for _, o := range a.tree.Data[base][g.kind] {
 				if a.objMatch(o.Name) {
 					n++
 				}
@@ -542,12 +542,12 @@ func (a *root) kindGroups(c *ui.Context, p app.ConnProfile, schema string, depth
 func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base string, kind engine.ObjectKind, depth int) {
 	t := c.Theme()
 	groupKey := objectGroupKey(base, kind)
-	if err := a.treeErr[groupKey]; err != "" {
+	if err := a.tree.Err[groupKey]; err != "" {
 		treeInfoRow(c, err, depth, t.Danger)
 		return
 	}
 	var objs []engine.DBObject
-	if m := a.treeData[base]; m != nil {
+	if m := a.tree.Data[base]; m != nil {
 		objs = m[kind]
 	}
 	searching := a.searchFiltersObjects(p)
@@ -560,14 +560,14 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 		}
 		objs = kept
 	}
-	if !searching && !a.objSearchActive() && len(objs) == 0 && (a.treeLoading[groupKey] || a.treeLoading[base+"|all"] || a.treeLoading[base+"|counts"]) {
+	if !searching && !a.objSearchActive() && len(objs) == 0 && (a.tree.Loading[groupKey] || a.tree.Loading[base+"|all"] || a.tree.Loading[base+"|counts"]) {
 		treeInfoRow(c, locales.TreeLoading(), depth, t.TextMuted)
 	}
 	for _, o := range objs {
 		obj := o
 		selKey := base + "|" + obj.Name
 		leaf := treeRowBase(c, obj.Name).PaddingStart(float32(4 + depth*folderIndent))
-		if a.treeSelected == selKey {
+		if a.tree.Selected == selKey {
 			leaf.Background(t.Accent.Alpha(0.12))
 		}
 		leaf.Children(func() {
@@ -575,7 +575,7 @@ func (a *root) objectLeaves(c *ui.Context, p app.ConnProfile, schema, base strin
 			ui.Spacer(c)
 		})
 		if leaf.Clicked() {
-			a.treeSelected = selKey
+			a.tree.Selected = selKey
 			a.selConn, a.selObj, a.hasSelObj = p, obj, true
 			// Ctrl+点击表/视图直接打开现有的 DDL 弹窗；双击的第二下跳过，
 			// 避免一次双击发出两次 DDL 请求。
@@ -783,7 +783,7 @@ func (a *root) viewDDLForWord(word string) bool {
 		}
 		kind = k
 	}
-	a.showDDL(p, engine.DBObject{Kind: kind, Name: word, Schema: a.connSchema[p.ID]})
+	a.showDDL(p, engine.DBObject{Kind: kind, Name: word, Schema: a.tree.ConnSchema[p.ID]})
 	return true
 }
 
@@ -811,7 +811,7 @@ func (a *root) knownObjects(connID string) map[string]engine.ObjectKind {
 			}
 		}
 	}
-	if m := a.treeData[key]; m != nil {
+	if m := a.tree.Data[key]; m != nil {
 		for _, kind := range []engine.ObjectKind{engine.ObjectTable, engine.ObjectView} {
 			for _, o := range m[kind] {
 				out[strings.ToLower(o.Name)] = kind

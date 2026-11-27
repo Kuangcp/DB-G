@@ -177,17 +177,17 @@ func (a *root) installSession(p app.ConnProfile, sess engine.Session) {
 // applyProbe 把后台探测到的 schema 信息写回 UI 状态。
 func (a *root) applyProbe(p app.ConnProfile, probe connProbe) {
 	if probe.active != "" {
-		a.connSchema[p.ID] = probe.active
+		a.tree.ConnSchema[p.ID] = probe.active
 	}
 	if len(probe.schemas) == 0 {
 		return
 	}
-	if a.treeSchemas == nil {
-		a.treeSchemas = map[string][]string{}
+	if a.tree.Schemas == nil {
+		a.tree.Schemas = map[string][]string{}
 	}
-	a.treeSchemas[p.ID] = probe.schemas
+	a.tree.Schemas[p.ID] = probe.schemas
 	if probe.switched != "" {
-		a.connSchema[p.ID] = probe.switched
+		a.tree.ConnSchema[p.ID] = probe.switched
 	}
 	a.saveMetaCache(p)
 }
@@ -208,7 +208,7 @@ func (a *root) connect(p app.ConnProfile) error {
 	}
 	a.clearServerInfo(p.ID)
 	app.LogInfo("conn", "open", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path))
-	sess, probe, err := dialSession(p, a.connSchema[p.ID])
+	sess, probe, err := dialSession(p, a.tree.ConnSchema[p.ID])
 	if err != nil {
 		a.setSessionErr(p.ID, err, p)
 		return err
@@ -245,7 +245,7 @@ func (a *root) connectAsync(p app.ConnProfile, done func(error)) {
 	a.connOpening[p.ID] = true
 	a.clearServerInfo(p.ID)
 	app.LogInfo("conn", "open", "kind", p.Kind, "name", p.Name, "dsn", app.RedactDSN(p.Path))
-	cur := a.connSchema[p.ID]
+	cur := a.tree.ConnSchema[p.ID]
 	var (
 		sess  engine.Session
 		probe connProbe
@@ -640,27 +640,27 @@ func (a *root) cancelConnRuns(connID string) {
 
 // markConnTreeStale 让某连接已加载的树分组在下次展开时替换首页，并丢掉计数。
 func (a *root) markConnTreeStale(connID string) {
-	if a.treeGroupStale == nil {
-		a.treeGroupStale = map[string]bool{}
+	if a.tree.GroupStale == nil {
+		a.tree.GroupStale = map[string]bool{}
 	}
-	for base, byKind := range a.treeData {
+	for base, byKind := range a.tree.Data {
 		if !connBaseMatch(connID, base) {
 			continue
 		}
 		for kind := range byKind {
 			key := objectGroupKey(base, kind)
-			delete(a.treePageStarted, key)
-			a.treeGroupStale[key] = true
+			delete(a.tree.PageStarted, key)
+			a.tree.GroupStale[key] = true
 		}
 	}
-	for base := range a.treeCounts {
+	for base := range a.tree.Counts {
 		if connBaseMatch(connID, base) {
-			delete(a.treeCounts, base)
+			delete(a.tree.Counts, base)
 		}
 	}
-	for key := range a.treeLoading {
+	for key := range a.tree.Loading {
 		if connBaseMatch(connID, key) {
-			delete(a.treeLoading, key)
+			delete(a.tree.Loading, key)
 		}
 	}
 }

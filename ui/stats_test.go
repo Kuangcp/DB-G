@@ -53,7 +53,7 @@ func TestObjectStatsModal(t *testing.T) {
 			ExactRowsSQL: "SELECT COUNT(*) FROM users",
 		},
 	})
-	a.treeExpand[connID] = true
+	a.tree.Expand[connID] = true
 	a.groupOpenPtr(connID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -110,7 +110,7 @@ func TestObjectStatsUnsupported(t *testing.T) {
 		}},
 		err: errors.New("统计查询炸了"),
 	})
-	a.treeExpand[connID] = true
+	a.tree.Expand[connID] = true
 	a.groupOpenPtr(connID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -133,14 +133,14 @@ func TestObjectStatsOnlyForTables(t *testing.T) {
 		treeFakeSession: treeFakeSession{},
 		stats:           &engine.ObjectStats{Rows: &rows, Columns: &columns},
 	})
-	a.treeData[connID] = map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data[connID] = map[engine.ObjectKind][]engine.DBObject{
 		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "users"}},
 		engine.ObjectView:  {{Kind: engine.ObjectView, Name: "user_view"}},
 	}
-	a.treeCounts[connID] = map[engine.ObjectKind]int{
+	a.tree.Counts[connID] = map[engine.ObjectKind]int{
 		engine.ObjectTable: 1, engine.ObjectView: 1,
 	}
-	a.treeExpand[connID] = true
+	a.tree.Expand[connID] = true
 	*a.groupOpenPtr(connID+"|"+kindKey(engine.ObjectView), false) = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()

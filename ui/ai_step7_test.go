@@ -139,12 +139,12 @@ func TestConnectionAIStrictPolicy(t *testing.T) {
 func TestConnFormSavesAIStrictPolicy(t *testing.T) {
 	a := newSidebarRoot(t)
 	a.openNewConnForm("")
-	a.connFormName = "strict_prod"
-	a.connFormPath = seedConnFile(t)
-	a.connFormAIStrict = true
+	a.connForm.Name = "strict_prod"
+	a.connForm.Path = seedConnFile(t)
+	a.connForm.AIStrict = true
 	a.saveConnForm()
-	if a.connFormErr != "" {
-		t.Fatal(a.connFormErr)
+	if a.connForm.Err != "" {
+		t.Fatal(a.connForm.Err)
 	}
 	list := a.store.List()
 	if len(list) != 1 || !list[0].AIContextStrict {

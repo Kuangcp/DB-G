@@ -20,150 +20,90 @@ import (
 )
 
 type root struct {
-	code              *codeEditor
-	stmtOKColor       ui.Color // 执行成功圆点（主题 Success）
-	stmtErrColor      ui.Color // 执行失败圆点（主题 Danger）
-	stmtRunColor      ui.Color // 执行中圆点（主题 Accent）
-	aiDebug           aiDebugState
-	aiRewrite         aiRewriteState
-	con               *app.Console
-	win               *mygo.Window
-	resultState       ui.ListState
-	resultClickMods   ui.Modifiers // 结果表格最近一次指针按下/抬起时的修饰键
-	pointerDouble     bool         // 最近一次指针事件是否是双击的第二次按下
-	editorPercent     float32      // 编辑器占上下的百分比（结果区在下方）
-	resultsHidden     bool         // Alt+D 临时隐藏结果区
-	sidebarHidden     bool         // 临时隐藏左侧数据源面板（纯瞬态）
-	selConn           app.ConnProfile
-	selObj            engine.DBObject
-	hasSelObj         bool
-	sidebarWidth      float32
-	store             *app.ConnStore
-	toastQueue        []ui.Toast // 下一帧弹出的浮窗提示（错误自动消失，不再占顶栏）
-	toastSeq          uint64
-	connFormOpen      bool
-	connFormURL       string // 从 JDBC/URL 导入的临时输入（不落盘）
-	connFormURLErr    string
-	connFormID        string
-	connFormName      string
-	connFormPath      string
-	connFormErr       string
-	connFormKind      string
-	connFormHost      string
-	connFormPort      string
-	connFormUser      string
-	connFormPass      string
-	connFormShowPass  bool // 密码框是否显示明文（纯瞬态）
-	connFormDB        string
-	connFormParams    string
-	connFormTimeout   string                       // 查询超时（秒，空 = 默认 30）
-	connFormGuard     bool                         // 高危 SQL 硬阻断
-	connFormAIStrict  bool                         // 连接级 AI 只发 schema + SQL
-	connProto         int                          // ClickHouse 协议：0 native / 1 http / 2 https
-	connFormFolder    string                       // 连接所属文件夹；空 = 根级
-	connFormTags      []connTagDraft               // 已添加标签（最多 app.MaxConnTags）
-	connFormTagInput  string                       // 标签输入框正文
-	connFormTagColor  string                       // 下一个新标签使用的调色板键
-	serverInfo        map[string]engine.ServerInfo // connID → 数据库名/版本
-	serverInfoErr     map[string]string            // connID → 版本查询失败原因
-	serverInfoSeq     map[string]uint64            // connID → 异步查询轮次（旧结果作废）
-	chords            map[string][]chord           // 动作 → 键位（见 keymap.go）
-	mouseBindings     map[string]ui.Modifiers      // 鼠标双击动作 → 修饰键（见 keymap.go）
-	keymapPath        string                       // keymap.json 的位置（空 = 不读盘，测试用）
-	fontPrefs         app.FontPrefs                // 编辑区/结果区/功能界面字体
-	fontPrefsPath     string                       // fonts.json 的位置（空 = 不落盘）
-	resultPrefs       app.ResultPrefs              // 结果大小预算
-	resultPrefsPath   string                       // results.json 的位置（空 = 不落盘）
-	consolePrefs      app.ConsolePrefs             // 控制台自动保存
-	consolePrefsPath  string                       // console.json 的位置（空 = 不落盘）
-	themePrefs        app.ThemePrefs               // 外观：模式/强调色/密度/圆角/字号
-	themePath         string                       // theme.json 的位置（空 = 不落盘）
-	themeSaveSeq      atomic.Uint64
-	themeHex          string // 外观分区里自定义强调色的输入框
-	themeHexErr       string
-	paletteLight      app.ThemePalette // 自定义配色的浅色草稿
-	paletteDark       app.ThemePalette // 自定义配色的深色草稿
-	paletteLoaded     bool             // 草稿是否已从 prefs 载入
-	paletteErr        string
-	localePref        string      // 界面语言："" 跟随系统，或 en / zh-Hans
-	localePrefsPath   string      // locale.json 的位置（空 = 不落盘）
-	aiPrefs           app.AIPrefs // AI 服务地址/模型/出网开关
-	aiShowKey         bool        // AI API Key 是否显示明文（纯瞬态）
-	aiPrefsPath       string      // ai.json 的位置（空 = 不落盘）
-	aiWarn            string
-	syncPrefsPath     string        // sync.json 的位置（空 = 不落盘）
-	syncPrefs         app.SyncPrefs // 仓库地址/分支/SSH 私钥
-	syncWarn          string
-	syncResult        string
-	syncBusy          bool
-	syncKeySet        bool
-	syncKeyKCV        string
-	syncKeyOpen       bool
-	syncKeyImportOnly bool
-	syncKeyInput      string
-	syncKeyErr        string
-	syncKeyRepoKCV    string
-	syncPendingKind   string
-	syncFindings      []app.SecretFinding
-	syncFindingsOpen  bool
-	aiModels          []string // /models 返回的模型列表
-	aiModelsLoading   bool
-	aiModelsErr       string
-	aiModelsSeq       int    // 异步获取轮次；旧结果作废
-	aiModelsKey       string // 已请求过的 baseURL+key 指纹
-	vault             *app.Vault
-	aiTestProvider    ai.Provider // 测试注入；nil = 按 aiPrefs 创建
-	aiChat            aiChatState
-	aiTokenScale      map[string]float64 // model → provider 实际/估算比例
-	aiLintOpen        bool
-	aiLintReport      aiSQLReport
-	aiDDL             map[string]aiDDLEntry      // 相关表 DDL 缓存（AI 上下文用）
-	aiRelations       map[string]aiRelationEntry // 相关表外键缓存（AI 检索用）
-	aiFix             aiFixState
-	aiCompletion      aiCompletionState
-	plan              planState
-	guardOpen         bool
-	guardBlocked      bool
-	guardRisks        []app.SQLRisk
-	settingsSection   int                       // 设置窗口选中的分区
-	captureAction     string                    // 设置窗口正在录制键位的动作
-	settingsNotice    map[string]settingsNotice // 设置分区内联提示（key = 分区）
-	connTestMsg       string                    // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
-	connTestErr       bool
-	connTestBusy      bool
-	connTestSeq       int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
-	connDeleteOpen    bool
-	connDeleting      string
-	treeExpand        map[string]bool
-	treeOpen          map[string]*bool
-	treeData          map[string]map[engine.ObjectKind][]engine.DBObject
-	treeCounts        map[string]map[engine.ObjectKind]int
-	treeLoading       map[string]bool
-	treePageStarted   map[string]bool
-	treeSchemas       map[string][]string
-	schemaLoading     map[string]bool   // connID → schema 列表加载中
-	connSchema        map[string]string // connID → 当前 schema/库（空 = 未选）
-	treeErr           map[string]string
-	treeSelected      string
-	objSearch         string          // 对象树搜索词（非空时过滤连接/文件夹/已加载对象）
-	folderCollapsed   map[string]bool // folderID → 收起；缺省 = 展开
-	metaCache         *app.MetaCache
-	metaCacheTried    map[string]bool
-	metaCacheLoading  map[string]bool
-	metaCacheStale    map[string]bool
-	metaSaveSeq       map[string]uint64
-	treeGroupStale    map[string]bool // 过期缓存的分组；展开时替换首页
-	treeGen           uint64          // 重载/删除时递增，丢弃旧的异步结果
-	execPending       bool
+	code             *codeEditor
+	stmtOKColor      ui.Color // 执行成功圆点（主题 Success）
+	stmtErrColor     ui.Color // 执行失败圆点（主题 Danger）
+	stmtRunColor     ui.Color // 执行中圆点（主题 Accent）
+	aiDebug          aiDebugState
+	aiRewrite        aiRewriteState
+	con              *app.Console
+	win              *mygo.Window
+	resultState      ui.ListState
+	resultClickMods  ui.Modifiers // 结果表格最近一次指针按下/抬起时的修饰键
+	pointerDouble    bool         // 最近一次指针事件是否是双击的第二次按下
+	editorPercent    float32      // 编辑器占上下的百分比（结果区在下方）
+	resultsHidden    bool         // Alt+D 临时隐藏结果区
+	sidebarHidden    bool         // 临时隐藏左侧数据源面板（纯瞬态）
+	selConn          app.ConnProfile
+	selObj           engine.DBObject
+	hasSelObj        bool
+	sidebarWidth     float32
+	store            *app.ConnStore
+	toastQueue       []ui.Toast // 下一帧弹出的浮窗提示（错误自动消失，不再占顶栏）
+	toastSeq         uint64
+	connForm         connFormState                // 新建/编辑连接弹窗
+	connProto        int                          // ClickHouse 协议：0 native / 1 http / 2 https
+	serverInfo       map[string]engine.ServerInfo // connID → 数据库名/版本
+	serverInfoErr    map[string]string            // connID → 版本查询失败原因
+	serverInfoSeq    map[string]uint64            // connID → 异步查询轮次（旧结果作废）
+	chords           map[string][]chord           // 动作 → 键位（见 keymap.go）
+	mouseBindings    map[string]ui.Modifiers      // 鼠标双击动作 → 修饰键（见 keymap.go）
+	keymapPath       string                       // keymap.json 的位置（空 = 不读盘，测试用）
+	fontPrefs        app.FontPrefs                // 编辑区/结果区/功能界面字体
+	fontPrefsPath    string                       // fonts.json 的位置（空 = 不落盘）
+	resultPrefs      app.ResultPrefs              // 结果大小预算
+	resultPrefsPath  string                       // results.json 的位置（空 = 不落盘）
+	consolePrefs     app.ConsolePrefs             // 控制台自动保存
+	consolePrefsPath string                       // console.json 的位置（空 = 不落盘）
+	themePrefs       app.ThemePrefs               // 外观：模式/强调色/密度/圆角/字号
+	themePath        string                       // theme.json 的位置（空 = 不落盘）
+	themeSaveSeq     atomic.Uint64
+	themeHex         string // 外观分区里自定义强调色的输入框
+	themeHexErr      string
+	paletteLight     app.ThemePalette // 自定义配色的浅色草稿
+	paletteDark      app.ThemePalette // 自定义配色的深色草稿
+	paletteLoaded    bool             // 草稿是否已从 prefs 载入
+	paletteErr       string
+	localePref       string      // 界面语言："" 跟随系统，或 en / zh-Hans
+	localePrefsPath  string      // locale.json 的位置（空 = 不落盘）
+	aiPrefs          app.AIPrefs // AI 服务地址/模型/出网开关
+	aiShowKey        bool        // AI API Key 是否显示明文（纯瞬态）
+	aiPrefsPath      string      // ai.json 的位置（空 = 不落盘）
+	aiWarn           string
+	gitSync          syncState // Git 同步：配置、密钥弹窗、发现项
+	aiModels         []string  // /models 返回的模型列表
+	aiModelsLoading  bool
+	aiModelsErr      string
+	aiModelsSeq      int    // 异步获取轮次；旧结果作废
+	aiModelsKey      string // 已请求过的 baseURL+key 指纹
+	vault            *app.Vault
+	aiTestProvider   ai.Provider // 测试注入；nil = 按 aiPrefs 创建
+	aiChat           aiChatState
+	aiTokenScale     map[string]float64 // model → provider 实际/估算比例
+	aiLintOpen       bool
+	aiLintReport     aiSQLReport
+	aiDDL            map[string]aiDDLEntry      // 相关表 DDL 缓存（AI 上下文用）
+	aiRelations      map[string]aiRelationEntry // 相关表外键缓存（AI 检索用）
+	aiFix            aiFixState
+	aiCompletion     aiCompletionState
+	plan             planState
+	guardOpen        bool
+	guardBlocked     bool
+	guardRisks       []app.SQLRisk
+	settingsSection  int                       // 设置窗口选中的分区
+	captureAction    string                    // 设置窗口正在录制键位的动作
+	settingsNotice   map[string]settingsNotice // 设置分区内联提示（key = 分区）
+	connTestMsg      string                    // 新建/编辑连接弹窗里「测试连接」「复制」的一行反馈
+	connTestErr      bool
+	connTestBusy     bool
+	connTestSeq      int // 测试连接轮次；取消或重开时递增，旧 goroutine 的结果作废
+	connDeleteOpen   bool
+	connDeleting     string
+	tree             treeState
+	execPending      bool
 
-	appIconPNG  []byte                                  // 窗口图标；自举安装时写入图标目录
-	selfInstall bool                                    // 发布构建才启用（app.ReleaseBuild）
-	installNeed app.InstallStatus                       // 安装/升级状态；NeedInstall 决定顶栏图标
-	installOpen bool                                    // 安装确认弹窗
-	installBusy bool                                    // 安装进行中
-	installErr  string                                  // 安装失败原因
-	installNote string                                  // 安装成功的一行提示
-	installFn   func([]byte) (app.InstallStatus, error) // 默认 app.InstallSelf（测试可注入）
+	appIconPNG []byte       // 窗口图标；自举安装时写入图标目录
+	install    installState // 自举安装/升级（仅发布构建）
 
 	extFiles       map[string]*extFile // consoleID → 外部 .sql 的磁盘一致性状态
 	extPollAt      time.Time
@@ -247,34 +187,11 @@ type root struct {
 	paletteQuery          string // 命令面板当前查询
 	paletteJumpID         string // 面板选中的 SQL 命中所在控制台（待跳转）
 	paletteJumpSel        [2]int // 跳转后要选中的 rune 范围
-	exportConfirm         bool
-	exportFormat          string
-	exportStatus          string
-	exportPath            string             // 最近一次成功导出的文件，双击状态可打开所在目录
+	exportState           exportState
 	revealPath            func(string) error // 测试注入；nil = app.RevealPath
 	editStatus            string
 	editStatusSeq         atomic.Uint64
-	exportBusy            bool
-	exportFull            bool
-	exportRows            atomic.Int64
-	exportCloseConfirm    bool
-	cellViewOpen          bool
-	cellViewTitle         string
-	cellViewText          string
-	cellViewJSONOK        bool          // 当前内容按 JSON 树渲染
-	cellViewJSONRoot      *jsonTreeNode // 解析后的 JSON 树
-	cellViewJSONRows      []jsonTreeRow // 当前展开状态下的可见行
-	cellViewJSONExpanded  map[string]bool
-	cellViewJSONTruncated bool
-	cellViewJSONList      ui.ListState
-	cellViewFindOpen      bool
-	cellViewFindQuery     string
-	cellViewFindHits      []*jsonTreeNode
-	cellViewFindCur       int
-	cellViewFindLast      string
-	cellViewWrap          bool    // 查看器里的长文本是否自动折行
-	cellModalW            float32 // 单元格查看/编辑弹窗宽度
-	cellModalH            float32 // 单元格查看/编辑弹窗高度
+	cellView              cellViewState
 	consoleErr            string
 	widthsFor             *engine.QueryResult
 	widths                []float32
@@ -300,49 +217,48 @@ type root struct {
 
 func newRoot(text string) *root {
 	a := &root{
-		code:             newCodeEditor(locales.TabEmptyHint()),
-		con:              app.NewConsole(),
-		editorPercent:    65,
-		sidebarWidth:     280,
-		treeExpand:       map[string]bool{},
-		treeOpen:         map[string]*bool{},
-		treeData:         map[string]map[engine.ObjectKind][]engine.DBObject{},
-		treeCounts:       map[string]map[engine.ObjectKind]int{},
-		treeLoading:      map[string]bool{},
-		treePageStarted:  map[string]bool{},
-		treeSchemas:      map[string][]string{},
-		schemaLoading:    map[string]bool{},
-		connSchema:       map[string]string{},
-		treeErr:          map[string]string{},
-		folderCollapsed:  map[string]bool{},
-		metaCacheTried:   map[string]bool{},
-		metaCacheLoading: map[string]bool{},
-		metaCacheStale:   map[string]bool{},
-		metaSaveSeq:      map[string]uint64{},
-		treeGroupStale:   map[string]bool{},
-		connFormKind:     "sqlite",
-		connFormTagColor: app.DefaultConnTagColor,
-		cellModalW:       cellModalDefaultW,
-		cellModalH:       cellModalDefaultH,
-		cellViewWrap:     true,
-		chords:           defaultChords(),
-		mouseBindings:    defaultMouseBindings(),
-		fontPrefs:        app.DefaultFontPrefs(),
-		resultPrefs:      app.DefaultResultPrefs(),
-		consolePrefs:     app.DefaultConsolePrefs(),
-		themePrefs:       app.DefaultThemePrefs(),
-		sessions:         map[string]engine.Session{},
-		sessionUse:       map[string]uint64{},
-		sessionErr:       map[string]string{},
-		connOpening:      map[string]bool{},
-		connWaiters:      map[string][]func(error){},
-		serverInfo:       map[string]engine.ServerInfo{},
-		serverInfoErr:    map[string]string{},
-		serverInfoSeq:    map[string]uint64{},
-		consoles:         map[string]*app.Console{},
-		viewerTabs:       map[string]*viewerTab{},
-		lastVer:          map[string]uint64{},
-		extFiles:         map[string]*extFile{},
+		code:          newCodeEditor(locales.TabEmptyHint()),
+		con:           app.NewConsole(),
+		editorPercent: 65,
+		sidebarWidth:  280,
+		tree: treeState{
+			Expand:           map[string]bool{},
+			Open:             map[string]*bool{},
+			Data:             map[string]map[engine.ObjectKind][]engine.DBObject{},
+			Counts:           map[string]map[engine.ObjectKind]int{},
+			Loading:          map[string]bool{},
+			PageStarted:      map[string]bool{},
+			Schemas:          map[string][]string{},
+			SchemaLoading:    map[string]bool{},
+			ConnSchema:       map[string]string{},
+			Err:              map[string]string{},
+			FolderCollapsed:  map[string]bool{},
+			MetaCacheTried:   map[string]bool{},
+			MetaCacheLoading: map[string]bool{},
+			MetaCacheStale:   map[string]bool{},
+			MetaSaveSeq:      map[string]uint64{},
+			GroupStale:       map[string]bool{},
+		},
+		connForm:      connFormState{Kind: "sqlite", TagColor: app.DefaultConnTagColor},
+		cellView:      cellViewState{ModalW: cellModalDefaultW, ModalH: cellModalDefaultH, Wrap: true},
+		chords:        defaultChords(),
+		mouseBindings: defaultMouseBindings(),
+		fontPrefs:     app.DefaultFontPrefs(),
+		resultPrefs:   app.DefaultResultPrefs(),
+		consolePrefs:  app.DefaultConsolePrefs(),
+		themePrefs:    app.DefaultThemePrefs(),
+		sessions:      map[string]engine.Session{},
+		sessionUse:    map[string]uint64{},
+		sessionErr:    map[string]string{},
+		connOpening:   map[string]bool{},
+		connWaiters:   map[string][]func(error){},
+		serverInfo:    map[string]engine.ServerInfo{},
+		serverInfoErr: map[string]string{},
+		serverInfoSeq: map[string]uint64{},
+		consoles:      map[string]*app.Console{},
+		viewerTabs:    map[string]*viewerTab{},
+		lastVer:       map[string]uint64{},
+		extFiles:      map[string]*extFile{},
 	}
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.con.SetPageSize(a.resultPrefs.PageSize)
@@ -413,11 +329,11 @@ func newRootWithStore(storePath string) *root {
 	}
 	r.localePref = localePrefs.Locale
 	r.aiPrefsPath = filepath.Join(filepath.Dir(storePath), "ai.json")
-	r.syncPrefsPath = filepath.Join(filepath.Dir(storePath), "sync.json")
-	r.syncPrefs, r.syncWarn = app.LoadSyncPrefs(r.syncPrefsPath)
-	if key, ok := app.LoadSyncKey(r.syncPrefsPath); ok {
-		r.syncKeySet = true
-		r.syncKeyKCV = sync.KCV(key)
+	r.gitSync.PrefsPath = filepath.Join(filepath.Dir(storePath), "sync.json")
+	r.gitSync.Prefs, r.gitSync.Warn = app.LoadSyncPrefs(r.gitSync.PrefsPath)
+	if key, ok := app.LoadSyncKey(r.gitSync.PrefsPath); ok {
+		r.gitSync.KeySet = true
+		r.gitSync.KeyKCV = sync.KCV(key)
 	}
 	if vault, err := app.LoadVault(storePath); err != nil {
 		r.aiWarn = locales.RootAiKeyUnavailable(err.Error())
@@ -428,7 +344,7 @@ func newRootWithStore(storePath string) *root {
 		r.aiWarn = warn
 	}
 	r.store = app.LoadStore(storePath)
-	r.metaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
+	r.tree.MetaCache = app.NewMetaCache(filepath.Join(filepath.Dir(storePath), "meta"))
 	r.history = app.OpenHistory(app.DefaultHistoryDir())
 	if err := r.history.MigrateLegacy(filepath.Join(filepath.Dir(storePath), "history.jsonl")); err != nil {
 		app.LogWarn("history", "legacy migration failed", "err", err.Error())
@@ -439,9 +355,9 @@ func newRootWithStore(storePath string) *root {
 	r.applyConsolePrefs()
 	r.pruneMissingExternal()
 	r.restoreSession()
-	r.selfInstall = app.ReleaseBuild() && !app.UpdateBuild() && runtime.GOOS == "linux"
-	if r.selfInstall {
-		r.installNeed = app.CheckInstall()
+	r.install.Self = app.ReleaseBuild() && !app.UpdateBuild() && runtime.GOOS == "linux"
+	if r.install.Self {
+		r.install.Need = app.CheckInstall()
 	}
 	ws, _ := r.mgr.ActiveWorkspace()
 	app.LogInfo("startup", "session restored", "consoles", len(r.mgr.Open()), "workspace", ws.Name, "conn_warning", r.store.Warning())
@@ -791,10 +707,10 @@ func (a *root) Attach(win *mygo.Window) {
 	win.OnFocus(func() { a.pollExternalFiles(true) })
 	win.OnClose(func(e *mygo.CloseEvent) {
 		// 导出尚未完成时先确认，避免用户顺手关窗把导出中断成半截文件。
-		if a.exportBusy {
+		if a.exportState.Busy {
 			e.PreventDefault()
-			if !a.exportCloseConfirm {
-				a.safeUpdate(win, func() { a.exportCloseConfirm = true })
+			if !a.exportState.CloseConfirm {
+				a.safeUpdate(win, func() { a.exportState.CloseConfirm = true })
 			}
 			return
 		}

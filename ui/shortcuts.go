@@ -90,7 +90,7 @@ func (a *root) runKeyAction(c *ui.Context, id string) {
 	case "copyCell":
 		a.copyCurrentCell(c, a.currentRuntime().Result())
 	case "setNull":
-		if a.resultsHidden || a.inlineEditOn || a.editCellOpen || a.cellViewOpen ||
+		if a.resultsHidden || a.inlineEditOn || a.editCellOpen || a.cellView.Open ||
 			a.filterOpen || a.previewOpen || a.aiChat.open {
 			return
 		}

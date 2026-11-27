@@ -14,17 +14,17 @@ func TestConnFormURLImportMySQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connFormKind != "mysql" || a.connFormHost != "db.local" || a.connFormPort != "3307" ||
-		a.connFormUser != "root" || a.connFormPass != "pw" || a.connFormDB != "app" ||
-		a.connFormParams != "useSSL=false" {
+	if a.connForm.Kind != "mysql" || a.connForm.Host != "db.local" || a.connForm.Port != "3307" ||
+		a.connForm.User != "root" || a.connForm.Pass != "pw" || a.connForm.DB != "app" ||
+		a.connForm.Params != "useSSL=false" {
 		t.Fatalf("导入字段: kind=%q host=%q port=%q user=%q pass=%q db=%q params=%q",
-			a.connFormKind, a.connFormHost, a.connFormPort, a.connFormUser, a.connFormPass, a.connFormDB, a.connFormParams)
+			a.connForm.Kind, a.connForm.Host, a.connForm.Port, a.connForm.User, a.connForm.Pass, a.connForm.DB, a.connForm.Params)
 	}
-	if a.connFormName != "app" {
-		t.Fatalf("空名称应建议为库名: %q", a.connFormName)
+	if a.connForm.Name != "app" {
+		t.Fatalf("空名称应建议为库名: %q", a.connForm.Name)
 	}
-	if a.connFormURL != "" {
-		t.Fatalf("导入后应清空含密码的 URL: %q", a.connFormURL)
+	if a.connForm.URL != "" {
+		t.Fatalf("导入后应清空含密码的 URL: %q", a.connForm.URL)
 	}
 }
 
@@ -35,10 +35,10 @@ func TestConnFormURLImportClickHouse(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connFormKind != "clickhouse" || a.connProto != 2 || a.connFormPort != "8443" ||
-		a.connFormDB != "analytics" || a.connFormParams != "compress=0" {
+	if a.connForm.Kind != "clickhouse" || a.connProto != 2 || a.connForm.Port != "8443" ||
+		a.connForm.DB != "analytics" || a.connForm.Params != "compress=0" {
 		t.Fatalf("ClickHouse 导入: kind=%q proto=%d port=%q db=%q params=%q",
-			a.connFormKind, a.connProto, a.connFormPort, a.connFormDB, a.connFormParams)
+			a.connForm.Kind, a.connProto, a.connForm.Port, a.connForm.DB, a.connForm.Params)
 	}
 }
 
@@ -49,17 +49,17 @@ func TestConnFormURLImportSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connFormKind != "sqlite" || a.connFormPath != "/tmp/app.db" ||
-		a.connFormHost != "" || a.connFormPort != "" {
+	if a.connForm.Kind != "sqlite" || a.connForm.Path != "/tmp/app.db" ||
+		a.connForm.Host != "" || a.connForm.Port != "" {
 		t.Fatalf("SQLite 导入: kind=%q path=%q host=%q port=%q",
-			a.connFormKind, a.connFormPath, a.connFormHost, a.connFormPort)
+			a.connForm.Kind, a.connForm.Path, a.connForm.Host, a.connForm.Port)
 	}
 }
 
 // 解析失败只提示，不覆盖已经填好的字段。
 func TestConnFormURLImportFailureKeepsFields(t *testing.T) {
 	a, tt := openConnModal(t)
-	a.connFormKind, a.connFormHost = "postgres", "keep.example"
+	a.connForm.Kind, a.connForm.Host = "postgres", "keep.example"
 	// 直接改表单字段后先重排一帧：按钮在底栏，点击坐标取自上一帧布局。
 	tt.Frame()
 	tt.SetClipboard("jdbc:oracle:thin:@host:1521:xe")
@@ -67,10 +67,10 @@ func TestConnFormURLImportFailureKeepsFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.connFormKind != "postgres" || a.connFormHost != "keep.example" {
-		t.Fatalf("失败不应改表单: kind=%q host=%q", a.connFormKind, a.connFormHost)
+	if a.connForm.Kind != "postgres" || a.connForm.Host != "keep.example" {
+		t.Fatalf("失败不应改表单: kind=%q host=%q", a.connForm.Kind, a.connForm.Host)
 	}
-	if a.connFormURLErr == "" {
+	if a.connForm.URLErr == "" {
 		t.Fatal("应显示导入错误")
 	}
 }

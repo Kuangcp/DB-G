@@ -55,9 +55,9 @@ func TestConnFormSavesTags(t *testing.T) {
 	if !tt.HasText("标签") {
 		t.Fatalf("tag editor missing: %q", tt.Texts())
 	}
-	a.connFormName = "带标签的库"
-	a.connFormPath = path
-	a.connFormTags = []connTagDraft{
+	a.connForm.Name = "带标签的库"
+	a.connForm.Path = path
+	a.connForm.Tags = []connTagDraft{
 		{label: "  生产  ", color: "red"},
 		{label: "只读", color: "violet"},
 	}
@@ -88,14 +88,14 @@ func TestConnFormLoadsTagsForEdit(t *testing.T) {
 	}
 	p = a.store.List()[0]
 	a.setConnTagForm(p.Tags)
-	if len(a.connFormTags) != 2 {
-		t.Fatalf("tags = %+v", a.connFormTags)
+	if len(a.connForm.Tags) != 2 {
+		t.Fatalf("tags = %+v", a.connForm.Tags)
 	}
-	if got := a.connFormTags[0]; got.label != "生产" || got.color != "red" {
+	if got := a.connForm.Tags[0]; got.label != "生产" || got.color != "red" {
 		t.Fatalf("tag 0 = %+v", got)
 	}
-	if a.connFormTagInput != "" || a.connFormTagColor != defaultTagColor(0) {
-		t.Fatalf("input state = %q %q", a.connFormTagInput, a.connFormTagColor)
+	if a.connForm.TagInput != "" || a.connForm.TagColor != defaultTagColor(0) {
+		t.Fatalf("input state = %q %q", a.connForm.TagInput, a.connForm.TagColor)
 	}
 }
 
@@ -123,26 +123,26 @@ func TestAddConnFormTagLimits(t *testing.T) {
 	if !a.addConnFormTag("  生产  ", "red") {
 		t.Fatal("first tag must be added")
 	}
-	if a.connFormTags[0].label != "生产" {
-		t.Fatalf("label = %q", a.connFormTags[0].label)
+	if a.connForm.Tags[0].label != "生产" {
+		t.Fatalf("label = %q", a.connForm.Tags[0].label)
 	}
 	if a.addConnFormTag("生产", "blue") {
 		t.Fatal("duplicate tag must be rejected")
 	}
 	a.addConnFormTag("只读", "")
 	a.addConnFormTag("灰度", "green")
-	if got := a.connFormTags[1].color; got != a.connFormTagColor {
+	if got := a.connForm.Tags[1].color; got != a.connForm.TagColor {
 		t.Fatalf("empty color must use current swatch: %q", got)
 	}
 	if a.addConnFormTag("第四个", "red") {
 		t.Fatal("fourth tag must be rejected")
 	}
-	if len(a.connFormTags) != app.MaxConnTags {
-		t.Fatalf("tags = %+v", a.connFormTags)
+	if len(a.connForm.Tags) != app.MaxConnTags {
+		t.Fatalf("tags = %+v", a.connForm.Tags)
 	}
 	a.removeConnFormTag("只读")
-	if len(a.connFormTags) != 2 || a.connFormTags[1].label != "灰度" {
-		t.Fatalf("after remove: %+v", a.connFormTags)
+	if len(a.connForm.Tags) != 2 || a.connForm.Tags[1].label != "灰度" {
+		t.Fatalf("after remove: %+v", a.connForm.Tags)
 	}
 }
 
@@ -162,12 +162,12 @@ func TestTagSuggestionsExcludeSelectedAndMatchFuzzy(t *testing.T) {
 	}
 	a.resetConnTagForm()
 	a.addConnFormTag("生产", "red")
-	a.connFormTagInput = "灰"
+	a.connForm.TagInput = "灰"
 	got := a.tagSuggestions()
 	if len(got) != 1 || got[0].Label != "灰度" || got[0].Color != "green" {
 		t.Fatalf("fuzzy matches = %+v", got)
 	}
-	a.connFormTagInput = ""
+	a.connForm.TagInput = ""
 	if got := a.tagSuggestions(); len(got) != 2 {
 		t.Fatalf("all matches = %+v", got)
 	}
@@ -197,14 +197,14 @@ func TestTagInputChoosesExistingSuggestion(t *testing.T) {
 	tt.Key(0, ui.KeyDown)
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if len(a.connFormTags) != 1 {
-		t.Fatalf("tags = %+v", a.connFormTags)
+	if len(a.connForm.Tags) != 1 {
+		t.Fatalf("tags = %+v", a.connForm.Tags)
 	}
-	if got := a.connFormTags[0]; got.label != "灰度" || got.color != "green" {
+	if got := a.connForm.Tags[0]; got.label != "灰度" || got.color != "green" {
 		t.Fatalf("chosen tag = %+v", got)
 	}
-	if a.connFormTagInput != "" {
-		t.Fatalf("input must clear after choosing: %q", a.connFormTagInput)
+	if a.connForm.TagInput != "" {
+		t.Fatalf("input must clear after choosing: %q", a.connForm.TagInput)
 	}
 }
 
@@ -222,15 +222,15 @@ func TestTagChipRemove(t *testing.T) {
 	tt.Type("生产")
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if len(a.connFormTags) != 1 {
-		t.Fatalf("tags = %+v", a.connFormTags)
+	if len(a.connForm.Tags) != 1 {
+		t.Fatalf("tags = %+v", a.connForm.Tags)
 	}
 	if err := tt.Click("移除标签 生产"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if len(a.connFormTags) != 0 {
-		t.Fatalf("tag not removed: %+v", a.connFormTags)
+	if len(a.connForm.Tags) != 0 {
+		t.Fatalf("tag not removed: %+v", a.connForm.Tags)
 	}
 }
 
@@ -248,11 +248,11 @@ func TestTagInputEnterAddsTag(t *testing.T) {
 	tt.Type("生产")
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if len(a.connFormTags) != 1 || a.connFormTags[0].label != "生产" {
-		t.Fatalf("tags = %+v", a.connFormTags)
+	if len(a.connForm.Tags) != 1 || a.connForm.Tags[0].label != "生产" {
+		t.Fatalf("tags = %+v", a.connForm.Tags)
 	}
-	if a.connFormTagInput != "" {
-		t.Fatalf("input must clear after adding: %q", a.connFormTagInput)
+	if a.connForm.TagInput != "" {
+		t.Fatalf("input must clear after adding: %q", a.connForm.TagInput)
 	}
 	if !tt.HasText("生产") {
 		t.Fatalf("chip missing: %q", tt.Texts())

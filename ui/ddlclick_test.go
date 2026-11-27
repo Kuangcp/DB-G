@@ -36,7 +36,7 @@ func newDDLClickRoot(t *testing.T) (*root, *ddlClickSession, *ui.Tester) {
 		{Kind: engine.ObjectTable, Name: "users"},
 	}}}
 	a.testSetSession(stored.ID, fake)
-	a.treeExpand[stored.ID] = true
+	a.tree.Expand[stored.ID] = true
 	a.groupOpenPtr(stored.ID+"|"+kindKey(engine.ObjectTable), true)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()

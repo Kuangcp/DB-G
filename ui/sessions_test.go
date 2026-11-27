@@ -36,7 +36,7 @@ func TestMultipleConnectionsStayOpen(t *testing.T) {
 	}
 	a.expandConnAndTree(a1)
 	a.expandConnAndTree(b1)
-	if err := a.treeErr[a1.ID]; err != "" {
+	if err := a.tree.Err[a1.ID]; err != "" {
 		t.Fatalf("甲不该报 %q", err)
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -121,8 +121,8 @@ func TestStartupConnectsNothing(t *testing.T) {
 	if n := len(a.sessions); n != 0 {
 		t.Fatalf("启动时不该连任何数据源，实际 %d 个", n)
 	}
-	if len(a.treeData) != 0 {
-		t.Fatalf("启动时不该预载对象树: %d", len(a.treeData))
+	if len(a.tree.Data) != 0 {
+		t.Fatalf("启动时不该预载对象树: %d", len(a.tree.Data))
 	}
 }
 
@@ -162,7 +162,7 @@ func TestClickingConnNameConnects(t *testing.T) {
 	if !a.connected(p.ID) {
 		t.Fatal("点数据源名应当连上")
 	}
-	if !a.treeExpand[p.ID] {
+	if !a.tree.Expand[p.ID] {
 		t.Fatal("点数据源名应当展开")
 	}
 }

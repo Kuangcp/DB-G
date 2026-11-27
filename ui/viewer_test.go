@@ -100,9 +100,9 @@ func TestViewerDoubleClickOpensOneTab(t *testing.T) {
 	}
 	p := a.store.List()[0]
 	a.testSetSession(p.ID, &viewerFakeSession{result: &engine.QueryResult{IsQuery: true, Columns: []string{"id"}}})
-	a.treeExpand[p.ID] = true
+	a.tree.Expand[p.ID] = true
 	a.groupOpenPtr(p.ID+"|"+kindKey(engine.ObjectTable), true)
-	a.treeData = map[string]map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data = map[string]map[engine.ObjectKind][]engine.DBObject{
 		objectTreeKey(p.ID, ""): {engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "users"}}},
 	}
 	tt := ui.NewTester(rootView(a), 1400, 800)

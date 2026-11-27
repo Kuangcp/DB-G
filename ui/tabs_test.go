@@ -15,7 +15,7 @@ func newConsoleRoot(t *testing.T) *root {
 	t.Helper()
 	a := newRoot("")
 	a.store = app.LoadStore(filepath.Join(t.TempDir(), "connections.json"))
-	a.metaCache = app.NewMetaCache(filepath.Join(t.TempDir(), "meta"))
+	a.tree.MetaCache = app.NewMetaCache(filepath.Join(t.TempDir(), "meta"))
 	a.consoles, a.lastVer = map[string]*app.Console{}, map[string]uint64{}
 	return a
 }

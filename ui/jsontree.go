@@ -109,55 +109,55 @@ func jsonQuote(s string) string {
 
 // applyCellJSON 装载新树：默认只展开根，列表里显示顶层节点。
 func (a *root) applyCellJSON(root *jsonTreeNode, truncated bool) {
-	a.cellViewJSONRoot = root
-	a.cellViewJSONTruncated = truncated
-	a.cellViewJSONExpanded = map[string]bool{"": true}
+	a.cellView.JSONRoot = root
+	a.cellView.JSONTruncated = truncated
+	a.cellView.JSONExpanded = map[string]bool{"": true}
 	a.rebuildCellJSONRows()
 }
 
 // rebuildCellJSONRows 按当前展开状态生成可见行；折叠的子树整段跳过。
 func (a *root) rebuildCellJSONRows() {
-	a.cellViewJSONRows = a.cellViewJSONRows[:0]
-	if a.cellViewJSONRoot == nil {
+	a.cellView.JSONRows = a.cellView.JSONRows[:0]
+	if a.cellView.JSONRoot == nil {
 		return
 	}
 	var walk func(n *jsonTreeNode)
 	walk = func(n *jsonTreeNode) {
-		if len(a.cellViewJSONRows) >= maxJSONTreeRows {
-			a.cellViewJSONTruncated = true
+		if len(a.cellView.JSONRows) >= maxJSONTreeRows {
+			a.cellView.JSONTruncated = true
 			return
 		}
-		open := len(n.children) > 0 && a.cellViewJSONExpanded[n.path]
-		a.cellViewJSONRows = append(a.cellViewJSONRows, jsonTreeRow{node: n, open: open})
+		open := len(n.children) > 0 && a.cellView.JSONExpanded[n.path]
+		a.cellView.JSONRows = append(a.cellView.JSONRows, jsonTreeRow{node: n, open: open})
 		if open {
 			for _, child := range n.children {
 				walk(child)
 			}
 		}
 	}
-	walk(a.cellViewJSONRoot)
+	walk(a.cellView.JSONRoot)
 }
 
 // expandAllJSON 展开全部可折叠节点；false 时收回到只剩根。
 func (a *root) expandAllJSON(open bool) {
-	if a.cellViewJSONRoot == nil {
+	if a.cellView.JSONRoot == nil {
 		return
 	}
 	if !open {
-		a.cellViewJSONExpanded = map[string]bool{"": true}
+		a.cellView.JSONExpanded = map[string]bool{"": true}
 		a.rebuildCellJSONRows()
 		return
 	}
 	var walk func(n *jsonTreeNode)
 	walk = func(n *jsonTreeNode) {
 		if len(n.children) > 0 {
-			a.cellViewJSONExpanded[n.path] = true
+			a.cellView.JSONExpanded[n.path] = true
 			for _, child := range n.children {
 				walk(child)
 			}
 		}
 	}
-	walk(a.cellViewJSONRoot)
+	walk(a.cellView.JSONRoot)
 	a.rebuildCellJSONRows()
 }
 
@@ -167,7 +167,7 @@ func (a *root) cellViewFindBar(c *ui.Context) {
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(4, 8).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 		ui.Icon(c, iconSearch).FontSize(14).TextColor(t.TextMuted)
-		input := ui.TextInput(c, &a.cellViewFindQuery).
+		input := ui.TextInput(c, &a.cellView.FindQuery).
 			Placeholder(locales.CellViewerFindPlaceholder()).
 			Label(locales.CellViewerFind()).
 			FontSize(12).Grow(1).AutoFocus().
@@ -180,7 +180,7 @@ func (a *root) cellViewFindBar(c *ui.Context) {
 					a.cellViewFindStep(1)
 					return true
 				case k.Key == ui.KeyEscape:
-					a.cellViewFindOpen = false
+					a.cellView.FindOpen = false
 					return true
 				}
 				return false
@@ -189,12 +189,12 @@ func (a *root) cellViewFindBar(c *ui.Context) {
 			a.refreshCellFind()
 		}
 		switch {
-		case strings.TrimSpace(a.cellViewFindQuery) == "":
+		case strings.TrimSpace(a.cellView.FindQuery) == "":
 			ui.Text(c, locales.CellViewerFindHint()).FontSize(11).TextColor(t.TextMuted)
-		case len(a.cellViewFindHits) == 0:
+		case len(a.cellView.FindHits) == 0:
 			ui.Text(c, locales.CellViewerFindNoMatch()).FontSize(11).TextColor(t.Danger)
 		default:
-			ui.Text(c, fmt.Sprintf("%d / %d", a.cellViewFindCur+1, len(a.cellViewFindHits))).
+			ui.Text(c, fmt.Sprintf("%d / %d", a.cellView.FindCur+1, len(a.cellView.FindHits))).
 				FontSize(11).TextColor(t.TextMuted)
 		}
 		if iconButtonPlain(c, iconChevronLeft, locales.CellViewerFindPrev(), ui.Transparent).Clicked() {
@@ -204,21 +204,21 @@ func (a *root) cellViewFindBar(c *ui.Context) {
 			a.cellViewFindStep(1)
 		}
 		if iconButtonPlain(c, iconClose, locales.CommonClose(), ui.Transparent).Clicked() {
-			a.cellViewFindOpen = false
+			a.cellView.FindOpen = false
 		}
 	})
 }
 
 // refreshCellFind 重新计算匹配：展开命中节点的所有祖先，再重建可见行。
 func (a *root) refreshCellFind() {
-	q := strings.ToLower(strings.TrimSpace(a.cellViewFindQuery))
-	if q == a.cellViewFindLast {
+	q := strings.ToLower(strings.TrimSpace(a.cellView.FindQuery))
+	if q == a.cellView.FindLast {
 		return
 	}
-	a.cellViewFindLast = q
-	a.cellViewFindHits = a.cellViewFindHits[:0]
-	a.cellViewFindCur = 0
-	if q == "" || a.cellViewJSONRoot == nil {
+	a.cellView.FindLast = q
+	a.cellView.FindHits = a.cellView.FindHits[:0]
+	a.cellView.FindCur = 0
+	if q == "" || a.cellView.JSONRoot == nil {
 		a.rebuildCellJSONRows()
 		return
 	}
@@ -226,16 +226,16 @@ func (a *root) refreshCellFind() {
 	walk = func(n *jsonTreeNode) {
 		if strings.Contains(strings.ToLower(n.key), q) ||
 			strings.Contains(strings.ToLower(n.summary), q) {
-			a.cellViewFindHits = append(a.cellViewFindHits, n)
+			a.cellView.FindHits = append(a.cellView.FindHits, n)
 		}
 		for _, child := range n.children {
 			walk(child)
 		}
 	}
-	walk(a.cellViewJSONRoot)
-	for _, hit := range a.cellViewFindHits {
+	walk(a.cellView.JSONRoot)
+	for _, hit := range a.cellView.FindHits {
 		for p := hit.parent; p != nil; p = p.parent {
-			a.cellViewJSONExpanded[p.path] = true
+			a.cellView.JSONExpanded[p.path] = true
 		}
 	}
 	a.rebuildCellJSONRows()
@@ -244,22 +244,22 @@ func (a *root) refreshCellFind() {
 
 // cellViewFindStep 在匹配之间前后跳转；首尾循环。
 func (a *root) cellViewFindStep(delta int) {
-	if len(a.cellViewFindHits) == 0 {
+	if len(a.cellView.FindHits) == 0 {
 		return
 	}
-	n := len(a.cellViewFindHits)
-	a.cellViewFindCur = (a.cellViewFindCur + delta + n) % n
+	n := len(a.cellView.FindHits)
+	a.cellView.FindCur = (a.cellView.FindCur + delta + n) % n
 	a.scrollToCellFind()
 }
 
 func (a *root) scrollToCellFind() {
-	if a.cellViewFindCur < 0 || a.cellViewFindCur >= len(a.cellViewFindHits) {
+	if a.cellView.FindCur < 0 || a.cellView.FindCur >= len(a.cellView.FindHits) {
 		return
 	}
-	hit := a.cellViewFindHits[a.cellViewFindCur]
-	for i, row := range a.cellViewJSONRows {
+	hit := a.cellView.FindHits[a.cellView.FindCur]
+	for i, row := range a.cellView.JSONRows {
 		if row.node == hit {
-			a.cellViewJSONList.ScrollTo(i, ui.Center)
+			a.cellView.JSONList.ScrollTo(i, ui.Center)
 			return
 		}
 	}
@@ -270,11 +270,11 @@ func (a *root) jsonRowsView(c *ui.Context) {
 	t := c.Theme()
 	// 折叠后行数会变少，等列表这一帧画完再重建，避免迭代中的旧下标越界。
 	toggle := ""
-	ui.List(c, &a.cellViewJSONList, len(a.cellViewJSONRows), func(i int) {
-		if i < 0 || i >= len(a.cellViewJSONRows) {
+	ui.List(c, &a.cellView.JSONList, len(a.cellView.JSONRows), func(i int) {
+		if i < 0 || i >= len(a.cellView.JSONRows) {
 			return
 		}
-		row := a.cellViewJSONRows[i]
+		row := a.cellView.JSONRows[i]
 		node := row.node
 		root := node.key == ""
 		display := node.key
@@ -289,8 +289,8 @@ func (a *root) jsonRowsView(c *ui.Context) {
 			}
 		}
 		btn := ui.ButtonBase(c).Label(label).Justify(ui.Start).Padding(1, 4).Radius(3)
-		if a.cellViewFindOpen && a.cellViewFindCur < len(a.cellViewFindHits) &&
-			a.cellViewFindHits[a.cellViewFindCur] == node {
+		if a.cellView.FindOpen && a.cellView.FindCur < len(a.cellView.FindHits) &&
+			a.cellView.FindHits[a.cellView.FindCur] == node {
 			btn.Background(t.Accent.Alpha(0.16))
 		} else if btn.Hovered() {
 			btn.Background(t.SurfaceHover)
@@ -324,7 +324,7 @@ func (a *root) jsonRowsView(c *ui.Context) {
 		}
 	}).Grow(1).Padding(6, 8)
 	if toggle != "" {
-		a.cellViewJSONExpanded[toggle] = !a.cellViewJSONExpanded[toggle]
+		a.cellView.JSONExpanded[toggle] = !a.cellView.JSONExpanded[toggle]
 		a.rebuildCellJSONRows()
 	}
 }

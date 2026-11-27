@@ -252,7 +252,7 @@ func TestCtrlDoubleClickEditsShortCellInline(t *testing.T) {
 	tt.Frame()
 	tt.HoldModifiers(0)
 	if !a.inlineEditOn || a.editCellOpen {
-		t.Fatalf("short cell must edit inline: inline=%v modal=%v view=%v row=%d cursor=%q plan=%v err=%q", a.inlineEditOn, a.editCellOpen, a.cellViewOpen, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
+		t.Fatalf("short cell must edit inline: inline=%v modal=%v view=%v row=%d cursor=%q plan=%v err=%q", a.inlineEditOn, a.editCellOpen, a.cellView.Open, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
 	}
 	if a.inlineEditRow != 0 || a.inlineEditCol != 1 {
 		t.Fatalf("inline target = (%d,%d)", a.inlineEditRow, a.inlineEditCol)
@@ -263,8 +263,8 @@ func TestCtrlDoubleClickEditsShortCellInline(t *testing.T) {
 	if a.inlineEditOn {
 		t.Fatal("Enter must finish inline editing")
 	}
-	if a.cellViewOpen || a.editCellOpen {
-		t.Fatalf("Enter must not open another panel: view=%v modal=%v", a.cellViewOpen, a.editCellOpen)
+	if a.cellView.Open || a.editCellOpen {
+		t.Fatalf("Enter must not open another panel: view=%v modal=%v", a.cellView.Open, a.editCellOpen)
 	}
 	got, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]
 	if !ok || got != "alice2" {
@@ -304,7 +304,7 @@ func TestCtrlDoubleClickLongCellOpensModal(t *testing.T) {
 	tt.Frame()
 	tt.HoldModifiers(0)
 	if !a.editCellOpen || a.inlineEditOn {
-		t.Fatalf("long cell must open modal: modal=%v inline=%v view=%v row=%d cursor=%q plan=%v err=%q", a.editCellOpen, a.inlineEditOn, a.cellViewOpen, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
+		t.Fatalf("long cell must open modal: modal=%v inline=%v view=%v row=%d cursor=%q plan=%v err=%q", a.editCellOpen, a.inlineEditOn, a.cellView.Open, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
 	}
 	if a.editCellText != long {
 		t.Fatalf("modal text = %q", a.editCellText)
@@ -338,8 +338,8 @@ func TestCellViewerCloseIcon(t *testing.T) {
 	tt.Frame()
 	a.openCellViewer(a.con.Result(), 0, 0)
 	tt.Frame()
-	if !a.cellViewOpen || !tt.HasText("hello") {
-		t.Fatalf("viewer missing: %v %q", a.cellViewOpen, tt.Texts())
+	if !a.cellView.Open || !tt.HasText("hello") {
+		t.Fatalf("viewer missing: %v %q", a.cellView.Open, tt.Texts())
 	}
 	if _, ok := tt.Find("复制原文"); !ok {
 		t.Fatalf("copy icon missing: %q", tt.Texts())
@@ -348,7 +348,7 @@ func TestCellViewerCloseIcon(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.cellViewOpen {
+	if a.cellView.Open {
 		t.Fatal("close icon must close the viewer")
 	}
 }
@@ -581,8 +581,8 @@ func TestMouseDoubleClickPlainEditsWhenSwapped(t *testing.T) {
 	tt.ClickAt(rect.X+2, rect.Y+2)
 	tt.Frame()
 	tt.Frame()
-	if !a.inlineEditOn || a.cellViewOpen {
-		t.Fatalf("普通双击应变成编辑: inline=%v view=%v", a.inlineEditOn, a.cellViewOpen)
+	if !a.inlineEditOn || a.cellView.Open {
+		t.Fatalf("普通双击应变成编辑: inline=%v view=%v", a.inlineEditOn, a.cellView.Open)
 	}
 }
 
@@ -597,7 +597,7 @@ func TestMouseDoubleClickCtrlPreviewsWhenSwapped(t *testing.T) {
 	if a.resultClickMods != ui.Ctrl {
 		t.Fatalf("应记录双击时的 Ctrl 修饰键，得到 %v", a.resultClickMods)
 	}
-	if !a.cellViewOpen || a.inlineEditOn {
-		t.Fatalf("Ctrl+双击应变成预览: view=%v inline=%v", a.cellViewOpen, a.inlineEditOn)
+	if !a.cellView.Open || a.inlineEditOn {
+		t.Fatalf("Ctrl+双击应变成预览: view=%v inline=%v", a.cellView.Open, a.inlineEditOn)
 	}
 }

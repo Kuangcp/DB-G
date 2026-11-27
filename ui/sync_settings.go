@@ -26,7 +26,7 @@ func (a *root) syncSection(c *ui.Context) {
 	})
 
 	ui.Text(c, locales.SyncRepo()).FontSize(12).TextColor(t.TextMuted)
-	if ui.TextInput(c, &a.syncPrefs.RepoURL).
+	if ui.TextInput(c, &a.gitSync.Prefs.RepoURL).
 		Placeholder("git@github.com:me/db-g-sync.git").
 		Label(locales.SyncRepoLabel()).
 		Changed() {
@@ -35,7 +35,7 @@ func (a *root) syncSection(c *ui.Context) {
 	ui.Row(c).Gap(8).Children(func() {
 		ui.Column(c).Grow(1).Gap(4).Children(func() {
 			ui.Text(c, locales.SyncBranch()).FontSize(12).TextColor(t.TextMuted)
-			if ui.TextInput(c, &a.syncPrefs.Branch).
+			if ui.TextInput(c, &a.gitSync.Prefs.Branch).
 				Placeholder("main").
 				Label(locales.SyncBranchLabel()).
 				Changed() {
@@ -44,7 +44,7 @@ func (a *root) syncSection(c *ui.Context) {
 		})
 		ui.Column(c).Grow(2).Gap(4).Children(func() {
 			ui.Text(c, locales.SyncSSHKey()).FontSize(12).TextColor(t.TextMuted)
-			if ui.TextInput(c, &a.syncPrefs.SSHKeyPath).
+			if ui.TextInput(c, &a.gitSync.Prefs.SSHKeyPath).
 				Placeholder("~/.ssh/id_ed25519").
 				Label(locales.SyncSSHKeyLabel()).
 				Changed() {
@@ -52,7 +52,7 @@ func (a *root) syncSection(c *ui.Context) {
 			}
 		})
 	})
-	workTree := app.SyncWorkTree(a.syncPrefsPath)
+	workTree := app.SyncWorkTree(a.gitSync.PrefsPath)
 	ui.Text(c, locales.SyncDir(workTree)).FontSize(11).
 		TextColor(t.TextMuted).SingleLine().Tooltip(locales.SyncDirHint())
 	if _, err := os.Stat(filepath.Join(workTree, ".git")); err != nil {
@@ -66,31 +66,31 @@ func (a *root) syncSection(c *ui.Context) {
 	ui.Divider(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, locales.SyncKey()).FontSize(12).TextColor(t.TextMuted)
-		if a.syncKeySet {
+		if a.gitSync.KeySet {
 			ui.Text(c, locales.SyncKeyConfigured()).FontSize(12).TextColor(t.Success)
-			if a.syncKeyKCV != "" {
-				ui.Text(c, "KCV "+a.syncKeyKCV).FontSize(11).TextColor(t.TextMuted)
+			if a.gitSync.KeyKCV != "" {
+				ui.Text(c, "KCV "+a.gitSync.KeyKCV).FontSize(11).TextColor(t.TextMuted)
 			}
 		} else {
 			ui.Text(c, locales.SyncKeyMissing()).FontSize(12).TextColor(t.Warning)
 		}
 		ui.Spacer(c)
-		if a.syncKeySet {
+		if a.gitSync.KeySet {
 			if ui.Button(c, locales.SyncCopyKey()).Clicked() {
-				if key, ok := app.LoadSyncKey(a.syncPrefsPath); ok {
+				if key, ok := app.LoadSyncKey(a.gitSync.PrefsPath); ok {
 					c.WriteClipboard(sync.KeyString(key))
-					a.syncResult = locales.SyncKeyCopied()
+					a.gitSync.Result = locales.SyncKeyCopied()
 				}
 			}
 			if ui.Button(c, locales.SyncImportKey()).Clicked() {
 				a.openSyncKeyModal(false)
 			}
 			if ui.Button(c, locales.SyncClear()).Clicked() {
-				if err := app.ClearSyncKey(a.syncPrefsPath); err != nil {
-					a.syncWarn = locales.SyncClearKeyFailed(err.Error())
+				if err := app.ClearSyncKey(a.gitSync.PrefsPath); err != nil {
+					a.gitSync.Warn = locales.SyncClearKeyFailed(err.Error())
 				} else {
-					a.syncKeySet, a.syncKeyKCV = false, ""
-					a.syncResult = locales.SyncKeyCleared()
+					a.gitSync.KeySet, a.gitSync.KeyKCV = false, ""
+					a.gitSync.Result = locales.SyncKeyCleared()
 				}
 			}
 		} else {
@@ -109,84 +109,84 @@ func (a *root) syncSection(c *ui.Context) {
 
 	ui.Divider(c)
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		if ui.PrimaryButton(c, locales.SyncPull()).Disabled(a.syncBusy || strings.TrimSpace(a.syncPrefs.RepoURL) == "").
+		if ui.PrimaryButton(c, locales.SyncPull()).Disabled(a.gitSync.Busy || strings.TrimSpace(a.gitSync.Prefs.RepoURL) == "").
 			Clicked() {
 			a.startSync("pull")
 		}
-		if ui.Button(c, locales.SyncCommitPush()).Disabled(a.syncBusy || strings.TrimSpace(a.syncPrefs.RepoURL) == "").
+		if ui.Button(c, locales.SyncCommitPush()).Disabled(a.gitSync.Busy || strings.TrimSpace(a.gitSync.Prefs.RepoURL) == "").
 			Clicked() {
 			a.startSync("push")
 		}
-		if a.syncBusy {
+		if a.gitSync.Busy {
 			ui.Spinner(c)
 			ui.Text(c, locales.SyncRunning()).FontSize(11).TextColor(t.TextMuted)
 		}
 		ui.Spacer(c)
-		if a.syncPrefs.LastSyncAt > 0 {
-			ui.Text(c, locales.SyncLast(time.UnixMilli(a.syncPrefs.LastSyncAt).Format("01-02 15:04"))).
+		if a.gitSync.Prefs.LastSyncAt > 0 {
+			ui.Text(c, locales.SyncLast(time.UnixMilli(a.gitSync.Prefs.LastSyncAt).Format("01-02 15:04"))).
 				FontSize(11).TextColor(t.TextMuted)
 		}
 	})
-	if a.syncResult != "" {
-		ui.Text(c, a.syncResult).FontSize(11).TextColor(t.Success).SingleLine().Tooltip(a.syncResult)
+	if a.gitSync.Result != "" {
+		ui.Text(c, a.gitSync.Result).FontSize(11).TextColor(t.Success).SingleLine().Tooltip(a.gitSync.Result)
 	}
-	if a.syncWarn != "" {
-		ui.Text(c, a.syncWarn).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.syncWarn)
+	if a.gitSync.Warn != "" {
+		ui.Text(c, a.gitSync.Warn).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.gitSync.Warn)
 	}
 	ui.Text(c, locales.SyncTransportHint()).
 		FontSize(11).TextColor(t.TextMuted)
 }
 
 func (a *root) saveSyncPrefs() {
-	prefs := a.syncPrefs
+	prefs := a.gitSync.Prefs
 	if strings.TrimSpace(prefs.Branch) == "" {
 		prefs.Branch = "main"
 	}
-	if err := app.SaveSyncPrefs(a.syncPrefsPath, prefs); err != nil {
-		a.syncWarn = locales.SyncSaveFailed(err.Error())
+	if err := app.SaveSyncPrefs(a.gitSync.PrefsPath, prefs); err != nil {
+		a.gitSync.Warn = locales.SyncSaveFailed(err.Error())
 	}
 }
 
 func (a *root) syncService() *app.SyncService {
-	return app.NewSyncService(a.store, a.syncPrefsPath)
+	return app.NewSyncService(a.store, a.gitSync.PrefsPath)
 }
 
 // reloadSyncPrefs 把磁盘上的同步配置读回内存（保留 KCV/已确认指纹等后台写入的字段）。
 func (a *root) reloadSyncPrefs() {
-	prefs, warn := app.LoadSyncPrefs(a.syncPrefsPath)
-	a.syncPrefs = prefs
+	prefs, warn := app.LoadSyncPrefs(a.gitSync.PrefsPath)
+	a.gitSync.Prefs = prefs
 	if warn != "" {
-		a.syncWarn = warn
+		a.gitSync.Warn = warn
 	}
-	if key, ok := app.LoadSyncKey(a.syncPrefsPath); ok {
-		a.syncKeySet = true
-		a.syncKeyKCV = sync.KCV(key)
+	if key, ok := app.LoadSyncKey(a.gitSync.PrefsPath); ok {
+		a.gitSync.KeySet = true
+		a.gitSync.KeyKCV = sync.KCV(key)
 	} else {
-		a.syncKeySet, a.syncKeyKCV = false, ""
+		a.gitSync.KeySet, a.gitSync.KeyKCV = false, ""
 	}
 }
 
 // startSync 在后台执行拉取/提交；结果为 NeedsKey/Findings 时转成弹窗。
 func (a *root) startSync(kind string) {
-	if a.syncBusy {
+	if a.gitSync.Busy {
 		return
 	}
-	if strings.TrimSpace(a.syncPrefs.RepoURL) == "" {
-		a.syncWarn = locales.SyncRepoRequired()
+	if strings.TrimSpace(a.gitSync.Prefs.RepoURL) == "" {
+		a.gitSync.Warn = locales.SyncRepoRequired()
 		return
 	}
 	a.saveSyncPrefs()
 	if err := a.flushActive(); err != nil {
-		a.syncWarn = locales.SyncSaveConsoleFailed(err.Error())
+		a.gitSync.Warn = locales.SyncSaveConsoleFailed(err.Error())
 		return
 	}
 	if m := a.consoleMgr(); m != nil {
 		m.FlushAll()
 	}
-	a.syncBusy = true
-	a.syncPendingKind = kind
+	a.gitSync.Busy = true
+	a.gitSync.PendingKind = kind
 	a.updateSettingsWindow()
-	a.syncWarn, a.syncResult = "", locales.SyncRunning()
+	a.gitSync.Warn, a.gitSync.Result = "", locales.SyncRunning()
 	svc := a.syncService()
 	run := func() app.SyncOutcome {
 		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
@@ -205,26 +205,26 @@ func (a *root) startSync(kind string) {
 }
 
 func (a *root) finishSync(res app.SyncOutcome) {
-	a.syncBusy = false
+	a.gitSync.Busy = false
 	defer a.updateSettingsWindow()
-	a.syncResult = res.Message
+	a.gitSync.Result = res.Message
 	a.reloadSyncPrefs()
 	switch {
 	case res.NeedsKey:
-		a.syncKeyRepoKCV = res.RepoKCV
+		a.gitSync.KeyRepoKCV = res.RepoKCV
 		a.openSyncKeyModal(res.RepoHasKCV)
 	case len(res.Findings) > 0:
-		a.syncFindings = res.Findings
-		a.syncFindingsOpen = true
+		a.gitSync.Findings = res.Findings
+		a.gitSync.FindingsOpen = true
 	case res.OK:
-		a.syncWarn = ""
-		a.syncPendingKind = ""
+		a.gitSync.Warn = ""
+		a.gitSync.PendingKind = ""
 		if res.Applied {
 			a.refreshAfterSync()
 		}
 	default:
-		a.syncWarn = res.Message
-		a.syncPendingKind = ""
+		a.gitSync.Warn = res.Message
+		a.gitSync.PendingKind = ""
 	}
 }
 
@@ -253,85 +253,85 @@ func (a *root) refreshAfterSync() {
 }
 
 func (a *root) openSyncKeyModal(importOnly bool) {
-	a.syncKeyOpen = true
-	a.syncKeyImportOnly = importOnly
-	a.syncKeyInput = ""
-	a.syncKeyErr = ""
+	a.gitSync.KeyOpen = true
+	a.gitSync.KeyImportOnly = importOnly
+	a.gitSync.KeyInput = ""
+	a.gitSync.KeyErr = ""
 }
 
 func (a *root) generateSyncKey() {
 	a.saveSyncPrefs()
 	key, err := sync.NewKey()
 	if err != nil {
-		a.syncWarn = locales.SyncGenKeyFailed(err.Error())
+		a.gitSync.Warn = locales.SyncGenKeyFailed(err.Error())
 		return
 	}
 	if err := a.syncService().SaveKey(key); err != nil {
-		a.syncWarn = locales.SyncSaveKeyFailed(err.Error())
+		a.gitSync.Warn = locales.SyncSaveKeyFailed(err.Error())
 		return
 	}
-	a.syncKeySet = true
-	a.syncKeyKCV = sync.KCV(key)
-	a.syncKeyOpen = false
+	a.gitSync.KeySet = true
+	a.gitSync.KeyKCV = sync.KCV(key)
+	a.gitSync.KeyOpen = false
 	a.reloadSyncPrefs()
 	a.updateSettingsWindow()
-	a.syncResult = locales.SyncKeyGenerated()
+	a.gitSync.Result = locales.SyncKeyGenerated()
 	a.rerunSync()
 }
 
 func (a *root) importSyncKey() {
 	a.saveSyncPrefs()
-	key, err := sync.ParseKeyString(a.syncKeyInput)
+	key, err := sync.ParseKeyString(a.gitSync.KeyInput)
 	if err != nil {
-		a.syncKeyErr = err.Error()
+		a.gitSync.KeyErr = err.Error()
 		return
 	}
-	if a.syncKeyRepoKCV != "" && !sync.KCVEqual(sync.KCV(key), a.syncKeyRepoKCV) {
-		a.syncKeyErr = locales.SyncKeyKCVBad()
+	if a.gitSync.KeyRepoKCV != "" && !sync.KCVEqual(sync.KCV(key), a.gitSync.KeyRepoKCV) {
+		a.gitSync.KeyErr = locales.SyncKeyKCVBad()
 		return
 	}
 	if err := a.syncService().SaveKey(key); err != nil {
-		a.syncKeyErr = locales.SyncSaveKeyFailed(err.Error())
+		a.gitSync.KeyErr = locales.SyncSaveKeyFailed(err.Error())
 		return
 	}
-	a.syncKeySet = true
-	a.syncKeyKCV = sync.KCV(key)
-	a.syncKeyOpen = false
-	a.syncKeyInput = ""
+	a.gitSync.KeySet = true
+	a.gitSync.KeyKCV = sync.KCV(key)
+	a.gitSync.KeyOpen = false
+	a.gitSync.KeyInput = ""
 	a.reloadSyncPrefs()
 	a.updateSettingsWindow()
-	a.syncResult = locales.SyncKeyImported()
+	a.gitSync.Result = locales.SyncKeyImported()
 	a.rerunSync()
 }
 
 func (a *root) rerunSync() {
-	kind := a.syncPendingKind
+	kind := a.gitSync.PendingKind
 	if kind == "" {
 		return
 	}
-	a.syncPendingKind = ""
+	a.gitSync.PendingKind = ""
 	a.startSync(kind)
 }
 
 // syncKeyModal 是缺失/导入同步密钥时的弹窗。
 func (a *root) syncKeyModal(c *ui.Context) {
-	if !a.syncKeyOpen {
+	if !a.gitSync.KeyOpen {
 		return
 	}
 	t := c.Theme()
-	m := ui.Modal(c, &a.syncKeyOpen, func() {
+	m := ui.Modal(c, &a.gitSync.KeyOpen, func() {
 		ui.Text(c, locales.SyncKeyTitle()).Bold()
-		if a.syncKeyImportOnly {
+		if a.gitSync.KeyImportOnly {
 			ui.Text(c, locales.SyncKeyRemoteHasData()).
 				FontSize(12).TextColor(t.Danger)
 		} else {
 			ui.Text(c, locales.SyncKeyRemoteEmpty()).
 				FontSize(12).TextColor(t.TextMuted)
 		}
-		if a.syncKeyRepoKCV != "" {
-			ui.Text(c, locales.SyncRepoKCV(a.syncKeyRepoKCV)).FontSize(11).TextColor(t.TextMuted)
+		if a.gitSync.KeyRepoKCV != "" {
+			ui.Text(c, locales.SyncRepoKCV(a.gitSync.KeyRepoKCV)).FontSize(11).TextColor(t.TextMuted)
 		}
-		ui.TextInput(c, &a.syncKeyInput).
+		ui.TextInput(c, &a.gitSync.KeyInput).
 			Placeholder(locales.SyncKeyPlaceholder()).
 			Label(locales.SyncKeyTitle()).
 			Password().
@@ -343,15 +343,15 @@ func (a *root) syncKeyModal(c *ui.Context) {
 				}
 				return false
 			})
-		if a.syncKeyErr != "" {
-			ui.Text(c, a.syncKeyErr).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.syncKeyErr)
+		if a.gitSync.KeyErr != "" {
+			ui.Text(c, a.gitSync.KeyErr).FontSize(11).TextColor(t.Danger).SingleLine().Tooltip(a.gitSync.KeyErr)
 		}
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.syncKeyOpen = false
-				a.syncPendingKind = ""
+				a.gitSync.KeyOpen = false
+				a.gitSync.PendingKind = ""
 			}
-			if !a.syncKeyImportOnly {
+			if !a.gitSync.KeyImportOnly {
 				if ui.Button(c, locales.SyncGenerateNew()).Clicked() {
 					a.generateSyncKey()
 				}
@@ -362,22 +362,22 @@ func (a *root) syncKeyModal(c *ui.Context) {
 		})
 	}).Width(620).Height(300)
 	if m.Dismissed() {
-		a.syncPendingKind = ""
+		a.gitSync.PendingKind = ""
 	}
 }
 
 // syncFindingsModal 展示即将提交的 SQL 中疑似明文凭据，二次确认后才继续。
 func (a *root) syncFindingsModal(c *ui.Context) {
-	if !a.syncFindingsOpen {
+	if !a.gitSync.FindingsOpen {
 		return
 	}
 	t := c.Theme()
-	ui.Modal(c, &a.syncFindingsOpen, func() {
+	ui.Modal(c, &a.gitSync.FindingsOpen, func() {
 		ui.Text(c, locales.SyncFindingsTitle()).Bold()
 		ui.Text(c, locales.SyncFindingsHint()).
 			FontSize(12).TextColor(t.Warning)
 		ui.Scroll(c).Height(300).Children(func() {
-			for _, f := range a.syncFindings {
+			for _, f := range a.gitSync.Findings {
 				label := secretRuleLabel(f)
 				ui.Row(c).Gap(8).Children(func() {
 					ui.Text(c, label).FontSize(10.5).TextColor(t.Danger)
@@ -388,22 +388,22 @@ func (a *root) syncFindingsModal(c *ui.Context) {
 		})
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.SyncCancelCommit()).Clicked() {
-				a.syncFindingsOpen = false
-				a.syncFindings = nil
-				a.syncPendingKind = ""
+				a.gitSync.FindingsOpen = false
+				a.gitSync.Findings = nil
+				a.gitSync.PendingKind = ""
 			}
 			if ui.PrimaryButton(c, locales.SyncCommitAnyway()).Clicked() {
-				ids := make([]string, 0, len(a.syncFindings))
-				for _, f := range a.syncFindings {
+				ids := make([]string, 0, len(a.gitSync.Findings))
+				for _, f := range a.gitSync.Findings {
 					ids = append(ids, f.Fingerprint)
 				}
 				if err := a.syncService().AcceptFindings(ids); err != nil {
-					a.syncWarn = locales.SyncSaveConfirmFailed(err.Error())
+					a.gitSync.Warn = locales.SyncSaveConfirmFailed(err.Error())
 					return
 				}
 				a.reloadSyncPrefs()
-				a.syncFindingsOpen = false
-				a.syncFindings = nil
+				a.gitSync.FindingsOpen = false
+				a.gitSync.Findings = nil
 				a.rerunSync()
 			}
 		})

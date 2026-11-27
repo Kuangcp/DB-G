@@ -48,7 +48,7 @@ func TestTopBarClickConnectsAndExpands(t *testing.T) {
 	if !a.connected(prof.ID) {
 		t.Fatal("单击未连接的数据源应当建立连接")
 	}
-	if !a.treeExpand[prof.ID] {
+	if !a.tree.Expand[prof.ID] {
 		t.Fatal("单击连接后应展开左侧数据源")
 	}
 }
@@ -58,11 +58,11 @@ func TestTopBarClickDisconnectsAndMarksTreeStale(t *testing.T) {
 	a.testSetSession(prof.ID, treeFakeSession{})
 	base := objectTreeKey(prof.ID, "")
 	groupKey := objectGroupKey(base, engine.ObjectTable)
-	a.treeData[base] = map[engine.ObjectKind][]engine.DBObject{
+	a.tree.Data[base] = map[engine.ObjectKind][]engine.DBObject{
 		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "t"}},
 	}
-	a.treePageStarted[groupKey] = true
-	a.treeCounts[base] = map[engine.ObjectKind]int{engine.ObjectTable: 1}
+	a.tree.PageStarted[groupKey] = true
+	a.tree.Counts[base] = map[engine.ObjectKind]int{engine.ObjectTable: 1}
 
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -73,13 +73,13 @@ func TestTopBarClickDisconnectsAndMarksTreeStale(t *testing.T) {
 	if len(a.sessionErr) != 0 {
 		t.Fatalf("断开后不该留下连接错误: %v", a.sessionErr)
 	}
-	if !a.treeGroupStale[groupKey] || a.treePageStarted[groupKey] {
+	if !a.tree.GroupStale[groupKey] || a.tree.PageStarted[groupKey] {
 		t.Fatal("断开后树分组应标成过期并允许重拉首页")
 	}
-	if _, ok := a.treeCounts[base]; ok {
+	if _, ok := a.tree.Counts[base]; ok {
 		t.Fatal("断开后计数应清掉，重连时重取")
 	}
-	if len(a.treeData[base][engine.ObjectTable]) != 1 {
+	if len(a.tree.Data[base][engine.ObjectTable]) != 1 {
 		t.Fatal("断开后已加载对象应保留，侧栏不突然空掉")
 	}
 }

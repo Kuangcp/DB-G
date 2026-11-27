@@ -34,11 +34,11 @@ func cachePayload(name string, n int) app.MetaCachePayload {
 func TestMetaCacheRendersTreeWithoutSession(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := cacheTestProfile(t, a)
-	if err := a.metaCache.Save(p, cachePayload("cached_table", 1)); err != nil {
+	if err := a.tree.MetaCache.Save(p, cachePayload("cached_table", 1)); err != nil {
 		t.Fatal(err)
 	}
 	a.loadMetaCache(p)
-	a.treeExpand[p.ID] = true
+	a.tree.Expand[p.ID] = true
 	*a.groupOpenPtr(p.ID+"|"+kindKey(engine.ObjectTable), false) = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -53,16 +53,16 @@ func TestMetaCacheRendersTreeWithoutSession(t *testing.T) {
 func TestMetaCacheStaleRefreshesCountsAndPage(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := cacheTestProfile(t, a)
-	a.metaCache = app.NewMetaCacheWithTTL(a.metaCache.MetaCachePath(p), 0) // 目录不对，下面重设
+	a.tree.MetaCache = app.NewMetaCacheWithTTL(a.tree.MetaCache.MetaCachePath(p), 0) // 目录不对，下面重设
 	// 用独立目录和 0 TTL，保证读到即过期。
-	a.metaCache = app.NewMetaCacheWithTTL(t.TempDir(), 0)
-	if err := a.metaCache.Save(p, cachePayload("cached_old", 1)); err != nil {
+	a.tree.MetaCache = app.NewMetaCacheWithTTL(t.TempDir(), 0)
+	if err := a.tree.MetaCache.Save(p, cachePayload("cached_old", 1)); err != nil {
 		t.Fatal(err)
 	}
 	sess := &pagedFakeSession{total: 2}
 	a.testSetSession(p.ID, sess)
 	a.loadMetaCache(p)
-	a.treeExpand[p.ID] = true
+	a.tree.Expand[p.ID] = true
 	*a.groupOpenPtr(p.ID+"|"+kindKey(engine.ObjectTable), false) = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -75,7 +75,7 @@ func TestMetaCacheStaleRefreshesCountsAndPage(t *testing.T) {
 	if sess.objectsCall != 0 {
 		t.Fatal("stale refresh must not fall back to full Objects")
 	}
-	got, hit, _ := a.metaCache.Load(p)
+	got, hit, _ := a.tree.MetaCache.Load(p)
 	if !hit || got.Counts[""][engine.ObjectTable] != 2 {
 		t.Fatalf("refreshed cache: hit=%v %+v", hit, got.Counts)
 	}
@@ -87,18 +87,18 @@ func TestMetaCacheStaleRefreshesCountsAndPage(t *testing.T) {
 func TestReloadAndRemoveClearMetaCache(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := cacheTestProfile(t, a)
-	if err := a.metaCache.Save(p, cachePayload("t", 1)); err != nil {
+	if err := a.tree.MetaCache.Save(p, cachePayload("t", 1)); err != nil {
 		t.Fatal(err)
 	}
 	a.reloadTree()
-	if _, hit, _ := a.metaCache.Load(p); hit {
+	if _, hit, _ := a.tree.MetaCache.Load(p); hit {
 		t.Fatal("reloadTree must clear disk cache")
 	}
-	if err := a.metaCache.Save(p, cachePayload("t", 1)); err != nil {
+	if err := a.tree.MetaCache.Save(p, cachePayload("t", 1)); err != nil {
 		t.Fatal(err)
 	}
 	a.removeConn(p.ID)
-	if _, hit, _ := a.metaCache.Load(p); hit {
+	if _, hit, _ := a.tree.MetaCache.Load(p); hit {
 		t.Fatal("removing a connection must clear its cache")
 	}
 }
@@ -115,11 +115,11 @@ func TestMetaCacheRendersCachedSchemaTree(t *testing.T) {
 			"db1": {engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "cached_schema_table", Schema: "db1"}}},
 		},
 	}
-	if err := a.metaCache.Save(p, payload); err != nil {
+	if err := a.tree.MetaCache.Save(p, payload); err != nil {
 		t.Fatal(err)
 	}
 	a.loadMetaCache(p)
-	a.treeExpand[p.ID] = true
+	a.tree.Expand[p.ID] = true
 	*a.groupOpenPtr(p.ID+"|db1|schema", false) = true
 	*a.groupOpenPtr(p.ID+"|db1|"+kindKey(engine.ObjectTable), false) = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
@@ -134,7 +134,7 @@ func TestMetaCacheSavedAfterMetadataLoad(t *testing.T) {
 	p := cacheTestProfile(t, a)
 	a.testSetSession(p.ID, &pagedFakeSession{total: 3})
 	a.loadGroupsIn(p, "")
-	got, hit, _ := a.metaCache.Load(p)
+	got, hit, _ := a.tree.MetaCache.Load(p)
 	if !hit {
 		t.Fatal("metadata load must write disk cache")
 	}
@@ -149,13 +149,13 @@ func TestMetaCacheSavedAfterMetadataLoad(t *testing.T) {
 func TestMetaCacheFreshHitAvoidsQueries(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := cacheTestProfile(t, a)
-	if err := a.metaCache.Save(p, cachePayload("cached_table", 1)); err != nil {
+	if err := a.tree.MetaCache.Save(p, cachePayload("cached_table", 1)); err != nil {
 		t.Fatal(err)
 	}
 	sess := &pagedFakeSession{total: 1}
 	a.testSetSession(p.ID, sess)
 	a.loadMetaCache(p)
-	a.treeExpand[p.ID] = true
+	a.tree.Expand[p.ID] = true
 	*a.groupOpenPtr(p.ID+"|"+kindKey(engine.ObjectTable), false) = true
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
@@ -172,11 +172,11 @@ func TestMetaCacheFreshHitAvoidsQueries(t *testing.T) {
 func TestRefreshConnMetaClearsCaches(t *testing.T) {
 	a := newSidebarRoot(t)
 	p := seedConsoleConn(t, a, "本地")
-	a.connSchema[p.ID] = "main"
-	a.treeData[p.ID] = map[engine.ObjectKind][]engine.DBObject{
+	a.tree.ConnSchema[p.ID] = "main"
+	a.tree.Data[p.ID] = map[engine.ObjectKind][]engine.DBObject{
 		engine.ObjectTable: {{Kind: engine.ObjectTable, Name: "t"}},
 	}
-	a.treeCounts[p.ID] = map[engine.ObjectKind]int{engine.ObjectTable: 1}
+	a.tree.Counts[p.ID] = map[engine.ObjectKind]int{engine.ObjectTable: 1}
 	key, _ := a.completionScope(p.ID)
 	a.catalog.finishColumns(key, "t", []engine.Column{{Name: "id", PrimaryKey: true}}, p.Kind)
 	if _, ok := a.catalog.getColumns(key, "t"); !ok {
@@ -188,10 +188,10 @@ func TestRefreshConnMetaClearsCaches(t *testing.T) {
 	if _, ok := a.catalog.getColumns(key, "t"); ok {
 		t.Fatal("刷新后补全列缓存应失效")
 	}
-	if len(a.treeData) != 0 || len(a.treeCounts) != 0 {
-		t.Fatalf("刷新后对象树缓存应清空: data=%d counts=%d", len(a.treeData), len(a.treeCounts))
+	if len(a.tree.Data) != 0 || len(a.tree.Counts) != 0 {
+		t.Fatalf("刷新后对象树缓存应清空: data=%d counts=%d", len(a.tree.Data), len(a.tree.Counts))
 	}
-	if got := a.connSchema[p.ID]; got != "main" {
+	if got := a.tree.ConnSchema[p.ID]; got != "main" {
 		t.Fatalf("刷新不应丢掉当前 schema: %q", got)
 	}
 }

@@ -166,21 +166,21 @@ func (a *root) connBar(c *ui.Context) {
 				a.extMsg = ""
 			}
 		}
-		if a.installNeed.NeedInstall {
+		if a.install.Need.NeedInstall {
 			label := locales.InstallTitle()
 			switch {
-			case a.installNeed.Upgrade:
-				label = locales.TopUpgradeApp(a.installNeed.Running)
-			case a.installNeed.Repair:
+			case a.install.Need.Upgrade:
+				label = locales.TopUpgradeApp(a.install.Need.Running)
+			case a.install.Need.Repair:
 				label = locales.InstallRepairTitle()
 			}
 			if iconButton(c, iconUpgrade, label, t.Accent).Clicked() {
-				a.installOpen = true
-				a.installErr = ""
+				a.install.Open = true
+				a.install.Err = ""
 			}
 		}
-		if a.installNote != "" {
-			ui.Text(c, a.installNote).FontSize(12).TextColor(t.TextMuted).SingleLine()
+		if a.install.Note != "" {
+			ui.Text(c, a.install.Note).FontSize(12).TextColor(t.TextMuted).SingleLine()
 		}
 		// 表视图只读浏览，执行/计划/编辑工具不适用，整组隐藏。
 		if !a.viewerActive() {

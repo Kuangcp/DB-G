@@ -458,7 +458,7 @@ func TestAISnapshotUsesCurrentSchemaKey(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.connSchema[prof.ID] = "shop"
+	a.tree.ConnSchema[prof.ID] = "shop"
 	key := prof.ID + "|shop"
 	a.catalog.finish(key, []string{"orders"}, nil, "mysql")
 	a.catalog.finishColumns(key, "orders", []engine.Column{
@@ -680,7 +680,7 @@ func TestAIDDLContextPrefetchAndCache(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate")
 	}
-	a.connSchema[prof.ID] = "db1"
+	a.tree.ConnSchema[prof.ID] = "db1"
 	fake := &schemaFakeSession{
 		schemas: []string{"db1"},
 		objects: map[string][]engine.DBObject{

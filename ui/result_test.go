@@ -330,7 +330,7 @@ func TestCellViewerJSONTree(t *testing.T) {
 	tt.Frame()
 	a.openCellViewer(a.con.Result(), 0, 0)
 	tt.Frame()
-	if !a.cellViewJSONOK {
+	if !a.cellView.JSONOK {
 		t.Fatal("JSON should render as a tree")
 	}
 	if !tt.HasText("user") {
@@ -436,23 +436,23 @@ func TestCellViewerResizable(t *testing.T) {
 	tt.Frame()
 	a.openCellViewer(a.con.Result(), 0, 0)
 	tt.Frame()
-	if a.cellModalW <= 0 || a.cellModalH <= 0 {
-		t.Fatalf("size not initialized: %v×%v", a.cellModalW, a.cellModalH)
+	if a.cellView.ModalW <= 0 || a.cellView.ModalH <= 0 {
+		t.Fatalf("size not initialized: %v×%v", a.cellView.ModalW, a.cellView.ModalH)
 	}
 	grip, ok := tt.Find("调整弹窗大小")
 	if !ok {
 		t.Fatalf("resize grip missing: %q", tt.Texts())
 	}
-	beforeW, beforeH := a.cellModalW, a.cellModalH
+	beforeW, beforeH := a.cellView.ModalW, a.cellView.ModalH
 	tt.Press(grip.X+grip.W/2, grip.Y+grip.H/2)
 	tt.Move(grip.X+grip.W/2+60, grip.Y+grip.H/2+30)
 	tt.Release(grip.X+grip.W/2+60, grip.Y+grip.H/2+30)
 	tt.Frame()
-	if a.cellModalW <= beforeW || a.cellModalH <= beforeH {
-		t.Fatalf("resize did not grow: before %v×%v after %v×%v", beforeW, beforeH, a.cellModalW, a.cellModalH)
+	if a.cellView.ModalW <= beforeW || a.cellView.ModalH <= beforeH {
+		t.Fatalf("resize did not grow: before %v×%v after %v×%v", beforeW, beforeH, a.cellView.ModalW, a.cellView.ModalH)
 	}
-	if a.cellModalW > 1200-40 || a.cellModalH > 800-40 {
-		t.Fatalf("size escaped window: %v×%v", a.cellModalW, a.cellModalH)
+	if a.cellView.ModalW > 1200-40 || a.cellView.ModalH > 800-40 {
+		t.Fatalf("size escaped window: %v×%v", a.cellView.ModalW, a.cellView.ModalH)
 	}
 }
 
@@ -463,8 +463,8 @@ func TestCellViewerSizesToContent(t *testing.T) {
 	ts.Frame()
 	short.openCellViewer(short.con.Result(), 0, 0)
 	ts.Frame()
-	if short.cellModalW > 440 || short.cellModalH > 280 {
-		t.Fatalf("short text should use a small dialog: %v×%v", short.cellModalW, short.cellModalH)
+	if short.cellView.ModalW > 440 || short.cellView.ModalH > 280 {
+		t.Fatalf("short text should use a small dialog: %v×%v", short.cellView.ModalW, short.cellView.ModalH)
 	}
 
 	big := newTestRoot()
@@ -478,8 +478,8 @@ func TestCellViewerSizesToContent(t *testing.T) {
 	tb.Frame()
 	big.openCellViewer(big.con.Result(), 0, 0)
 	tb.Frame()
-	if big.cellModalW < 500 || big.cellModalH < 600 {
-		t.Fatalf("large JSON should use a large dialog: %v×%v", big.cellModalW, big.cellModalH)
+	if big.cellView.ModalW < 500 || big.cellView.ModalH < 600 {
+		t.Fatalf("large JSON should use a large dialog: %v×%v", big.cellView.ModalW, big.cellView.ModalH)
 	}
 }
 
@@ -494,21 +494,21 @@ func TestCellViewerWrapToggle(t *testing.T) {
 	tt.Frame()
 	a.openCellViewer(a.con.Result(), 0, 0)
 	tt.Frame()
-	if !a.cellViewWrap {
+	if !a.cellView.Wrap {
 		t.Fatal("wrap must default on")
 	}
 	if err := tt.Click("自动折行：开（点击关闭）"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.cellViewWrap {
+	if a.cellView.Wrap {
 		t.Fatal("wrap toggle must turn it off")
 	}
 	if err := tt.Click("自动折行：关（点击开启）"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.cellViewWrap {
+	if !a.cellView.Wrap {
 		t.Fatal("wrap toggle must turn it back on")
 	}
 }
@@ -520,7 +520,7 @@ func TestCellViewerWrapChangesTextWidth(t *testing.T) {
 	tt.Frame()
 	a.openCellViewer(a.con.Result(), 0, 0)
 	text := strings.Repeat("x", 400)
-	a.cellViewText = text
+	a.cellView.Text = text
 	a.fitCellModal(text, false)
 	tt.Frame()
 	wrapped, ok := tt.Find(text)
@@ -547,17 +547,17 @@ func TestExportBusyIndicator(t *testing.T) {
 		Columns: []string{"id"},
 		Rows:    [][]any{{int64(1)}},
 	}, "")
-	a.exportBusy = true
-	a.exportFull = true
-	a.exportFormat = "csv"
-	a.exportRows.Store(1234)
+	a.exportState.Busy = true
+	a.exportState.Full = true
+	a.exportState.Format = "csv"
+	a.exportState.Rows.Store(1234)
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
 	if !tt.HasText("正在全量导出 CSV") || !tt.HasText("已写 1234 行") {
 		t.Fatalf("busy export indicator missing: %q", tt.Texts())
 	}
 
-	a.exportCloseConfirm = true
+	a.exportState.CloseConfirm = true
 	tt.Frame()
 	if !tt.HasText("正在导出，确定退出？") || !tt.HasText("继续导出") || !tt.HasText("仍要退出") {
 		t.Fatalf("close confirmation missing: %q", tt.Texts())
@@ -722,7 +722,7 @@ func TestCellViewerJSONFind(t *testing.T) {
 	tt.Frame()
 	tt.Type("needle")
 	tt.Frame()
-	if got := len(a.cellViewFindHits); got != 2 {
+	if got := len(a.cellView.FindHits); got != 2 {
 		t.Fatalf("应匹配 2 个节点，得到 %d", got)
 	}
 	if _, ok := tt.Find("k"); !ok {
@@ -733,13 +733,13 @@ func TestCellViewerJSONFind(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if a.cellViewFindCur != 1 || !tt.HasText("2 / 2") {
-		t.Fatalf("Enter 应跳到下一个匹配: cur=%d texts=%v", a.cellViewFindCur, tt.Texts())
+	if a.cellView.FindCur != 1 || !tt.HasText("2 / 2") {
+		t.Fatalf("Enter 应跳到下一个匹配: cur=%d texts=%v", a.cellView.FindCur, tt.Texts())
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if a.cellViewFindCur != 0 {
-		t.Fatalf("最后一个匹配后应回到第一个: cur=%d", a.cellViewFindCur)
+	if a.cellView.FindCur != 0 {
+		t.Fatalf("最后一个匹配后应回到第一个: cur=%d", a.cellView.FindCur)
 	}
 }
 
@@ -761,7 +761,7 @@ func TestCellViewerJSONFindShortcut(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyF)
 	tt.Frame()
-	if !a.cellViewFindOpen {
+	if !a.cellView.FindOpen {
 		t.Fatal("Ctrl+F 应打开预览搜索条")
 	}
 }

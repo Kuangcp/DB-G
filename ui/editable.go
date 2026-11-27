@@ -74,7 +74,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	if t := a.activeViewerTab(); t != nil {
 		// 表视图总是浏览一个已知对象：直接用它，不必从 SQL 里反推关系名。
 		// 编辑 SQL 用裸表名（会话当前 schema）；浏览别的 schema 时按跨 schema 只读处理。
-		if cur := a.connSchema[connID]; t.schema != "" && cur != "" && t.schema != cur {
+		if cur := a.tree.ConnSchema[connID]; t.schema != "" && cur != "" && t.schema != cur {
 			a.readonlyReason = locales.EditReadonlyCrossSchema()
 			return
 		}
@@ -100,7 +100,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		for _, name := range seen {
 			table = name
 		}
-		schema = a.connSchema[connID]
+		schema = a.tree.ConnSchema[connID]
 	}
 	scopeKey := catalogKey(connID, schema)
 	cols, all := a.catalog.getColumnsMany(scopeKey, []string{table})

@@ -79,7 +79,7 @@ func newSchemaTestRoot(t *testing.T, p app.ConnProfile) (*root, app.ConnProfile,
 		},
 	}
 	a.testSetSession(stored.ID, fake)
-	a.treeSchemas[stored.ID] = fake.schemas
+	a.tree.Schemas[stored.ID] = fake.schemas
 	return a, stored, fake
 }
 
@@ -97,7 +97,7 @@ func TestDefaultSchemaForPrefersConfiguredDatabase(t *testing.T) {
 
 func TestTopBarSchemaPickerSwitchesSchema(t *testing.T) {
 	a, stored, fake := newSchemaTestRoot(t, app.ConnProfile{Name: "多库", Kind: "mysql", Host: "h", Port: 3306})
-	a.connSchema[stored.ID] = "db1"
+	a.tree.ConnSchema[stored.ID] = "db1"
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
 	if !tt.HasText("db1") {
@@ -110,17 +110,17 @@ func TestTopBarSchemaPickerSwitchesSchema(t *testing.T) {
 	if fake.active != "db2" {
 		t.Fatalf("UseSchema = %q, want db2", fake.active)
 	}
-	if got := a.connSchema[stored.ID]; got != "db2" {
+	if got := a.tree.ConnSchema[stored.ID]; got != "db2" {
 		t.Fatalf("connSchema = %q", got)
 	}
-	if a.treeOpen[stored.ID+"|db2|schema"] == nil || !*a.treeOpen[stored.ID+"|db2|schema"] {
+	if a.tree.Open[stored.ID+"|db2|schema"] == nil || !*a.tree.Open[stored.ID+"|db2|schema"] {
 		t.Fatal("切换后应展开对应 schema 节点")
 	}
 }
 
 func TestSchemaSwitchScopesCompletionCache(t *testing.T) {
 	a, stored, _ := newSchemaTestRoot(t, app.ConnProfile{Name: "多库", Kind: "mysql", Host: "h", Port: 3306})
-	a.connSchema[stored.ID] = "db1"
+	a.tree.ConnSchema[stored.ID] = "db1"
 	a.ensureCatalog(stored.ID)
 	items := a.completionItems(stored.ID)
 	if !hasCompletion(items, "only_db1") || hasCompletion(items, "only_db2") {

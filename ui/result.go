@@ -293,28 +293,28 @@ func (a *root) openCellViewer(r *engine.QueryResult, row, col int) {
 		v = pending
 	}
 	text, isJSON := formatCellText(cellStringFor(a.gridKind(), r, col, v))
-	a.cellViewTitle = r.Columns[col]
+	a.cellView.Title = r.Columns[col]
 	if isJSON {
-		a.cellViewTitle += "（JSON）"
+		a.cellView.Title += "（JSON）"
 	}
-	a.cellViewText = text
+	a.cellView.Text = text
 	a.fitCellModal(text, isJSON)
-	a.cellViewJSONOK = false
-	a.cellViewJSONRoot, a.cellViewJSONRows = nil, nil
-	a.cellViewJSONExpanded, a.cellViewJSONTruncated = nil, false
-	a.cellViewJSONList = ui.ListState{}
-	a.cellViewFindOpen = false
-	a.cellViewFindQuery, a.cellViewFindLast = "", ""
-	a.cellViewFindHits, a.cellViewFindCur = nil, 0
+	a.cellView.JSONOK = false
+	a.cellView.JSONRoot, a.cellView.JSONRows = nil, nil
+	a.cellView.JSONExpanded, a.cellView.JSONTruncated = nil, false
+	a.cellView.JSONList = ui.ListState{}
+	a.cellView.FindOpen = false
+	a.cellView.FindQuery, a.cellView.FindLast = "", ""
+	a.cellView.FindHits, a.cellView.FindCur = nil, 0
 	// 避免对超大文本做树解析（解析与节点量都随大小爆炸），超出就退回纯文本。
-	if isJSON && len(a.cellViewText) <= 1<<20 {
-		if root, truncated, err := buildJSONTree([]byte(a.cellViewText)); err == nil &&
+	if isJSON && len(a.cellView.Text) <= 1<<20 {
+		if root, truncated, err := buildJSONTree([]byte(a.cellView.Text)); err == nil &&
 			(root.kind == "object" || root.kind == "array") {
 			a.applyCellJSON(root, truncated)
-			a.cellViewJSONOK = true
+			a.cellView.JSONOK = true
 		}
 	}
-	a.cellViewOpen = true
+	a.cellView.Open = true
 }
 
 // humanBytes 把字节数缩成 KB/MB，结果区的进度提示用。
@@ -339,13 +339,13 @@ const (
 
 // cellModalSize 返回查看/编辑弹窗当前尺寸；首次使用时补默认值。
 func (a *root) cellModalSize() (float32, float32) {
-	if a.cellModalW <= 0 {
-		a.cellModalW = cellModalDefaultW
+	if a.cellView.ModalW <= 0 {
+		a.cellView.ModalW = cellModalDefaultW
 	}
-	if a.cellModalH <= 0 {
-		a.cellModalH = cellModalDefaultH
+	if a.cellView.ModalH <= 0 {
+		a.cellView.ModalH = cellModalDefaultH
 	}
-	return a.cellModalW, a.cellModalH
+	return a.cellView.ModalW, a.cellView.ModalH
 }
 
 // fitCellModal 按内容给查看/编辑弹窗一个合适的初始尺寸：短文本用小窗口，
@@ -366,7 +366,7 @@ func (a *root) fitCellModal(text string, isJSON bool) {
 		total += n
 	}
 	if total == 0 {
-		a.cellModalW, a.cellModalH = minW, minH
+		a.cellView.ModalW, a.cellView.ModalH = minW, minH
 		return
 	}
 	w := min(max(float32(maxRunes)*charW+100, minW), cellModalDefaultW)
@@ -377,7 +377,7 @@ func (a *root) fitCellModal(text string, isJSON bool) {
 		wrapped += max((n+perLine-1)/perLine, 1)
 	}
 	h := min(max(float32(wrapped)*20+110, minH), cellModalDefaultH)
-	a.cellModalW, a.cellModalH = w, h
+	a.cellView.ModalW, a.cellView.ModalH = w, h
 }
 
 // cellModalGrip 是弹窗右下角的拖拽调整大小手柄。面板在窗口里居中，
@@ -398,24 +398,24 @@ func (a *root) cellModalGrip(c *ui.Context) {
 	})
 	if dx, dy, held := grip.Dragged(); held {
 		w, h := c.Size()
-		a.cellModalW = min(max(a.cellModalW+2*dx, cellModalMinW), w-40)
-		a.cellModalH = min(max(a.cellModalH+2*dy, cellModalMinH), h-40)
+		a.cellView.ModalW = min(max(a.cellView.ModalW+2*dx, cellModalMinW), w-40)
+		a.cellView.ModalH = min(max(a.cellView.ModalH+2*dy, cellModalMinH), h-40)
 	}
 }
 
 // viewerToolbar 是单元格查看器的标题栏：标题在左，JSON 折叠控制与复制/关闭在右。
 func (a *root) viewerToolbar(c *ui.Context) {
 	ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
-		ui.Text(c, a.cellViewTitle).Bold().SingleLine()
-		if a.cellViewJSONOK && a.cellViewJSONTruncated {
+		ui.Text(c, a.cellView.Title).Bold().SingleLine()
+		if a.cellView.JSONOK && a.cellView.JSONTruncated {
 			ui.Text(c, locales.JsonTooManyNodes(maxJSONTreeRows)).
 				FontSize(11).TextColor(c.Theme().Warning).SingleLine()
 		}
 		ui.Spacer(c)
-		if a.cellViewJSONOK {
+		if a.cellView.JSONOK {
 			if iconButtonPlain(c, iconSearch, locales.CellViewerFind(), ui.Transparent).Clicked() {
-				a.cellViewFindOpen = !a.cellViewFindOpen
-				if a.cellViewFindOpen {
+				a.cellView.FindOpen = !a.cellView.FindOpen
+				if a.cellView.FindOpen {
 					a.refreshCellFind()
 				}
 			}
@@ -428,53 +428,53 @@ func (a *root) viewerToolbar(c *ui.Context) {
 		} else {
 			label := locales.JsonWrapOn()
 			col := c.Theme().Accent
-			if !a.cellViewWrap {
+			if !a.cellView.Wrap {
 				label, col = locales.JsonWrapOff(), ui.Transparent
 			}
 			if iconButtonPlain(c, iconWrapText, label, col).Clicked() {
-				a.cellViewWrap = !a.cellViewWrap
+				a.cellView.Wrap = !a.cellView.Wrap
 			}
 		}
 		if iconButtonPlain(c, iconCopy, locales.JsonCopyRaw(), ui.Transparent).Tooltip(locales.JsonCopyRawTip()).Clicked() {
-			c.WriteClipboard(a.cellViewText)
+			c.WriteClipboard(a.cellView.Text)
 		}
 		if iconButtonPlain(c, iconClose, locales.CommonClose(), ui.Transparent).Clicked() {
-			a.cellViewOpen = false
+			a.cellView.Open = false
 		}
 	})
 }
 
 // cellViewer 渲染长文本查看弹窗；JSON 时画可展开/折叠的树。
 func (a *root) cellViewer(c *ui.Context) {
-	if !a.cellViewOpen {
+	if !a.cellView.Open {
 		return
 	}
 	w, h := a.cellModalSize()
-	m := ui.Modal(c, &a.cellViewOpen, func() {
+	m := ui.Modal(c, &a.cellView.Open, func() {
 		a.viewerToolbar(c)
-		if a.cellViewJSONOK && a.cellViewFindOpen {
+		if a.cellView.JSONOK && a.cellView.FindOpen {
 			a.cellViewFindBar(c)
 		}
 		switch {
-		case a.cellViewJSONOK:
+		case a.cellView.JSONOK:
 			a.jsonRowsView(c)
-		case a.cellViewWrap:
+		case a.cellView.Wrap:
 			// 纵向滚动容器里再套一层 FillWidth，文本才会拿到视口宽度并折行。
 			ui.Scroll(c).Grow(1).Children(func() {
 				ui.Column(c).FillWidth().Children(func() {
-					a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12))
+					a.withResultFont(ui.Text(c, a.cellView.Text).Font("monospace").FontSize(12))
 				})
 			})
 		default:
 			// 不折行：整行保留自然宽度，交给横向滚动查看。
 			ui.ScrollBoth(c).Grow(1).Children(func() {
-				a.withResultFont(ui.Text(c, a.cellViewText).Font("monospace").FontSize(12).NoWrap())
+				a.withResultFont(ui.Text(c, a.cellView.Text).Font("monospace").FontSize(12).NoWrap())
 			})
 		}
 		a.cellModalGrip(c)
 	}).Width(w).Height(h)
-	if a.cellViewJSONOK && m.Shortcut(ui.Ctrl, ui.KeyF) {
-		a.cellViewFindOpen = true
+	if a.cellView.JSONOK && m.Shortcut(ui.Ctrl, ui.KeyF) {
+		a.cellView.FindOpen = true
 		a.refreshCellFind()
 	}
 }
@@ -525,7 +525,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 			}).Label(locales.ResultActions())
 			ui.Divider(c)
 			a.pinButton(c)
-			iconButtonPlain(c, iconDownload, locales.ExportMenu(), ui.Transparent).Disabled(a.exportBusy).Menu(func(m *ui.Menu) {
+			iconButtonPlain(c, iconDownload, locales.ExportMenu(), ui.Transparent).Disabled(a.exportState.Busy).Menu(func(m *ui.Menu) {
 				if m.Item(locales.ExportCurrentCSV()).Chosen() {
 					a.pickExport("csv", false)
 				}
@@ -550,27 +550,27 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 					a.confirmFullExport("jsonl")
 				}
 			})
-			if a.exportBusy {
+			if a.exportState.Busy {
 				ui.Spinner(c)
-				label := locales.ExportRunning(strings.ToUpper(a.exportFormat))
-				if a.exportFull {
-					label = locales.ExportFullRunning(strings.ToUpper(a.exportFormat))
+				label := locales.ExportRunning(strings.ToUpper(a.exportState.Format))
+				if a.exportState.Full {
+					label = locales.ExportFullRunning(strings.ToUpper(a.exportState.Format))
 				}
-				if n := a.exportRows.Load(); n > 0 {
+				if n := a.exportState.Rows.Load(); n > 0 {
 					label += locales.ExportWritten(int(n))
 				}
 				ui.Text(c, label).FontSize(12).TextColor(c.Theme().Accent).SingleLine()
-			} else if a.exportStatus != "" {
-				status := ui.Text(c, a.exportStatus).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
-				if a.exportPath != "" {
+			} else if a.exportState.Status != "" {
+				status := ui.Text(c, a.exportState.Status).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+				if a.exportState.Path != "" {
 					status.Tooltip(locales.ExportOpenFolderTip())
 					if status.DoubleClicked() {
 						a.openExportFolder()
 					}
 				}
 				if iconButtonPlain(c, iconClose, locales.ExportClearTip(), ui.Transparent).Clicked() {
-					a.exportStatus = ""
-					a.exportPath = ""
+					a.exportState.Status = ""
+					a.exportState.Path = ""
 				}
 			}
 			if a.editStatus != "" {
@@ -1245,25 +1245,25 @@ func (a *root) canStream() bool {
 
 // confirmFullExport 打开「会重新执行查询」的确认弹窗。
 func (a *root) confirmFullExport(format string) {
-	a.exportFormat = format
-	a.exportConfirm = true
+	a.exportState.Format = format
+	a.exportState.Confirm = true
 }
 
 // exportConfirmModal 渲染全量导出确认。
 func (a *root) exportConfirmModal(c *ui.Context) {
-	if !a.exportConfirm {
+	if !a.exportState.Confirm {
 		return
 	}
-	ui.Modal(c, &a.exportConfirm, func() {
-		ui.Text(c, locales.ExportFullTitle(a.exportFormat)).Bold()
+	ui.Modal(c, &a.exportState.Confirm, func() {
+		ui.Text(c, locales.ExportFullTitle(a.exportState.Format)).Bold()
 		ui.Text(c, locales.ExportFullHint()).TextColor(c.Theme().TextMuted)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
-				a.exportConfirm = false
+				a.exportState.Confirm = false
 			}
 			if ui.PrimaryButton(c, locales.ExportChooseFile()).Clicked() {
-				format := a.exportFormat
-				a.exportConfirm = false
+				format := a.exportState.Format
+				a.exportState.Confirm = false
 				a.pickExport(format, true)
 			}
 		})
@@ -1272,19 +1272,19 @@ func (a *root) exportConfirmModal(c *ui.Context) {
 
 // exportCloseModal 在导出进行中阻止关窗时给用户选择。
 func (a *root) exportCloseModal(c *ui.Context) {
-	if !a.exportCloseConfirm {
+	if !a.exportState.CloseConfirm {
 		return
 	}
-	ui.Modal(c, &a.exportCloseConfirm, func() {
+	ui.Modal(c, &a.exportState.CloseConfirm, func() {
 		ui.Text(c, locales.ExportExitTitle()).Bold()
 		ui.Text(c, locales.ExportExitHint()).TextColor(c.Theme().TextMuted)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.ExportContinue()).Clicked() {
-				a.exportCloseConfirm = false
+				a.exportState.CloseConfirm = false
 			}
 			if ui.Button(c, locales.ExportExitAnyway()).TextColor(c.Theme().Danger).Clicked() {
-				a.exportCloseConfirm = false
-				a.exportBusy = false
+				a.exportState.CloseConfirm = false
+				a.exportState.Busy = false
 				if a.win != nil {
 					a.win.Close()
 				}
@@ -1295,15 +1295,15 @@ func (a *root) exportCloseModal(c *ui.Context) {
 
 // openExportFolder 用系统文件管理器定位最近导出的文件。
 func (a *root) openExportFolder() {
-	if a.exportPath == "" {
+	if a.exportState.Path == "" {
 		return
 	}
 	reveal := app.RevealPath
 	if a.revealPath != nil {
 		reveal = a.revealPath
 	}
-	if err := reveal(a.exportPath); err != nil {
-		a.exportStatus = locales.ExportOpenFolderFailed(err.Error())
+	if err := reveal(a.exportState.Path); err != nil {
+		a.exportState.Status = locales.ExportOpenFolderFailed(err.Error())
 	}
 }
 
@@ -1332,33 +1332,33 @@ func (a *root) pickExport(format string, full bool) {
 			return
 		}
 		a.safeUpdate(win, func() {
-			a.exportStatus = ""
-			a.exportPath = ""
-			a.exportBusy = true
-			a.exportFull = full
-			a.exportFormat = format
-			a.exportRows.Store(0)
-			a.exportCloseConfirm = false
+			a.exportState.Status = ""
+			a.exportState.Path = ""
+			a.exportState.Busy = true
+			a.exportState.Full = full
+			a.exportState.Format = format
+			a.exportState.Rows.Store(0)
+			a.exportState.CloseConfirm = false
 		})
 		var progress func(int)
 		if full {
 			progress = func(n int) {
-				a.exportRows.Store(int64(n))
+				a.exportState.Rows.Store(int64(n))
 				a.safeUpdate(win, func() {})
 			}
 		}
 		n, err := a.exportToProgress(path, format, full, progress)
 		a.safeUpdate(win, func() {
-			a.exportBusy = false
-			a.exportCloseConfirm = false
+			a.exportState.Busy = false
+			a.exportState.CloseConfirm = false
 			if err != nil {
-				a.exportPath = ""
-				a.exportStatus = locales.ExportFailed(err.Error())
+				a.exportState.Path = ""
+				a.exportState.Status = locales.ExportFailed(err.Error())
 				app.LogError("export", "failed", "path", path, "format", format, "err", err.Error())
 				return
 			}
-			a.exportPath = path
-			a.exportStatus = locales.ExportDone(n, path)
+			a.exportState.Path = path
+			a.exportState.Status = locales.ExportDone(n, path)
 			app.LogInfo("export", "done", "path", path, "format", format, "rows", n, "full", full)
 		})
 	}()
@@ -1384,26 +1384,26 @@ func (a *root) pickExportSelection(format string, rows, cols []int) {
 			return
 		}
 		a.safeUpdate(win, func() {
-			a.exportStatus = ""
-			a.exportPath = ""
-			a.exportBusy = true
-			a.exportFull = false
-			a.exportFormat = format
-			a.exportRows.Store(0)
-			a.exportCloseConfirm = false
+			a.exportState.Status = ""
+			a.exportState.Path = ""
+			a.exportState.Busy = true
+			a.exportState.Full = false
+			a.exportState.Format = format
+			a.exportState.Rows.Store(0)
+			a.exportState.CloseConfirm = false
 		})
 		n, err := a.exportSelectionTo(path, format, rows, cols)
 		a.safeUpdate(win, func() {
-			a.exportBusy = false
-			a.exportCloseConfirm = false
+			a.exportState.Busy = false
+			a.exportState.CloseConfirm = false
 			if err != nil {
-				a.exportPath = ""
-				a.exportStatus = locales.ExportFailed(err.Error())
+				a.exportState.Path = ""
+				a.exportState.Status = locales.ExportFailed(err.Error())
 				app.LogError("export", "selection failed", "path", path, "format", format, "err", err.Error())
 				return
 			}
-			a.exportPath = path
-			a.exportStatus = locales.ExportSelectionDone(n, path)
+			a.exportState.Path = path
+			a.exportState.Status = locales.ExportSelectionDone(n, path)
 			app.LogInfo("export", "selection done", "path", path, "format", format, "rows", n)
 		})
 	}()
