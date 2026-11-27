@@ -23,7 +23,7 @@ import (
 
 // displayToResult 把显示顺序的行号换成结果行下标（排序/筛选后两者不同）。
 func (a *root) displayToResult(r *engine.QueryResult, displayRow int) int {
-	rows := a.resView.apply(r)
+	rows := a.grid.view.apply(r)
 	if displayRow < 0 || displayRow >= len(rows) {
 		return -1
 	}
@@ -32,7 +32,7 @@ func (a *root) displayToResult(r *engine.QueryResult, displayRow int) int {
 
 // cursorDataCol 把 Cells.Cursor（列 ID）换成结果里的数据列下标；行号列或未知列返回 -1。
 func (a *root) cursorDataCol(r *engine.QueryResult) int {
-	id := a.resultState.Cells.Cursor
+	id := a.grid.state.Cells.Cursor
 	if id == "" || id == "#" || r == nil {
 		return -1
 	}
@@ -52,7 +52,7 @@ func (a *root) copyCurrentCell(c *ui.Context, r *engine.QueryResult) {
 		return
 	}
 	col := a.cursorDataCol(r)
-	row := a.displayToResult(r, a.resultRow)
+	row := a.displayToResult(r, a.grid.row)
 	if r == nil || row < 0 || col < 0 || col >= len(r.Columns) {
 		return
 	}
@@ -66,15 +66,15 @@ func (a *root) resultSelection(r *engine.QueryResult) (rows, cols []int, multi b
 		return nil, nil, false
 	}
 	chosen := make(map[int]bool)
-	for k := range a.resultSel.All() {
+	for k := range a.grid.sel.All() {
 		chosen[k] = true
 	}
-	for i, ri := range a.resView.apply(r) {
+	for i, ri := range a.grid.view.apply(r) {
 		if chosen[i] {
 			rows = append(rows, ri)
 		}
 	}
-	for _, id := range a.resultState.SelectedColumns() {
+	for _, id := range a.grid.state.SelectedColumns() {
 		if id == "#" {
 			continue
 		}
@@ -505,7 +505,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 		})
 	}
 	a.ensureEditState(r)
-	displayRows := a.resView.apply(r)
+	displayRows := a.grid.view.apply(r)
 	editSet := a.editSet()
 	insertRows := len(editSet.Inserts)
 	totalRows := len(displayRows) + insertRows
@@ -576,34 +576,34 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 			if a.editStatus != "" {
 				ui.Text(c, a.editStatus).FontSize(12).TextColor(c.Theme().Success).SingleLine()
 			}
-			if n := len(a.resView.filters); n > 0 {
+			if n := len(a.grid.view.filters); n > 0 {
 				ui.Text(c, locales.FilterColumns(n)).FontSize(12).TextColor(c.Theme().TextMuted)
 			}
 		})
 	}
 
-	a.resultState.HeaderMenu = nil
+	a.grid.state.HeaderMenu = nil
 	if mode == gridConsole {
-		a.resultState.HeaderMenu = func(m *ui.Menu, col int) {
+		a.grid.state.HeaderMenu = func(m *ui.Menu, col int) {
 			if col <= 0 {
 				return
 			}
 			idx := col - 1
 			if m.Item(locales.SortAsc()).Chosen() {
-				a.resView.sortBy(r, idx, false)
+				a.grid.view.sortBy(r, idx, false)
 			}
 			if m.Item(locales.SortDesc()).Chosen() {
-				a.resView.sortBy(r, idx, true)
+				a.grid.view.sortBy(r, idx, true)
 			}
 			if m.Item(locales.SortClear()).Chosen() {
-				a.resView.sortBy(r, -1, false)
+				a.grid.view.sortBy(r, -1, false)
 			}
 			if m.Item(locales.FilterMenu()).Chosen() {
-				a.filterOpen, a.filterCol, a.filterText = true, idx, a.resView.filters[idx]
+				a.filterOpen, a.filterCol, a.filterText = true, idx, a.grid.view.filters[idx]
 			}
-			if _, has := a.resView.filters[idx]; has {
+			if _, has := a.grid.view.filters[idx]; has {
 				if m.Item(locales.FilterClearColumn()).Chosen() {
-					a.resView.clearFilter(idx)
+					a.grid.view.clearFilter(idx)
 				}
 			}
 		}
@@ -611,40 +611,40 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 
 	// 单元格级选择：Selection 与 Selected 同时设置才真正进入 CellSelect
 	// （mygo 要求两者都有），点击会同时移动行与列光标。
-	if a.lastResult != r {
-		a.lastResult = r
-		a.resView.clear()
-		a.resultSel.Clear()
+	if a.grid.last != r {
+		a.grid.last = r
+		a.grid.view.clear()
+		a.grid.sel.Clear()
 		a.stopInlineEdit()
 		// 列光标默认落在第一列数据（不是行号列），未点击时的复制/查看也有目标。
-		a.resultState.Cells = ui.ColumnRange{}
+		a.grid.state.Cells = ui.ColumnRange{}
 		if len(r.Columns) > 0 {
-			a.resultState.Cells = ui.ColumnRange{Cursor: r.Columns[0], Anchor: r.Columns[0]}
+			a.grid.state.Cells = ui.ColumnRange{Cursor: r.Columns[0], Anchor: r.Columns[0]}
 		}
 	}
-	a.resultState.Selection = &a.resultSel
-	a.resultState.CellSelect = true
-	a.resultState.Selected = &a.resultRow
-	a.resultState.CellsStyle = ui.CellsStyle{
+	a.grid.state.Selection = &a.grid.sel
+	a.grid.state.CellSelect = true
+	a.grid.state.Selected = &a.grid.row
+	a.grid.state.CellsStyle = ui.CellsStyle{
 		Cell:     c.Theme().Accent,
 		CellText: c.Theme().AccentText,
 		Row:      c.Theme().Accent.Alpha(0.12),
 		Stripe:   c.Theme().Text.Alpha(0.035),
 	}
 	kind := a.gridKind()
-	a.resultState.CellMenu = func(m *ui.Menu, row, col int) {
+	a.grid.state.CellMenu = func(m *ui.Menu, row, col int) {
 		// resultRow 与 Table 一致，存「显示顺序」；取数据时再映射到结果行。
 		displayRow := row
-		a.resultRow = displayRow
-		dataRows := len(a.resView.apply(r))
+		a.grid.row = displayRow
+		dataRows := len(a.grid.view.apply(r))
 		dataCol := col - 1 // 第 0 列是行号
 		if displayRow >= dataRows {
 			insIdx := displayRow - dataRows
-			if a.editPlan != nil && dataCol >= 0 && dataCol < len(a.editPlan.Columns) && dataCol < len(a.editPlan.Nullable) {
+			if a.grid.plan != nil && dataCol >= 0 && dataCol < len(a.grid.plan.Columns) && dataCol < len(a.grid.plan.Nullable) {
 				if m.Item(locales.EditCellMenu()).Chosen() {
 					a.beginEditAt(r, -1-insIdx, dataCol)
 				}
-				if a.editPlan.Nullable[dataCol] && m.Item(locales.SetNull()).Chosen() {
+				if a.grid.plan.Nullable[dataCol] && m.Item(locales.SetNull()).Chosen() {
 					a.setCellEdit(-1-insIdx, dataCol, nil)
 				}
 				if _, ok := a.editSet().Inserts[insIdx][dataCol]; ok && m.Item(locales.RestoreCell()).Chosen() {
@@ -708,13 +708,13 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 		if dataCol >= 0 && m.Item(locales.ViewFullContent()).Chosen() {
 			a.openCellViewer(r, row, dataCol)
 		}
-		if a.editPlan != nil && dataCol >= 0 {
-			if it := m.Item(locales.EditCellMenu()); it.Disabled(!a.editPlan.Editable[dataCol]).Chosen() {
+		if a.grid.plan != nil && dataCol >= 0 {
+			if it := m.Item(locales.EditCellMenu()); it.Disabled(!a.grid.plan.Editable[dataCol]).Chosen() {
 				a.editCellRow, a.editCellCol = row, dataCol
 				a.editCellText = editTextFor(kind, r, dataCol, a.editCellValue(row, dataCol))
 				a.editCellOpen = true
 			}
-			if a.editPlan.Editable[dataCol] && m.Item(locales.SetNull()).Chosen() {
+			if a.grid.plan.Editable[dataCol] && m.Item(locales.SetNull()).Chosen() {
 				a.setCellEdit(row, dataCol, nil)
 			}
 			if _, has := a.editSet().Cells[app.CellKey{Row: row, Col: dataCol}]; has {
@@ -723,7 +723,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 				}
 			}
 		}
-		if a.editPlan != nil {
+		if a.grid.plan != nil {
 			if a.editSet().Deletes[row] {
 				if m.Item(locales.RestoreRow()).Chosen() {
 					a.clearRowEdit(row)
@@ -735,7 +735,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 	}
 
 	handledDouble := false
-	tbl := a.withResultFont(ui.Table(c, &a.resultState, cols, totalRows, func(row, col int) {
+	tbl := a.withResultFont(ui.Table(c, &a.grid.state, cols, totalRows, func(row, col int) {
 		if row < 0 {
 			return
 		}
@@ -796,7 +796,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 			return
 		}
 		if _, dirty := editSet.Cells[app.CellKey{Row: ri, Col: col - 1}]; dirty {
-			if row == a.resultRow && col-1 == a.cursorDataCol(r) {
+			if row == a.grid.row && col-1 == a.cursorDataCol(r) {
 				txt.TextColor(c.Theme().AccentText).Bold()
 			} else {
 				txt.TextColor(c.Theme().Accent).Bold()
@@ -815,7 +815,7 @@ func (a *root) gridTable(c *ui.Context, r *engine.QueryResult, mode int) {
 		}
 	})).Grow(1)
 	if tbl.Submitted() && !handledDouble {
-		row := a.displayToResult(r, a.resultRow)
+		row := a.displayToResult(r, a.grid.row)
 		col := a.cursorDataCol(r)
 		// 双击落在行号列/空白处时，单元格的 RowDoubleClicked 不会置 handledDouble；
 		// 这里必须按同一套鼠标手势处理，否则会回落到旧的硬编码行为。
@@ -908,12 +908,12 @@ func cutRunes(s string, n int) string {
 
 // columnWidths 返回结果各列的宽度（按值自适应，带缓存：同一结果只量一次）。
 func (a *root) columnWidths(r *engine.QueryResult) []float32 {
-	if a.widthsFor == r && len(a.widths) == len(r.Columns) {
-		return a.widths
+	if a.grid.widthsFor == r && len(a.grid.widths) == len(r.Columns) {
+		return a.grid.widths
 	}
-	a.widthsFor = r
-	a.widths = resultWidths(r)
-	return a.widths
+	a.grid.widthsFor = r
+	a.grid.widths = resultWidths(r)
+	return a.grid.widths
 }
 
 // resultWidths 按表头与每一行渲染后的文本量出各列宽度。
@@ -1086,8 +1086,8 @@ func (a *root) changePage(delta int) {
 			ps.Page = target
 			ps.HasMore = res.HasMore && !res.Truncated
 			if a.currentRuntimeID() == id {
-				a.resView.clear()
-				a.resultRow = 0
+				a.grid.view.clear()
+				a.grid.row = 0
 				a.stopInlineEdit()
 				a.editSet().Clear()
 			}
@@ -1201,7 +1201,7 @@ func (a *root) filterModal(c *ui.Context) {
 				a.filterOpen = false
 			}
 			if ui.PrimaryButton(c, locales.FilterApply()).Clicked() {
-				a.resView.setFilter(a.filterCol, a.filterText)
+				a.grid.view.setFilter(a.filterCol, a.filterText)
 				a.filterOpen = false
 			}
 		})
@@ -1230,7 +1230,7 @@ func (a *root) recordPageState(runtimeID, sql string, res *engine.QueryResult) {
 		Size: size, BaseSQL: sql,
 		HasMore: res.HasMore && !res.Truncated,
 	}
-	a.resView.key = ""
+	a.grid.view.key = ""
 }
 
 // canStream 报告能否全量流式导出（驱动实现 RowStreamer 且有可重放的 SQL）。

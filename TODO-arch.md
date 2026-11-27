@@ -147,10 +147,10 @@
 
 ### ARCH-06 `root` 是上帝对象：277 字段、547 方法、横跨十余个业务域
 
-**进度（2026-11-27）**：root 直接字段 277 → 189。已分组：
-`connForm`（连接表单）、`exportState`、`gitSync`、`install`、`cellView`、`tree`。
+**进度（2026-11-27）**：root 直接字段 277 → 180。已分组：
+`connForm`（连接表单）、`exportState`、`gitSync`、`install`、`cellView`、`tree`、`grid`（ARCH-07）。
 每组都用 gofmt 结构重写迁移引用，并有编译期的状态归组测试。
-**剩余**：控制台/标签、AI、设置偏好、弹窗/模态、编辑器/结果网格（与 ARCH-07 合并处理）。
+**剩余**：控制台/标签、AI、设置偏好、弹窗/模态、编辑器。
 
 **证据**：`ui/root.go:22-304`。字段按前缀粗分：
 
@@ -182,6 +182,10 @@
 ---
 
 ### ARCH-07 网格状态靠 `stash/load` 在 root 与控制台/表视图之间搬
+
+**已完成（2026-11-27）**：`gridSnap` 改为 `gridState`，控制台与每个 `viewerTab` 各持一份
+`*gridState`；`root.grid` 指向当前展示的网格，切换标签只换指针；`stashGrid`/`loadGrid` 已删除。
+新增 `TestGridStateSwitchingKeepsIndependentState` 覆盖独立状态与切回恢复。
 
 **证据**
 - `ui/grid.go:11-59`：`gridSnap` + `stashGrid`/`loadGrid` 逐字段复制 10 个 root 字段。

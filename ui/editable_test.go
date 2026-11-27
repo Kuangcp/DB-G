@@ -26,8 +26,8 @@ func TestEditPlanGating(t *testing.T) {
 	a := openForSelection(t)
 	a.history = app.OpenHistory(t.TempDir())
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
-	if a.editPlan == nil {
-		t.Fatalf("single table with pk must be editable: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("single table with pk must be editable: %q", a.grid.readonly)
 	}
 	// JOIN → 只读
 	if _, err := a.testSession(t).RunStatement(t.Context(), "CREATE TABLE other (id INTEGER PRIMARY KEY)"); err != nil {
@@ -35,8 +35,8 @@ func TestEditPlanGating(t *testing.T) {
 	}
 	tt = runEditQuery(t, a, "SELECT u.id, u.name FROM users u JOIN other o ON o.id = u.id")
 	tt.Frame()
-	if a.editPlan != nil || !strings.Contains(a.readonlyReason, "单表") {
-		t.Fatalf("join must be read-only: plan=%v reason=%q", a.editPlan, a.readonlyReason)
+	if a.grid.plan != nil || !strings.Contains(a.grid.readonly, "单表") {
+		t.Fatalf("join must be read-only: plan=%v reason=%q", a.grid.plan, a.grid.readonly)
 	}
 	// 视图 → 只读（无主键）
 	if _, err := a.testSession(t).RunStatement(t.Context(), "CREATE VIEW v_users AS SELECT id, name FROM users"); err != nil {
@@ -44,8 +44,8 @@ func TestEditPlanGating(t *testing.T) {
 	}
 	tt = runEditQuery(t, a, "SELECT id, name FROM v_users")
 	tt.Frame()
-	if a.editPlan != nil {
-		t.Fatalf("view must be read-only: %+v", a.editPlan)
+	if a.grid.plan != nil {
+		t.Fatalf("view must be read-only: %+v", a.grid.plan)
 	}
 }
 
@@ -56,8 +56,8 @@ func TestEditCellCommitThroughUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
-	if a.editPlan == nil {
-		t.Fatalf("not editable: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("not editable: %q", a.grid.readonly)
 	}
 	a.setCellEdit(0, 1, "alice2")
 	lines, err := a.previewEdits()
@@ -153,7 +153,7 @@ func TestEditDeleteInsertRow(t *testing.T) {
 	if len(a.editSet().Inserts) != 1 {
 		t.Fatal("insert row missing")
 	}
-	a.resultRow = len(a.resView.apply(r)) // 新增行
+	a.grid.row = len(a.grid.view.apply(r)) // 新增行
 	a.deleteSelectedRow(r)
 	if len(a.editSet().Inserts) != 0 || a.editSet().Count() != 0 {
 		t.Fatalf("insert row must be removed: %+v", a.editSet())
@@ -238,8 +238,8 @@ func TestCtrlDoubleClickEditsShortCellInline(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
-	if a.editPlan == nil {
-		t.Fatalf("not editable: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("not editable: %q", a.grid.readonly)
 	}
 	rect, ok := tt.Find("alice")
 	if !ok {
@@ -252,7 +252,7 @@ func TestCtrlDoubleClickEditsShortCellInline(t *testing.T) {
 	tt.Frame()
 	tt.HoldModifiers(0)
 	if !a.inlineEditOn || a.editCellOpen {
-		t.Fatalf("short cell must edit inline: inline=%v modal=%v view=%v row=%d cursor=%q plan=%v err=%q", a.inlineEditOn, a.editCellOpen, a.cellView.Open, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
+		t.Fatalf("short cell must edit inline: inline=%v modal=%v view=%v row=%d cursor=%q plan=%v err=%q", a.inlineEditOn, a.editCellOpen, a.cellView.Open, a.grid.row, a.grid.state.Cells.Cursor, a.grid.plan, a.consoleErr)
 	}
 	if a.inlineEditRow != 0 || a.inlineEditCol != 1 {
 		t.Fatalf("inline target = (%d,%d)", a.inlineEditRow, a.inlineEditCol)
@@ -283,8 +283,8 @@ func TestCtrlDoubleClickLongCellOpensModal(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
-	if a.editPlan == nil {
-		t.Fatalf("not editable: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("not editable: %q", a.grid.readonly)
 	}
 	label := ""
 	for _, text := range tt.Texts() {
@@ -304,7 +304,7 @@ func TestCtrlDoubleClickLongCellOpensModal(t *testing.T) {
 	tt.Frame()
 	tt.HoldModifiers(0)
 	if !a.editCellOpen || a.inlineEditOn {
-		t.Fatalf("long cell must open modal: modal=%v inline=%v view=%v row=%d cursor=%q plan=%v err=%q", a.editCellOpen, a.inlineEditOn, a.cellView.Open, a.resultRow, a.resultState.Cells.Cursor, a.editPlan, a.consoleErr)
+		t.Fatalf("long cell must open modal: modal=%v inline=%v view=%v row=%d cursor=%q plan=%v err=%q", a.editCellOpen, a.inlineEditOn, a.cellView.Open, a.grid.row, a.grid.state.Cells.Cursor, a.grid.plan, a.consoleErr)
 	}
 	if a.editCellText != long {
 		t.Fatalf("modal text = %q", a.editCellText)
@@ -360,11 +360,11 @@ func TestCtrlShiftNSetsSelectedCellsNull(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users ORDER BY id")
-	a.resultRow = 0
-	a.resultState.Cells = ui.ColumnRange{Cursor: "name", Anchor: "name"}
-	a.resultSel.Clear()
-	a.resultSel.Add(0)
-	a.resultSel.Add(1)
+	a.grid.row = 0
+	a.grid.state.Cells = ui.ColumnRange{Cursor: "name", Anchor: "name"}
+	a.grid.sel.Clear()
+	a.grid.sel.Add(0)
+	a.grid.sel.Add(1)
 	tt.Frame()
 	tt.Key(ui.Ctrl|ui.Shift, ui.KeyN)
 	tt.Frame()
@@ -397,10 +397,10 @@ func TestCtrlShiftNSkipsNotNullColumn(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt := runEditQuery(t, a, "SELECT id, code FROM strict")
-	a.resultRow = 0
-	a.resultState.Cells = ui.ColumnRange{Cursor: "code", Anchor: "code"}
-	a.resultSel.Clear()
-	a.resultSel.Add(0)
+	a.grid.row = 0
+	a.grid.state.Cells = ui.ColumnRange{Cursor: "code", Anchor: "code"}
+	a.grid.sel.Clear()
+	a.grid.sel.Add(0)
 	tt.Frame()
 	tt.Key(ui.Ctrl|ui.Shift, ui.KeyN)
 	tt.Frame()
@@ -421,8 +421,8 @@ func TestEditingNullStartsWithEmptyText(t *testing.T) {
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
 	_ = tt
 	r := a.currentRuntime().Result()
-	if r == nil || a.editPlan == nil {
-		t.Fatalf("precondition: result=%v plan=%v reason=%q", r, a.editPlan, a.readonlyReason)
+	if r == nil || a.grid.plan == nil {
+		t.Fatalf("precondition: result=%v plan=%v reason=%q", r, a.grid.plan, a.grid.readonly)
 	}
 	a.beginEditAt(r, 0, 1)
 	if !a.inlineEditOn || a.inlineEditText != "" {
@@ -468,8 +468,8 @@ func TestNewExecutionDiscardsEditState(t *testing.T) {
 	}
 	tt := runEditQuery(t, a, "SELECT id, name FROM users ORDER BY id")
 	a.setCellEdit(0, 1, "alice2")
-	a.resView.sortBy(a.currentRuntime().Result(), 1, true)
-	a.resView.setFilter(1, "ali")
+	a.grid.view.sortBy(a.currentRuntime().Result(), 1, true)
+	a.grid.view.setFilter(1, "ali")
 	if a.editSet().Count() == 0 {
 		t.Fatal("precondition: pending edit")
 	}
@@ -481,8 +481,8 @@ func TestNewExecutionDiscardsEditState(t *testing.T) {
 	if _, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; ok {
 		t.Fatal("old pending cell leaked into the new result")
 	}
-	if a.resView.sortCol != -1 || len(a.resView.filters) != 0 {
-		t.Fatalf("view cache leaked: sort=%d filters=%v", a.resView.sortCol, a.resView.filters)
+	if a.grid.view.sortCol != -1 || len(a.grid.view.filters) != 0 {
+		t.Fatalf("view cache leaked: sort=%d filters=%v", a.grid.view.sortCol, a.grid.view.filters)
 	}
 }
 
@@ -520,8 +520,8 @@ func TestPinnedResultKeepsEditState(t *testing.T) {
 		t.Fatalf("pinned run missing: %+v", a.stmtRuns)
 	}
 	tt.Frame()
-	if a.editPlan == nil {
-		t.Fatalf("pinned result must stay editable: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("pinned result must stay editable: %q", a.grid.readonly)
 	}
 	if v, ok := a.editSet().Cells[app.CellKey{Row: 0, Col: 1}]; !ok || v != "alice2" {
 		t.Fatalf("switching back must restore the pending edit, got %v (set=%v)", v, ok)
@@ -565,8 +565,8 @@ func swapCellGestures(t *testing.T) (*root, *ui.Tester, ui.Rect) {
 	}
 	a.setMouseBinding(mouseCellEdit, 0) // 默认预览↔编辑互换
 	tt := runEditQuery(t, a, "SELECT id, name FROM users")
-	if a.editPlan == nil {
-		t.Fatalf("not editable: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("not editable: %q", a.grid.readonly)
 	}
 	rect, ok := tt.Find("alice")
 	if !ok {

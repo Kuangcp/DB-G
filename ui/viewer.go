@@ -49,7 +49,7 @@ type viewerTab struct {
 
 	page viewerPage
 	rt   *app.Console // 数据页的独立运行态（进度/停止/结果都复用它）
-	grid gridSnap
+	grid *gridState
 
 	query viewerQuery
 	seq   uint64 // 请求轮次：刷新/翻页后旧结果作废
@@ -89,7 +89,7 @@ func (a *root) openViewerTab(p app.ConnProfile, o engine.DBObject) {
 		t = &viewerTab{
 			id: id, connID: p.ID, schema: o.Schema, obj: o,
 			page: viewerData,
-			grid: newGridSnap(),
+			grid: newGridState(),
 		}
 		a.viewerTabs[id] = t
 		a.viewerOrder = append(a.viewerOrder, id)
@@ -98,7 +98,7 @@ func (a *root) openViewerTab(p app.ConnProfile, o engine.DBObject) {
 	a.activateViewer(id)
 }
 
-// activateViewer 切到表视图标签：暂存当前网格状态，铺开该标签的状态。
+// activateViewer 切到表视图标签：只把当前网格指针切到该标签自己的状态。
 func (a *root) activateViewer(id string) {
 	t := a.viewerTabs[id]
 	if t == nil {
@@ -108,31 +108,36 @@ func (a *root) activateViewer(id string) {
 		a.ensureViewerPage(t)
 		return
 	}
-	if prev := a.activeViewerTab(); prev != nil {
-		prev.grid = a.stashGrid()
-	} else {
+	if a.activeViewerTab() == nil {
 		if err := a.flushActive(); err != nil {
 			a.externalFlushFailed(err)
 			return
 		}
-		a.consoleGrid = a.stashGrid()
+		a.consoleGrid = a.grid
 	}
 	a.activeViewer = id
-	a.loadGrid(t.grid)
+	if t.grid == nil {
+		t.grid = newGridState()
+	}
+	a.grid = t.grid
+	a.stopInlineEdit()
+	a.editCellOpen, a.previewOpen, a.filterOpen = false, false, false
 	a.touchConsoleMRU(viewerRuntimeID(id))
 	a.ensureViewerPage(t)
 }
 
-// leaveViewer 离开表视图回到控制台（恢复控制台的网格状态）。
+// leaveViewer 离开表视图回到控制台（换回控制台自己的网格指针）。
 func (a *root) leaveViewer() {
 	if a.activeViewer == "" {
 		return
 	}
-	if t := a.activeViewerTab(); t != nil {
-		t.grid = a.stashGrid()
-	}
 	a.activeViewer = ""
-	a.loadGrid(a.consoleGrid)
+	if a.consoleGrid == nil {
+		a.consoleGrid = newGridState()
+	}
+	a.grid = a.consoleGrid
+	a.stopInlineEdit()
+	a.editCellOpen, a.previewOpen, a.filterOpen = false, false, false
 }
 
 // closeViewerTab 关闭一个表视图标签；关的是当前标签时回落到控制台。
@@ -154,7 +159,10 @@ func (a *root) closeViewerTab(id string) {
 	}
 	if a.activeViewer == id {
 		a.activeViewer = ""
-		a.loadGrid(a.consoleGrid)
+		if a.consoleGrid == nil {
+			a.consoleGrid = newGridState()
+		}
+		a.grid = a.consoleGrid
 	}
 	app.LogInfo("catalog", "viewer close", "object", t.obj.Name)
 }
@@ -296,7 +304,7 @@ func (a *root) viewerReload(t *viewerTab, after func()) {
 			t.query.loading = false
 			t.query.err = errMsg
 			if a.viewerActive() && a.activeViewer == t.id {
-				a.editKey = "" // 结果变了，可编辑计划重算
+				a.grid.editKey = "" // 结果变了，可编辑计划重算
 			}
 			if after != nil {
 				after()

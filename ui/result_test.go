@@ -299,16 +299,16 @@ func TestResultCellSelectionAndCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.resultRow != 1 {
-		t.Fatalf("row cursor: %d", a.resultRow)
+	if a.grid.row != 1 {
+		t.Fatalf("row cursor: %d", a.grid.row)
 	}
-	if got := a.resultState.Cells.Cursor; got != "name" {
+	if got := a.grid.state.Cells.Cursor; got != "name" {
 		t.Fatalf("column cursor: %q", got)
 	}
-	if !a.resultSel.Has(1) {
+	if !a.grid.sel.Has(1) {
 		t.Fatal("the clicked row is not chosen")
 	}
-	if a.resultState.CellsStyle.Cell == (ui.Color{}) || a.resultState.CellsStyle.Row == (ui.Color{}) {
+	if a.grid.state.CellsStyle.Cell == (ui.Color{}) || a.grid.state.CellsStyle.Row == (ui.Color{}) {
 		t.Fatal("result table must paint chosen cells and rows with CellsStyle")
 	}
 	tt.Key(ui.Ctrl, ui.KeyC)
@@ -681,7 +681,7 @@ func TestResultLastRowFullyVisible(t *testing.T) {
 	for range 3 {
 		tt.Frame()
 	}
-	a.resultState.ScrollTo(99, ui.End)
+	a.grid.state.ScrollTo(99, ui.End)
 	for range 2 {
 		tt.Frame()
 	}

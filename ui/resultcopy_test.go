@@ -168,8 +168,8 @@ func TestCopyLongCellKeepsFullText(t *testing.T) {
 	}, "")
 	tt := ui.NewTester(rootView(a), 1200, 800)
 	tt.Frame()
-	a.resultRow = 0
-	a.resultState.Cells = ui.ColumnRange{Cursor: "raw_result_json", Anchor: "raw_result_json"}
+	a.grid.row = 0
+	a.grid.state.Cells = ui.ColumnRange{Cursor: "raw_result_json", Anchor: "raw_result_json"}
 	tt.Frame()
 	tt.Key(ui.Ctrl, ui.KeyC)
 	tt.Frame()

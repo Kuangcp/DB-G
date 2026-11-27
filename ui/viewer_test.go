@@ -217,8 +217,8 @@ func TestViewerDataIsEditable(t *testing.T) {
 	if tb.rt.Result() == nil || len(tb.rt.Result().Rows) == 0 {
 		t.Fatal("数据页没读到行")
 	}
-	if a.editPlan == nil {
-		t.Fatalf("表视图数据页应可编辑: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("表视图数据页应可编辑: %q", a.grid.readonly)
 	}
 	a.setCellEdit(0, 1, "alice2")
 	if err := a.applyEditsSync(); err != nil {
@@ -412,7 +412,7 @@ func TestGridStateSurvivesTabSwitch(t *testing.T) {
 	// 控制台结果：塞一份结果并把列筛选设上。
 	a.con.SetOutcome(&engine.QueryResult{IsQuery: true, Columns: []string{"id", "name"},
 		Rows: [][]any{{int64(1), "alice"}}}, "")
-	a.resView.setFilter(1, "ali")
+	a.grid.view.setFilter(1, "ali")
 
 	obj := engine.DBObject{Kind: engine.ObjectTable, Name: "users"}
 	a.testSetSession(prof.ID, &viewerFakeSession{result: &engine.QueryResult{IsQuery: true,
@@ -429,7 +429,7 @@ func TestGridStateSurvivesTabSwitch(t *testing.T) {
 	if !a.activateConsole(rec.ID) {
 		t.Fatal("activate console")
 	}
-	if got := a.resView.filters[1]; got != "ali" {
+	if got := a.grid.view.filters[1]; got != "ali" {
 		t.Fatalf("控制台筛选丢了: %q", got)
 	}
 	if a.editSet().Count() != 0 {
@@ -459,8 +459,8 @@ func TestViewerInlineEditThroughGrid(t *testing.T) {
 	waitViewer(t, a, id)
 	tt := ui.NewTester(rootView(a), 1400, 800)
 	tt.Frame()
-	if a.editPlan == nil {
-		t.Fatalf("表视图应可编辑: %q", a.readonlyReason)
+	if a.grid.plan == nil {
+		t.Fatalf("表视图应可编辑: %q", a.grid.readonly)
 	}
 	rect, ok := tt.Find("alice")
 	if !ok {
@@ -474,7 +474,7 @@ func TestViewerInlineEditThroughGrid(t *testing.T) {
 	tt.HoldModifiers(0)
 	if !a.inlineEditOn || a.inlineEditRow != 0 || a.inlineEditCol != 1 {
 		t.Fatalf("应就地编辑 name 格: inline=%v row=%d col=%d plan=%v err=%q",
-			a.inlineEditOn, a.inlineEditRow, a.inlineEditCol, a.editPlan, a.readonlyReason)
+			a.inlineEditOn, a.inlineEditRow, a.inlineEditCol, a.grid.plan, a.grid.readonly)
 	}
 	tt.Type("2")
 	tt.Key(0, ui.KeyEnter)

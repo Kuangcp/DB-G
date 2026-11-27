@@ -7,9 +7,9 @@ import (
 	"db-g/engine"
 )
 
-// gridSnap 是一块结果网格的界面状态快照。控制台结果区与表视图数据页共用同一套
-// 网格/编辑代码；只有一块网格可见，所以切换标签时把这些状态在 root 与各自快照之间搬一次。
-type gridSnap struct {
+// gridState 是一块结果网格的界面状态。控制台与每个表视图标签各自持有一份，
+// 切换标签只换 root.grid 指针，不再逐字段 stash/load。
+type gridState struct {
 	state     ui.ListState
 	sel       ui.Selection[int]
 	row       int
@@ -22,39 +22,9 @@ type gridSnap struct {
 	readonly  string
 }
 
-// newGridSnap 返回一块空网格的状态（首次打开表视图时用）。
-func newGridSnap() gridSnap {
-	return gridSnap{view: newResultView()}
-}
-
-// stashGrid 把 root 上的网格状态收进快照（切换标签前调用）。
-func (a *root) stashGrid() gridSnap {
-	snap := gridSnap{
-		state: a.resultState, sel: a.resultSel, row: a.resultRow,
-		view: a.resView, last: a.lastResult,
-		widthsFor: a.widthsFor, widths: a.widths,
-		editKey: a.editKey, plan: a.editPlan, readonly: a.readonlyReason,
-	}
-	if snap.view == nil {
-		snap.view = newResultView()
-	}
-	return snap
-}
-
-// loadGrid 把快照铺回 root（切换标签后调用）。
-func (a *root) loadGrid(snap gridSnap) {
-	a.resultState = snap.state
-	a.resultSel = snap.sel
-	a.resultRow = snap.row
-	a.resView = snap.view
-	if a.resView == nil {
-		a.resView = newResultView()
-	}
-	a.lastResult = snap.last
-	a.widthsFor, a.widths = snap.widthsFor, snap.widths
-	a.editKey, a.editPlan, a.readonlyReason = snap.editKey, snap.plan, snap.readonly
-	a.stopInlineEdit()
-	a.editCellOpen, a.previewOpen, a.filterOpen = false, false, false
+// newGridState 返回一块空网格的状态。
+func newGridState() *gridState {
+	return &gridState{view: newResultView()}
 }
 
 // viewerActive 报告当前展示的是否是表视图标签。

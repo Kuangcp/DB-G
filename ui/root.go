@@ -28,7 +28,7 @@ type root struct {
 	aiRewrite        aiRewriteState
 	con              *app.Console
 	win              *mygo.Window
-	resultState      ui.ListState
+	grid             *gridState   // 当前展示的网格（控制台或表视图）
 	resultClickMods  ui.Modifiers // 结果表格最近一次指针按下/抬起时的修饰键
 	pointerDouble    bool         // 最近一次指针事件是否是双击的第二次按下
 	editorPercent    float32      // 编辑器占上下的百分比（结果区在下方）
@@ -133,7 +133,7 @@ type root struct {
 	viewerTabs            map[string]*viewerTab // 表/视图临时标签（只在内存，关应用即丢）
 	viewerOrder           []string              // 表视图标签的创建顺序（标签行渲染用）
 	activeViewer          string                // 非空 = 当前展示表视图
-	consoleGrid           gridSnap              // 切到表视图时暂存的控制台结果网格状态
+	consoleGrid           *gridState            // 控制台自己的结果网格状态
 	pendingClose          string
 	pendingSwitchWS       string
 	lastVer               map[string]uint64
@@ -142,22 +142,15 @@ type root struct {
 	nextTabNo             int                    // 结果编号分配器（结果 N：pin/重排都不改名）
 	runsByConsole         map[string]consoleRuns // consoleID → 该控制台最近一次的结果 tab（对照 db-k 的 runSlots）
 	activeStmt            int
-	lastExecSQL           string // 最近一次执行的语句文本（取更多/复制 INSERT 用）
-	resView               *resultView
+	lastExecSQL           string                // 最近一次执行的语句文本（取更多/复制 INSERT 用）
 	pageStates            map[string]*pageState // runtimeID → 分页状态
-	resultRow             int
-	resultSel             ui.Selection[int]   // 结果表选中的单元格块（按显示行号）
-	lastResult            *engine.QueryResult // 上次渲染的结果指针（换结果时清空选区）
 	filterOpen            bool
 	filterCol             int
 	filterText            string
 	history               *app.History
 	pendingAppend         string // 激活控制台后，在其光标处追加的正文（对象预览用）
 	pendingExec           bool   // 写入正文后是否立即执行
-	editKey               string
-	editPlan              *app.EditPlan
 	editSets              map[string]*app.EditSet
-	readonlyReason        string
 	editBusy              bool
 	editCellOpen          bool
 	editCellRow           int
@@ -193,8 +186,6 @@ type root struct {
 	editStatusSeq         atomic.Uint64
 	cellView              cellViewState
 	consoleErr            string
-	widthsFor             *engine.QueryResult
-	widths                []float32
 	computingCompletion   bool
 	retriggerPending      bool
 	completionWanted      bool // 编辑器正在等/持有补全弹层（用户触发）
@@ -263,7 +254,8 @@ func newRoot(text string) *root {
 	a.con.SetOnDone(a.execDoneLogger(""))
 	a.con.SetPageSize(a.resultPrefs.PageSize)
 	a.con.SetResultBudgetMB(a.resultPrefs.BudgetMB)
-	a.resView = newResultView()
+	a.grid = newGridState()
+	a.consoleGrid = a.grid
 	a.pageStates = map[string]*pageState{}
 	a.code.SetActive("", text)
 	a.catalog = newCatalogCache()

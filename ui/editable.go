@@ -33,9 +33,9 @@ func (a *root) discardEditState(id string) {
 	if id != a.gridRuntimeID() {
 		return
 	}
-	a.editKey = ""
-	a.editPlan = nil
-	a.readonlyReason = ""
+	a.grid.editKey = ""
+	a.grid.plan = nil
+	a.grid.readonly = ""
 	a.stopInlineEdit()
 	a.editCellOpen = false
 	a.previewOpen = false
@@ -44,15 +44,15 @@ func (a *root) discardEditState(id string) {
 // ensureEditState 在结果变化时重算可编辑计划（只读原因也一并算出）。
 func (a *root) ensureEditState(r *engine.QueryResult) {
 	key := a.editStateKey(r)
-	if key == a.editKey {
+	if key == a.grid.editKey {
 		return
 	}
-	a.editKey = key
+	a.grid.editKey = key
 	if a.editSets == nil {
 		a.editSets = map[string]*app.EditSet{}
 	}
-	a.editPlan = nil
-	a.readonlyReason = ""
+	a.grid.plan = nil
+	a.grid.readonly = ""
 	if r == nil || !r.IsQuery {
 		return
 	}
@@ -62,11 +62,11 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	}
 	sess := a.gridSession()
 	if sess == nil || !sess.Caps().Has(engine.CapEditableResult) {
-		a.readonlyReason = locales.EditReadonlyNoWrite()
+		a.grid.readonly = locales.EditReadonlyNoWrite()
 		return
 	}
 	if _, ok := sess.(engine.Transactional); !ok {
-		a.readonlyReason = locales.EditReadonlyNoTx()
+		a.grid.readonly = locales.EditReadonlyNoTx()
 		return
 	}
 	var table, schema string
@@ -75,7 +75,7 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		// 表视图总是浏览一个已知对象：直接用它，不必从 SQL 里反推关系名。
 		// 编辑 SQL 用裸表名（会话当前 schema）；浏览别的 schema 时按跨 schema 只读处理。
 		if cur := a.tree.ConnSchema[connID]; t.schema != "" && cur != "" && t.schema != cur {
-			a.readonlyReason = locales.EditReadonlyCrossSchema()
+			a.grid.readonly = locales.EditReadonlyCrossSchema()
 			return
 		}
 		table, schema = t.obj.Name, t.schema
@@ -88,12 +88,12 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 			}
 		}
 		if len(seen) != 1 {
-			a.readonlyReason = locales.EditReadonlySingleTable()
+			a.grid.readonly = locales.EditReadonlySingleTable()
 			return
 		}
 		for _, rel := range rels {
 			if rel.Table != "" && rel.Schema != "" {
-				a.readonlyReason = locales.EditReadonlyCrossSchema()
+				a.grid.readonly = locales.EditReadonlyCrossSchema()
 				return
 			}
 		}
@@ -109,8 +109,8 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 		// headless（无窗口）下加载是同步的，这里再读一次即可立刻判定。
 		cols, all = a.catalog.getColumnsMany(scopeKey, []string{table})
 		if !all {
-			a.readonlyReason = locales.EditReadonlyLoadingColumns()
-			a.editKey = "" // 列加载完成后重算
+			a.grid.readonly = locales.EditReadonlyLoadingColumns()
+			a.grid.editKey = "" // 列加载完成后重算
 			return
 		}
 	}
@@ -120,10 +120,10 @@ func (a *root) ensureEditState(r *engine.QueryResult) {
 	}
 	plan, err := app.BuildEditPlan(a.gridKind(), table, r.Columns, infos)
 	if err != nil {
-		a.readonlyReason = err.Error()
+		a.grid.readonly = err.Error()
 		return
 	}
-	a.editPlan = plan
+	a.grid.plan = plan
 }
 
 // editSet 返回当前结果的本地改动集。
@@ -148,10 +148,10 @@ func (a *root) rowsForPlan() [][]any {
 
 // setCellEdit 暂存一格改动（结果行下标 + 结果列下标；row < 0 为新增行 -row-1）。
 func (a *root) setCellEdit(row, col int, v any) {
-	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Columns) {
+	if a.grid.plan == nil || col < 0 || col >= len(a.grid.plan.Columns) {
 		return
 	}
-	if row >= 0 && !a.editPlan.Editable[col] {
+	if row >= 0 && !a.grid.plan.Editable[col] {
 		return
 	}
 	if row < 0 {
@@ -167,15 +167,15 @@ func (a *root) setSelectedNull(r *engine.QueryResult) {
 	if r == nil || !r.IsQuery {
 		return
 	}
-	if a.editPlan == nil {
-		if a.readonlyReason != "" {
-			a.gridErr(locales.EditReadonlyPrefix(a.readonlyReason))
+	if a.grid.plan == nil {
+		if a.grid.readonly != "" {
+			a.gridErr(locales.EditReadonlyPrefix(a.grid.readonly))
 		}
 		return
 	}
 	rows, cols, _ := a.resultSelection(r)
 	if len(rows) == 0 || len(cols) == 0 {
-		row := a.displayToResult(r, a.resultRow)
+		row := a.displayToResult(r, a.grid.row)
 		col := a.cursorDataCol(r)
 		if row < 0 || col < 0 {
 			return
@@ -189,16 +189,16 @@ func (a *root) setSelectedNull(r *engine.QueryResult) {
 			continue
 		}
 		for _, col := range cols {
-			if col < 0 || col >= len(a.editPlan.Columns) {
+			if col < 0 || col >= len(a.grid.plan.Columns) {
 				continue
 			}
-			if !a.editPlan.Editable[col] {
+			if !a.grid.plan.Editable[col] {
 				readonly++
 				continue
 			}
-			if col >= len(a.editPlan.Nullable) || !a.editPlan.Nullable[col] {
+			if col >= len(a.grid.plan.Nullable) || !a.grid.plan.Nullable[col] {
 				if nullCol == "" {
-					nullCol = a.editPlan.Columns[col]
+					nullCol = a.grid.plan.Columns[col]
 				}
 				continue
 			}
@@ -241,11 +241,11 @@ func (a *root) addInsertRow(r *engine.QueryResult) int {
 	es := a.editSet()
 	idx := es.AddInsert()
 	if r != nil {
-		row := len(a.resView.apply(r)) + idx
-		a.resultRow = row
-		a.resultState.ScrollTo(row, ui.End)
-		if a.editPlan != nil {
-			for col, editable := range a.editPlan.Editable {
+		row := len(a.grid.view.apply(r)) + idx
+		a.grid.row = row
+		a.grid.state.ScrollTo(row, ui.End)
+		if a.grid.plan != nil {
+			for col, editable := range a.grid.plan.Editable {
 				if editable {
 					a.beginEditAt(r, -1-idx, col)
 					break
@@ -263,32 +263,32 @@ func (a *root) removeInsertRow(r *engine.QueryResult, idx int) {
 		return
 	}
 	es.RemoveInsert(idx)
-	dataRows := len(a.resView.apply(r))
-	if a.resultRow >= dataRows+idx {
-		a.resultRow--
+	dataRows := len(a.grid.view.apply(r))
+	if a.grid.row >= dataRows+idx {
+		a.grid.row--
 	}
-	if a.resultRow < dataRows+len(es.Inserts) {
+	if a.grid.row < dataRows+len(es.Inserts) {
 		return
 	}
-	a.resultRow = dataRows + len(es.Inserts) - 1
-	if a.resultRow < 0 {
-		a.resultRow = 0
+	a.grid.row = dataRows + len(es.Inserts) - 1
+	if a.grid.row < 0 {
+		a.grid.row = 0
 	}
 }
 
 // deleteSelectedRow 删除当前选中行：数据行打删除标记，新增行直接移除。
 func (a *root) deleteSelectedRow(r *engine.QueryResult) {
-	dataRows := len(a.resView.apply(r))
-	if a.resultRow >= dataRows {
-		a.removeInsertRow(r, a.resultRow-dataRows)
+	dataRows := len(a.grid.view.apply(r))
+	if a.grid.row >= dataRows {
+		a.removeInsertRow(r, a.grid.row-dataRows)
 		return
 	}
-	a.deleteRow(a.displayToResult(r, a.resultRow))
+	a.deleteRow(a.displayToResult(r, a.grid.row))
 }
 
 // deleteRow 标记删除某结果行。
 func (a *root) deleteRow(row int) {
-	if a.editPlan == nil || row < 0 || row >= len(a.rowsForPlan()) {
+	if a.grid.plan == nil || row < 0 || row >= len(a.rowsForPlan()) {
 		return
 	}
 	a.editSet().MarkDeleted(row)
@@ -296,21 +296,21 @@ func (a *root) deleteRow(row int) {
 
 // previewEdits 生成提交预览（只读 SQL 列表）。
 func (a *root) previewEdits() ([]string, error) {
-	if a.editPlan == nil {
-		return nil, errors.New(a.readonlyReason)
+	if a.grid.plan == nil {
+		return nil, errors.New(a.grid.readonly)
 	}
 	es := a.editSet()
 	if es.Count() == 0 {
 		return nil, errors.New(locales.EditNothingToCommit())
 	}
-	return es.Preview(a.editPlan, a.rowsForPlan())
+	return es.Preview(a.grid.plan, a.rowsForPlan())
 }
 
 // applyEditsSync 在事务里执行全部改动（测试与提交共用；调用方保证不在 UI 线程做长活）。
 func (a *root) applyEditsSync() error {
-	plan := a.editPlan
+	plan := a.grid.plan
 	if plan == nil {
-		return errors.New(a.readonlyReason)
+		return errors.New(a.grid.readonly)
 	}
 	es := a.editSet()
 	ops, err := es.BuildOps(plan, a.rowsForPlan())
@@ -377,7 +377,7 @@ func (a *root) setEditStatus(msg string) {
 // applyConfirmedEdits 在确认后执行（有窗口时后台 + Update）。
 func (a *root) applyConfirmedEdits() {
 	a.previewOpen = false
-	if a.editPlan == nil || a.editSet().Count() == 0 {
+	if a.grid.plan == nil || a.editSet().Count() == 0 {
 		return
 	}
 	a.editBusy = true
@@ -390,7 +390,7 @@ func (a *root) applyConfirmedEdits() {
 			return
 		}
 		a.gridErr("")
-		a.editKey = ""
+		a.grid.editKey = ""
 		a.refreshGrid(func() { a.setEditStatus(locales.EditCommitOK()) })
 	}
 	if a.win == nil {
@@ -421,7 +421,7 @@ func (a *root) refreshResult(onDone func()) {
 	rt.SetOnDone(func(res *engine.QueryResult, errMsg string, dur time.Duration) {
 		apply := func() {
 			a.recordPageState(id, sql, res)
-			a.editKey = ""
+			a.grid.editKey = ""
 			a.refreshStmtMarks()
 			if onDone != nil {
 				onDone()
@@ -448,7 +448,7 @@ func (a *root) editCellModal(c *ui.Context) {
 		if a.editCellRow < 0 {
 			pos = locales.EditNewRowPos(-a.editCellRow)
 		}
-		ui.Text(c, locales.EditCellTitle(a.editPlan.Columns[a.editCellCol], pos)).Bold()
+		ui.Text(c, locales.EditCellTitle(a.grid.plan.Columns[a.editCellCol], pos)).Bold()
 		ui.TextArea(c, &a.editCellText).AutoFocus().Grow(1)
 		ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 			if ui.Button(c, locales.CommonCancel()).Clicked() {
@@ -516,7 +516,7 @@ func parseEditedValue(original any, s string) any {
 func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 	es := a.editSet()
 	n := es.Count()
-	editable := a.editPlan != nil
+	editable := a.grid.plan != nil
 	if editable {
 		if iconButton(c, iconSquarePen, locales.EditCurrentCell(), ui.Transparent).Clicked() {
 			a.beginEditCurrent(r)
@@ -530,7 +530,7 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 		}
 		if iconButton(c, iconUndo, locales.EditUndoChanges(), ui.Transparent).Disabled(n == 0).Clicked() {
 			a.editSet().Clear()
-			a.editKey = ""
+			a.grid.editKey = ""
 		}
 	}
 	if editable {
@@ -545,8 +545,8 @@ func (a *root) editToolbar(c *ui.Context, r *engine.QueryResult) {
 		if iconButton(c, iconCheck, label, col).Disabled(n == 0 || a.editBusy).Clicked() {
 			a.commitEdits()
 		}
-	} else if a.readonlyReason != "" {
-		ui.Text(c, locales.EditReadonlyPrefix(a.readonlyReason)).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
+	} else if a.grid.readonly != "" {
+		ui.Text(c, locales.EditReadonlyPrefix(a.grid.readonly)).FontSize(12).TextColor(c.Theme().TextMuted).SingleLine()
 	}
 }
 
@@ -570,13 +570,13 @@ func editTextFor(kind string, r *engine.QueryResult, col int, v any) string {
 // beginEditAt 按内容长度选择行内编辑或弹窗编辑。
 // row >= 0 是结果行下标；row < 0 表示新增行，编号为 -row-1。
 func (a *root) beginEditAt(r *engine.QueryResult, row, col int) {
-	if a.editPlan == nil || col < 0 || col >= len(a.editPlan.Editable) {
-		if a.readonlyReason != "" {
-			a.gridErr(locales.EditReadonlyPrefix(a.readonlyReason))
+	if a.grid.plan == nil || col < 0 || col >= len(a.grid.plan.Editable) {
+		if a.grid.readonly != "" {
+			a.gridErr(locales.EditReadonlyPrefix(a.grid.readonly))
 		}
 		return
 	}
-	if row >= 0 && !a.editPlan.Editable[col] {
+	if row >= 0 && !a.grid.plan.Editable[col] {
 		a.gridErr(locales.EditPkReadonly())
 		return
 	}
@@ -628,10 +628,10 @@ func (a *root) stopInlineEdit() {
 // 与当前值相同就什么都不改（NULL 格打开再保存不会产生空改动）；改回数据库原值则撤掉改动。
 // 新增行没有“原值”：空文本表示该列走库默认，其余文本按普通值解析。
 func (a *root) commitCellEdit(row, col int, text string) {
-	if col < 0 || a.editPlan == nil || col >= len(a.editPlan.Columns) {
+	if col < 0 || a.grid.plan == nil || col >= len(a.grid.plan.Columns) {
 		return
 	}
-	if row >= 0 && !a.editPlan.Editable[col] {
+	if row >= 0 && !a.grid.plan.Editable[col] {
 		return
 	}
 	if row < 0 {
@@ -701,10 +701,10 @@ func (a *root) inlineCellEditor(c *ui.Context) {
 // beginEditCurrent 打开「编辑格」（当前选中单元格），按内容长度选择行内/弹窗。
 func (a *root) beginEditCurrent(r *engine.QueryResult) {
 	col := a.cursorDataCol(r)
-	dataRows := len(a.resView.apply(r))
-	row := a.displayToResult(r, a.resultRow)
-	if a.resultRow >= dataRows {
-		row = -1 - (a.resultRow - dataRows)
+	dataRows := len(a.grid.view.apply(r))
+	row := a.displayToResult(r, a.grid.row)
+	if a.grid.row >= dataRows {
+		row = -1 - (a.grid.row - dataRows)
 	}
 	a.beginEditAt(r, row, col)
 }

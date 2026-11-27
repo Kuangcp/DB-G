@@ -162,8 +162,8 @@ func TestDisplayToResultAfterSort(t *testing.T) {
 	a := newTestRoot()
 	r := resultWith([]string{"id"},
 		[]any{int64(30)}, []any{int64(10)}, []any{int64(20)})
-	a.resView.sortBy(r, 0, false)
-	got := a.resView.apply(r)
+	a.grid.view.sortBy(r, 0, false)
+	got := a.grid.view.apply(r)
 	if got[0] != 1 || got[1] != 2 || got[2] != 0 {
 		t.Fatalf("sort order: %v", got)
 	}
