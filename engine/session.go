@@ -53,12 +53,6 @@ type Column struct {
 	Comment    string // 数据库里的列备注；没有则为空
 }
 
-// ColumnLister 是可选能力接口：按表名列出一个表的列。
-// UI 经类型断言与 CapColumns 能力位判定后使用；Session 接口本身不要求实现它。
-type ColumnLister interface {
-	Columns(ctx context.Context, table string) ([]Column, error)
-}
-
 // SchemaColumnLister 是可选能力接口：按 schema/库 + 表名列出列。
 // 多 schema 数据源必须实现它，否则未选默认库时无法取列（MySQL 的 "未选择数据库"）。
 type SchemaColumnLister interface {
@@ -73,12 +67,6 @@ type Index struct {
 	Primary   bool
 	Type      string // btree/hash/gin/…；没有类型概念时为空
 	Predicate string // 部分索引的 WHERE 条件；没有则为空
-}
-
-// IndexLister 是可选能力接口：列出一个表的索引。
-// UI 经类型断言与 CapIndexes 能力位判定后使用；Session 接口本身不要求实现它。
-type IndexLister interface {
-	Indexes(ctx context.Context, table string) ([]Index, error)
 }
 
 // SchemaIndexLister 是可选能力接口：按 schema/库 + 表名列出索引。
@@ -117,11 +105,6 @@ type Tx interface {
 // Transactional 是可选能力接口：会话能否开显式事务（写操作提交用）。
 type Transactional interface {
 	Begin(ctx context.Context) (Tx, error)
-}
-
-// ObjectDDLer 是可选能力接口：返回对象的 DDL（建表/建视图语句）。
-type ObjectDDLer interface {
-	ObjectDDL(ctx context.Context, kind ObjectKind, name string) (string, error)
 }
 
 // SchemaObjectDDLer 是可选能力接口：按对象所在 schema/库取 DDL。

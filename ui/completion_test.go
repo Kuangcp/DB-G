@@ -191,7 +191,7 @@ func (s noColumnsSession) Caps() engine.Capabilities  { return engine.CapObjects
 func (s noColumnsSession) RunStatement(context.Context, string) (*engine.QueryResult, error) {
 	return &engine.QueryResult{}, nil
 }
-func (s noColumnsSession) Objects(context.Context, engine.ObjectKind) ([]engine.DBObject, error) {
+func (s noColumnsSession) ObjectsIn(context.Context, string, engine.ObjectKind) ([]engine.DBObject, error) {
 	return []engine.DBObject{{Name: "t"}}, nil
 }
 

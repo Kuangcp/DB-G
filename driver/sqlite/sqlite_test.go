@@ -219,7 +219,7 @@ func TestObjects(t *testing.T) {
 	s := newMemSession(t)
 	lister, ok := s.(engine.SchemaObjectLister)
 	if !ok {
-		t.Fatal("sqlite session must implement engine.ObjectLister")
+		t.Fatal("sqlite session must implement engine.SchemaObjectLister")
 	}
 	if !s.Caps().Has(engine.CapObjects) {
 		t.Fatal("sqlite Caps must include CapObjects")

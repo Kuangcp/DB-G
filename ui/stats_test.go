@@ -22,7 +22,7 @@ func (f statsFakeSession) Caps() engine.Capabilities {
 	return engine.CapObjects | engine.CapObjectStats
 }
 
-func (f statsFakeSession) ObjectStats(context.Context, engine.ObjectKind, string) (*engine.ObjectStats, error) {
+func (f statsFakeSession) ObjectStatsIn(context.Context, string, engine.ObjectKind, string) (*engine.ObjectStats, error) {
 	return f.stats, f.err
 }
 

@@ -45,13 +45,13 @@ func (s *viewerFakeSession) RunStatement(_ context.Context, sql string) (*engine
 	}
 	return s.result, nil
 }
-func (s *viewerFakeSession) Columns(context.Context, string) ([]engine.Column, error) {
+func (s *viewerFakeSession) ColumnsIn(context.Context, string, string) ([]engine.Column, error) {
 	return s.cols, nil
 }
-func (s *viewerFakeSession) Indexes(context.Context, string) ([]engine.Index, error) {
+func (s *viewerFakeSession) IndexesIn(context.Context, string, string) ([]engine.Index, error) {
 	return s.indexes, nil
 }
-func (s *viewerFakeSession) ObjectDDL(context.Context, engine.ObjectKind, string) (string, error) {
+func (s *viewerFakeSession) ObjectDDLIn(context.Context, string, engine.ObjectKind, string) (string, error) {
 	return s.ddl, s.ddlErr
 }
 func (s *viewerFakeSession) lastQuery() string {

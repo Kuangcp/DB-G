@@ -24,33 +24,11 @@ func (scopedStub) ObjectStatsIn(context.Context, string, ObjectKind, string) (*O
 	return &ObjectStats{}, nil
 }
 
-type flatStub struct{ stubSession }
-
-func (flatStub) Columns(context.Context, string) ([]Column, error) {
-	return []Column{{Name: "flat"}}, nil
-}
-func (flatStub) Objects(context.Context, ObjectKind) ([]DBObject, error) {
-	return []DBObject{{Name: "f"}}, nil
-}
-func (flatStub) Indexes(context.Context, string) ([]Index, error) {
-	return []Index{{Name: "fi"}}, nil
-}
-func (flatStub) ObjectDDL(context.Context, ObjectKind, string) (string, error) {
-	return "flat ddl", nil
-}
-func (flatStub) ObjectStats(context.Context, ObjectKind, string) (*ObjectStats, error) {
-	return &ObjectStats{}, nil
-}
-
 func TestCatalogResolution(t *testing.T) {
 	ctx := context.Background()
 	cols, err := ColumnsOf(ctx, scopedStub{}, "s", "t")
 	if err != nil || cols[0].Name != "scoped" {
-		t.Fatalf("scoped columns = %+v %v", cols, err)
-	}
-	cols, err = ColumnsOf(ctx, flatStub{}, "", "t")
-	if err != nil || cols[0].Name != "flat" {
-		t.Fatalf("flat columns = %+v %v", cols, err)
+		t.Fatalf("columns = %+v %v", cols, err)
 	}
 	if _, err := ColumnsOf(ctx, stubSession{}, "", "t"); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("unsupported err = %v", err)

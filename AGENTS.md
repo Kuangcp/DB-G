@@ -56,7 +56,7 @@ main.go ──> ui ──> app ──> engine
 ### 新增一个数据源（照单走，别漏）
 
 1. `driver/<kind>/`：实现 `engine.Session`（`Open`/`Close`/`RunStatement`/`Cancel`/`Caps`），
-   可选接口按能力实现（`ColumnLister`/`ObjectLister`/`SchemaLister`/`ObjectDDLer`/`Transactional`/`RowStreamer`）；
+   可选接口按能力实现（`SchemaObjectLister`/`SchemaColumnLister`/`SchemaIndexLister`/`SchemaObjectDDLer`/`SchemaObjectStatter`/`SchemaLister`/`Transactional`/`RowStreamer`）；
    `init()` 里 `engine.Register("<kind>", openSession)`。
 2. **`main.go` 加 `_ "db-g/driver/<kind>"`** —— 漏了不会编译报错，只会在打开连接时报
    `engine: unknown data source kind`（历史事故：postgres / clickhouse 都漏过）。
@@ -79,9 +79,9 @@ UI 靠 `Capabilities` 位降级功能，不靠类型断言猜：
 | `CapSQLCompletion` | 参与 SQL 补全 |
 | `CapExplain` | 「执行计划」/ `PlanExplainer`；解析由 `ai/plan` 负责 |
 | `CapExplainAnalyze` | 「ANALYZE 重跑」；目前 PostgreSQL / MySQL 支持，SQLite / ClickHouse 不显示该按钮 |
-| `CapObjectStats` | 表右键「查看统计」；四个驱动都实现，`ObjectStatter`/`SchemaObjectStatter` 返回估算行数/列数/占用与数据源特有项，并带上实际执行的 SQL 与未执行的精确 COUNT(*) 语句 |
+| `CapObjectStats` | 表右键「查看统计」；四个驱动都实现，`SchemaObjectStatter` 返回估算行数/列数/占用与数据源特有项，并带上实际执行的 SQL 与未执行的精确 COUNT(*) 语句 |
 | `CapForeignKeys` | 外键查询（`ForeignKeyer`）：只服务 AI 检索的一跳扩展，不进入补全/对象树热路径；SQLite / MySQL / PostgreSQL 实现，ClickHouse 无外键 |
-| `CapIndexes` | 表视图结构页的索引列表（`IndexLister`/`SchemaIndexLister`）：MySQL / PostgreSQL / SQLite 实现；ClickHouse 返回空 |
+| `CapIndexes` | 表视图结构页的索引列表（`SchemaIndexLister`）：MySQL / PostgreSQL / SQLite 实现；ClickHouse 返回空 |
 
 连接参数：`app.ConnProfile` → `ui.engineProfile()` → `engine.Profile`，**三处打开连接
 （`connect` / 测试连接）都走这个函数**，不要各自拼 `engine.Profile`。

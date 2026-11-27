@@ -203,7 +203,7 @@ func (f treeFakeSession) Caps() engine.Capabilities  { return engine.CapObjects 
 func (f treeFakeSession) RunStatement(context.Context, string) (*engine.QueryResult, error) {
 	return &engine.QueryResult{}, nil
 }
-func (f treeFakeSession) Objects(context.Context, engine.ObjectKind) ([]engine.DBObject, error) {
+func (f treeFakeSession) ObjectsIn(context.Context, string, engine.ObjectKind) ([]engine.DBObject, error) {
 	return f.objs, f.err
 }
 

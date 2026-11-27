@@ -25,7 +25,7 @@ func (f *hydrateFakeSession) Caps() engine.Capabilities {
 	return engine.CapObjects | engine.CapColumns
 }
 
-func (f *hydrateFakeSession) Objects(_ context.Context, kind engine.ObjectKind) ([]engine.DBObject, error) {
+func (f *hydrateFakeSession) ObjectsIn(_ context.Context, _ string, kind engine.ObjectKind) ([]engine.DBObject, error) {
 	f.objectCalls++
 	var out []engine.DBObject
 	for _, o := range f.tables {
@@ -36,7 +36,7 @@ func (f *hydrateFakeSession) Objects(_ context.Context, kind engine.ObjectKind) 
 	return out, nil
 }
 
-func (f *hydrateFakeSession) Columns(_ context.Context, table string) ([]engine.Column, error) {
+func (f *hydrateFakeSession) ColumnsIn(_ context.Context, _ string, table string) ([]engine.Column, error) {
 	f.columnCalls++
 	return f.cols[table], nil
 }

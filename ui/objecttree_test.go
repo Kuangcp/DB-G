@@ -27,7 +27,7 @@ func (f *pagedFakeSession) Caps() engine.Capabilities  { return engine.CapObject
 func (f *pagedFakeSession) RunStatement(context.Context, string) (*engine.QueryResult, error) {
 	return &engine.QueryResult{}, nil
 }
-func (f *pagedFakeSession) Objects(context.Context, engine.ObjectKind) ([]engine.DBObject, error) {
+func (f *pagedFakeSession) ObjectsIn(context.Context, string, engine.ObjectKind) ([]engine.DBObject, error) {
 	f.objectsCall++
 	return nil, fmt.Errorf("full Objects must not be called")
 }

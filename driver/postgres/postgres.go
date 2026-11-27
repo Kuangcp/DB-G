@@ -414,7 +414,7 @@ func (s *session) ObjectsIn(ctx context.Context, schema string, kind engine.Obje
 	return s.ObjectsPage(ctx, schema, kind, 0, 0)
 }
 
-// Objects 列出当前 schema 的对象（保持 ObjectLister 兼容）。
+// ObjectsIn 列出指定 schema 的对象；schema 为空表示 search_path 当前值。
 
 func (s *session) currentSchema(ctx context.Context) (string, error) {
 	var schema sql.NullString

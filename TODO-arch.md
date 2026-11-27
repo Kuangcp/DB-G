@@ -415,7 +415,8 @@ UI 的成对断言已全部改为调用助手；`sess.(engine.Xxx)` 从 38 降�
 ServerInfoer/ForeignKeyer 等），不再有 scoped/flat 双分支。
 **已完成（2026-11-27 追加）**：四个驱动的 flat 包装方法已全部删除；
 SQLite 补齐 `ObjectsIn`/`ColumnsIn`/`ObjectDDLIn`（忽略 schema），与另外三个驱动一致。
-现在驱动只实现 schema 感知一套，`engine` 的 flat 回退仅用于旧的测试假会话。
+`engine` 的 flat 接口定义与 catalog 回退也已删除；现在驱动只实现 schema 感知一套，
+测试假会话同步改为 scoped 方法。
 
 **证据**
 - `engine` 有 10 对「单 schema / 带 schema」接口：`ObjectLister`/`SchemaLister`、

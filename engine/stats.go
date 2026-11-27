@@ -21,11 +21,6 @@ type ObjectStats struct {
 	ExactRowsSQL string
 }
 
-// ObjectStatter 是可选能力接口：返回表对象的统计信息（行数/列数/占用空间等）。
-type ObjectStatter interface {
-	ObjectStats(ctx context.Context, kind ObjectKind, name string) (*ObjectStats, error)
-}
-
 // SchemaObjectStatter 是可选能力接口：按对象所在 schema/库取统计。
 type SchemaObjectStatter interface {
 	ObjectStatsIn(ctx context.Context, schema string, kind ObjectKind, name string) (*ObjectStats, error)

@@ -19,7 +19,7 @@ func (f *ddlClickSession) Caps() engine.Capabilities {
 	return engine.CapObjects | engine.CapObjectDDL
 }
 
-func (f *ddlClickSession) ObjectDDL(context.Context, engine.ObjectKind, string) (string, error) {
+func (f *ddlClickSession) ObjectDDLIn(context.Context, string, engine.ObjectKind, string) (string, error) {
 	f.calls++
 	return "CREATE TABLE users (id INTEGER PRIMARY KEY);", nil
 }

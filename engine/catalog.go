@@ -13,9 +13,6 @@ func ObjectsOf(ctx context.Context, sess Session, schema string, kind ObjectKind
 	if l, ok := sess.(SchemaObjectLister); ok {
 		return l.ObjectsIn(ctx, schema, kind)
 	}
-	if l, ok := sess.(ObjectLister); ok {
-		return l.Objects(ctx, kind)
-	}
 	return nil, ErrUnsupported
 }
 
@@ -23,9 +20,6 @@ func ObjectsOf(ctx context.Context, sess Session, schema string, kind ObjectKind
 func ColumnsOf(ctx context.Context, sess Session, schema, table string) ([]Column, error) {
 	if l, ok := sess.(SchemaColumnLister); ok {
 		return l.ColumnsIn(ctx, schema, table)
-	}
-	if l, ok := sess.(ColumnLister); ok {
-		return l.Columns(ctx, table)
 	}
 	return nil, ErrUnsupported
 }
@@ -35,9 +29,6 @@ func IndexesOf(ctx context.Context, sess Session, schema, table string) ([]Index
 	if l, ok := sess.(SchemaIndexLister); ok {
 		return l.IndexesIn(ctx, schema, table)
 	}
-	if l, ok := sess.(IndexLister); ok {
-		return l.Indexes(ctx, table)
-	}
 	return nil, ErrUnsupported
 }
 
@@ -46,9 +37,6 @@ func ObjectDDLOf(ctx context.Context, sess Session, schema string, kind ObjectKi
 	if l, ok := sess.(SchemaObjectDDLer); ok {
 		return l.ObjectDDLIn(ctx, schema, kind, name)
 	}
-	if l, ok := sess.(ObjectDDLer); ok {
-		return l.ObjectDDL(ctx, kind, name)
-	}
 	return "", ErrUnsupported
 }
 
@@ -56,9 +44,6 @@ func ObjectDDLOf(ctx context.Context, sess Session, schema string, kind ObjectKi
 func ObjectStatsOf(ctx context.Context, sess Session, schema string, kind ObjectKind, name string) (*ObjectStats, error) {
 	if l, ok := sess.(SchemaObjectStatter); ok {
 		return l.ObjectStatsIn(ctx, schema, kind, name)
-	}
-	if l, ok := sess.(ObjectStatter); ok {
-		return l.ObjectStats(ctx, kind, name)
 	}
 	return nil, ErrUnsupported
 }
